@@ -1,6 +1,5 @@
-import React from 'react';
 
-const DashboardLayout = ({ title, children }) => {
+const DashboardLayout = ({ children }) => {
     return (
         <div className="w-full">
             {/* Content - No separate header needed, it's in Sidebar now */}

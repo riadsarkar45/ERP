@@ -4,6 +4,7 @@ import Sidebar from "../dashboard/Sidebar";
 import Home from "../dashboard/pages/Home";
 import KnittingOrders from "../dashboard/pages/KnittingOrders";
 import NewOrder from "../dashboard/pages/NewOrder";
+import FactoryWiseReport from "../dashboard/pages/FactoryWiseReport";
 
 const routers = createBrowserRouter([
     {
@@ -29,6 +30,10 @@ const routers = createBrowserRouter([
                     {
                         path: "new-order",
                         element: <NewOrder />
+                    },
+                    {
+                        path: "factory-wise-report/:factoryName",
+                        element: <FactoryWiseReport />
                     }
                 ]
             }

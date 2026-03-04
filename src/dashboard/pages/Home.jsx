@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout";
 import { Package, Palette, FileText, TrendingUp } from "lucide-react";
 
@@ -7,6 +8,11 @@ const Home = () => {
         { label: "Total Dyeing Order", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50" },
         { label: "Total Yarn Dye Order", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
         { label: "Total AOP Order", value: "44,444", icon: FileText, color: "text-purple-600", bg: "bg-purple-50" },
+    ];
+    const audits = [
+        { label: "Completed Audits", value: "44,444", icon: Package, color: "text-primary-500", bg: "bg-primary-50" },
+        { label: "Pending Audits", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50" },
+        { label: "Upcoming Audits", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
     ];
 
     const factories = [
@@ -23,6 +29,25 @@ const Home = () => {
 
     return (
         <DashboardLayout title="Dashboard">
+            {/* AUDIT STATS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {audits.map((stat, index) => {
+                    const Icon = stat.icon;
+                    return (
+                        <div key={index} className="bg-white rounded-md border border-gray-200 p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                                    <p className="text-2xl font-semibold text-gray-800">{stat.value}</p>
+                                </div>
+                                <div className={`${stat.bg} ${stat.color} p-3 rounded-md`}>
+                                    <Icon size={24} />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {stats.map((stat, index) => {
@@ -48,12 +73,14 @@ const Home = () => {
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Factories</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                     {factories.map((factory, index) => (
-                        <button
-                            key={index}
-                            className="bg-primary-50 text-primary-500 p-3 border border-primary-200 hover:bg-primary-100 rounded-md transition-colors text-sm font-medium"
-                        >
-                            {factory}
-                        </button>
+                        <Link to={`../factory-wise-report/${factory}`}>
+                            <button
+                                key={index}
+                                className="bg-primary-50 text-primary-500 p-3 border border-primary-200 hover:bg-primary-100 rounded-md transition-colors text-sm font-medium"
+                            >
+                                {factory}
+                            </button>
+                        </Link>
                     ))}
                 </div>
             </div>

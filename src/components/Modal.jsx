@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, Save } from 'lucide-react';
 import Input from './Input';
 
 const Modal = ({ order, onClose, onUpdate }) => {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState(() => order || {
         workOrderPlaceDate: "",
         workOrderNo: "",
         month: "",
@@ -13,14 +13,11 @@ const Modal = ({ order, onClose, onUpdate }) => {
         poNo: "",
         style: "",
         color: "",
-        composition: ""
+        composition: "",
+        yarnDelivery: "",
+        finishYarnReceived: "",
+        orderQty: ""
     });
-
-    useEffect(() => {
-        if (order) {
-            setFormData(order);
-        }
-    }, [order]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -167,8 +164,40 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                     required
                                 />
                             </div>
+                            {/* row 4 */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <Input
+                                    label="Yarn Delivery Y/D"
+                                    name="yarnDelivery"
+                                    type="text"
+                                    value={formData.yarnDelivery}
+                                    onChange={handleChange}
+                                    placeholder="e.g., P-264702"
+                                    required
+                                />
 
-                            {/* Row 4 */}
+                                <Input
+                                    label="Yarn Dyed Order Qty"
+                                    name="orderQty"
+                                    type="text"
+                                    value={formData.orderQty}
+                                    onChange={handleChange}
+                                    placeholder="e.g., WGR-538"
+                                    required
+                                />
+
+                                <Input
+                                    label="Finish Yarn Received"
+                                    name="finishYarnReceived"
+                                    type="text"
+                                    value={formData.finishYarnReceived}
+                                    onChange={handleChange}
+                                    placeholder="e.g., WHITE SWAN (12-0000 TCX)"
+                                    required
+                                />
+                            </div>
+
+                            {/* Row 5 */}
                             <div className="grid grid-cols-1 gap-6">
                                 <Input
                                     label="Composition"

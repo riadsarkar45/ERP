@@ -68,7 +68,7 @@ const Sidebar = () => {
                                 
                                 <div className="flex-1 min-w-0">
                                     <h1 className="text-base font-bold text-white truncate">ERP System</h1>
-                                    <p className="text-primary-200 text-xs">Order Management</p>
+                                    <p className="text-primary-200 text-xs">Audit Management</p>
                                 </div>
                             </div>
                             
