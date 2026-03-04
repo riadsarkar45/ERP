@@ -1,68 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
+  min-height: 100vh;
+  background-color: #f9fafb;
+  color: #1f2937;
+}
+
+#root {
+  width: 100%;
   min-height: 100vh;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* Custom scrollbar - Minimal */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Toast Animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
   }
-  a:hover {
-    color: #747bff;
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
-  button {
-    background-color: #f9f9f9;
+}
+
+@keyframes slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
   }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+.animate-slide-out {
+  animation: slide-out 0.3s ease-in forwards;
+}
+
+/* Select Dropdown Styling */
+select {
+  background-color: white;
+}
+
+/* Dropdown options styling */
+select option {
+  padding: 14px 16px !important;
+  background-color: white !important;
+  color: #4b5563 !important;
+  font-size: 15px !important;
+  line-height: 1.6 !important;
+  font-weight: 400 !important;
+  border: none !important;
+  min-height: 48px !important;
+}
+
+/* First option (placeholder) */
+select option:first-child {
+  color: #9ca3af !important;
+  background-color: #f9fafb !important;
+}
+
+/* Hover state - Primary 400 */
+select option:hover {
+  background-color: #4777c1 !important;
+  background: #4777c1 !important;
+  color: white !important;
+}
+
+/* Selected/Checked state - Primary 500 */
+select option:checked {
+  background-color: #1A3567 !important;
+  background: #1A3567 !important;
+  color: white !important;
+  font-weight: 500 !important;
+}
+
+/* Active state */
+select option:active {
+  background-color: #1A3567 !important;
+  color: white !important;
+}
+
+/* Focus state for better visibility */
+select:focus option:checked {
+  background-color: #1A3567 !important;
+  background: #1A3567 !important;
+  color: white !important;
+}
+
+select:focus option:hover {
+  background-color: #4777c1 !important;
+  background: #4777c1 !important;
+  color: white !important;
+}
+
+/* Firefox specific styling */
+@-moz-document url-prefix() {
+  select option {
+    padding: 14px 16px !important;
+    min-height: 48px !important;
+  }
+  
+  select option:checked {
+    background: #1A3567 linear-gradient(0deg, #1A3567 0%, #1A3567 100%) !important;
+    color: white !important;
+    font-weight: 500 !important;
+  }
+  
+  select option:hover {
+    background: #4777c1 linear-gradient(0deg, #4777c1 0%, #4777c1 100%) !important;
+    color: white !important;
+  }
+  
+  select option:first-child {
+    background: #f9fafb linear-gradient(0deg, #f9fafb 0%, #f9fafb 100%) !important;
+    color: #9ca3af !important;
+  }
+}
+
+/* Chrome, Safari, Edge specific */
+@supports (-webkit-appearance: none) {
+  select option {
+    background-color: white !important;
+    color: #4b5563 !important;
+  }
+  
+  select option:hover {
+    background-color: #4777c1 !important;
+    color: white !important;
+  }
+  
+  select option:checked {
+    background-color: #1A3567 !important;
+    color: white !important;
+  }
+  
+  select option:first-child {
+    background-color: #f9fafb !important;
+    color: #9ca3af !important;
+  }
+}
+
+/* Webkit specific for better control */
+select::-webkit-scrollbar {
+  width: 8px;
+}
+
+select::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+select::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+select::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

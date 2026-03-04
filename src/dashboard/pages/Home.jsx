@@ -1,95 +1,106 @@
-import React from 'react';
-import Header from '../../components/Header';
+import DashboardLayout from "../../components/DashboardLayout";
+import { Package, Palette, FileText, TrendingUp } from "lucide-react";
 
 const Home = () => {
+    const stats = [
+        { label: "Total Knitting Order", value: "44,444", icon: Package, color: "text-primary-500", bg: "bg-primary-50" },
+        { label: "Total Dyeing Order", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50" },
+        { label: "Total Yarn Dye Order", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
+        { label: "Total AOP Order", value: "44,444", icon: FileText, color: "text-purple-600", bg: "bg-purple-50" },
+    ];
+
+    const factories = [
+        "That's It Knit",
+        "Fair Apparels Ltd",
+        "Tj Sweaters Ltd",
+        "Winter Dress Ltd",
+        "Optimum Sourcing",
+        "Styletex Ltd",
+        "Fashion Knitwear",
+        "Textile Solutions",
+        "Global Knits"
+    ];
+
     return (
-        <div>
-            <Header headerText='Dashboard' />
-            <div className='grid grid-cols-4 gap-2 mb-8'>
-                <div className='border p-3 rounded-md'>
-                    <h2>Total Knitting Order</h2>
-                    <span>44,444</span>
-                </div>
-                <div className='border p-3 rounded-md'>
-                    <h2>Total Dyeing Order</h2>
-                    <span>44,444</span>
-                </div>
-                <div className='border p-3 rounded-md'>
-                    <h2>Total Yarn Dye Order</h2>
-                    <span>44,444</span>
-                </div>
-                <div className='border p-3 rounded-md'>
-                    <h2>Total AOP Order</h2>
-                    <span>44,444</span>
+        <DashboardLayout title="Dashboard">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {stats.map((stat, index) => {
+                    const Icon = stat.icon;
+                    return (
+                        <div key={index} className="bg-white rounded-md border border-gray-200 p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                                    <p className="text-2xl font-semibold text-gray-800">{stat.value}</p>
+                                </div>
+                                <div className={`${stat.bg} ${stat.color} p-3 rounded-md`}>
+                                    <Icon size={24} />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Factories Section */}
+            <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Factories</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                    {factories.map((factory, index) => (
+                        <button
+                            key={index}
+                            className="bg-primary-50 text-primary-500 p-3 border border-primary-200 hover:bg-primary-100 rounded-md transition-colors text-sm font-medium"
+                        >
+                            {factory}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            <div className='mb-10'>
-                <Header headerText='Factories' />
-                <div className='grid grid-cols-6 gap-2'>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>That's It Knit </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Fair Apparels Ltd</button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Tj Sweaters Ltd </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Winter Dress Ltd </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Optimum Sourcing </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Optimum Sourcing </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Optimum Sourcing </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Optimum Sourcing </button>
-                    <button className='bg-blue-500 outline-none bg-opacity-30 p-2 border border-blue-500 hover:bg-opacity-20 text-blue-500'>Styletex Ltd </button>
-                </div>
-            </div>
-
-            <Header headerText='Recent Orders' />
-
+            {/* Recent Orders Section */}
             <div>
-                <div className="relative overflow-x-auto bg-neutral-primary-soft shadow-xs rounded-base border border-default">
-                    <table className="w-full text-sm text-left rtl:text-right text-body">
-                        <thead className="text-sm text-body bg-neutral-secondary-soft border-b rounded-base border-default">
-                            <tr>
-                                <th scope="col" className="px-6 py-3 font-medium">
-                                    Sr#
-                                </th>
-                                <th scope="col" className="px-6 py-3 font-medium">
-                                    Factory Name
-                                </th>
-                                <th scope="col" className="px-6 py-3 font-medium">
-                                    Yarn Composition
-                                </th>
-                                <th scope="col" className="px-6 py-3 font-medium">
-                                    Price
-                                </th>
-                                <th scope="col" className="px-6 py-3 font-medium">
-                                    Qty
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr className="bg-neutral-primary border-b border-default">
-                                <th scope="row" className="px-6 py-4 font-medium text-heading whitespace-nowrap">
-                                    1
-                                </th>
-                                <th scope="row" className="px-6 py-4 font-medium text-heading whitespace-nowrap">
-                                    Apple MacBook Pro 17"
-                                </th>
-                                <td className="px-6 py-4">
-                                    Silver
-                                </td>
-                                <td className="px-6 py-4">
-                                    Laptop
-                                </td>
-                                <td className="px-6 py-4">
-                                    $2999
-                                </td>
-                                <td className="px-6 py-4">
-                                    231
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Orders</h3>
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Sr#</th>
+                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Factory Name</th>
+                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Yarn Composition</th>
+                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Price</th>
+                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                <tr className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-gray-900">1</td>
+                                    <td className="px-6 py-4 text-gray-700">That's It Knit</td>
+                                    <td className="px-6 py-4 text-gray-700">100% Cotton 2/32</td>
+                                    <td className="px-6 py-4 text-gray-700">$2,999</td>
+                                    <td className="px-6 py-4 text-gray-700">231</td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-gray-900">2</td>
+                                    <td className="px-6 py-4 text-gray-700">Fair Apparels Ltd</td>
+                                    <td className="px-6 py-4 text-gray-700">95% CTN 5% ELASTANE</td>
+                                    <td className="px-6 py-4 text-gray-700">$3,499</td>
+                                    <td className="px-6 py-4 text-gray-700">450</td>
+                                </tr>
+                                <tr className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-gray-900">3</td>
+                                    <td className="px-6 py-4 text-gray-700">Tj Sweaters Ltd</td>
+                                    <td className="px-6 py-4 text-gray-700">100% Polyester</td>
+                                    <td className="px-6 py-4 text-gray-700">$1,899</td>
+                                    <td className="px-6 py-4 text-gray-700">320</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-
             </div>
-        </div>
+        </DashboardLayout>
     );
 };
 

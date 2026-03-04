@@ -3,6 +3,7 @@ import Root from "../root/Root";
 import Sidebar from "../dashboard/Sidebar";
 import Home from "../dashboard/pages/Home";
 import KnittingOrders from "../dashboard/pages/KnittingOrders";
+import NewOrder from "../dashboard/pages/NewOrder";
 
 const routers = createBrowserRouter([
     {
@@ -24,6 +25,10 @@ const routers = createBrowserRouter([
                     {
                         path: "knitting-order",
                         element: <KnittingOrders />
+                    },
+                    {
+                        path: "new-order",
+                        element: <NewOrder />
                     }
                 ]
             }
