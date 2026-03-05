@@ -1,12 +1,19 @@
+import { Link } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout";
+import Table from "../../components/Table";
 import { Package, Palette, FileText, TrendingUp } from "lucide-react";
 
 const Home = () => {
     const stats = [
-        { label: "Total Knitting Order", value: "44,444", icon: Package, color: "text-primary-500", bg: "bg-primary-50" },
-        { label: "Total Dyeing Order", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50" },
-        { label: "Total Yarn Dye Order", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
-        { label: "Total AOP Order", value: "44,444", icon: FileText, color: "text-purple-600", bg: "bg-purple-50" },
+        { label: "Total Knitting Order", value: "44,444", icon: Package, color: "text-primary-500", bg: "bg-primary-50", borderColor: "border-primary-500", bgOpacity: "bg-primary-500/10", borderOpacity: "border-primary-500/10" },
+        { label: "Total Dyeing Order", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50", borderColor: "border-blue-600", bgOpacity: "bg-blue-600/10", borderOpacity: "border-blue-600/10" },
+        { label: "Total Yarn Dye Order", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50", borderColor: "border-green-600", bgOpacity: "bg-green-600/10", borderOpacity: "border-green-600/10" },
+        { label: "Total AOP Order", value: "44,444", icon: FileText, color: "text-purple-600", bg: "bg-purple-50", borderColor: "border-purple-600", bgOpacity: "bg-purple-600/10", borderOpacity: "border-purple-600/10" },
+    ];
+    const audits = [
+        { label: "Completed Audits", value: "44,444", icon: Package, color: "text-primary-500", bg: "bg-primary-50", borderColor: "border-primary-500", bgOpacity: "bg-primary-500/10", borderOpacity: "border-primary-500/10" },
+        { label: "Pending Audits", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50", borderColor: "border-blue-600", bgOpacity: "bg-blue-600/10", borderOpacity: "border-blue-600/10" },
+        { label: "Upcoming Audits", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50", borderColor: "border-green-600", bgOpacity: "bg-green-600/10", borderOpacity: "border-green-600/10" },
     ];
 
     const factories = [
@@ -23,18 +30,37 @@ const Home = () => {
 
     return (
         <DashboardLayout title="Dashboard">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {stats.map((stat, index) => {
+            {/* AUDIT STATS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {audits.map((stat, index) => {
                     const Icon = stat.icon;
                     return (
-                        <div key={index} className="bg-white rounded-md border border-gray-200 p-6">
+                        <div key={index} className={`${stat.bgOpacity} rounded-lg border ${stat.borderOpacity} px-6 py-8`}>
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                                    <p className="text-2xl font-semibold text-gray-800">{stat.value}</p>
+                                    <p className={`text-xl font-normal ${stat.color}`}>{stat.value}</p>
                                 </div>
-                                <div className={`${stat.bg} ${stat.color} p-3 rounded-md`}>
+                                <div className={`${stat.bg} ${stat.color} p-3 rounded-lg`}>
+                                    <Icon size={24} />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {stats.map((stat, index) => {
+                    const Icon = stat.icon;
+                    return (
+                        <div key={index} className={`${stat.bgOpacity} rounded-lg border ${stat.borderOpacity} px-6 py-8`}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+                                    <p className={`text-xl font-normal ${stat.color}`}>{stat.value}</p>
+                                </div>
+                                <div className={`${stat.bg} ${stat.color} p-3 rounded-lg`}>
                                     <Icon size={24} />
                                 </div>
                             </div>
@@ -44,61 +70,39 @@ const Home = () => {
             </div>
 
             {/* Factories Section */}
-            <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Factories</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            <div className="mb-6">
+                <h3 className="text-base font-semibold text-gray-800 mb-3">Factories</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {factories.map((factory, index) => (
-                        <button
-                            key={index}
-                            className="bg-primary-50 text-primary-500 p-3 border border-primary-200 hover:bg-primary-100 rounded-md transition-colors text-sm font-medium"
-                        >
-                            {factory}
-                        </button>
+                        <Link key={index} to={`/dashboard/factory-wise-report/${factory}`}>
+                            <button
+                                className="w-full bg-primary-50 text-gray-700 py-3 px-3 border border-gray-200 hover:border-gray-200 hover:bg-primary-100 hover:text-primary-600 rounded-lg transition-all text-sm font-medium text-center"
+                            >
+                                {factory}
+                            </button>
+                        </Link>
                     ))}
                 </div>
             </div>
 
             {/* Recent Orders Section */}
             <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Orders</h3>
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Sr#</th>
-                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Factory Name</th>
-                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Yarn Composition</th>
-                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Price</th>
-                                    <th className="px-6 py-4 text-left font-semibold text-gray-700">Qty</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                <tr className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-gray-900">1</td>
-                                    <td className="px-6 py-4 text-gray-700">That's It Knit</td>
-                                    <td className="px-6 py-4 text-gray-700">100% Cotton 2/32</td>
-                                    <td className="px-6 py-4 text-gray-700">$2,999</td>
-                                    <td className="px-6 py-4 text-gray-700">231</td>
-                                </tr>
-                                <tr className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-gray-900">2</td>
-                                    <td className="px-6 py-4 text-gray-700">Fair Apparels Ltd</td>
-                                    <td className="px-6 py-4 text-gray-700">95% CTN 5% ELASTANE</td>
-                                    <td className="px-6 py-4 text-gray-700">$3,499</td>
-                                    <td className="px-6 py-4 text-gray-700">450</td>
-                                </tr>
-                                <tr className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-gray-900">3</td>
-                                    <td className="px-6 py-4 text-gray-700">Tj Sweaters Ltd</td>
-                                    <td className="px-6 py-4 text-gray-700">100% Polyester</td>
-                                    <td className="px-6 py-4 text-gray-700">$1,899</td>
-                                    <td className="px-6 py-4 text-gray-700">320</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <h3 className="text-base font-semibold text-gray-800 mb-3">Recent Orders</h3>
+                <Table
+                    columns={[
+                        { header: "Sr#", accessor: "sr", render: (row) => <span className="font-medium text-gray-900">{row.sr}</span> },
+                        { header: "Factory Name", accessor: "factory" },
+                        { header: "Yarn Composition", accessor: "yarn" },
+                        { header: "Price", accessor: "price" },
+                        { header: "Qty", accessor: "qty" }
+                    ]}
+                    data={[
+                        { sr: 1, factory: "That's It Knit", yarn: "100% Cotton 2/32", price: "$2,999", qty: "231" },
+                        { sr: 2, factory: "Fair Apparels Ltd", yarn: "95% CTN 5% ELASTANE", price: "$3,499", qty: "450" },
+                        { sr: 3, factory: "Tj Sweaters Ltd", yarn: "100% Polyester", price: "$1,899", qty: "320" }
+                    ]}
+                    emptyMessage="No recent orders"
+                />
             </div>
         </DashboardLayout>
     );

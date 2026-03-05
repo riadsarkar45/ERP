@@ -35,8 +35,32 @@ const Sidebar = () => {
         setIsCollapsed(!isCollapsed);
     };
 
-    // Get current page info
-    const currentPage = navItems.find(item => item.path === location.pathname);
+    // Get current page info with dynamic titles
+    const getPageInfo = () => {
+        const path = location.pathname;
+        
+        // Handle factory report pages
+        if (path.includes('/factory-wise-report/')) {
+            const factoryName = path.split('/factory-wise-report/')[1];
+            return {
+                title: `Factory Report - ${factoryName}`,
+                subtitle: 'Factory wise yarn dyeing report'
+            };
+        }
+        
+        // Handle other routes
+        const routeMap = {
+            '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
+            '/dashboard/knitting-order': { title: 'Knitting Orders', subtitle: 'Manage knitting orders' },
+            '/dashboard/yarn-dye-order': { title: 'Yarn Dyeing Orders', subtitle: 'Manage yarn dyeing orders' },
+            '/dashboard/aop-order': { title: 'AOP Orders', subtitle: 'Manage AOP orders' },
+            '/dashboard/new-order': { title: 'Add New Order', subtitle: 'Create new order' },
+        };
+        
+        return routeMap[path] || { title: 'Dashboard', subtitle: 'Welcome back, System Admin' };
+    };
+
+    const pageInfo = getPageInfo();
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
@@ -68,7 +92,7 @@ const Sidebar = () => {
                                 
                                 <div className="flex-1 min-w-0">
                                     <h1 className="text-base font-bold text-white truncate">ERP System</h1>
-                                    <p className="text-primary-200 text-xs">Order Management</p>
+                                    <p className="text-primary-200 text-xs">Audit Management</p>
                                 </div>
                             </div>
                             
@@ -140,9 +164,9 @@ const Sidebar = () => {
                         {/* Page Title */}
                         <div>
                             <h2 className="text-xl font-semibold text-gray-800">
-                                {currentPage?.label || 'Dashboard'}
+                                {pageInfo.title}
                             </h2>
-                            <p className="text-sm text-gray-500">Welcome back, System Admin</p>
+                            <p className="text-sm text-gray-500">{pageInfo.subtitle}</p>
                         </div>
                     </div>
                     
