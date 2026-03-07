@@ -4,13 +4,14 @@ import { Save, X } from "lucide-react";
 import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
+import useAxiosPublic from "../../hooks/Axios";
 
 const NewOrder = () => {
     const navigate = useNavigate();
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState('success');
-
+    const [file, setFile] = useState(null);
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
         workOrderNo: "",
@@ -23,7 +24,7 @@ const NewOrder = () => {
         color: "",
         composition: ""
     });
-
+    const axios = useAxiosPublic();
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -38,46 +39,33 @@ const NewOrder = () => {
         setShowToast(true);
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-
+        if (!file) {
+            return console.log("No file selected");
+        }
         try {
-            const existingOrders = JSON.parse(localStorage.getItem('knittingOrders') || '[]');
-
-            const newOrder = {
-                id: Date.now(),
-                ...formData,
-                createdAt: new Date().toISOString()
-            };
-
-            existingOrders.push(newOrder);
-            localStorage.setItem('knittingOrders', JSON.stringify(existingOrders));
-
-            // Show success toast
-            showNotification('Order created successfully!', 'success');
-
-            // Reset form
-            setFormData({
-                workOrderPlaceDate: "",
-                workOrderNo: "",
-                month: "",
-                salesContractNo: "",
-                buyer: "",
-                jobNo: "",
-                poNo: "",
-                style: "",
-                color: "",
-                composition: ""
+            const formDataToSend = new FormData();
+            formDataToSend.append('file', file);
+            const res = await axios.post('/api/upload', formDataToSend, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
             });
-
-            // Navigate after toast
-            setTimeout(() => {
-                navigate('/dashboard/knitting-order');
-            }, 1500);
+            console.log(res.data);
         } catch (error) {
+            console.log(error);
             showNotification('Failed to create order. Please try again.', 'error');
         }
     };
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setFile(e.target.files[0]);
+        }
+    }
+
+    console.log(file);
 
     const buyers = ["KIK", "LC WAIKIKI", "H&M", "ZARA", "UNIQLO"];
     const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
@@ -210,12 +198,11 @@ const NewOrder = () => {
                         />
                     </div>
 
-                    <Input
+                    <input
                         label="Or try to upload Excel File"
                         name="file"
                         type="file"
-                        value={formData.composition}
-                        onChange={handleChange}
+                        onChange={handleFileChange}
                     />
 
                     {/* Action Buttons */}
