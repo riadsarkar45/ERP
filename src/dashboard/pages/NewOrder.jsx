@@ -10,7 +10,7 @@ const NewOrder = () => {
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState('success');
-    
+
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
         workOrderNo: "",
@@ -40,22 +40,22 @@ const NewOrder = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
         try {
             const existingOrders = JSON.parse(localStorage.getItem('knittingOrders') || '[]');
-            
+
             const newOrder = {
                 id: Date.now(),
                 ...formData,
                 createdAt: new Date().toISOString()
             };
-            
+
             existingOrders.push(newOrder);
             localStorage.setItem('knittingOrders', JSON.stringify(existingOrders));
-            
+
             // Show success toast
             showNotification('Order created successfully!', 'success');
-            
+
             // Reset form
             setFormData({
                 workOrderPlaceDate: "",
@@ -69,7 +69,7 @@ const NewOrder = () => {
                 color: "",
                 composition: ""
             });
-            
+
             // Navigate after toast
             setTimeout(() => {
                 navigate('/dashboard/knitting-order');
@@ -93,7 +93,7 @@ const NewOrder = () => {
                     duration={3000}
                 />
             )}
-            
+
             <div className="bg-white rounded-md border border-gray-200 p-6 md:p-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Row 1 */}
@@ -209,6 +209,14 @@ const NewOrder = () => {
                             required
                         />
                     </div>
+
+                    <Input
+                        label="Or try to upload Excel File"
+                        name="file"
+                        type="file"
+                        value={formData.composition}
+                        onChange={handleChange}
+                    />
 
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
