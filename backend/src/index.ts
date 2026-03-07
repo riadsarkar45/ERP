@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { connectDatabase, disconnectDatabase } from "./database/connect";
 import cors from "cors";
 import router from "./routes/post";
+import getRouters from "./routes/get";
 const app = express();
 app.use(cors(
   {
@@ -16,6 +17,7 @@ app.get("/", (req: Request, res: Response) => {
 
 app.use(express.json());
 app.use("/api", router)
+app.use("/api", getRouters)
 
 
 process.on("SIGINT", async () => {
