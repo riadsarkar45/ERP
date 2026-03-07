@@ -11,4 +11,63 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+model Factory {
+  id           Int         @id @default(autoincrement())
+  factoryName  String      @unique
+  type         String?
+  createdAt    DateTime    @default(now())
+  workOrders   WorkOrder[]
+}
+
+model Job {
+  id         Int         @id @default(autoincrement())
+  jobNo      String      @unique
+  buyer      String?
+  poNo       String?
+  style      String?
+  month      String?
+  createdAt  DateTime    @default(now())
+  workOrders WorkOrder[]
+}
+
+model WorkOrder {
+  id                     Int       @id @default(autoincrement())
+
+  jobId                  Int
+  job                    Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  factoryId              Int
+  factory                Factory   @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+
+  workOrderPlaceDate     DateTime?
+  workOrderNo            String?
+  salesContractNo        String?
+  bookingColor           String?
+  composition            String?
+  dia                    String?
+  yarnCount              String?
+  brandLot               String?
+  yarnDyeingColor        String?
+  yarnDyedWorkOrderQty   Float?
+  yarnDeliveryForYD      Float?
+  delShortExcess         Float?
+  yarnReturnReceived     Float?
+  greyReceivedFromYD     Float?
+  finishYarnReceived     Float?
+  yarnStock              Float?
+  ydProcessLoss          Float?
+  processLossAfterYD     Float?
+  ydProcessLossVariation Float?
+  ydPricePerKg           Float?
+  totalBillingAmount     Float?
+  deductionForDebitNote  Float?
+  payableAmount          Float?
+  billNo                 String?
+  paidBillingAmount      Float?
+  pendingBillingAmount   Float?
+  remarks                String?
+  createdAt              DateTime  @default(now())
 }
