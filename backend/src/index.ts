@@ -1,15 +1,22 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { connectDatabase, disconnectDatabase } from "./database/connect";
-import { fileUpload } from "./controllers/uploads/upload";
-
+import cors from "cors";
+import router from "./routes/post";
 const app = express();
-
+app.use(cors(
+  {
+    origin: "http://localhost:5173",
+    credentials: true,
+  }
+))
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello");
 });
 
-app.post("/upload", fileUpload)
+app.use(express.json());
+app.use("/api", router)
+
 
 process.on("SIGINT", async () => {
   await disconnectDatabase();
@@ -21,7 +28,7 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 const PORT = 3000;
-app.listen(PORT, async() => {
+app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   await connectDatabase();
 })
