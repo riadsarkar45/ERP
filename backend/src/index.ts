@@ -5,9 +5,10 @@ import cors from "cors";
 import router from "./routes/post";
 import getRouters from "./routes/get";
 const app = express();
+const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
 app.use(cors(
   {
-    origin: "http://localhost:5173",
+    origin: corsOrigins,
     credentials: true,
   }
 ))

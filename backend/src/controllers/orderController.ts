@@ -10,6 +10,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                     type: true,
                     workOrders: {
                         select: {
+                            
                             workOrderNo: true,
                             workOrderPlaceDate: true,
                             salesContractNo: true,
@@ -36,7 +37,8 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             paidBillingAmount: true,
                             billNo: true,
                             remarks: true,
-                            createdAt: true
+                            createdAt: true,
+                            id: true
                         }
                     }
                 },
