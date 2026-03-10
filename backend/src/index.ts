@@ -4,6 +4,7 @@ import { connectDatabase, disconnectDatabase } from "./database/connect";
 import cors from "cors";
 import router from "./routes/post";
 import getRouters from "./routes/get";
+import updateRouters from "./routes/update";
 const app = express();
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
 app.use(cors(
@@ -19,6 +20,7 @@ app.get("/", (req: Request, res: Response) => {
 app.use(express.json());
 app.use("/api", router)
 app.use("/api", getRouters)
+app.use("/api", updateRouters)
 
 
 process.on("SIGINT", async () => {

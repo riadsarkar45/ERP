@@ -51,23 +51,23 @@ model WorkOrder {
   yarnCount              String?
   brandLot               String?
   yarnDyeingColor        String?
-  yarnDyedWorkOrderQty   Float?
-  yarnDeliveryForYD      Float?
-  delShortExcess         Float?
-  yarnReturnReceived     Float?
-  greyReceivedFromYD     Float?
-  finishYarnReceived     Float?
-  yarnStock              Float?
-  ydProcessLoss          Float?
-  processLossAfterYD     Float?
-  ydProcessLossVariation Float?
-  ydPricePerKg           Float?
-  totalBillingAmount     Float?
-  deductionForDebitNote  Float?
-  payableAmount          Float?
+  yarnDyedWorkOrderQty   String?
+  yarnDeliveryForYD      String?
+  delShortExcess         String?
+  yarnReturnReceived     String?
+  greyReceivedFromYD     String?
+  finishYarnReceived     String?
+  yarnStock              String?
+  ydProcessLoss          String?
+  processLossAfterYD     String?
+  ydProcessLossVariation String?
+  ydPricePerKg           String?
+  totalBillingAmount     String?
+  deductionForDebitNote  String?
+  payableAmount          String?
   billNo                 String?
-  paidBillingAmount      Float?
-  pendingBillingAmount   Float?
+  paidBillingAmount      String?
+  pendingBillingAmount   String?
   remarks                String?
   createdAt              DateTime  @default(now())
 }

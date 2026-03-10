@@ -1,16 +1,18 @@
-import prisma from "../database/prismaClient/prisma";
+import prisma from "../../database/prismaClient/prisma";
 import type { Request, Response } from "express";
 export const getAllOrders = async (req: Request, res: Response) => {
     try {
         const factoryOrderDetail = await prisma.factory.findMany(
             {
                 select: {
+
                     id: true,
                     factoryName: true,
                     type: true,
                     workOrders: {
+                        orderBy: { id: "desc" },
                         select: {
-                            
+
                             workOrderNo: true,
                             workOrderPlaceDate: true,
                             salesContractNo: true,
