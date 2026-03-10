@@ -74,7 +74,6 @@ export const fileUpload = async (req: Request, res: Response) => {
             skipDuplicates: true,
         });
 
-        // Fetch all jobs and build a map jobNo → id
         const allJobs = await prisma.job.findMany();
         const jobMap = new Map(allJobs.map((j) => [j.jobNo, j.id]));
 
