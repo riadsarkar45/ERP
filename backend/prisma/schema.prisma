@@ -15,11 +15,17 @@ datasource db {
 }
 
 model Factory {
-  id          Int         @id @default(autoincrement())
-  factoryName String      @unique
+  id          Int      @id @default(autoincrement())
+  factoryName String   @unique
   type        String?
-  createdAt   DateTime    @default(now())
-  workOrders  WorkOrder[]
+  createdAt   DateTime @default(now())
+  job         Job?     @relation(fields: [jobId], references: [id])
+  jobId       Int?
+}
+
+model Yarns {
+  id       Int    @id @unique @default(autoincrement())
+  yarnType String @unique
 }
 
 model Job {
@@ -31,18 +37,14 @@ model Job {
   month      String?
   createdAt  DateTime    @default(now())
   workOrders WorkOrder[]
+  factories  Factory[]
 }
 
 model WorkOrder {
   id Int @id @default(autoincrement())
 
-  jobId Int
-  jobNo String
-
-  job       Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  factoryId Int
-  factory   Factory @relation(fields: [factoryId], references: [id], onDelete: Cascade)
-
+  jobNo                  String
+  jobs                   Job       @relation(fields: [jobNo], references: [jobNo])
   workOrderPlaceDate     DateTime?
   workOrderNo            String?
   salesContractNo        String?
@@ -70,5 +72,6 @@ model WorkOrder {
   paidBillingAmount      String?
   pendingBillingAmount   String?
   remarks                String?
+  orderType              String
   createdAt              DateTime  @default(now())
 }

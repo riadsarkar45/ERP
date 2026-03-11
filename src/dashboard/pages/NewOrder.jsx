@@ -11,7 +11,6 @@ const NewOrder = () => {
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState('success');
-    const [file, setFile] = useState(null);
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
         workOrderNo: "",
@@ -22,7 +21,9 @@ const NewOrder = () => {
         poNo: "",
         style: "",
         color: "",
-        composition: ""
+        composition: "",
+        processLoss: "",
+        orderType: ""
     });
     const axios = useAxiosPublic();
     const handleChange = (e) => {
@@ -38,20 +39,13 @@ const NewOrder = () => {
         setToastType(type);
         setShowToast(true);
     };
-
+    console.log(formData, "formdata");
     const handleSubmit = async (e) => {
+        console.log("clicked...");
         e.preventDefault();
-        if (!file) {
-            return console.log("No file selected");
-        }
+
         try {
-            const formDataToSend = new FormData();
-            formDataToSend.append('file', file);
-            const res = await axios.post('/api/upload', formDataToSend, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            const res = await axios.post("/api/create-new-order", formData)
             console.log(res.data);
         } catch (error) {
             console.log(error);
@@ -59,17 +53,13 @@ const NewOrder = () => {
         }
     };
 
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            setFile(e.target.files[0]);
-        }
-    }
 
-    console.log(file);
+
 
     const buyers = ["KIK", "LC WAIKIKI", "H&M", "ZARA", "UNIQLO"];
     const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
     const salesContracts = ["N/A", "SC-001", "SC-002", "SC-003"];
+    const dyeingOrderType = ["Knitting Order", "AOP Order", "Fabric Booking Order", "Master Dyeing Order"];
 
     return (
         <DashboardLayout title="Add New Order">
@@ -185,6 +175,30 @@ const NewOrder = () => {
                         />
                     </div>
 
+                    <div className="grid grid-cols-2 gap-6">
+                        <Input
+                            label={"Process Loss"}
+                            name={"processLoss"}
+                            value={formData.processLoss}
+                            type="text"
+                            onChange={handleChange}
+                            required
+                            placeholder="Wastage %"
+                            options={dyeingOrderType}
+                        />
+                        <Input
+                            label={"Order Type"}
+                            name={"orderType"}
+                            value={formData.orderType}
+                            type="select"
+                            onChange={handleChange}
+                            required
+                            placeholder="Order Type"
+                            options={dyeingOrderType}
+                        />
+
+                    </div>
+
                     {/* Row 4 */}
                     <div className="grid grid-cols-1 gap-6">
                         <Input
@@ -198,12 +212,7 @@ const NewOrder = () => {
                         />
                     </div>
 
-                    <input
-                        label="Or try to upload Excel File"
-                        name="file"
-                        type="file"
-                        onChange={handleFileChange}
-                    />
+
 
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
