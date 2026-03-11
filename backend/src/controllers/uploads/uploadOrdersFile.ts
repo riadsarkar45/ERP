@@ -77,7 +77,7 @@ export const fileUpload = async (req: Request, res: Response) => {
         const allJobs = await prisma.job.findMany();
         const jobMap = new Map(allJobs.map((j) => [j.jobNo, j.id]));
 
-        // ── STEP 3: createMany WorkOrders ─────────────────────────
+        console.log(cleanData, "cleanData");
         const workOrders = cleanData
             .filter((row) => row["JOB NO."] && row["YARN DYED FACTORY NAME"])
             .map((row) => ({
@@ -87,6 +87,7 @@ export const fileUpload = async (req: Request, res: Response) => {
                     ? excelDateToJSDate(row["WORK ORDER PLACE DATE"])
                     : null,
                 workOrderNo: row["WORK ORDER NO."]?.toString() ?? null,
+                jobNo: row["JOB NO."]?.toString() ?? null,
                 salesContractNo: row["SALES CONTRACT NO."]?.toString() ?? null,
                 bookingColor: row["BOOKING COLOR"]?.toString() ?? null,
                 composition: row["COMPOSITION"]?.toString() ?? null,

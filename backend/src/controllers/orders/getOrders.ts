@@ -14,6 +14,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                         select: {
 
                             workOrderNo: true,
+                            jobNo: true,
                             workOrderPlaceDate: true,
                             salesContractNo: true,
                             bookingColor: true,

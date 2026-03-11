@@ -9,17 +9,17 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DATABASE_URL")
 }
 
 model Factory {
-  id           Int         @id @default(autoincrement())
-  factoryName  String      @unique
-  type         String?
-  createdAt    DateTime    @default(now())
-  workOrders   WorkOrder[]
+  id          Int         @id @default(autoincrement())
+  factoryName String      @unique
+  type        String?
+  createdAt   DateTime    @default(now())
+  workOrders  WorkOrder[]
 }
 
 model Job {
@@ -34,13 +34,14 @@ model Job {
 }
 
 model WorkOrder {
-  id                     Int       @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  jobId                  Int
-  job                    Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId Int
+  jobNo String
 
-  factoryId              Int
-  factory                Factory   @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+  job       Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  factoryId Int
+  factory   Factory @relation(fields: [factoryId], references: [id], onDelete: Cascade)
 
   workOrderPlaceDate     DateTime?
   workOrderNo            String?
