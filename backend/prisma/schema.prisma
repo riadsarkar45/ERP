@@ -76,3 +76,12 @@ model WorkOrder {
   orderType              String
   createdAt              DateTime  @default(now())
 }
+
+model audit {
+  id             Int      @id @default(autoincrement())
+  auditTitle     String
+  auditStartDate DateTime
+  auditEndDate   DateTime
+  auditDesc      String
+  auditType      String   @default("pending")
+}
