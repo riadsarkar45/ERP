@@ -15,7 +15,8 @@ export const createNewOrder = async (req: Request, res: Response) => {
         composition,
         processLoss,
         orderType,
-        factoryName
+        factoryName,
+        orderQty
     } = req.body as {
         workOrderPlaceDate: string,
         workOrderNo: string,
@@ -29,10 +30,11 @@ export const createNewOrder = async (req: Request, res: Response) => {
         composition: string,
         processLoss: string,
         orderType: string,
-        factoryName: string
+        factoryName: string,
+        orderQty: string,
     };
 
-    if (!workOrderNo || !jobNo || !workOrderPlaceDate || !salesContractNo || !poNo || !buyer || !style || !color || !composition || !processLoss || !orderType || !month || !workOrderNo) {
+    if (!orderQty || !workOrderNo || !jobNo || !workOrderPlaceDate || !salesContractNo || !poNo || !buyer || !style || !color || !composition || !processLoss || !orderType || !month || !workOrderNo) {
         return res.status(400).send({ message: "All fields are required", type: "error" })
     }
 
@@ -53,7 +55,7 @@ export const createNewOrder = async (req: Request, res: Response) => {
                 {
                     data: {
                         jobId: jobId,
-                        factoryName: "factoryName"
+                        factoryName: factoryName
                     }
                 }
             )
@@ -68,7 +70,8 @@ export const createNewOrder = async (req: Request, res: Response) => {
                         orderType: orderType,
                         processLossAfterYD: processLoss,
                         bookingColor: color,
-                        salesContractNo: salesContractNo
+                        salesContractNo: salesContractNo,
+                        orderQty: orderQty
                     }
                 }
             )

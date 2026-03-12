@@ -23,7 +23,9 @@ const NewOrder = () => {
         color: "",
         composition: "",
         processLoss: "",
-        orderType: ""
+        orderType: "",
+        factoryName: "",
+        orderQTY: "",
     });
     const axios = useAxiosPublic();
     const handleChange = (e) => {
@@ -59,7 +61,7 @@ const NewOrder = () => {
     const buyers = ["KIK", "LC WAIKIKI", "H&M", "ZARA", "UNIQLO"];
     const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
     const salesContracts = ["N/A", "SC-001", "SC-002", "SC-003"];
-    const dyeingOrderType = ["Knitting Order", "AOP Order", "Fabric Booking Order", "Master Dyeing Order"];
+    const dyeingOrderType = ["Knitting Order", "AOP Order", "Fabric Booking Order", "Master Dyeing Order", "Yarn Dyeing Order"];
 
     return (
         <DashboardLayout title="Add New Order">
@@ -200,7 +202,30 @@ const NewOrder = () => {
                     </div>
 
                     {/* Row 4 */}
+                    <div className="grid grid-cols-2 gap-6">
+
+                        <Input
+                            label="Order Qty"
+                            name="orderQTY"
+                            type="text"
+                            value={formData.orderQTY}
+                            onChange={handleChange}
+                            placeholder="e.g., 95% CTN 5% ELASTANE S.J 175 GSM"
+                            required
+                        />
+
+                        <Input
+                            label="Factory Name"
+                            name="factoryName"
+                            type="text"
+                            value={formData.factoryName}
+                            onChange={handleChange}
+                            placeholder="Factory Name"
+                            required
+                        />
+                    </div>
                     <div className="grid grid-cols-1 gap-6">
+
                         <Input
                             label="Composition"
                             name="composition"

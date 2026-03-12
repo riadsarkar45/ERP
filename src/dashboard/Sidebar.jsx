@@ -23,10 +23,10 @@ const Sidebar = () => {
         { path: "/dashboard/home", label: "Dashboard", icon: LayoutDashboard },
         { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Palette },
-        { path: "/dashboard/yarn-dye-order", label: "Dyeing Order", icon: Palette },
+        { path: "/dashboard/yarn-dye-order", label: "Fabric Dyeing Orders", icon: Palette },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: FileText },
         { path: "/dashboard/new-order", label: "Add New Order", icon: PlusCircle },
-        { path: "/dashboard/new-order", label: "New Audit", icon: PlusCircle },
+        { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
     ];
 
     const toggleMobileMenu = () => {

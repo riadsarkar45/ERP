@@ -5,6 +5,9 @@ import Home from "../dashboard/pages/Home";
 import KnittingOrders from "../dashboard/pages/KnittingOrders";
 import NewOrder from "../dashboard/pages/NewOrder";
 import FactoryWiseReport from "../dashboard/pages/FactoryWiseReport";
+import AopOrders from "../dashboard/pages/AopOrders";
+import YarnDyeOrders from "../dashboard/pages/YarnDyeOrders";
+import CreateNewAudit from "../dashboard/pages/audit/CreateNewAudit";
 
 const routers = createBrowserRouter([
     {
@@ -34,6 +37,18 @@ const routers = createBrowserRouter([
                     {
                         path: "factory-wise-report/:factoryName",
                         element: <FactoryWiseReport />
+                    },
+                    {
+                        path: "aop-order",
+                        element: <AopOrders />
+                    },
+                    {
+                        path: "yarn-dye-order",
+                        element: <YarnDyeOrders />
+                    },
+                    {
+                        path: "new-audit",
+                        element: <CreateNewAudit />
                     }
                 ]
             }

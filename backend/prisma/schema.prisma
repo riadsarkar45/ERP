@@ -47,6 +47,7 @@ model WorkOrder {
   jobs                   Job       @relation(fields: [jobNo], references: [jobNo])
   workOrderPlaceDate     DateTime?
   workOrderNo            String?
+  orderQty               String
   salesContractNo        String?
   bookingColor           String?
   composition            String?

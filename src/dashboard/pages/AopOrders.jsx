@@ -3,8 +3,9 @@ import DashboardLayout from "../../components/DashboardLayout";
 import { useParams } from "react-router-dom";
 import useAxiosPublic from "../../hooks/Axios";
 import Input from "../../components/Input";
+import { Search } from "lucide-react";
 
-const FactoryWiseReport = () => {
+const AopOrders = () => {
     const { factoryName } = useParams();
     const axiosPublic = useAxiosPublic();
     const [editRowData, setEditRowData] = useState({
@@ -34,7 +35,11 @@ const FactoryWiseReport = () => {
     useEffect(() => {
         const orders = async () => {
             try {
-                const res = await axiosPublic.get("/api/work-order");
+                const res = await axiosPublic.get(`/api/work-order/${"AOP Order"}`, {
+                    params: {
+                        orderType: "AOP Order"
+                    }
+                });
                 console.log(res.data);
                 setOrders(res.data);
             } catch (err) {
@@ -95,10 +100,33 @@ const FactoryWiseReport = () => {
     return (
         <DashboardLayout title={`Factory Report - ${factoryName}`}>
             <div className={`${isEditing ? 'flex justify-between' : 'flex'} items-center mb-5 bg-white p-2 rounded-sm`}>
-                <div className="flex gap-2">
-                    <Input />
-                    <Input />
-                    <Input />
+                <div className="bg-white mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Input
+                            label=""
+                            name="buyer"
+                            type="text"
+                            placeholder="Search by Buyer"
+                        />
+                        <Input
+                            label=""
+                            name="jobNo"
+                            type="text"
+                            placeholder="Search by Job No"
+                        />
+                        <Input
+                            label=""
+                            name="style"
+                            type="text"
+                            placeholder="Search by Style"
+                        />
+                        <button
+                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600 mt-auto"
+                        >
+                            <Search size={18} />
+                            Search
+                        </button>
+                    </div>
                 </div>
                 <div>
                     {
@@ -264,4 +292,4 @@ const FactoryWiseReport = () => {
     );
 };
 
-export default FactoryWiseReport;
+export default AopOrders;
