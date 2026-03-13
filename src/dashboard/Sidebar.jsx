@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
     LayoutDashboard, 
     Package, 
@@ -9,13 +9,33 @@ import {
     PanelLeftOpen,
     PanelRightOpen,
     X,
-    Bell
+    Bell,
+    LogOut,
+    User
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const Sidebar = () => {
     const location = useLocation();
+    const { user, logout } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const userMenuRef = useRef(null);
+    
+    // Close user menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+                setShowUserMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
     
     const isActive = (path) => location.pathname === path;
     
@@ -78,17 +98,17 @@ const Sidebar = () => {
             <aside className={`
                 fixed lg:static inset-y-0 left-0 z-40
                 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64
-                shrink-0 bg-primary-500 flex flex-col border-r border-gray-300
+                shrink-0 bg-primary-500 flex flex-col border-r border-gray-200
                 transform transition-all duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
                 {/* Header with Logo */}
-                <div className="h-20 px-6 border-b border-primary-400 bg-primary-600 flex items-center justify-between">
+                <div className="h-20 px-4 border-b border-primary-400 bg-primary-600 flex items-center justify-between">
                     {!isCollapsed ? (
                         <>
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                                 {/* Logo/Icon */}
-                                <div className="w-10 h-10 bg-primary-400 rounded-full flex items-center justify-center shrink-0">
+                                <div className="w-10 h-10  border border-gray-500 bg-primary-400 rounded-full flex items-center justify-center shrink-0">
                                     <span className="text-primary-100 font-bold text-lg">E</span>
                                 </div>
                                 
@@ -109,7 +129,7 @@ const Sidebar = () => {
                         </>
                     ) : (
                         <div className="w-full flex items-center justify-center">
-                            <div className="w-10 h-10 bg-white rounded-md flex items-center justify-center">
+                            <div className="w-10 h-8 bg-white rounded-full flex items-center justify-center">
                                 <span className="text-primary-500 font-bold text-lg">E</span>
                             </div>
                         </div>
@@ -117,7 +137,7 @@ const Sidebar = () => {
                 </div>
                 
                 {/* Navigation */}
-                <nav className="flex-1 p-4 overflow-y-auto">
+                <nav className="flex-1  overflow-y-auto">
                     <ul className="space-y-1">
                         {navItems.map((item) => {
                             const Icon = item.icon;
@@ -126,7 +146,7 @@ const Sidebar = () => {
                                     <Link
                                         to={item.path}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${
+                                        className={`flex items-center gap-3 px-4 py-3  transition-all duration-200 no-underline ${
                                             isActive(item.path)
                                                 ? 'bg-primary-400 text-white'
                                                 : 'text-white hover:bg-primary-600'
@@ -172,11 +192,50 @@ const Sidebar = () => {
                         </div>
                     </div>
                     
-                    {/* Notification Bell */}
-                    <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors relative">
-                        <Bell size={20} />
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                    </button>
+                    {/* User Menu and Notification Bell */}
+                    <div className="flex items-center gap-3">
+                        {/* User Menu */}
+                        <div className="relative" ref={userMenuRef}>
+                            <button
+                                onClick={() => setShowUserMenu(!showUserMenu)}
+                                className="flex items-center gap-2 p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                            >
+                                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                                    <User size={16} className="text-white" />
+                                </div>
+                                <span className="text-sm font-medium hidden sm:block">{user?.name}</span>
+                            </button>
+
+                            {/* User Dropdown */}
+                            {showUserMenu && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                                    <div className="py-1">
+                                        <div className="px-4 py-2 border-b border-gray-100">
+                                            <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                                            <p className="text-xs text-gray-500">{user?.email}</p>
+                                            <p className="text-xs text-primary-600 capitalize">{user?.role?.toLowerCase()}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                logout();
+                                                setShowUserMenu(false);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                        >
+                                            <LogOut size={16} />
+                                            Sign out
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Notification Bell */}
+                        <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors relative">
+                            <Bell size={20} />
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Content Area */}

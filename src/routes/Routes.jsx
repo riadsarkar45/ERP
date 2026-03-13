@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import Root from "../root/Root";
 import Sidebar from "../dashboard/Sidebar";
 import Home from "../dashboard/pages/Home";
@@ -8,6 +8,8 @@ import FactoryWiseReport from "../dashboard/pages/FactoryWiseReport";
 import AopOrders from "../dashboard/pages/AopOrders";
 import YarnDyeOrders from "../dashboard/pages/YarnDyeOrders";
 import CreateNewAudit from "../dashboard/pages/audit/CreateNewAudit";
+import Login from "../auth/Login";
+import ProtectedRoute from "../components/ProtectedRoute";
 
 const routers = createBrowserRouter([
     {
@@ -16,12 +18,24 @@ const routers = createBrowserRouter([
         children: [
             {
                 path: "/",
-                element: <h1>Login</h1>
+                element: <Navigate to="/login" replace />
+            },
+            {
+                path: "/login",
+                element: <Login />
             },
             {
                 path: "/dashboard",
-                element: <Sidebar />,
+                element: (
+                    <ProtectedRoute>
+                        <Sidebar />
+                    </ProtectedRoute>
+                ),
                 children: [
+                    {
+                        path: "",
+                        element: <Navigate to="/dashboard/home" replace />
+                    },
                     {
                         path: "home",
                         element: <Home />
@@ -29,6 +43,14 @@ const routers = createBrowserRouter([
                     {
                         path: "knitting-order",
                         element: <KnittingOrders />
+                    },
+                    {
+                        path: "yarn-dye-order",
+                        element: <div className="p-6"><h2 className="text-2xl font-semibold">Yarn Dyeing Orders</h2><p className="text-gray-600 mt-2">Coming soon...</p></div>
+                    },
+                    {
+                        path: "aop-order",
+                        element: <div className="p-6"><h2 className="text-2xl font-semibold">AOP Orders</h2><p className="text-gray-600 mt-2">Coming soon...</p></div>
                     },
                     {
                         path: "new-order",
