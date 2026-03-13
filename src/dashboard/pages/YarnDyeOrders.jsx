@@ -173,12 +173,12 @@ const YarnDyeOrders = () => {
                         <tbody>
                             {orders.map((factory, factoryIndex) =>
                                 factory.workOrders.map((order, orderIndex) => {
-                                    return factory.factories.map((fact, index) => {
                                         const isMarked = markRowId[order.id];
+                                        const fact = factory.factories[0];
                                         return (
                                             <tr
                                                 onClick={() => handleRowMark(order.id)}
-                                                key={`${factoryIndex}-${orderIndex}-${index}`}
+                                                key={`${factoryIndex}`}
                                                 className={`${isMarked ? 'bg-yellow-500 bg-opacity-30' : 'transition-colors'} `}
                                             >
                                                 {/* Factory name (rowspan) */}
@@ -281,7 +281,7 @@ const YarnDyeOrders = () => {
                                                 </td>
                                             </tr>
                                         )
-                                    })
+                                    
                                 })
                             )}
                         </tbody>

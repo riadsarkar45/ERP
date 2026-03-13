@@ -16,7 +16,7 @@ export const createNewOrder = async (req: Request, res: Response) => {
         processLoss,
         orderType,
         factoryName,
-        orderQty
+        orderQTY
     } = req.body as {
         workOrderPlaceDate: string,
         workOrderNo: string,
@@ -31,10 +31,11 @@ export const createNewOrder = async (req: Request, res: Response) => {
         processLoss: string,
         orderType: string,
         factoryName: string,
-        orderQty: string,
+        orderQTY: string,
     };
-
-    if (!orderQty || !workOrderNo || !jobNo || !workOrderPlaceDate || !salesContractNo || !poNo || !buyer || !style || !color || !composition || !processLoss || !orderType || !month || !workOrderNo) {
+    console.log(req.body);
+    if (!orderQTY || !workOrderNo || !jobNo || !workOrderPlaceDate || !salesContractNo || !poNo || !buyer || !style || !color || !composition || !processLoss || !orderType || !month || !workOrderNo) {
+        console.log("empty detected");
         return res.status(400).send({ message: "All fields are required", type: "error" })
     }
 
@@ -71,7 +72,7 @@ export const createNewOrder = async (req: Request, res: Response) => {
                         processLossAfterYD: processLoss,
                         bookingColor: color,
                         salesContractNo: salesContractNo,
-                        orderQty: orderQty
+                        orderQty: orderQTY
                     }
                 }
             )
