@@ -8,6 +8,7 @@ import FactoryWiseReport from "../dashboard/pages/FactoryWiseReport";
 import AopOrders from "../dashboard/pages/AopOrders";
 import YarnDyeOrders from "../dashboard/pages/YarnDyeOrders";
 import CreateNewAudit from "../dashboard/pages/audit/CreateNewAudit";
+import FabricDyeOrder from "../dashboard/pages/FabricDyeOrder";
 
 const routers = createBrowserRouter([
     {
@@ -49,6 +50,10 @@ const routers = createBrowserRouter([
                     {
                         path: "new-audit",
                         element: <CreateNewAudit />
+                    },
+                    {
+                        path: "fabric-booking-order",
+                        element: <FabricDyeOrder />
                     }
                 ]
             }

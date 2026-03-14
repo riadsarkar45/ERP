@@ -61,7 +61,7 @@ const NewOrder = () => {
     const buyers = ["KIK", "LC WAIKIKI", "H&M", "ZARA", "UNIQLO"];
     const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
     const salesContracts = ["N/A", "SC-001", "SC-002", "SC-003"];
-    const dyeingOrderType = ["Knitting Order", "AOP Order", "Fabric Booking Order", "Master Dyeing Order", "Yarn Dyeing Order"];
+    const dyeingOrderType = ["knittingOrder", "aopOrder", "fabricBookingOrder", "masterDyeingOrder", "yarnDyeingOrder"];
 
     return (
         <DashboardLayout title="Add New Order">

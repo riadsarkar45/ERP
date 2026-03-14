@@ -1,11 +1,11 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useState } from "react";
-import { 
-    LayoutDashboard, 
-    Package, 
-    Palette, 
-    FileText, 
-    PlusCircle, 
+import {
+    LayoutDashboard,
+    Package,
+    Palette,
+    FileText,
+    PlusCircle,
     PanelLeftOpen,
     PanelRightOpen,
     X,
@@ -16,14 +16,14 @@ const Sidebar = () => {
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
-    
+
     const isActive = (path) => location.pathname === path;
-    
+
     const navItems = [
         { path: "/dashboard/home", label: "Dashboard", icon: LayoutDashboard },
         { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Palette },
-        { path: "/dashboard/yarn-dye-order", label: "Fabric Dyeing Orders", icon: Palette },
+        { path: "/dashboard/fabric-booking-order", label: "Fabric Dyeing Orders", icon: Palette },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: FileText },
         { path: "/dashboard/new-order", label: "Add New Order", icon: PlusCircle },
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
@@ -40,7 +40,7 @@ const Sidebar = () => {
     // Get current page info with dynamic titles
     const getPageInfo = () => {
         const path = location.pathname;
-        
+
         // Handle factory report pages
         if (path.includes('/factory-wise-report/')) {
             const factoryName = path.split('/factory-wise-report/')[1];
@@ -49,7 +49,7 @@ const Sidebar = () => {
                 subtitle: 'Factory wise yarn dyeing report'
             };
         }
-        
+
         // Handle other routes
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
@@ -58,7 +58,7 @@ const Sidebar = () => {
             '/dashboard/aop-order': { title: 'AOP Orders', subtitle: 'Manage AOP orders' },
             '/dashboard/new-order': { title: 'Add New Order', subtitle: 'Create new order' },
         };
-        
+
         return routeMap[path] || { title: 'Dashboard', subtitle: 'Welcome back, System Admin' };
     };
 
@@ -91,13 +91,13 @@ const Sidebar = () => {
                                 <div className="w-10 h-10 bg-primary-400 rounded-full flex items-center justify-center shrink-0">
                                     <span className="text-primary-100 font-bold text-lg">E</span>
                                 </div>
-                                
+
                                 <div className="flex-1 min-w-0">
                                     <h1 className="text-base font-bold text-white truncate">ERP System</h1>
                                     <p className="text-primary-200 text-xs">Audit Management</p>
                                 </div>
                             </div>
-                            
+
                             {/* Mobile Close Button - Only on mobile */}
                             <button
                                 onClick={toggleMobileMenu}
@@ -115,7 +115,7 @@ const Sidebar = () => {
                         </div>
                     )}
                 </div>
-                
+
                 {/* Navigation */}
                 <nav className="flex-1 p-4 overflow-y-auto">
                     <ul className="space-y-1">
@@ -126,11 +126,10 @@ const Sidebar = () => {
                                     <Link
                                         to={item.path}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${
-                                            isActive(item.path)
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive(item.path)
                                                 ? 'bg-primary-400 text-white'
                                                 : 'text-white hover:bg-primary-600'
-                                        } ${isCollapsed ? 'justify-center' : ''}`}
+                                            } ${isCollapsed ? 'justify-center' : ''}`}
                                         title={isCollapsed ? item.label : ''}
                                     >
                                         <Icon size={20} className="shrink-0" />
@@ -162,7 +161,7 @@ const Sidebar = () => {
                         >
                             {isCollapsed || !isMobileMenuOpen ? <PanelRightOpen size={20} /> : <PanelLeftOpen size={20} />}
                         </button>
-                        
+
                         {/* Page Title */}
                         <div>
                             <h2 className="text-xl font-semibold text-gray-800">
@@ -171,14 +170,14 @@ const Sidebar = () => {
                             <p className="text-sm text-gray-500">{pageInfo.subtitle}</p>
                         </div>
                     </div>
-                    
+
                     {/* Notification Bell */}
                     <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors relative">
                         <Bell size={20} />
                         <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
                     </button>
                 </div>
-                
+
                 {/* Content Area */}
                 <div className="flex-1 overflow-auto">
                     <div className="p-6 lg:p-8 w-full">

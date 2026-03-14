@@ -4,16 +4,12 @@ export const getAllOrders = async (req: Request, res: Response) => {
     const { orderType } = req.params as {orderType: string};
     console.log(orderType);
     try {
-        const factoryOrderDetail = await prisma.job.findMany(
+        const factoryOrderDetail = await prisma.factory.findMany(
             {
                 select: {
 
                     id: true,
-                    jobNo: true,
-                    buyer: true,
-                    poNo: true,
-                    style: true,
-                    month: true,
+                    factoryName: true,
                     createdAt: true,
 
                     workOrders: {
@@ -49,14 +45,21 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             remarks: true,
                             createdAt: true,
                             id: true,
+                            orderQty: true,
                             orderType: true,
                         }
                     },
-                    factories: {
-                        select: {
-                            factoryName: true,
+                    jobs:{
+                        select:{
+                            jobNo: true,
+                            buyer: true,
+                            poNo: true,
+                            style: true,
+                            month: true,
+                            createdAt: true,
+                            id: true
                         }
-                    }
+                    },
                 },
 
             }

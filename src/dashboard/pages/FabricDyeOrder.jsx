@@ -5,7 +5,7 @@ import useAxiosPublic from "../../hooks/Axios";
 import Input from "../../components/Input";
 import { Search } from "lucide-react";
 
-const YarnDyeingOrder = () => {
+const FabricDyeOrder = () => {
     const { factoryName } = useParams();
     const axiosPublic = useAxiosPublic();
     const [editRowData, setEditRowData] = useState({
@@ -38,7 +38,7 @@ const YarnDyeingOrder = () => {
     useEffect(() => {
         const orders = async () => {
             try {
-                const res = await axiosPublic.get(`/api/work-order/${"yarnDyeingOrder"}`);
+                const res = await axiosPublic.get(`/api/work-order/${"fabricBookingOrder"}`);
                 console.log(res.data);
                 setOrders(res.data);
             } catch (err) {
@@ -48,7 +48,7 @@ const YarnDyeingOrder = () => {
         orders();
     }, [axiosPublic])
     console.log(orders);
-   
+    
 
     const handleEditRowData = useCallback((indexId, editingText, editingField, orderId) => {
         setEditRowData(prev => ({
@@ -78,7 +78,7 @@ const YarnDyeingOrder = () => {
         const update = await axiosPublic.patch(`/api/update-order/${orderId}`, changedField)
         console.log(update);
         if (update.status === 200) {
-            const res = await axiosPublic.get(`/api/work-order/${"yarnDyeingOrder"}`);
+            const res = await axiosPublic.get(`/api/work-order/${"fabricBookingOrder"}`);
             setOrders(res.data);
             setChangedField({});
             setEditRowData(prev => ({ ...prev, editingIndex: null, editingField: null }));
@@ -311,4 +311,4 @@ const YarnDyeingOrder = () => {
     );
 };
 
-export default YarnDyeingOrder;
+export default FabricDyeOrder;

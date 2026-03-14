@@ -13,6 +13,10 @@ const KnittingOrders = () => {
         yarnDyeingOrder: "",
         ydPricePerKg: 0,
         buyer: "",
+        poNo: "",
+        style: "",
+        month: "",
+        orderQty: "",
         yarnDyedWorkOrderQty: 0,
         yarnDeliveryForYD: "",
         delShortExcess: "",
@@ -29,17 +33,12 @@ const KnittingOrders = () => {
     const [orderId, setOrderId] = useState(0)
     const [isEditing, setIsEditing] = useState(false)
     const [orders, setOrders] = useState([]);
-    const [markRowId, setMarkRowId] = useState({});
     const [changedField, setChangedField] = useState({})
 
     useEffect(() => {
         const orders = async () => {
             try {
-                const res = await axiosPublic.get(`/api/work-order/${"Knitting Order"}`, {
-                    params: {
-                        orderType: "AOP Order"
-                    }
-                });
+                const res = await axiosPublic.get(`/api/work-order/${"knittingOrder"}`);
                 console.log(res.data);
                 setOrders(res.data);
             } catch (err) {
@@ -48,13 +47,8 @@ const KnittingOrders = () => {
         }
         orders();
     }, [axiosPublic])
-
-    const handleRowMark = (id) => {
-        setMarkRowId((prev) => ({
-            ...prev,
-            [id]: !prev[id]
-        }));
-    };
+    console.log(orders);
+    
 
     const handleEditRowData = useCallback((indexId, editingText, editingField, orderId) => {
         setEditRowData(prev => ({
@@ -84,7 +78,7 @@ const KnittingOrders = () => {
         const update = await axiosPublic.patch(`/api/update-order/${orderId}`, changedField)
         console.log(update);
         if (update.status === 200) {
-            const res = await axiosPublic.get("/api/work-order");
+            const res = await axiosPublic.get(`/api/work-order/${"knittingOrder"}`);
             setOrders(res.data);
             setChangedField({});
             setEditRowData(prev => ({ ...prev, editingIndex: null, editingField: null }));
@@ -146,7 +140,11 @@ const KnittingOrders = () => {
                                     "YARN DYED FACTORY NAME",
                                     "JOB NO.",
                                     "BUYER NAME",
+                                    "PO NO",
+                                    "STYLE",
+                                    "MONTH",
                                     "BOOKING COLOR",
+                                    "ORDER QTY",
                                     "Y/D PRICE PER KG",
                                     "YARN DYED WORK ORDER (QTY)",
                                     "YARN DELIVERY FOR Y/D",
@@ -171,45 +169,64 @@ const KnittingOrders = () => {
                         </thead>
 
                         <tbody>
-                            {orders.map((factory, factoryIndex) =>
-                                factory.workOrders.map((order, orderIndex) => {
-                                    return factory.factories.map((fact, index) => {
-                                        const isMarked = markRowId[order.id];
+                            {orders?.map((factory, factoryIndex) => {
+                                return factory.workOrders.map((order, orderIndex) => {
+                                        console.log(order, "mapped order");
+                                        const job = factory.jobs.find(j => j.jobNo === order.workOrderNo);
                                         return (
                                             <tr
-                                                onClick={() => handleRowMark(order.id)}
-                                                key={`${factoryIndex}-${orderIndex}-${index}`}
-                                                className={`${isMarked ? 'bg-yellow-500 bg-opacity-30' : 'transition-colors'} `}
+                                                //onClick={() => handleRowMark(order.id)}
+                                                key={`${factoryIndex} ${order.workOrderNo}`}
+                                            // className={`${isMarked ? 'bg-yellow-500 bg-opacity-30' : 'transition-colors'} `}
                                             >
-                                                {/* Factory name (rowspan) */}
-                                                {orderIndex === 0 && (
+                                                {orderIndex === 0 && (  // ✅ Render once per factory group
                                                     <td
-                                                        rowSpan={factory.workOrders.length}
+                                                        rowSpan={factory.workOrders.length}  // ✅ Spans all orders of this factory
                                                         className="px-3 py-2 align-middle font-semibold bg-primary-50 text-primary-700 text-sm border border-gray-300"
                                                     >
-                                                        {fact.factoryName}
+                                                        {factory.factoryName}
                                                     </td>
                                                 )}
 
-                                                {/* Job No (rowspan) */}
-                                                {orderIndex === 0 && (
-                                                    <td
-                                                        rowSpan={factory.workOrders.length}
-                                                        className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
-                                                    >
-                                                        {order.workOrderNo}
-                                                    </td>
-                                                )}
+                                                <td
+                                                    className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
+                                                >
+                                                    {order.workOrderNo}
+                                                </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, factory.buyer, "buyer", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
                                                     {
-                                                        order.id === orderId && editRowData.editingField === "buyer" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="buyer" value={editRowData.buyer} type="text" /> : factory.buyer
+                                                        job.id === orderId && editRowData.editingField === "buyer" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="buyer" value={editRowData.buyer} type="text" /> : job.buyer
                                                     }
 
                                                 </td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                    {
+                                                        job.id === orderId && editRowData.editingField === "poNo" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="poNo" value={editRowData.poNo} type="text" /> : job.poNo
+                                                    }
+
+                                                </td>
+                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                    {
+                                                        job.id === orderId && editRowData.editingField === "style" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="style" value={editRowData.style} type="text" /> : job.style
+                                                    }
+
+                                                </td>
+                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                    {
+                                                        job.id === orderId && editRowData.editingField === "month" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="month" value={editRowData.month} type="text" /> : job.month
+                                                    }
+
+                                                </td>
+                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
                                                     {
                                                         order.id === orderId && editRowData.editingField === "bookingColor" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="bookingColor" value={editRowData.bookingColor} type="text" /> : order.bookingColor
+                                                    }
+
+                                                </td>
+                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.orderQty, "orderQty", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                    {
+                                                        order.id === orderId && editRowData.editingField === "orderQty" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="orderQty" value={editRowData.orderQty} type="text" /> : order.orderQty
                                                     }
 
                                                 </td>
@@ -220,7 +237,7 @@ const KnittingOrders = () => {
                                                     }
                                                 </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                               <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
                                                     {
                                                         editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "yarnDyedWorkOrderQty" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="yarnDyedWorkOrderQty" value={editRowData.yarnDyedWorkOrderQty} type="text" /> : order.yarnDyedWorkOrderQty
                                                     }
@@ -281,8 +298,10 @@ const KnittingOrders = () => {
                                                 </td>
                                             </tr>
                                         )
-                                    })
                                 })
+
+                            }
+
                             )}
                         </tbody>
                     </table>

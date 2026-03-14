@@ -41,6 +41,30 @@ export const createNewOrder = async (req: Request, res: Response) => {
 
     try {
         await prisma.$transaction(async (tx) => {
+
+            const findFactoryName = await tx.factory.findUnique({
+                where: { factoryName: factoryName }
+            })
+            const findJob = await tx.job.findUnique({
+                where: { jobNo: jobNo }
+            })
+            let id = findJob?.id; // job id from @findJob
+            let factoryId = findFactoryName?.id
+
+            if (!findFactoryName) {
+                const newFactory = await tx.factory.create(
+                    {
+                        data: {
+                            jobId: Number(id),
+                            factoryName: factoryName
+                        }
+                    }
+                )
+
+                factoryId = newFactory.id
+            }else {
+                factoryId = findFactoryName.id
+            }
             const job = await tx.job.create({
                 data: {
                     month: month,
@@ -48,18 +72,15 @@ export const createNewOrder = async (req: Request, res: Response) => {
                     poNo: poNo,
                     style: style,
                     jobNo: jobNo,
+                    factoryId: factoryId
+                    
                 }
             })
             const jobId = job.id
 
-            await tx.factory.create(
-                {
-                    data: {
-                        jobId: jobId,
-                        factoryName: factoryName
-                    }
-                }
-            )
+
+
+
 
             await tx.workOrder.create(
                 {
@@ -72,7 +93,8 @@ export const createNewOrder = async (req: Request, res: Response) => {
                         processLossAfterYD: processLoss,
                         bookingColor: color,
                         salesContractNo: salesContractNo,
-                        orderQty: orderQTY
+                        orderQty: orderQTY,
+                        factoryId: Number(factoryId),
                     }
                 }
             )
