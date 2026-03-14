@@ -58,9 +58,6 @@ const NewOrder = () => {
 
 
 
-    const buyers = ["KIK", "LC WAIKIKI", "H&M", "ZARA", "UNIQLO"];
-    const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
-    const salesContracts = ["N/A", "SC-001", "SC-002", "SC-003"];
     const dyeingOrderType = ["knittingOrder", "aopOrder", "fabricBookingOrder", "masterDyeingOrder", "yarnDyeingOrder"];
 
     return (
@@ -100,10 +97,9 @@ const NewOrder = () => {
                         <Input
                             label="Month"
                             name="month"
-                            type="select"
+                            type="text"
                             value={formData.month}
                             onChange={handleChange}
-                            options={months}
                             placeholder="Select Month"
                             required
                         />
@@ -114,10 +110,8 @@ const NewOrder = () => {
                         <Input
                             label="Sales Contract No"
                             name="salesContractNo"
-                            type="select"
                             value={formData.salesContractNo}
                             onChange={handleChange}
-                            options={salesContracts}
                             placeholder="Select Contract"
                             required
                         />
@@ -125,10 +119,9 @@ const NewOrder = () => {
                         <Input
                             label="Buyer"
                             name="buyer"
-                            type="select"
                             value={formData.buyer}
                             onChange={handleChange}
-                            options={buyers}
+                            type="text"
                             placeholder="Select Buyer"
                             required
                         />
@@ -186,7 +179,6 @@ const NewOrder = () => {
                             onChange={handleChange}
                             required
                             placeholder="Wastage %"
-                            options={dyeingOrderType}
                         />
                         <Input
                             label={"Order Type"}
