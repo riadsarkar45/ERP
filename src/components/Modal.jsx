@@ -1,60 +1,39 @@
-import { useState } from 'react';
 import { X, Save } from 'lucide-react';
 import Input from './Input';
 
-const Modal = ({ order, onClose, onUpdate }) => {
-    const [formData, setFormData] = useState(() => order || {
-        workOrderPlaceDate: "",
-        workOrderNo: "",
-        month: "",
-        salesContractNo: "",
-        buyer: "",
-        jobNo: "",
-        poNo: "",
-        style: "",
-        color: "",
-        composition: "",
-        yarnDelivery: "",
-        finishYarnReceived: "",
-        orderQty: ""
-    });
+const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handleEditOnChange, setEditRowData }) => {
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
+    const filterWorkOrderWithId = () => {
+        const filt = orders.find(wo => wo.id === orderId);
+        if (filt) {
+            console.log(filt, 'filtered');
+        } else {
+            console.log("no data found");
+        }
+    }
+    filterWorkOrderWithId();
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onUpdate(formData);
-    };
-
-    const buyers = ["KIK", "LC WAIKIKI", "H&M", "ZARA", "UNIQLO"];
-    const months = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
-    const salesContracts = ["N/A", "SC-001", "SC-002", "SC-003"];
+    console.log(editRowData.editingField, "modal .jsx");
 
     return (
         <>
             {/* Backdrop */}
-            <div 
+            <div
                 className="fixed inset-0 bg-black bg-opacity-50 z-50 animate-fade-in"
-                onClick={onClose}
+                onClick={() => setIsEditing(false)}
             />
-            
+
             {/* Modal */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-                <div 
+                <div
                     className="bg-white rounded-md border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden pointer-events-auto animate-slide-in"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
                     <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-800">Edit Order</h2>
+                        <h2 className="text-xl font-semibold uppercase text-gray-800">Edit Order</h2>
                         <button
-                            onClick={onClose}
+                            onClick={() => setIsEditing(false)}
                             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
                         >
                             <X size={20} />
@@ -63,49 +42,158 @@ const Modal = ({ order, onClose, onUpdate }) => {
 
                     {/* Content */}
                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Row 1 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                <Input
-                                    label="Work Order Place Date"
-                                    name="workOrderPlaceDate"
-                                    type="date"
-                                    value={formData.workOrderPlaceDate}
-                                    onChange={handleChange}
-                                    required
-                                />
+                        {/* Row 1 */}
+                        {
+                            editRowData.editingField === "yarnReturnReceived" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <Input
+                                        label="Date"
+                                        name="date"
+                                        type="date"
+                                        onChange={handleEditOnChange}
+                                        required
+                                    />
 
-                                <Input
-                                    label="Work Order No"
-                                    name="workOrderNo"
-                                    type="text"
-                                    value={formData.workOrderNo}
-                                    onChange={handleChange}
-                                    placeholder="Enter work order number"
-                                    required
-                                />
+                                    <Input
+                                        label="Challan No"
+                                        name="challanNo"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.challan}
 
-                                <Input
-                                    label="Month"
-                                    name="month"
-                                    type="select"
-                                    value={formData.month}
-                                    onChange={handleChange}
-                                    options={months}
-                                    placeholder="Select Month"
-                                    required
-                                />
-                            </div>
+                                        placeholder="Enter Challan No"
+                                        required
+                                    />
 
-                            {/* Row 2 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <Input
+                                        label="Yarn Received Qty"
+                                        name="yarnReturnReceived"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.yarnReturnReceived}
+                                        placeholder="Qty"
+                                        required
+                                    />
+
+                                </div>
+                            )
+                        }
+                        {
+                            editRowData.editingField === "greyReceivedFromYD" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <Input
+                                        label="Date"
+                                        name="date"
+                                        type="date"
+                                        onChange={handleEditOnChange}
+                                        required
+                                    />
+
+                                    <Input
+                                        label="Challan No"
+                                        name="challanNo"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.challan}
+
+                                        placeholder="Enter Challan No"
+                                        required
+                                    />
+
+                                    <Input
+                                        label="Grey Received From YD"
+                                        name="greyReceivedFromYD"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.greyReceivedFromYD}
+                                        placeholder="greyReceivedFromYD"
+                                        required
+                                    />
+
+                                </div>
+                            )
+                        }
+                        {
+                            editRowData.editingField === "yarnDeliveryForYD" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <Input
+                                        label="Date"
+                                        name="date"
+                                        type="date"
+                                        onChange={handleEditOnChange}
+                                        required
+                                    />
+
+                                    <Input
+                                        label="Challan No"
+                                        name="challanNo"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.challan}
+
+                                        placeholder="Enter Challan No"
+                                        required
+                                    />
+
+                                    <Input
+                                        label="Yarn Delivery YD"
+                                        name="yarnDeliveryForYD"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.yarnDeliveryForYD}
+                                        placeholder="yarnDeliveryForYD"
+                                        required
+                                    />
+
+                                </div>
+                            )
+                        }
+                        {
+                            editRowData.editingField === "finishYarnReceived" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <Input
+                                        label="Date"
+                                        name="date"
+                                        type="date"
+                                        onChange={handleEditOnChange}
+                                        required
+                                    />
+
+                                    <Input
+                                        label="Challan No"
+                                        name="challanNo"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.challan}
+
+                                        placeholder="Enter Challan No"
+                                        required
+                                    />
+
+                                    <Input
+                                        label="Finish Yarn Received"
+                                        name="finishYarnReceived"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.finishYarnReceived}
+                                        placeholder="Finish Yarn Received"
+                                        required
+                                    />
+
+                                </div>
+                            )
+                        }
+
+
+                        {/* Row 2 */}
+                        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <Input
                                     label="Sales Contract No"
                                     name="salesContractNo"
-                                    type="select"
-                                    value={formData.salesContractNo}
-                                    onChange={handleChange}
-                                    options={salesContracts}
+                                    type="text"
+
+                                    onChange={handleEditOnChange}
+
                                     placeholder="Select Contract"
                                     required
                                 />
@@ -113,10 +201,9 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                 <Input
                                     label="Buyer"
                                     name="buyer"
-                                    type="select"
-                                    value={formData.buyer}
-                                    onChange={handleChange}
-                                    options={buyers}
+                                    type="text"
+                                    onChange={handleEditOnChange}
+
                                     placeholder="Select Buyer"
                                     required
                                 />
@@ -125,21 +212,19 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                     label="Job No"
                                     name="jobNo"
                                     type="text"
-                                    value={formData.jobNo}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., SM26-3429/JAN"
                                     required
                                 />
-                            </div>
+                            </div> */}
 
-                            {/* Row 3 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* Row 3 */}
+                        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <Input
                                     label="PO No"
                                     name="poNo"
                                     type="text"
-                                    value={formData.poNo}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., P-264702"
                                     required
                                 />
@@ -148,8 +233,7 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                     label="Style"
                                     name="style"
                                     type="text"
-                                    value={formData.style}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., WGR-538"
                                     required
                                 />
@@ -158,20 +242,18 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                     label="Color"
                                     name="color"
                                     type="text"
-                                    value={formData.color}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., WHITE SWAN (12-0000 TCX)"
                                     required
                                 />
-                            </div>
-                            {/* row 4 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            </div> */}
+                        {/* row 4 */}
+                        {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <Input
                                     label="Yarn Delivery Y/D"
                                     name="yarnDelivery"
                                     type="text"
-                                    value={formData.yarnDelivery}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., P-264702"
                                     required
                                 />
@@ -180,8 +262,7 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                     label="Yarn Dyed Order Qty"
                                     name="orderQty"
                                     type="text"
-                                    value={formData.orderQty}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., WGR-538"
                                     required
                                 />
@@ -190,45 +271,44 @@ const Modal = ({ order, onClose, onUpdate }) => {
                                     label="Finish Yarn Received"
                                     name="finishYarnReceived"
                                     type="text"
-                                    value={formData.finishYarnReceived}
-                                    onChange={handleChange}
+
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., WHITE SWAN (12-0000 TCX)"
                                     required
                                 />
-                            </div>
+                            </div> */}
 
-                            {/* Row 5 */}
-                            <div className="grid grid-cols-1 gap-6">
+                        {/* Row 5 */}
+                        {/* <div className="grid grid-cols-1 gap-6">
                                 <Input
                                     label="Composition"
                                     name="composition"
                                     type="text"
-                                    value={formData.composition}
-                                    onChange={handleChange}
+                                    onChange={handleEditOnChange}
                                     placeholder="e.g., 95% CTN 5% ELASTANE S.J 175 GSM"
                                     required
                                 />
-                            </div>
+                            </div> */}
 
-                            {/* Footer Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                                <button
-                                    type="submit"
-                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
-                                >
-                                    <Save size={18} />
-                                    Update Order
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={onClose}
-                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-all duration-200 border border-gray-200"
-                                >
-                                    <X size={18} />
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
+                        {/* Footer Buttons */}
+                        <div className="flex flex-col sm:flex-row gap-3 mt-10 border-gray-200">
+                            <button
+                                type="submit"
+                                onClick={() => handleSubmit()}
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                            >
+                                <Save size={18} />
+                                Update Order
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditing(false)}
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-all duration-200 border border-gray-200"
+                            >
+                                <X size={18} />
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

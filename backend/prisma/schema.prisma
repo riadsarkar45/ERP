@@ -79,6 +79,19 @@ model WorkOrder {
   orderType              String
   createdAt              DateTime  @default(now())
   factoryId              Int
+  challanNo              String?
+  date                   DateTime
+}
+
+model deliveries {
+  id                 Int      @id @default(autoincrement())
+  challanNo          Int
+  yarnReturnReceived String?
+  greyReceivedFromYd String?
+  yarnDeliveryForYD  String?
+  finishYarnReceived String?
+  deliveryDate       DateTime
+  jobId              Int      @unique
 }
 
 model audit {

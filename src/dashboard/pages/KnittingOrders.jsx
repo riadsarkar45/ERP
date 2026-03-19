@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import useAxiosPublic from "../../hooks/Axios";
 import Input from "../../components/Input";
 import { Search } from "lucide-react";
+import Modal from "../../components/Modal";
 
 const KnittingOrders = () => {
     const { factoryName } = useParams();
@@ -17,6 +18,7 @@ const KnittingOrders = () => {
         style: "",
         month: "",
         orderQty: "",
+        date: "",
         yarnDyedWorkOrderQty: 0,
         yarnDeliveryForYD: "",
         delShortExcess: "",
@@ -29,6 +31,7 @@ const KnittingOrders = () => {
         pendingBillingAmount: "",
         editingIndex: null,
         editingField: "",
+        challanNo: 0,        
     });
     const [orderId, setOrderId] = useState(0)
     const [isEditing, setIsEditing] = useState(false)
@@ -47,8 +50,7 @@ const KnittingOrders = () => {
         }
         orders();
     }, [axiosPublic])
-    console.log(orders);
-    
+
 
     const handleEditRowData = useCallback((indexId, editingText, editingField, orderId) => {
         setEditRowData(prev => ({
@@ -58,6 +60,7 @@ const KnittingOrders = () => {
             [editingField]: editingText
         }));
         setOrderId(orderId)
+        setIsEditing(true)
     }, [])
 
     const handleEditOnChange = (e) => {
@@ -88,7 +91,9 @@ const KnittingOrders = () => {
     console.log(changedField);
     useEffect(() => {
         console.log(editRowData.editingIndex, "index id");
-    }, [editRowData.editingIndex]);
+        console.log(changedField, "changed field");
+        console.log(editRowData.editingField, "edit row data");
+    }, [editRowData.editingIndex, changedField, editRowData]);
 
 
     return (
@@ -122,16 +127,20 @@ const KnittingOrders = () => {
                         </button>
                     </div>
                 </div>
-                <div>
-                    {
-                        isEditing && <button onClick={() => handleSubmit()} className="border p-2 bg-green-500 border-bg-green-500 bg-opacity-30 text-green-600">Save Changes</button>
-                    }
-                </div>
+
             </div>
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
 
                 <div className="table-container overflow-x-auto">
-
+                    {isEditing && <Modal
+                        setIsEditing={setIsEditing}
+                        handleSubmit={handleSubmit}
+                        handleEditOnChange={handleEditOnChange}
+                        setEditRowData={setEditRowData}
+                        editRowData={editRowData}
+                        orderId={orderId}
+                        orders={orders}
+                    />}
                     <table className="w-full border-collapse factory-table" style={{ minWidth: '1200px' }}>
                         {/* HEADER */}
                         <thead className="bg-gray-50">
@@ -157,6 +166,8 @@ const KnittingOrders = () => {
                                     "PAYABLE AMOUNT",
                                     "PAID BILLING AMOUNT",
                                     "PENDING BILLING AMOUNT",
+                                    "FROM FACTORY",
+                                    "TO FACTORY",
                                 ].map((header, i) => (
                                     <th
                                         key={i}
@@ -171,133 +182,136 @@ const KnittingOrders = () => {
                         <tbody>
                             {orders?.map((factory, factoryIndex) => {
                                 return factory.workOrders.map((order, orderIndex) => {
-                                        console.log(order, "mapped order");
-                                        const job = factory.jobs.find(j => j.jobNo === order.workOrderNo);
-                                        return (
-                                            <tr
-                                                //onClick={() => handleRowMark(order.id)}
-                                                key={`${factoryIndex} ${order.workOrderNo}`}
-                                            // className={`${isMarked ? 'bg-yellow-500 bg-opacity-30' : 'transition-colors'} `}
-                                            >
-                                                {orderIndex === 0 && (  // ✅ Render once per factory group
-                                                    <td
-                                                        rowSpan={factory.workOrders.length}  // ✅ Spans all orders of this factory
-                                                        className="px-3 py-2 align-middle font-semibold bg-primary-50 text-primary-700 text-sm border border-gray-300"
-                                                    >
-                                                        {factory.factoryName}
-                                                    </td>
-                                                )}
-
+                                    let sum = 0;
+                                    if (order.finishYarnReceived) {
+                                        sum = order.finishYarnReceived.split("+").reduce((sum, n) => sum + Number(n.trim()), 0);
+                                    }
+                                    const job = factory.jobs.find(j => j.jobNo === order.workOrderNo);
+                                    return (
+                                        <tr
+                                            //onClick={() => handleRowMark(order.id)}
+                                            key={`${factoryIndex} ${order.workOrderNo}`}
+                                        // className={`${isMarked ? 'bg-yellow-500 bg-opacity-30' : 'transition-colors'} `}
+                                        >
+                                            {orderIndex === 0 && ( 
                                                 <td
-                                                    className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
+                                                    rowSpan={factory.workOrders.length}
+                                                    className="px-3 py-2 align-middle font-semibold bg-primary-50 text-primary-700 text-sm border border-gray-300"
                                                 >
-                                                    {order.workOrderNo}
+                                                    {factory.factoryName}
                                                 </td>
+                                            )}
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        job.id === orderId && editRowData.editingField === "buyer" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="buyer" value={editRowData.buyer} type="text" /> : job.buyer
-                                                    }
+                                            <td
+                                                className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
+                                            >
+                                                {order.workOrderNo}
+                                            </td>
 
-                                                </td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        job.id === orderId && editRowData.editingField === "poNo" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="poNo" value={editRowData.poNo} type="text" /> : job.poNo
-                                                    }
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    job.buyer
+                                                }
 
-                                                </td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        job.id === orderId && editRowData.editingField === "style" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="style" value={editRowData.style} type="text" /> : job.style
-                                                    }
+                                            </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    job.poNo
+                                                }
 
-                                                </td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        job.id === orderId && editRowData.editingField === "month" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="month" value={editRowData.month} type="text" /> : job.month
-                                                    }
+                                            </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    job.style
+                                                }
 
-                                                </td>
-                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        order.id === orderId && editRowData.editingField === "bookingColor" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="bookingColor" value={editRowData.bookingColor} type="text" /> : order.bookingColor
-                                                    }
+                                            </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    job.month
+                                                }
 
-                                                </td>
-                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.orderQty, "orderQty", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        order.id === orderId && editRowData.editingField === "orderQty" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="orderQty" value={editRowData.orderQty} type="text" /> : order.orderQty
-                                                    }
+                                            </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.bookingColor
+                                                }
 
-                                                </td>
+                                            </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.orderQty, "orderQty", order.id)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.orderQty
+                                                }
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.ydPricePerKg, "ydPricePerKg", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "ydPricePerKg" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="ydPricePerKg" value={editRowData.ydPricePerKg} type="text" /> : order.ydPricePerKg
-                                                    }
-                                                </td>
+                                            </td>
 
-                                               <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "yarnDyedWorkOrderQty" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="yarnDyedWorkOrderQty" value={editRowData.yarnDyedWorkOrderQty} type="text" /> : order.yarnDyedWorkOrderQty
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.ydPricePerKg, "ydPricePerKg", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.ydPricePerKg
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDeliveryForYD, "yarnDeliveryForYD", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "yarnDeliveryForYD" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="yarnDeliveryForYD" value={editRowData.yarnDeliveryForYD} type="text" /> : order.yarnDeliveryForYD
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.yarnDyedWorkOrderQty
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.delShortExcess, "delShortExcess", order.id)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "delShortExcess" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="delShortExcess" value={editRowData.delShortExcess} type="text" /> : order.delShortExcess
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDeliveryForYD, "yarnDeliveryForYD", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.yarnDeliveryForYD
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnReturnReceived, "yarnReturnReceived", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "yarnReturnReceived" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="yarnReturnReceived" value={editRowData.yarnReturnReceived} type="text" /> : order.yarnReturnReceived
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.delShortExcess, "delShortExcess", order.id)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
+                                                {
+                                                    order.delShortExcess
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.greyReceivedFromYD, "greyReceivedFromYD", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "greyReceivedFromYD" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="greyReceivedFromYD" value={editRowData.greyReceivedFromYD} type="text" /> : order.greyReceivedFromYD
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnReturnReceived, "yarnReturnReceived", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.yarnReturnReceived
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.finishYarnReceived, "finishYarnReceived", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "finishYarnReceived" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="finishYarnReceived" value={editRowData.finishYarnReceived} type="text" /> : order.finishYarnReceived
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.greyReceivedFromYD, "greyReceivedFromYD", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.greyReceivedFromYD
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "processLossAfterYD" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="ydPricePerKg" value={editRowData.processLossAfterYD} type="text" /> : order.processLossAfterYD
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.finishYarnReceived, "finishYarnReceived", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    sum  // order.finishYarnReceived 
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "totalBillingAmount" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="ydPricePerKg" value={editRowData.totalBillingAmount} type="text" /> : order.totalBillingAmount
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
+                                                {
+                                                    order.processLossAfterYD
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "paidBillingAmount" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="paidBillingAmount" value={editRowData.paidBillingAmount} type="text" /> : order.paidBillingAmount
-                                                    }
-                                                </td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">
+                                                {
+                                                    order.totalBillingAmount
+                                                }
+                                            </td>
 
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.pendingBillingAmount, "pendingBillingAmount", order.id)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">
-                                                    {
-                                                        editRowData.editingIndex === orderIndex + 1 && editRowData.editingField === "pendingBillingAmount" ? <input onChange={handleEditOnChange} className="border border-red-600 outline-none p-1 rounded-md" name="ydPricePerKg" value={editRowData.pendingBillingAmount} type="text" /> : order.pendingBillingAmount
-                                                    }
-                                                </td>
-                                            </tr>
-                                        )
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
+                                                {
+                                                    order.paidBillingAmount
+                                                }
+                                            </td>
+
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.pendingBillingAmount, "pendingBillingAmount", order.id)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">
+                                                {
+                                                    order.pendingBillingAmount
+                                                }
+                                            </td>
+                                        </tr>
+                                    )
                                 })
 
                             }

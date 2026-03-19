@@ -20,7 +20,7 @@ const Home = () => {
     const stats = [
         {
             label: "Knitting Order",
-            value: countOrders.yarnDyeingOrder || 0,
+            value: countOrders.knittingOrder || 0,
             icon: Package,
             color: "text-primary-500",
             bg: "bg-primary-50",
@@ -31,7 +31,7 @@ const Home = () => {
         
         {
             label: "Fabric Booking",
-            value: countOrders.dyeingOrder || 0,
+            value: countOrders.fabricBookingOrder || 0,
             icon: Palette,
             color: "text-blue-600",
             bg: "bg-blue-50",

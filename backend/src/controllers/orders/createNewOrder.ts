@@ -95,6 +95,7 @@ export const createNewOrder = async (req: Request, res: Response) => {
                         salesContractNo: salesContractNo,
                         orderQty: orderQTY,
                         factoryId: Number(factoryId),
+                        date: "2026-03-17T10:30:00.000Z"
                     }
                 }
             )

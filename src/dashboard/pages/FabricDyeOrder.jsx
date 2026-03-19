@@ -170,9 +170,8 @@ const FabricDyeOrder = () => {
 
                         <tbody>
                             {orders?.map((factory, factoryIndex) => {
-                                return factory.workOrders.map((order, orderIndex) => {
-                                        console.log(order, "mapped order");
-                                        const job = factory.jobs.find(j => j.jobNo === order.workOrderNo);
+                                return factory?.workOrders.map((order, orderIndex) => {
+                                        const job = factory?.jobs.find(j => j.jobNo === order.workOrderNo);
                                         return (
                                             <tr
                                                 //onClick={() => handleRowMark(order.id)}

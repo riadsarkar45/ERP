@@ -4,9 +4,8 @@ import prisma from "../../database/prismaClient/prisma";
 export const updateOrders = async (req: Request, res: Response) => {
     try {
         const { orderId } = req.params;
-        console.log(orderId);
         const dataToUpdate = req.body;
-
+        const { date, challanNo } = req.body;
         if (!dataToUpdate || Object.keys(dataToUpdate).length === 0) {
             return res.status(400).json({ type: "error", message: "No data provided to update" });
         }
@@ -15,22 +14,83 @@ export const updateOrders = async (req: Request, res: Response) => {
             return res.status(400).json({ type: "error", message: "No id provided" });
         }
 
-        console.log(dataToUpdate);
+        const updateFieldArray = ["yarnReturnReceived", "greyReceivedFromYd", "yarnDeliveryForYD", "finishYarnReceived", "challanNo"];
+        const dataFields = Object.keys(dataToUpdate)
+        const matchedFields = updateFieldArray.filter((field) => dataFields.includes(field))
 
-        // ✅ Convert all values to string (Prisma schema expects String)
         const stringifiedData = Object.fromEntries(
             Object.entries(dataToUpdate).map(([key, value]) => [
                 key,
                 value !== null && value !== undefined ? String(value) : null
             ])
         );
-        console.log("1", stringifiedData);
-        const updatedWorkOrder = await prisma.workOrder.update({
-            where: { id: Number(orderId) },  // ✅ dynamic id from params
-            data: stringifiedData        // ✅ stringified data
-        });
-        console.log("2.", stringifiedData);
-        return res.status(200).json({ type: "success", data: updatedWorkOrder });
+        console.log(stringifiedData);
+        const matchedData = Object.fromEntries(
+            matchedFields.map((field) => [field, stringifiedData[field]])
+        )
+
+
+
+        await prisma.$transaction(async (tx) => {
+
+            const checkJobId = await tx.deliveries.findUnique(
+                {
+                    where: { jobId: Number(orderId) }
+                }
+            )
+            await tx.workOrder.update(
+                {
+                    where: { id: Number(orderId) },
+                    data: {
+                        ...stringifiedData,
+                        date: new Date(date)
+                    }
+                }
+            )
+            if (!checkJobId) {
+                await tx.deliveries.create(
+                    {
+                        data: {
+                            ...matchedData,
+                            jobId: Number(orderId),
+                            challanNo: Number(challanNo),
+                            deliveryDate: new Date(date)
+                        }
+                    }
+                )
+                // return newRecord
+            }
+
+            if (checkJobId) {
+
+                if (matchedFields.length > 0) {
+
+                    await tx.deliveries.upsert({
+                        where: { jobId: Number(orderId) },
+                        update: {
+                            ...matchedData,
+                            jobId: Number(orderId),
+                            challanNo: Number(challanNo),
+                            deliveryDate: new Date(date)
+                        },
+                        create: {
+                            ...matchedData,
+                            jobId: Number(orderId),
+                            challanNo: Number(challanNo),
+                            deliveryDate: new Date(date)
+                        }
+                    });
+
+
+
+                }
+            }
+        }, {
+            timeout: 15000,
+            maxWait: 5000
+        })
+
+        return res.status(200).json({ type: "success" });
 
     } catch (error) {
         console.error(error);
