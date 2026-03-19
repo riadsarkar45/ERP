@@ -46,7 +46,11 @@ const Sidebar = () => {
             const factoryName = path.split('/factory-wise-report/')[1];
             return {
                 title: `Factory Report - ${factoryName}`,
-                subtitle: 'Factory wise yarn dyeing report'
+            };
+        }
+        if (path.includes('/fabric-booking-order')) {
+            return {
+                title: `Fabric Booking Order`,
             };
         }
 
@@ -57,6 +61,7 @@ const Sidebar = () => {
             '/dashboard/yarn-dye-order': { title: 'Yarn Dyeing Orders', subtitle: 'Manage yarn dyeing orders' },
             '/dashboard/aop-order': { title: 'AOP Orders', subtitle: 'Manage AOP orders' },
             '/dashboard/new-order': { title: 'Add New Order', subtitle: 'Create new order' },
+            'fabric-booking-order': { title: 'Add New Order', subtitle: 'Fabric Booking Order' },
         };
 
         return routeMap[path] || { title: 'Dashboard', subtitle: 'Welcome back, System Admin' };

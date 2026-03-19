@@ -87,7 +87,7 @@ export const updateOrders = async (req: Request, res: Response) => {
             }
         }, {
             timeout: 15000,
-            maxWait: 5000
+            maxWait: 15000
         })
 
         return res.status(200).json({ type: "success" });
