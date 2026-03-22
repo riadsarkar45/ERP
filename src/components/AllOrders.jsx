@@ -288,16 +288,25 @@ const AllOrders = ({ orderType }) => {
                                                 }
                                             </td>
 
+
+
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">
+                                                {
+                                                    order.totalBillingAmount
+                                                }
+                                            </td>
+
                                             <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
                                                 {
                                                     order.processLossAfterYD
                                                 }
                                             </td>
 
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.payableAmount, "payableAmount", order.id)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">
                                                 {
-                                                    order.totalBillingAmount
+                                                    order.payableAmount
                                                 }
+                                                d
                                             </td>
 
                                             <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
@@ -306,11 +315,7 @@ const AllOrders = ({ orderType }) => {
                                                 }
                                             </td>
 
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.pendingBillingAmount, "pendingBillingAmount", order.id)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">
-                                                {
-                                                    order.pendingBillingAmount
-                                                }
-                                            </td>
+
                                         </tr>
                                     )
                                 })

@@ -1,7 +1,7 @@
 import { X, Save } from 'lucide-react';
 import Input from './Input';
 
-const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handleEditOnChange, setEditRowData }) => {
+const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handleEditOnChange }) => {
 
     const filterWorkOrderWithId = () => {
         const filt = orders.find(wo => wo.id === orderId);
@@ -184,6 +184,150 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handl
                             )
                         }
 
+                        {
+                            editRowData.editingField === "delShortExcess" && (
+                                <Input
+                                    label="Del Short Excess"
+                                    type='text'
+                                    name="delShortExcess"
+                                    placeholder='Del Short Excess'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.delShortExcess}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "processLossAfterYD" && (
+                                <Input
+                                    label="Process Loss After YD"
+                                    type='text'
+                                    name="processLossAfterYD"
+                                    placeholder='Process loss after YD'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.processLossAfterYD}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "bookingColor" && (
+                                <Input
+                                    label="Booking Color"
+                                    type='text'
+                                    name="bookingColor"
+                                    placeholder='Booking Color'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.bookingColor}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "orderQty" && (
+                                <Input
+                                    label="Order Qty"
+                                    type='text'
+                                    name="orderQty"
+                                    placeholder='Order Qty'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.orderQty}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "yarnDyedWorkOrderQty" && (
+                                <Input
+                                    label="Yarn Dyeing Order"
+                                    type='text'
+                                    name="yarnDyedWorkOrderQty"
+                                    placeholder='Order Qty'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.yarnDyedWorkOrderQty}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "paidBillingAmount" && (
+                                <Input
+                                    label="Paid Billing Amount"
+                                    type='text'
+                                    name="paidBillingAmount"
+                                    placeholder='Paid Billing Amount'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.paidBillingAmount}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "payableAmount" && (
+                                <Input
+                                    label="Payable Amount"
+                                    type='text'
+                                    name="payableAmount"
+                                    placeholder='Payable Amount'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.payableAmount}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "month" && (
+                                <Input
+                                    label="Month"
+                                    type='text'
+                                    name="month"
+                                    placeholder='Month'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.month}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "poNo" && (
+                                <Input
+                                    label="Po No"
+                                    type='text'
+                                    name="poNo"
+                                    placeholder='poNo'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.poNo}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "buyer" && (
+                                <Input
+                                    label="Buyer"
+                                    type='text'
+                                    name="buyer"
+                                    placeholder='Buyer'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.buyer}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "style" && (
+                                <Input
+                                    label="style"
+                                    type='text'
+                                    name="style"
+                                    placeholder='Style'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.style}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "ydPricePerKg" && (
+                                <Input
+                                    label="YD Price per KG"
+                                    type='text'
+                                    name="ydPricePerKg"
+                                    placeholder='YD Price per KG'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.ydPricePerKg}
+                                />
+                            )
+                        }
 
                         {/* Row 2 */}
                         {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

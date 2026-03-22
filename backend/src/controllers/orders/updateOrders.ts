@@ -43,7 +43,7 @@ export const updateOrders = async (req: Request, res: Response) => {
                     where: { id: Number(orderId) },
                     data: {
                         ...stringifiedData,
-                        date: new Date(date)
+                        date: new Date()
                     }
                 }
             )
