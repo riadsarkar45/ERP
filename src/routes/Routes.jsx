@@ -9,6 +9,7 @@ import AopOrders from "../dashboard/pages/AopOrders";
 import YarnDyeOrders from "../dashboard/pages/YarnDyeOrders";
 import CreateNewAudit from "../dashboard/pages/audit/CreateNewAudit";
 import FabricDyeOrder from "../dashboard/pages/FabricDyeOrder";
+import Summary from "../dashboard/pages/styleSummary/Summary";
 
 const routers = createBrowserRouter([
     {
@@ -54,7 +55,11 @@ const routers = createBrowserRouter([
                     {
                         path: "fabric-booking-order",
                         element: <FabricDyeOrder />
-                    }
+                    },
+                    {
+                        path: "style-requirement",
+                        element: <Summary />
+                    },
                 ]
             }
         ]

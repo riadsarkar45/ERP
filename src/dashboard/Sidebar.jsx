@@ -27,6 +27,7 @@ const Sidebar = () => {
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: FileText },
         { path: "/dashboard/new-order", label: "Add New Order", icon: PlusCircle },
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
+        { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
     ];
 
     const toggleMobileMenu = () => {
@@ -51,6 +52,11 @@ const Sidebar = () => {
         if (path.includes('/fabric-booking-order')) {
             return {
                 title: `Fabric Booking Order`,
+            };
+        }
+        if (path.includes('style-requirement')) {
+            return {
+                title: `Style And Requirement`,
             };
         }
 

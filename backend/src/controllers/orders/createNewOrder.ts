@@ -96,10 +96,6 @@ export const createNewOrder = async (req: Request, res: Response) => {
                     stylesId: Number(styleId)
                 }
             })
-            const jobId = job.id
-
-
-
 
 
             await tx.workOrder.create(
