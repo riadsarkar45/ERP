@@ -35,7 +35,6 @@ export const createNewOrder = async (req: Request, res: Response) => {
     };
     console.log(req.body);
     if (!orderQTY || !workOrderNo || !jobNo || !workOrderPlaceDate || !salesContractNo || !poNo || !buyer || !style || !color || !composition || !processLoss || !orderType || !month || !workOrderNo) {
-        console.log("empty detected");
         return res.status(400).send({ message: "All fields are required", type: "error" })
     }
 
@@ -48,10 +47,18 @@ export const createNewOrder = async (req: Request, res: Response) => {
             const findJob = await tx.job.findUnique({
                 where: { jobNo: jobNo }
             })
-            let id = findJob?.id; // job id from @findJob
-            let factoryId = findFactoryName?.id
 
-            if (!findFactoryName) {
+            const findStyleNo = await tx.styles.findUnique(
+                {
+                    where: { styleName: style }
+                },
+
+            )
+            let styleId = findStyleNo?.id
+            let id = findJob?.id; // job id from @findJob
+            let factoryId = findFactoryName?.id // @factoryId from @factory
+
+            if (!findFactoryName || !findStyleNo) {
                 const newFactory = await tx.factory.create(
                     {
                         data: {
@@ -61,8 +68,21 @@ export const createNewOrder = async (req: Request, res: Response) => {
                     }
                 )
 
+                if (!findStyleNo) {
+                    const newStyle = await tx.styles.create(
+                        {
+                            data: {
+                                styleName: style,
+                                createdAt: new Date()
+                            }
+                        }
+                    )
+                    styleId = newStyle.id
+
+                }
+
                 factoryId = newFactory.id
-            }else {
+            } else {
                 factoryId = findFactoryName.id
             }
             const job = await tx.job.create({
@@ -72,8 +92,8 @@ export const createNewOrder = async (req: Request, res: Response) => {
                     poNo: poNo,
                     style: style,
                     jobNo: jobNo,
-                    factoryId: factoryId
-                    
+                    factoryId: factoryId,
+                    stylesId: Number(styleId)
                 }
             })
             const jobId = job.id

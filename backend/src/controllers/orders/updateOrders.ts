@@ -3,9 +3,10 @@ import prisma from "../../database/prismaClient/prisma";
 
 export const updateOrders = async (req: Request, res: Response) => {
     try {
-        const { orderId } = req.params;
+        const { orderId, styleNo } = req.params as { orderId: string, styleNo: string };
         const dataToUpdate = req.body;
         const { date, challanNo } = req.body;
+        console.log(styleNo, "styleNo");
         if (!dataToUpdate || Object.keys(dataToUpdate).length === 0) {
             return res.status(400).json({ type: "error", message: "No data provided to update" });
         }
@@ -29,8 +30,6 @@ export const updateOrders = async (req: Request, res: Response) => {
             matchedFields.map((field) => [field, stringifiedData[field]])
         )
 
-
-
         await prisma.$transaction(async (tx) => {
 
             const checkJobId = await tx.deliveries.findUnique(
@@ -38,6 +37,25 @@ export const updateOrders = async (req: Request, res: Response) => {
                     where: { jobId: Number(orderId) }
                 }
             )
+
+            const findStyleNo = await tx.styles.findUnique(
+                {
+                    where: { styleName: styleNo }
+                }
+            )
+            let styleId = findStyleNo?.id
+            if (!findStyleNo) {
+                const newStyle = await tx.styles.create(
+                    {
+                        data: {
+                            styleName: styleNo,
+                            createdAt: new Date()
+                        }
+                    }
+                )
+
+                styleId = newStyle.id
+            }
             await tx.workOrder.update(
                 {
                     where: { id: Number(orderId) },
@@ -54,7 +72,8 @@ export const updateOrders = async (req: Request, res: Response) => {
                             ...matchedData,
                             jobId: Number(orderId),
                             challanNo: Number(challanNo),
-                            deliveryDate: new Date(date)
+                            deliveryDate: new Date(),
+                            styleId: Number(styleId)
                         }
                     }
                 )

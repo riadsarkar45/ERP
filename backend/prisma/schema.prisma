@@ -40,6 +40,8 @@ model Job {
   factoryId   Int
   factoryName Factory     @relation(fields: [factoryId], references: [id])
   workOrders  WorkOrder[]
+  styles      styles?     @relation(fields: [stylesId], references: [id])
+  stylesId    Int?
 }
 
 model WorkOrder {
@@ -85,13 +87,14 @@ model WorkOrder {
 
 model deliveries {
   id                 Int      @id @default(autoincrement())
-  challanNo          Int
+  challanNo          Int?
   yarnReturnReceived String?
   greyReceivedFromYd String?
   yarnDeliveryForYD  String?
   finishYarnReceived String?
   deliveryDate       DateTime
   jobId              Int      @unique
+  styleId            Int      @default(0)
 }
 
 model audit {
@@ -101,4 +104,12 @@ model audit {
   auditEndDate   DateTime
   auditDesc      String
   auditType      String   @default("pending")
+}
+
+model styles {
+  id        Int      @id @default(autoincrement())
+  styleName String   @unique
+  styleId   Int      @default(0)
+  jobs      Job[]
+  createdAt DateTime
 }
