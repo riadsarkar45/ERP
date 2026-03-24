@@ -10,6 +10,7 @@ import YarnDyeOrders from "../dashboard/pages/YarnDyeOrders";
 import CreateNewAudit from "../dashboard/pages/audit/CreateNewAudit";
 import FabricDyeOrder from "../dashboard/pages/FabricDyeOrder";
 import Summary from "../dashboard/pages/styleSummary/Summary";
+import AllAudits from "../dashboard/pages/audit/AllAudits";
 
 const routers = createBrowserRouter([
     {
@@ -59,6 +60,10 @@ const routers = createBrowserRouter([
                     {
                         path: "style-requirement",
                         element: <Summary />
+                    },
+                    {
+                        path: "audits",
+                        element: <AllAudits />
                     },
                 ]
             }

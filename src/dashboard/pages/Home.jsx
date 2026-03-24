@@ -8,12 +8,19 @@ import useAxiosPublic from "../../hooks/Axios";
 const Home = () => {
     const [countOrders, setCountOrders] = useState({})
     const axiosPublic = useAxiosPublic();
+    const [aud, setAudits] = useState({
+        audits: 0,
+        upComing: 0,
+        pending: 0,
+
+    })
 
     useEffect(() => {
         const countOrders = async () => {
             const res = await axiosPublic.get("api/dashboard-detail")
-            console.log(res.data.data);
-            setCountOrders(res.data.data);
+            console.log(res.data);
+            setAudits({ audits: res?.data?.audits, upComing: res?.data?.upComing, pending: res?.data?.pending });
+            setCountOrders(res?.data?.data);
         }
         countOrders();
     }, [axiosPublic])
@@ -28,7 +35,7 @@ const Home = () => {
             bgOpacity: "bg-primary-500/10",
             borderOpacity: "border-primary-500/10"
         },
-        
+
         {
             label: "Fabric Booking",
             value: countOrders.fabricBookingOrder || 0,
@@ -61,22 +68,22 @@ const Home = () => {
         },
     ];
     const audits = [
-        { label: "Completed Audits", value: "44,444", icon: Package, color: "text-primary-500", bg: "bg-primary-50", borderColor: "border-primary-500", bgOpacity: "bg-primary-500/10", borderOpacity: "border-primary-500/10" },
-        { label: "Pending Audits", value: "44,444", icon: Palette, color: "text-blue-600", bg: "bg-blue-50", borderColor: "border-blue-600", bgOpacity: "bg-blue-600/10", borderOpacity: "border-blue-600/10" },
-        { label: "Upcoming Audits", value: "44,444", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50", borderColor: "border-green-600", bgOpacity: "bg-green-600/10", borderOpacity: "border-green-600/10" },
+        { label: "Completed Audits", value: aud?.audits || 0, icon: Package, color: "text-primary-500", bg: "bg-primary-50", borderColor: "border-primary-500", bgOpacity: "bg-primary-500/10", borderOpacity: "border-primary-500/10" },
+        { label: "Pending Audits", value: aud?.pending || 0, icon: Palette, color: "text-blue-600", bg: "bg-blue-50", borderColor: "border-blue-600", bgOpacity: "bg-blue-600/10", borderOpacity: "border-blue-600/10" },
+        { label: "Upcoming Audits", value: aud?.upComing || 0, icon: TrendingUp, color: "text-green-600", bg: "bg-green-50", borderColor: "border-green-600", bgOpacity: "bg-green-600/10", borderOpacity: "border-green-600/10" },
     ];
 
-    const factories = [
-        "That's It Knit",
-        "Fair Apparels Ltd",
-        "Tj Sweaters Ltd",
-        "Winter Dress Ltd",
-        "Optimum Sourcing",
-        "Styletex Ltd",
-        "Fashion Knitwear",
-        "Textile Solutions",
-        "Global Knits"
-    ];
+    // const factories = [
+    //     "That's It Knit",
+    //     "Fair Apparels Ltd",
+    //     "Tj Sweaters Ltd",
+    //     "Winter Dress Ltd",
+    //     "Optimum Sourcing",
+    //     "Styletex Ltd",
+    //     "Fashion Knitwear",
+    //     "Textile Solutions",
+    //     "Global Knits"
+    // ];
 
     return (
         <DashboardLayout title="Dashboard">
@@ -120,7 +127,7 @@ const Home = () => {
             </div>
 
             {/* Factories Section */}
-            <div className="mb-6">
+            {/* <div className="mb-6">
                 <h3 className="text-base font-semibold text-gray-800 mb-3">Factories</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {factories.map((factory, index) => (
@@ -133,10 +140,10 @@ const Home = () => {
                         </Link>
                     ))}
                 </div>
-            </div>
+            </div> */}
 
             {/* Recent Orders Section */}
-            <div>
+            {/* <div>
                 <h3 className="text-base font-semibold text-gray-800 mb-3">Recent Orders</h3>
                 <Table
                     columns={[
@@ -153,7 +160,7 @@ const Home = () => {
                     ]}
                     emptyMessage="No recent orders"
                 />
-            </div>
+            </div> */}
         </DashboardLayout>
     );
 };

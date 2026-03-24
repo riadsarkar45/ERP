@@ -25,6 +25,7 @@ const Sidebar = () => {
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Palette },
         { path: "/dashboard/fabric-booking-order", label: "Fabric Dyeing Orders", icon: Palette },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: FileText },
+        { path: "/dashboard/audits", label: "Audits", icon: FileText },
         { path: "/dashboard/new-order", label: "Add New Order", icon: PlusCircle },
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
@@ -59,6 +60,11 @@ const Sidebar = () => {
                 title: `Style And Requirement`,
             };
         }
+        if (path.includes('audits')) {
+            return {
+                title: `All Audits`,
+            };
+        }
 
         // Handle other routes
         const routeMap = {
@@ -67,7 +73,8 @@ const Sidebar = () => {
             '/dashboard/yarn-dye-order': { title: 'Yarn Dyeing Orders', subtitle: 'Manage yarn dyeing orders' },
             '/dashboard/aop-order': { title: 'AOP Orders', subtitle: 'Manage AOP orders' },
             '/dashboard/new-order': { title: 'Add New Order', subtitle: 'Create new order' },
-            'fabric-booking-order': { title: 'Add New Order', subtitle: 'Fabric Booking Order' },
+            '/dashboard/fabric-booking-order': { title: 'Add New Order', subtitle: 'Fabric Booking Order' },
+            '/dashboard/audits': { title: 'AUDITS', subtitle: 'Audits' },
         };
 
         return routeMap[path] || { title: 'Dashboard', subtitle: 'Welcome back, System Admin' };
@@ -138,8 +145,8 @@ const Sidebar = () => {
                                         to={item.path}
                                         onClick={() => setIsMobileMenuOpen(false)}
                                         className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive(item.path)
-                                                ? 'bg-primary-400 text-white'
-                                                : 'text-white hover:bg-primary-600'
+                                            ? 'bg-primary-400 text-white'
+                                            : 'text-white hover:bg-primary-600'
                                             } ${isCollapsed ? 'justify-center' : ''}`}
                                         title={isCollapsed ? item.label : ''}
                                     >

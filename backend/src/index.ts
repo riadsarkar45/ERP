@@ -33,7 +33,12 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 const PORT = 3000;
-app.listen(PORT, async () => {
-  console.log(`Server is running on port ${PORT}`);
+
+const start = async () => {
   await connectDatabase();
-})
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+};
+
+start();

@@ -11,6 +11,13 @@ export const dashboardController = async (req: Request, res: Response) => {
         }
     )
 
+    const [complete, canceled, pending, upComing] = await Promise.all([
+        prisma.audit.count({ where: { auditType: "complete" } }),
+        prisma.audit.count({ where: { auditType: "canceled" } }),
+        prisma.audit.count({ where: { auditType: "pending" } }),
+        prisma.audit.count({ where: { auditType: "upComing" } }),
+    ]);
+
 
     const counts = countDyeOrders.reduce<Record<string, number>>((acc, item) => {
         acc[item.orderType] = item._count.orderType;
@@ -21,5 +28,5 @@ export const dashboardController = async (req: Request, res: Response) => {
         res.status(404).send({ message: "No data found", type: "error" })
     }
 
-    res.status(200).send({ data: counts, type: "success" })
+    res.status(200).send({ data: counts, audits: complete, canceled, pending, upComing, type: "success" })
 }

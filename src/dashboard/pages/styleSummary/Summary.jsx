@@ -81,6 +81,16 @@ const Summary = () => {
                                             <td
                                                 className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
                                             >
+                                                {rep.buyers}
+                                            </td>
+                                            <td
+                                                className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
+                                            >
+                                                {rep.factories}
+                                            </td>
+                                            <td
+                                                className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
+                                            >
                                                 {/* {rep.totalOrderQty} */}
                                                 {totalOrderQty}
                                             </td>
