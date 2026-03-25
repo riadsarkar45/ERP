@@ -57,7 +57,8 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             style: true,
                             month: true,
                             createdAt: true,
-                            id: true
+                            id: true,
+                            status: true,
                         }
                     },
                 },

@@ -11,6 +11,7 @@ import CreateNewAudit from "../dashboard/pages/audit/CreateNewAudit";
 import FabricDyeOrder from "../dashboard/pages/FabricDyeOrder";
 import Summary from "../dashboard/pages/styleSummary/Summary";
 import AllAudits from "../dashboard/pages/audit/AllAudits";
+import Jobs from "../dashboard/pages/jobs/Jobs";
 
 const routers = createBrowserRouter([
     {
@@ -64,6 +65,10 @@ const routers = createBrowserRouter([
                     {
                         path: "audits",
                         element: <AllAudits />
+                    },
+                    {
+                        path: "jobs",
+                        element: <Jobs />
                     },
                 ]
             }

@@ -25,6 +25,7 @@ const Sidebar = () => {
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Palette },
         { path: "/dashboard/fabric-booking-order", label: "Fabric Dyeing Orders", icon: Palette },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: FileText },
+        { path: "/dashboard/jobs", label: "Jobs", icon: FileText },
         { path: "/dashboard/audits", label: "Audits", icon: FileText },
         { path: "/dashboard/new-order", label: "Add New Order", icon: PlusCircle },
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
@@ -63,6 +64,11 @@ const Sidebar = () => {
         if (path.includes('audits')) {
             return {
                 title: `All Audits`,
+            };
+        }
+        if (path.includes('jobs')) {
+            return {
+                title: `Jobs`,
             };
         }
 

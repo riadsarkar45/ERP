@@ -3,6 +3,7 @@ import { getAllOrders } from "../controllers/orders/getOrders";
 import { dashboardController } from "../controllers/dashboard/dashboard";
 import { getOrderSummaryByStyle } from "../controllers/orders/styleWiseOrder";
 import { allAudits } from "../controllers/audit/allAudits";
+import { getAllJobs } from "../controllers/jobs/allJobs";
 
 const getRouters = express.Router();
 
@@ -15,5 +16,7 @@ getRouters.get("/dashboard-detail", dashboardController);
 getRouters.get("/style-requirement", getOrderSummaryByStyle);
 
 getRouters.get("/audits", allAudits);
+
+getRouters.get("/jobs", getAllJobs);
 
 export default getRouters;

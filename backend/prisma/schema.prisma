@@ -42,6 +42,8 @@ model Job {
   workOrders  WorkOrder[]
   styles      styles?     @relation(fields: [stylesId], references: [id])
   stylesId    Int?
+  status      String      @default("active")
+  comment     String?     @default("NO COMMENT")
 }
 
 model WorkOrder {
