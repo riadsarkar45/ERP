@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Input from "./Input";
@@ -30,70 +30,103 @@ const AllOrders = ({ orderType }) => {
         editingField: "",
         challanNo: 0,
     });
-    const [orderId, setOrderId] = useState(0)
-    const [isEditing, setIsEditing] = useState(false)
-    const [orders, setOrders] = useState([]);
-    const [changedField, setChangedField] = useState({})
-    const [styleNo, setStyleNo] = useState("")
+    const [orderId, setOrderId] = useState(0);
+    const [isEditing, setIsEditing] = useState(false);
+    const [orders, setOrders] = useState([]);           // ✅ original data, never mutated
+    const [changedField, setChangedField] = useState({});
+    const [styleNo, setStyleNo] = useState("");
+    const [search, setSearch] = useState({
+        buyerName: "",
+        jobNo: "",
+        styleName: "",
+        poNo: "",                                       // ✅ added PO No field
+    });
 
     useEffect(() => {
-        const orders = async () => {
+        const fetchOrders = async () => {
             try {
                 const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-                console.log(res.data);
                 setOrders(res.data);
             } catch (err) {
                 console.log(err);
             }
-        }
-        orders();
-    }, [axiosPublic, orderType])
+        };
+        fetchOrders();
+    }, [axiosPublic, orderType]);
 
+    // ✅ Live search: recomputes automatically on every search or orders change
+    const filteredOrders = useMemo(() => {
+        const { buyerName, jobNo, styleName, poNo } = search;
+
+        // If all fields are empty, return everything
+        const hasQuery = buyerName || jobNo || styleName || poNo;
+        if (!hasQuery) return orders;
+
+        return orders
+            .map(factory => {
+                // Find jobs that match ALL active search terms
+                const matchingJobs = (factory.jobs || []).filter(job => {
+                    const buyerMatch = (job.buyer || "")
+                        .toLowerCase().includes(buyerName.toLowerCase());
+                    const jobMatch = (job.jobNo || "")
+                        .toLowerCase().includes(jobNo.toLowerCase());
+                    const styleMatch = (job.style || "")
+                        .toLowerCase().includes(styleName.toLowerCase());
+                    const poMatch = (job.poNo || "")
+                        .toLowerCase().includes(poNo.toLowerCase());
+                    return buyerMatch && jobMatch && styleMatch && poMatch;
+                });
+
+                if (matchingJobs.length === 0) return null;
+
+                // Keep only workOrders linked to a matching job
+                const matchingWorkOrders = (factory.workOrders || []).filter(order =>
+                    matchingJobs.some(j => j.jobNo === order.workOrderNo)
+                );
+
+                return { ...factory, jobs: matchingJobs, workOrders: matchingWorkOrders };
+            })
+            .filter(Boolean); // remove factories with no matches
+    }, [search, orders]);
 
     const handleEditRowData = useCallback((indexId, editingText, editingField, orderId, styleNo) => {
         setEditRowData(prev => ({
             ...prev,
-            editingField: editingField,
+            editingField,
             editingIndex: indexId,
-            [editingField]: editingText
+            [editingField]: editingText,
         }));
-        setStyleNo(styleNo)
-        setOrderId(orderId)
-        setIsEditing(true)
-    }, [])
+        setStyleNo(styleNo);
+        setOrderId(orderId);
+        setIsEditing(true);
+    }, []);
 
     const handleEditOnChange = (e) => {
         const { name, value } = e.target;
-        setEditRowData(prev => ({
-            ...prev,
-            [name]: value
-        }))
-        setIsEditing(true)
-        setChangedField(prev => ({
-            ...prev,
-            [name]: value
-        }))
-    }
+        setEditRowData(prev => ({ ...prev, [name]: value }));
+        setIsEditing(true);
+        setChangedField(prev => ({ ...prev, [name]: value }));
+    };
 
     const handleSubmit = async () => {
-        console.log(orderId);
-        const update = await axiosPublic.patch(`/api/update-order/${orderId}/${styleNo}`, changedField)
-        console.log(update);
+        const update = await axiosPublic.patch(
+            `/api/update-order/${orderId}/${styleNo}`,
+            changedField
+        );
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
             setOrders(res.data);
             setChangedField({});
             setEditRowData(prev => ({ ...prev, editingIndex: null, editingField: null }));
-            setIsEditing(false)
+            setIsEditing(false);
         }
-    }
-    console.log(changedField);
-    useEffect(() => {
-        console.log(editRowData.editingIndex, "index id");
-        console.log(changedField, "changed field");
-        console.log(editRowData.editingField, "edit row data");
-    }, [editRowData.editingIndex, changedField, editRowData]);
+    };
 
+    // ✅ Single handler for all search inputs
+    const handleSearch = (e) => {
+        const { name, value } = e.target;
+        setSearch(prev => ({ ...prev, [name]: value }));
+    };
 
     return (
         <div>
@@ -103,79 +136,71 @@ const AllOrders = ({ orderType }) => {
                         <div className="rotate-45">No order found</div>
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* ✅ All 4 inputs are now controlled with value + onChange */}
                         <Input
                             label=""
-                            name="buyer"
+                            name="buyerName"
                             type="text"
+                            value={search.buyerName}
+                            onChange={handleSearch}
                             placeholder="Search by Buyer"
                         />
                         <Input
                             label=""
                             name="jobNo"
                             type="text"
+                            value={search.jobNo}
+                            onChange={handleSearch}
                             placeholder="Search by Job No"
                         />
                         <Input
                             label=""
-                            name="style"
+                            name="styleName"         // ✅ fixed: matches state key
                             type="text"
+                            value={search.styleName}
+                            onChange={handleSearch}
                             placeholder="Search by Style"
                         />
-                        <button
-                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600 mt-auto"
-                        >
-                            <Search size={18} />
-                            Search
-                        </button>
+                        <Input
+                            label=""
+                            name="poNo"              // ✅ new PO No search
+                            type="text"
+                            value={search.poNo}
+                            onChange={handleSearch}
+                            placeholder="Search by PO No"
+                        />
                     </div>
                 </div>
-
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-
                 <div className="table-container overflow-x-auto">
-                    {isEditing && <Modal
-                        setIsEditing={setIsEditing}
-                        handleSubmit={handleSubmit}
-                        handleEditOnChange={handleEditOnChange}
-                        setEditRowData={setEditRowData}
-                        editRowData={editRowData}
-                        orderId={orderId}
-                        orders={orders}
-                    />}
+                    {isEditing && (
+                        <Modal
+                            setIsEditing={setIsEditing}
+                            handleSubmit={handleSubmit}
+                            handleEditOnChange={handleEditOnChange}
+                            setEditRowData={setEditRowData}
+                            editRowData={editRowData}
+                            orderId={orderId}
+                            orders={orders}
+                        />
+                    )}
                     <table className="w-full border-collapse factory-table" style={{ minWidth: '1200px' }}>
-                        {/* HEADER */}
                         <thead className="bg-gray-50">
                             <tr>
                                 {[
-                                    "YARN DYED FACTORY NAME",
-                                    "JOB NO.",
-                                    "BUYER NAME",
-                                    "PO NO",
-                                    "STYLE",
-                                    "MONTH",
-                                    "BOOKING COLOR",
-                                    "ORDER QTY",
-                                    "Y/D PRICE PER KG",
-                                    "YARN DYED WORK ORDER (QTY)",
-                                    "YARN DELIVERY FOR Y/D",
-                                    "DEL. SHORT & EXCESS",
-                                    "YARN RETURN RECEIVED",
-                                    "GREY RECEIVED FROM Y/D",
-                                    "FINISH YARN RECEIVED",
-                                    "YARN RCVD SHORT & EXCESS",
-                                    "PROCESS LOSS AFTER Y/D",
-                                    "PAYABLE AMOUNT",
-                                    "PAID BILLING AMOUNT",
-                                    "PENDING BILLING AMOUNT",
-                                    "FROM FACTORY",
-                                    "TO FACTORY",
+                                    "YARN DYED FACTORY NAME", "JOB NO.", "BUYER NAME",
+                                    "PO NO", "STYLE", "MONTH", "BOOKING COLOR", "ORDER QTY",
+                                    "Y/D PRICE PER KG", "YARN DYED WORK ORDER (QTY)",
+                                    "YARN DELIVERY FOR Y/D", "DEL. SHORT & EXCESS",
+                                    "YARN RETURN RECEIVED", "GREY RECEIVED FROM Y/D",
+                                    "FINISH YARN RECEIVED", "YARN RCVD SHORT & EXCESS",
+                                    "PROCESS LOSS AFTER Y/D", "PAYABLE AMOUNT",
+                                    "PAID BILLING AMOUNT", "PENDING BILLING AMOUNT",
+                                    "FROM FACTORY", "TO FACTORY",
                                 ].map((header, i) => (
-                                    <th
-                                        key={i}
-                                        className="px-3 py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200 whitespace-nowrap"
-                                    >
+                                    <th key={i} className="px-3 py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200 whitespace-nowrap">
                                         {header}
                                     </th>
                                 ))}
@@ -183,19 +208,18 @@ const AllOrders = ({ orderType }) => {
                         </thead>
 
                         <tbody>
-                            {orders?.map((factory, factoryIndex) => {
+                            {/* ✅ Now rendering filteredOrders instead of orders */}
+                            {filteredOrders?.map((factory, factoryIndex) => {
                                 return factory.workOrders.map((order, orderIndex) => {
                                     let sum = 0;
                                     if (order.finishYarnReceived) {
-                                        sum = order.finishYarnReceived.split("+").reduce((sum, n) => sum + Number(n.trim()), 0);
+                                        sum = order.finishYarnReceived
+                                            .split("+")
+                                            .reduce((acc, n) => acc + Number(n.trim()), 0);
                                     }
                                     const job = factory.jobs.find(j => j.jobNo === order.workOrderNo);
                                     return (
-                                        <tr
-                                            //onClick={() => handleRowMark(order.id)}
-                                            key={`${factoryIndex} ${order.workOrderNo}`}
-                                        // className={`${isMarked ? 'bg-yellow-500 bg-opacity-30' : 'transition-colors'} `}
-                                        >
+                                        <tr key={`${factoryIndex}-${order.workOrderNo}`}>
                                             {orderIndex === 0 && (
                                                 <td
                                                     rowSpan={factory.workOrders.length}
@@ -204,127 +228,28 @@ const AllOrders = ({ orderType }) => {
                                                     {factory.factoryName}
                                                 </td>
                                             )}
-
-                                            <td
-                                                className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300"
-                                            >
-                                                {order.workOrderNo}
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    job.buyer
-                                                }
-
-                                            </td>
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    job.poNo
-                                                }
-
-                                            </td>
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    job.style
-                                                }
-
-                                            </td>
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    job.month
-                                                }
-
-                                            </td>
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.bookingColor
-                                                }
-
-                                            </td>
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.orderQty, "orderQty", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.orderQty
-                                                }
-
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.ydPricePerKg, "ydPricePerKg", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.ydPricePerKg
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.yarnDyedWorkOrderQty
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDeliveryForYD, "yarnDeliveryForYD", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.yarnDeliveryForYD
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.delShortExcess, "delShortExcess", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
-                                                {
-                                                    order.delShortExcess
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnReturnReceived, "yarnReturnReceived", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.yarnReturnReceived
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.greyReceivedFromYD, "greyReceivedFromYD", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.greyReceivedFromYD
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.finishYarnReceived, "finishYarnReceived", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    sum  // order.finishYarnReceived 
-                                                }
-                                            </td>
-
-
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id, job.style)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">
-                                                {
-                                                    order.totalBillingAmount
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">
-                                                {
-                                                    order.processLossAfterYD
-                                                }
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.payableAmount, "payableAmount", order.id, job.style)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">
-                                                {
-                                                    order.payableAmount
-                                                }
-                                                d
-                                            </td>
-
-                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">
-                                                {
-                                                    order.paidBillingAmount
-                                                }
-                                            </td>
-
-
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{order.workOrderNo}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.buyer}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.poNo}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.style}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.month}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.bookingColor}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.orderQty, "orderQty", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.orderQty}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.ydPricePerKg, "ydPricePerKg", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.ydPricePerKg}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.yarnDyedWorkOrderQty}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDeliveryForYD, "yarnDeliveryForYD", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.yarnDeliveryForYD}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.delShortExcess, "delShortExcess", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">{order.delShortExcess}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnReturnReceived, "yarnReturnReceived", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.yarnReturnReceived}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.greyReceivedFromYD, "greyReceivedFromYD", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.greyReceivedFromYD}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.finishYarnReceived, "finishYarnReceived", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{sum}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id, job.style)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">{order.totalBillingAmount}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">{order.processLossAfterYD}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.payableAmount, "payableAmount", order.id, job.style)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">{order.payableAmount}</td>
+                                            <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.paidBillingAmount}</td>
                                         </tr>
-                                    )
-                                })
-
-                            }
-
-                            )}
+                                    );
+                                });
+                            })}
                         </tbody>
                     </table>
                 </div>
