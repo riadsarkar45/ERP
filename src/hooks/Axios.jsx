@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const axiosPublic = axios.create({
-    // baseURL: "https://erp-4-zhkz.onrender.com",
-    baseURL: "http://localhost:3000",
+    baseURL: "https://erp-5-37o0.onrender.com",
+    // baseURL: "http://localhost:3000",
     withCredentials: true,
 });
 

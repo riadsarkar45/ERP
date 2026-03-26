@@ -49,6 +49,9 @@ const NewOrder = () => {
         try {
             const res = await axios.post("/api/create-new-order", formData)
             console.log(res.data);
+            if (res.data.type === "success") {
+                showNotification("Order created", "success")
+            }
         } catch (error) {
             console.log(error);
             showNotification('Failed to create order. Please try again.', 'error');
