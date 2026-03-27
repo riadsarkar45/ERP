@@ -47,6 +47,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             id: true,
                             orderQty: true,
                             orderType: true,
+                            payableAmount: true,
                         }
                     },
                     jobs:{

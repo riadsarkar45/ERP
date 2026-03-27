@@ -1,16 +1,15 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Save, X } from "lucide-react";
+import { Loader2, Save, X } from "lucide-react";
 import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
 import useAxiosPublic from "../../hooks/Axios";
 
 const NewOrder = () => {
-    const navigate = useNavigate();
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState('success');
+    const [isClicked, setIsClicked] = useState(false)
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
         workOrderNo: "",
@@ -44,6 +43,7 @@ const NewOrder = () => {
     console.log(formData, "formdata");
     const handleSubmit = async (e) => {
         console.log("clicked...");
+        setIsClicked(true)
         e.preventDefault();
 
         try {
@@ -51,10 +51,13 @@ const NewOrder = () => {
             console.log(res.data);
             if (res.data.type === "success") {
                 showNotification("Order created", "success")
+                setIsClicked(false)
             }
         } catch (error) {
             console.log(error);
             showNotification('Failed to create order. Please try again.', 'error');
+            setIsClicked(false)
+
         }
     };
 
@@ -236,16 +239,23 @@ const NewOrder = () => {
 
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                        <button
-                            type="submit"
-                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
-                        >
-                            <Save size={18} />
-                            Create Order
-                        </button>
+                        {
+                            isClicked ? <button
+                                disabled
+                                className="flex  items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                            >
+                                <span className="rotate-180"><Loader2 size={18} /></span>
+                                
+                            </button> : <button
+                                type="submit"
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                            >
+                                <Save size={18} />
+                                Create Order
+                            </button>
+                        }
                         <button
                             type="button"
-                            onClick={() => navigate('/dashboard/knitting-order')}
                             className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-all duration-200 border border-gray-200"
                         >
                             <X size={18} />
