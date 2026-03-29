@@ -9,6 +9,7 @@ const COLUMNS = [
     { header: "JOB NO.", width: "10mm" },
     { header: "BUYER NAME", width: "14mm" },
     { header: "PO NO", width: "12mm" },
+    { header: "COMPOSITION", width: "12mm" },
     { header: "STYLE", width: "12mm" },
     { header: "MONTH", width: "10mm" },
     { header: "BOOKING COLOR", width: "14mm" },
@@ -320,6 +321,7 @@ const AllOrders = ({ orderType }) => {
                                                 <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{order.workOrderNo}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.buyer}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.poNo}</td>
+                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.composition, "composition", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.composition}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.style}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.month}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.bookingColor}</td>
@@ -335,6 +337,7 @@ const AllOrders = ({ orderType }) => {
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">{order.processLossAfterYD}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.payableAmount, "payableAmount", order.id, job.style)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">{order.payableAmount}</td>
                                                 <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.paidBillingAmount}</td>
+                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.pendingBillingAmount, "pendingBillingAmount", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.pendingBillingAmount}</td>
                                             </tr>
                                         );
                                     });

@@ -269,6 +269,18 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handl
                             )
                         }
                         {
+                            editRowData.editingField === "pendingBillingAmount" && (
+                                <Input
+                                    label="Pending Billing Amount"
+                                    type='text'
+                                    name="pendingBillingAmount"
+                                    placeholder='Pending Billing Amount'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.pendingBillingAmount}
+                                />
+                            )
+                        }
+                        {
                             editRowData.editingField === "month" && (
                                 <Input
                                     label="Month"
@@ -289,6 +301,18 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handl
                                     placeholder='poNo'
                                     onChange={handleEditOnChange}
                                     value={editRowData.poNo}
+                                />
+                            )
+                        }
+                        {
+                            editRowData.editingField === "composition" && (
+                                <Input
+                                    label="Composition"
+                                    type='text'
+                                    name="composition"
+                                    placeholder='Composition'
+                                    onChange={handleEditOnChange}
+                                    value={editRowData.composition}
                                 />
                             )
                         }
