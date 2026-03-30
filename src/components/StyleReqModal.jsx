@@ -1,7 +1,7 @@
 import { X, Save } from 'lucide-react';
 import Input from './Input';
 
-const StyleReqModal = ({ handleShowModal, setShowModal }) => {
+const StyleReqModal = ({ setShowModal }) => {
 
 
 
@@ -59,13 +59,6 @@ const StyleReqModal = ({ handleShowModal, setShowModal }) => {
                             />
 
                             <Input
-                                label="Composition"
-                                type='text'
-                                name="composition"
-                                placeholder='Composition'
-                                required
-                            />
-                            <Input
                                 label="PO No"
                                 type='text'
                                 name="poNo"
@@ -86,6 +79,15 @@ const StyleReqModal = ({ handleShowModal, setShowModal }) => {
                                 placeholder='Color'
                                 required
                             />
+
+                            <Input
+                                label="Composition"
+                                type='text'
+                                name="composition"
+                                placeholder='Composition'
+                                required
+                            />
+
                             <Input
                                 label="Finish Dia"
                                 type='text'

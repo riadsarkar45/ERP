@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import useAxiosPublic from "../../../hooks/Axios";
 import {
-    PlusCircle
+    PlusCircle,
+    RefreshCcw
 } from "lucide-react";
 import StyleReqModal from "../../../components/StyleReqModal";
+import Input from "../../../components/Input";
 const Summary = () => {
     const axiosPublic = useAxiosPublic();
     const [showModal, setShowModal] = useState(false);
@@ -24,13 +26,60 @@ const Summary = () => {
     const handleShowModal = () => {
         setShowModal(true)
     }
+
+
+    const summary = [
+        "SALES CONTACT NO",
+        "BUYER",
+        "JOB NO",
+        "STYLE",
+        "COLOR",
+        "COMPOSITION",
+        "FINISH DIA",
+        "ORDER QTY",
+        "1st BOOKING",
+        "ADDITIONAL BOOKING",
+        "TOTAL REQUIRED YARN BOOKING",
+        "KNITTING WORK ORDER QTY",
+        "WORK ORDER SHORT & EXCESS",
+        "RAW YARN DELIVERY",
+        "SHORT & EXCESS (+/-)",
+        "RAW YARN DELIVERY FOR DYED",
+        "YARN RECEIVED AFTER DYED",
+        "PARTY STOCK (SHORT & EXCESS)",
+        "TOTAL KNITTING (GREY)",
+        "RETURN YARN RECEIVED",
+        "BALANCE (+/-)",
+        "GREY DELIVERY FOR DYEING",
+        "GREY RETURN FROM DYEING",
+        "GREY RECEIVED FROM DYEING",
+        "FINISH RECEIVED FROM DYEING",
+        "FINISH RECEIVED FROM DYEING",
+        "GREY BALANCE (+/-)",
+        "PROCESS LOSS %",
+        "FINISH DELIVERY FROM AOP",
+        "FINISH RECEIVED FROM AOP",
+        "AOP FAB. BALANCE (+/-)",
+        "AOP PROCESS LOSS (%)",
+        "SENT FOR RE-PROCESS",
+        "RETURN RCVD",
+        "RECEIVED AFTER RE-PROCESS (GREY)",
+        "RECEIVED AFTER RE-PROCESS (FINISH)",
+        "RE-PROCESS FAB. BALANCE (+/-)",
+        "RE-PROCESS PROCESS LOSS (%)",
+    ]
     return (
         <DashboardLayout>
-            <div>
+            <div className="flex gap-2">
                 <button onClick={() => handleShowModal()}
                     className="flex mb-4 items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
 
                 ><PlusCircle /></button>
+                <button
+                    className="flex mb-4 items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+
+                ><RefreshCcw /></button>
+                
             </div>
 
             {
@@ -46,7 +95,7 @@ const Summary = () => {
                         {/* HEADER */}
                         <thead className="bg-gray-50">
                             <tr>
-                                {objectKeys.map((header, i) => (
+                                {summary.map((header, i) => (
                                     <th
                                         key={i}
                                         className="px-3 uppercase py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200 whitespace-nowrap"

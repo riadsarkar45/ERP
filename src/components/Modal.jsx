@@ -144,6 +144,24 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, orders, editRowData, handl
                                         placeholder="yarnDeliveryForYD"
                                         required
                                     />
+                                    <Input
+                                        label="Yarn Count"
+                                        name="yarnCount"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.yarnCount}
+                                        placeholder="Yarn Count"
+                                        required
+                                    />
+                                    <Input
+                                        label="Lot Number"
+                                        name="lotNo"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        value={editRowData.lotNo}
+                                        placeholder="Lot Number"
+                                        required
+                                    />
 
                                 </div>
                             )
