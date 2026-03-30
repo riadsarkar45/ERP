@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import useAxiosPublic from "../../../hooks/Axios";
-
+import {
+    PlusCircle
+} from "lucide-react";
+import StyleReqModal from "../../../components/StyleReqModal";
 const Summary = () => {
     const axiosPublic = useAxiosPublic();
+    const [showModal, setShowModal] = useState(false);
     const [objectKeys, setObjectKeys] = useState([])
     const [data, setData] = useState([])
     useEffect(() => {
@@ -15,8 +19,27 @@ const Summary = () => {
         }
         styleSummary();
     }, [axiosPublic])
+    console.log(showModal);
+
+    const handleShowModal = () => {
+        setShowModal(true)
+    }
     return (
         <DashboardLayout>
+            <div>
+                <button onClick={() => handleShowModal()}
+                    className="flex mb-4 items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+
+                ><PlusCircle /></button>
+            </div>
+
+            {
+                showModal && <StyleReqModal
+                    handleShowModal={handleShowModal}
+                    setShowModal={setShowModal}
+                />
+            }
+
             <div className="bg-white border border-gray-200 overflow-hidden">
                 <div className="table-container overflow-x-autotable-container overflow-x-auto">
                     <table className="w-full border-collapse factory-table" style={{ minWidth: '1200px' }}>
@@ -48,7 +71,7 @@ const Summary = () => {
                                     let totalPayableAmount = 0
                                     let totalPaidBillingAmount = 0
                                     let totalPendingBillingAmount = 0
-                                    if (rep.totalPendingBillingAmount||rep.totalPendingBillingAmount||rep.totalPaidBillingAmount||rep.totalPayableAmount||rep.totalBillingAmount || rep.totalDelivery || rep.totalReturn || rep.totalOrderQty || rep.totalYarnDyed || rep.totalGreyReceived || rep.totalFinishYarn) {
+                                    if (rep.totalPendingBillingAmount || rep.totalPendingBillingAmount || rep.totalPaidBillingAmount || rep.totalPayableAmount || rep.totalBillingAmount || rep.totalDelivery || rep.totalReturn || rep.totalOrderQty || rep.totalYarnDyed || rep.totalGreyReceived || rep.totalFinishYarn) {
                                         totalDelivery = rep.totalDelivery.split("+").reduce((sum, n) => sum + Number(n.trim()), 0);
                                         totalReturn = rep.totalReturn.split("+").reduce((sum, n) => sum + Number(n.trim()), 0);
                                         totalOrderQty = rep.totalOrderQty.split("+").reduce((sum, n) => sum + Number(n.trim()), 0);
