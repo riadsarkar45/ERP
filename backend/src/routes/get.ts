@@ -4,6 +4,7 @@ import { dashboardController } from "../controllers/dashboard/dashboard";
 import { getOrderSummaryByStyle } from "../controllers/orders/styleWiseOrder";
 import { allAudits } from "../controllers/audit/allAudits";
 import { getAllJobs } from "../controllers/jobs/allJobs";
+import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
 
 const getRouters = express.Router();
 
@@ -18,5 +19,7 @@ getRouters.get("/style-requirement", getOrderSummaryByStyle);
 getRouters.get("/audits", allAudits);
 
 getRouters.get("/jobs", getAllJobs);
+
+getRouters.get("/styles", styleRequirements);
 
 export default getRouters;

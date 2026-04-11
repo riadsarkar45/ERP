@@ -1,0 +1,61 @@
+import type { Request, Response } from "express";
+import prisma from "../../database/prismaClient/prisma";
+
+export const createNewStyleRequirement = async (req: Request, res: Response) => {
+    const { orderInfo, rows } = req.body;
+
+    if (!orderInfo || !rows) {
+        return res.status(400).send({ message: "No data provided", type: "error" })
+    }
+    console.log(req.body, "body");
+    try {
+        await prisma.$transaction(async (tx) => {
+            let styleId = null;
+            const findStyleName = await tx.styleRequirement.findUnique(
+                {
+                    where: { styleNo: orderInfo.styleNo }
+                },
+
+            )
+
+            styleId = findStyleName ? findStyleName.id : null;
+
+            if (!findStyleName) {
+                const createNewStyle = await tx.styleRequirement.create(
+                    {
+                        data: {
+                            styleNo: orderInfo.styleNo as string,
+                            buyerName: orderInfo.buyerName as string,
+                            jobNo: orderInfo.jobNo as string,
+                            processLoss: orderInfo.processLoss as string,
+                            poNo: orderInfo.poNo as string,
+                            salesContact: orderInfo.salesContact as string,
+                        },
+                        select: {
+                            id: true,
+                        }
+                    }
+                )
+
+                styleId = createNewStyle.id;
+            }
+            await tx.styleRequirementRow.createMany(
+                {
+                    data: rows.map((row: any) => ({
+                        styleRequirementId: Number(styleId),  // foreign key
+                        color: row.color,
+                        composition: row.composition,
+                        finishDia: row.finishDia,
+                        orderQty: row.orderQty,
+                        finishRequiredQty: row.finishRequiredQty,
+                    }))
+                }
+            )
+        })
+
+        res.status(200).send({ message: "Style requirement created successfully", type: "success" })
+    } catch (error) {
+        console.log(error);
+        return res.status(500).send({ message: "Internal server error", type: "error" })
+    }
+};

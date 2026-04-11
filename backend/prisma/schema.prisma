@@ -87,6 +87,28 @@ model WorkOrder {
   date                   DateTime
 }
 
+model StyleRequirement {
+  id           Int                   @id @default(autoincrement())
+  salesContact String
+  buyerName    String
+  jobNo        String
+  poNo         String
+  styleNo      String                @unique
+  processLoss  String
+  rows         StyleRequirementRow[]
+}
+
+model StyleRequirementRow {
+  id                 Int              @id @default(autoincrement())
+  styleRequirementId Int
+  styleRequirement   StyleRequirement @relation(fields: [styleRequirementId], references: [id])
+  color              String
+  composition        String
+  finishDia          String
+  orderQty           String
+  finishRequiredQty  String
+}
+
 model deliveries {
   id                 Int      @id @default(autoincrement())
   challanNo          Int?
