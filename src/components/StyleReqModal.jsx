@@ -2,6 +2,7 @@ import { X, Save, Plus } from 'lucide-react';
 import Input from './Input';
 import { useState } from 'react';
 import useAxiosPublic from '../hooks/Axios';
+import { RefreshCcw } from "lucide-react";
 
 const defaultRow = () => ({
     id: Date.now() + Math.random(),
@@ -24,6 +25,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             processLoss: '',
         }
     )
+    const [isLoading, setIsLoading] = useState(false);
 
     const axiosPublic = useAxiosPublic();
     console.log(orderInfo, "order info");
@@ -39,6 +41,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         );
 
     const createNewRequirement = async () => {
+        setIsLoading(true);
         const payload = {
             orderInfo,
             rows: rows.map(row => ({
@@ -52,7 +55,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
 
         const res = await axiosPublic.post("/api/new-style-requirements", payload)
         if (res.data.type === "success") {
-            axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), console.log(res.data.data) });
+            axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), setIsLoading(false) });
 
         }
 
@@ -213,14 +216,24 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
 
                         {/* Action buttons - original design */}
                         <div className="flex flex-col sm:flex-row gap-3 mt-10 border-gray-200">
-                            <button
-                                onClick={() => createNewRequirement()}
-                                type="submit"
-                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
-                            >
-                                <Save size={18} />
-                                Insert
-                            </button>
+                            {
+                                isLoading ? (
+                                    <button
+                                    onClick={() => setIsLoading(false)}
+                                        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                                    >
+                                        <Save size={18} />
+                                        <RefreshCcw size={18} className="animate-spin" />
+                                    </button>
+                                ) : <button
+                                    onClick={() => createNewRequirement()}
+                                    type="submit"
+                                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                                >
+                                    <Save size={18} />
+                                    Insert
+                                </button>
+                            }
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}

@@ -51,6 +51,8 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                     }))
                 }
             )
+        }, {
+            timeout: 15000
         })
 
         res.status(200).send({ message: "Style requirement created successfully", type: "success" })

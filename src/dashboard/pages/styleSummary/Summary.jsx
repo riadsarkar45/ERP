@@ -3,10 +3,6 @@ import { PlusCircle, RefreshCcw } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
-import ColumnHeader from "../../../components/ColumnHeader";
-import FilterToolbar from "../../../components/Filtertoolbar";
-import { useTableFilter } from "../../../hooks/UseTableFilter";
-import { exportToExcel } from "../../../hooks/Exporttoexcel";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -90,7 +86,6 @@ export default function Summary() {
                                 <td className="border" >{row.styleNo}</td>
                                 <td className="border" >{row.poNo}</td>
 
-                                {/* 👇 GROUPED CELL (THIS IS THE MAGIC) */}
                                 <td>
                                     <div className="space-y-1">
                                         {row.rows.map((cell, j) => (
