@@ -109,6 +109,37 @@ model StyleRequirementRow {
   finishRequiredQty  String
 }
 
+model cuttingStyle {
+  id             Int      @id @default(autoincrement())
+  styleName      String   @unique
+  buyerName      String
+  item           String
+  fabricRequired String
+  fabricReceived String
+  color          String
+  styleId        Int      @default(0)
+  createdAt      DateTime
+  size           sizes[]
+}
+
+model sizeWiseCutting {
+  id             Int    @id @default(autoincrement())
+  cuttingStyleId Int
+  sizeId         Int
+  size           sizes  @relation(fields: [sizeId], references: [id])
+  cutQty         String
+}
+
+model sizes {
+  id               Int               @id @default(autoincrement())
+  sizeName         String
+  styleId          Int               @default(0)
+  createdAt        DateTime
+  cuttingStyle     cuttingStyle?     @relation(fields: [cuttingStyleId], references: [id])
+  cuttingStyleId   Int?
+  sizeWiseCuttings sizeWiseCutting[]
+}
+
 model deliveries {
   id                 Int      @id @default(autoincrement())
   challanNo          Int?

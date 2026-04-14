@@ -219,7 +219,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             {
                                 isLoading ? (
                                     <button
-                                    onClick={() => setIsLoading(false)}
+                                        onClick={() => setIsLoading(false)}
                                         className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
                                     >
                                         <Save size={18} />

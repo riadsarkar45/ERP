@@ -9,8 +9,11 @@ import {
     PanelLeftOpen,
     PanelRightOpen,
     X,
-    Bell
+    Bell,
+    Scissors
 } from "lucide-react";
+
+
 
 const Sidebar = () => {
     const location = useLocation();
@@ -28,6 +31,7 @@ const Sidebar = () => {
         { path: "/dashboard/jobs", label: "Jobs", icon: FileText },
         { path: "/dashboard/audits", label: "Audits", icon: FileText },
         { path: "/dashboard/new-order", label: "Add New Order", icon: PlusCircle },
+        { path: "/dashboard/cutting", label: "Daily Cutting", icon: Scissors },
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
     ];
@@ -69,6 +73,11 @@ const Sidebar = () => {
         if (path.includes('jobs')) {
             return {
                 title: `Jobs`,
+            };
+        }
+        if (path.includes('cutting')) {
+            return {
+                title: `Daily Fabric Cutting Report`,
             };
         }
 

@@ -12,6 +12,8 @@ import FabricDyeOrder from "../dashboard/pages/FabricDyeOrder";
 import Summary from "../dashboard/pages/styleSummary/Summary";
 import AllAudits from "../dashboard/pages/audit/AllAudits";
 import Jobs from "../dashboard/pages/jobs/Jobs";
+import Cutting from "../dashboard/pages/cutting/DailyFabricCutting";
+import DailyFabricCutting from "../dashboard/pages/cutting/DailyFabricCutting";
 
 const routers = createBrowserRouter([
     {
@@ -69,6 +71,10 @@ const routers = createBrowserRouter([
                     {
                         path: "jobs",
                         element: <Jobs />
+                    },
+                    {
+                        path: "cutting",
+                        element: <DailyFabricCutting />
                     },
                 ]
             }

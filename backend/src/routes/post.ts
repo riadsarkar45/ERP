@@ -4,6 +4,7 @@ import multer from "multer";
 import { createNewOrder } from "../controllers/orders/createNewOrder";
 import { createNewAudit } from "../controllers/audit/newAudit";
 import { createNewStyleRequirement } from "../controllers/newStyleRequirements/createNewReq";
+import { cuttingDataUpdate } from "../controllers/fabricCutting/fabricCuttingData";
 
 const router = express.Router();
 
@@ -16,5 +17,7 @@ router.post("/create-new-order", createNewOrder)
 router.post("/create-new-audit", createNewAudit)
 
 router.post("/new-style-requirements", createNewStyleRequirement)
+
+router.post("/cutting-production", cuttingDataUpdate)
 
 export default router;
