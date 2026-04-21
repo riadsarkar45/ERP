@@ -3,7 +3,8 @@ const Input = ({
     name, 
     type = "text", 
     value, 
-    onChange, 
+    onChange,
+    readOnly = false, 
     required = false, 
     placeholder = "",
     options = [], // For select dropdown
@@ -55,6 +56,7 @@ const Input = ({
                     onChange={onChange}
                     required={required}
                     placeholder={placeholder}
+                    readOnly={readOnly}
                     className={baseInputClass}
                 />
             )}

@@ -22,4 +22,6 @@ getRouters.get("/jobs", getAllJobs);
 
 getRouters.get("/styles", styleRequirements);
 
+getRouters.get("/styles/:jobNo", styleRequirements);
+
 export default getRouters;

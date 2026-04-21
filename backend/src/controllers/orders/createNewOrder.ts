@@ -44,72 +44,23 @@ export const createNewOrder = async (req: Request, res: Response) => {
             const findFactoryName = await tx.factory.findUnique({
                 where: { factoryName: factoryName }
             })
-            const findJob = await tx.job.findUnique({
-                where: { jobNo: jobNo }
-            })
+           
 
-            const findStyleNo = await tx.styles.findUnique(
-                {
-                    where: { styleName: style }
-                },
-
-            )
-            let styleId = findStyleNo?.id
-            let id = findJob?.id; // job id from @findJob
+            
             let factoryId = findFactoryName?.id // @factoryId from @factory
 
-            if (!findFactoryName || !findStyleNo) {
-                const newFactory = await tx.factory.create(
-                    {
-                        data: {
-                            jobId: Number(id),
-                            factoryName: factoryName
-                        }
-                    }
-                )
-
-                if (!findStyleNo) {
-                    const newStyle = await tx.styles.create(
-                        {
-                            data: {
-                                styleName: style,
-                                createdAt: new Date()
-                            }
-                        }
-                    )
-                    styleId = newStyle.id
-
-                }
-
-                factoryId = newFactory.id
-            } else {
-                factoryId = findFactoryName.id
-            }
-            const job = await tx.job.create({
-                data: {
-                    month: month,
-                    buyer: buyer,
-                    poNo: poNo,
-                    style: style,
-                    jobNo: jobNo,
-                    factoryId: factoryId,
-                    stylesId: Number(styleId)
-                }
-            })
+     
+           
 
 
             await tx.workOrder.create(
                 {
                     data: {
                         jobNo: jobNo,
-                        workOrderPlaceDate: new Date(workOrderPlaceDate),
                         workOrderNo: workOrderNo,
                         composition: composition,
                         orderType: orderType,
-                        processLossAfterYD: processLoss,
                         bookingColor: color,
-                        salesContractNo: salesContractNo,
-                        orderQty: orderQTY,
                         factoryId: Number(factoryId),
                         date: "2026-03-17T10:30:00.000Z"
                     }

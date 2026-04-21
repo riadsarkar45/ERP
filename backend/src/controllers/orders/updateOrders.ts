@@ -38,24 +38,8 @@ export const updateOrders = async (req: Request, res: Response) => {
                 }
             )
 
-            const findStyleNo = await tx.styles.findUnique(
-                {
-                    where: { styleName: styleNo }
-                }
-            )
-            let styleId = findStyleNo?.id
-            if (!findStyleNo) {
-                const newStyle = await tx.styles.create(
-                    {
-                        data: {
-                            styleName: styleNo,
-                            createdAt: new Date()
-                        }
-                    }
-                )
-
-                styleId = newStyle.id
-            }
+            
+            
             await tx.workOrder.update(
                 {
                     where: { id: Number(orderId) },
@@ -73,7 +57,6 @@ export const updateOrders = async (req: Request, res: Response) => {
                             jobId: Number(orderId),
                             challanNo: Number(challanNo),
                             deliveryDate: new Date(),
-                            styleId: Number(styleId)
                         }
                     }
                 )

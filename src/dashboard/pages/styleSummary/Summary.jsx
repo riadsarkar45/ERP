@@ -3,6 +3,7 @@ import { PlusCircle, RefreshCcw } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
+import { useNavigate } from "react-router-dom";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -28,14 +29,16 @@ export default function Summary() {
     const axiosPublic = useAxiosPublic();
     const [rawData, setRawData] = useState([]);
     const [showModal, setShowModal] = useState(false);
-
+    const navigate = useNavigate();
     useEffect(() => {
         axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), console.log(res.data.data) });
 
     }, [axiosPublic]);
 
 
-
+    const handleRedirect = (jobNumber) => {
+        navigate(`/dashboard/new-order/${jobNumber}`)
+    }
 
 
     return (
@@ -82,7 +85,7 @@ export default function Summary() {
 
                                 <td className="border" >{row.salesContact}</td>
                                 <td className="border" >{row.buyerName}</td>
-                                <td className="border" >{row.jobNo}</td>
+                                <td onDoubleClick={() => handleRedirect(row.jobNo)} className="border" >{row.jobNo}</td>
                                 <td className="border" >{row.styleNo}</td>
                                 <td className="border" >{row.poNo}</td>
 

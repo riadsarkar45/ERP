@@ -7,40 +7,27 @@ export const cuttingDataUpdate = async (req: Request, res: Response) => {
 
     try {
         await prisma.$transaction(async (tx) => {
-            let styleId = null;
             const findStyleId = await tx.styleRequirement.findUnique(
                 {
                     where: { styleNo: styleInfos.styleNo as string }
                 }
             )
-            styleId = findStyleId ? findStyleId?.id : null;
-            const cuttingStyleData = await tx.cuttingStyle.create(
-                {
-                    data: {
-                        styleName: styleInfos.styleNo as string,
-                        buyerName: styleInfos.buyerName as string,
-                        item: styleInfos.item as string,
-                        fabricRequired: styleInfos.fabricRequired as string,
-                        fabricReceived: styleInfos.fabricReceived as string,
-                        color: styleInfos.color as string,
-                        styleId: Number(styleId) as number,
-                        createdAt: new Date(),
-                    },
-                    select: {
-                        id: true,
-                    }
-                },
 
-            )
+            if (!findStyleId) {
+                throw new Error("Style not found");
+            }
 
             await tx.sizes.createMany(
                 {
-                    data: rows.map((row: any) => ({ 
+                    data: rows.map((row: any) => ({
                         sizeName: row.size,
-                        styleId: Number(cuttingStyleData.id),
-                        cuttingStyleId: Number(cuttingStyleData.id),
+                        styleId: Number(findStyleId.id),
+                        cuttingStyleId: Number(findStyleId.id),
+                        styleRequirementId: Number(findStyleId.id),
                         createdAt: new Date(),
-                    }))
+                    }), {
+                        timeout: 15000
+                    })
                 }
             )
 

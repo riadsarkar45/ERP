@@ -1,6 +1,6 @@
 import { Plus, X } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Input from "../../../components/Input";
 import useAxiosPublic from "../../../hooks/Axios";
 
@@ -11,19 +11,28 @@ const defaultRow = () => ({
 });
 
 const DailyFabricCutting = () => {
+
     const [rows, setRows] = useState([defaultRow()]);
+    const [styleReq, setStyleReq] = useState([]);
     const [styleInfos, setStyleInfos] = useState({
         styleNo: '',
-        item: '',
-        fabricRequired: '',
-        color: '',
-        orderQty: '',
-        fabricReceived: '',
 
     })
     const axiosPublic = useAxiosPublic();
-    const sizes = ["98/104", "110/116", "122/128", "134/140", "N/A", "N/A", "N/A", "N/A"];
-    const emptyRows = Array(12).fill(null);
+    useEffect(() => {
+        const fetchStyleReq = async () => {
+            const res = await axiosPublic.get("/api/styles");
+            console.log(res.data.data);
+            // const data = res.data.data;
+
+
+            // const convertArrayToObject = arrayToObject(data, item => item.id);
+            setStyleReq(res.data.data);
+        };
+
+        fetchStyleReq();
+    }, [axiosPublic]);
+    console.log(styleReq, "converted");
 
     const addRow = () => setRows((prev) => [...prev, defaultRow()]);
 
@@ -46,11 +55,8 @@ const DailyFabricCutting = () => {
         const insert = await axiosPublic.post("/api/cutting-production", payload)
         console.log(insert.data);
 
-        console.log(payload, "payload");
     }
 
-    console.log(styleInfos, "style infos");
-    console.log(rows, "rows");
     return (
         <DashboardLayout>
             {/* Search Inputs */}
@@ -93,49 +99,10 @@ const DailyFabricCutting = () => {
                         placeholder="Style"
                         onChange={(e) => setStyleInfos({ ...styleInfos, styleNo: e.target.value })}
                     />
-                    <Input
-                        label={"Buyer Name"}
-                        name={"buyerName"}
-                        placeholder="Buyer Name"
-                        onChange={(e) => setStyleInfos({ ...styleInfos, buyerName: e.target.value })}
 
-                    />
-                    <Input
-                        label={"Item"}
-                        name={"item"}
-                        placeholder="Item"
-                        onChange={(e) => setStyleInfos({ ...styleInfos, item: e.target.value })}
 
-                    />
-                    <Input
-                        label={"Fabric Required"}
-                        name={"fabricRequired"}
-                        placeholder="Fabric Required"
-                        onChange={(e) => setStyleInfos({ ...styleInfos, fabricRequired: e.target.value })}
 
-                    />
 
-                    <Input
-                        label={"Color"}
-                        name={"color"}
-                        placeholder="Color"
-                        onChange={(e) => setStyleInfos({ ...styleInfos, color: e.target.value })}
-
-                    />
-                    <Input
-                        label={"Order Quantity"}
-                        name={"orderQty"}
-                        placeholder="Order Quantity"
-                        onChange={(e) => setStyleInfos({ ...styleInfos, orderQty: e.target.value })}
-
-                    />
-                    <Input
-                        label={"Fabric Received"}
-                        name={"fabricReceived"}
-                        placeholder="Fabric Received"
-                        onChange={(e) => setStyleInfos({ ...styleInfos, fabricReceived: e.target.value })}
-
-                    />
                 </div>
                 {rows.map((row) => (
                     <div
@@ -165,122 +132,92 @@ const DailyFabricCutting = () => {
                     </div>
                 ))}
             </div>
-
-            {/* Buyer Banner */}
-            <div className="text-center font-bold text-sm py-1 border border-gray-400 border-b-0 bg-gray-100">
-                BUYER : LPP
-            </div>
-
-            {/* Info Bar */}
-            <div className="grid grid-cols-5 border border-gray-400 text-xs">
-                {[
-                    [["Style :", "25481"], ["Color :", "WHITE LOVE AOP"]],
-                    [["Item :", "BOXER"], ["Order Quantity :", "1,800"]],
-                    [["Fabric Required :", "55"], ["Fabric Received :", "-"]],
-                    [["Booking Consumption :", "0.031"], ["Actual Consumption :", "-"]],
-                    [["CUTTING CONSUMP.", ""], ["CONSUMP. VARIATION", ""]],
-                ].map((col, ci) => (
-                    <div key={ci} className={ci < 4 ? "border-r border-gray-400" : ""}>
-                        {col.map(([label, val], ri) => (
-                            <div key={ri} className={`px-2 py-1 ${ri === 0 ? "border-b border-gray-400" : ""}`}>
-                                <span className="font-semibold">{label}</span> {val}
-                            </div>
-                        ))}
-                    </div>
-                ))}
-            </div>
-
-            {/* Main Table */}
             <div className="overflow-x-auto mt-2">
-                <table className="w-full border-collapse text-xs text-center">
-                    <thead>
-                        <tr>
-                            {["Body Part Name", "CUTTING NUMBER.", "Total Layers", "Pcs Per Layer", "Total Cutting"].map(h => (
-                                <th key={h} rowSpan={2} className="border border-gray-500 bg-green-200 p-1 font-bold text-green-900">{h}</th>
-                            ))}
-                            <th colSpan={8} className="border border-gray-500 bg-green-300 p-1 font-bold text-green-900">Sizes</th>
-                            <th rowSpan={2} className="border border-gray-500 bg-green-200 p-1 font-bold text-green-900">Total</th>
-                        </tr>
-                        <tr>
-                            {sizes.map((s, i) => (
-                                <th key={i} className="border border-gray-500 bg-green-300 p-1 font-bold text-green-900">{s}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {/* Size Wise Requirements */}
-                        <tr className="bg-white">
-                            <td colSpan={5} className="border border-gray-500 italic text-gray-500 py-1">Size Wise Requirements</td>
-                            <td className="border border-gray-500">375</td>
-                            <td className="border border-gray-500">300</td>
-                            <td className="border border-gray-500">600</td>
-                            <td className="border border-gray-500">525</td>
-                            {["-", "-", "-", "-"].map((v, i) => <td key={i} className="border border-gray-500">{v}</td>)}
-                            <td className="border border-gray-500 font-bold">1,800</td>
-                        </tr>
+                {
+                    styleReq?.map((req) =>
+                        req.rows.map((row, j) =>
+                            <div key={req.id - j + 1} className="text-[10px] text-gray-700 mb-5">
+                                <div className="grid grid-cols-4 border border-gray-300 p-2 bg-gray-50">
+                                    <div className="border-r border-gray-300 p-2 font-bold">
+                                        Buyer: <span className="font-normal ml-1">{req.buyerName}</span>
+                                    </div>
+                                    <div className="p-2 border-r font-bold pl-4">
+                                        Style: <span className="font-normal ml-1">{req.styleNo}</span>
+                                    </div>
+                                    <div className="p-2 border-r font-bold pl-4">
+                                        Color: <span className="font-normal ml-1">{row.color}</span>
+                                    </div>
+                                    <div className="p-2 border-r font-bold pl-4">
+                                        Order Qty: <span className="font-normal ml-1">{row.orderQty}</span>
+                                    </div>
 
-                        {/* With 2% */}
-                        <tr className="bg-yellow-200 text-red-800 font-semibold">
-                            <td colSpan={5} className="border border-gray-500 text-right pr-2">With <strong>2%</strong></td>
-                            <td className="border border-gray-500">383</td>
-                            <td className="border border-gray-500">306</td>
-                            <td className="border border-gray-500">612</td>
-                            <td className="border border-gray-500">536</td>
-                            {["-", "-", "-", "-"].map((v, i) => <td key={i} className="border border-gray-500">{v}</td>)}
-                            <td className="border border-gray-500">1,836</td>
-                        </tr>
+                                </div>
+                                <div className="border border-r border-t-0 border-gray-300 grid grid-cols-4 p-2 bg-white">
+                                    <div className="p-2 font-bold">
+                                        Fabric Required: <span className="font-normal ml-1">non</span>
+                                    </div>
+                                    <div className="p-2 border-r font-bold pl-4">
+                                        Booking Consumption: <span className="font-normal ml-1">0.031</span>
+                                    </div>
+                                    <div className="p-2 border-r font-bold pl-4">
+                                        Cutting Consumption: <span className="font-normal ml-1">-</span>
+                                    </div>
+                                    <div className="p-2 border-r font-bold pl-4">
+                                        Variation Consumption: <span className="font-normal ml-1">-</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-8 border border-t-0 border-gray-300 p-4 bg-gray-50">
+                                    <div className="border-r font-bold">
+                                        Order Quantity: <span className="font-normal ml-1">56</span>
+                                    </div>
+                                    <div className="border-r font-bold">
+                                        Fabric Received: <span className="font-normal ml-1">56</span>
+                                    </div>
+                                    <div className="border-r font-bold">
+                                        Actual Consumption: <span className="font-normal ml-1">-</span>
+                                    </div>
+                                    <div className="border-r font-bold">
+                                        Item: <span className="font-normal ml-1">box</span>
+                                    </div>
+                                    <div className="border-r font-bold">
+                                        Last Updated: <span className="font-normal ml-1">{"14.4.2026"}</span>
+                                    </div>
+                                </div>
+                                <div className="">
+                                    <table className="w-full text-[11px] text-left border-collapse">
+                                        <thead className="bg-gray-100">
+                                            <tr>
+                                                <th className="border border-gray-300 p-2">Cutting Part</th>
+                                                <th className="border border-gray-300 p-2">Cutting Number</th>
+                                                <th className="border border-gray-300 p-2">PCS Per Layer</th>
+                                                <th className="border border-gray-300 p-2">Cutting Layer</th>
+                                                <th className="border border-gray-300 p-2">Quantity</th>
+                                                {req?.sizes?.map((s) => (
+                                                    <th key={s.id} className="border border-gray-300 p-2">{s.sizeName}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
 
-                        {/* Already Cutted */}
-                        <tr className="bg-green-400 font-bold text-green-900">
-                            <td colSpan={5} className="border border-gray-500">ALREADY CUTTED</td>
-                            <td className="border border-gray-500">372</td>
-                            <td className="border border-gray-500">310</td>
-                            <td className="border border-gray-500">620</td>
-                            <td className="border border-gray-500">558</td>
-                            {["-", "-", "-", "-"].map((v, i) => <td key={i} className="border border-gray-500">{v}</td>)}
-                            <td className="border border-gray-500">1,860</td>
-                        </tr>
+                                        <tbody>
+                                            {[
+                                                { size: "S", qty: 10 },
+                                                { size: "M", qty: 20 },
+                                                { size: "L", qty: 15 }
+                                            ].map((s, i) => (
+                                                <tr key={i} className="hover:bg-gray-50">
+                                                    <td className="border border-gray-300 p-2">{s.size}</td>
+                                                    <td className="border border-gray-300 p-2">{s.qty}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
 
-                        {/* Data row */}
-                        <tr className="bg-white">
-                            <td className="border border-gray-500"></td>
-                            <td className="border border-gray-500">1</td>
-                            <td className="border border-gray-500">31</td>
-                            <td className="border border-gray-500">60</td>
-                            <td className="border border-gray-500">1,860</td>
-                            <td className="border border-gray-500">12</td>
-                            <td className="border border-gray-500">10</td>
-                            <td className="border border-gray-500">20</td>
-                            <td className="border border-gray-500">18</td>
-                            {["-", "-", "-", "-"].map((v, i) => <td key={i} className="border border-gray-500">{v}</td>)}
-                            <td className="border border-gray-500">-</td>
-                        </tr>
 
-                        {/* Empty rows */}
-                        {emptyRows.map((_, i) => (
-                            <tr key={i} className="bg-white">
-                                <td className="border border-gray-500 py-1">EMPTY</td>
-                                <td className="border border-gray-500">EMPTY 1</td>
-                                <td className="border border-gray-500">EMPTY TEST COUNT 1</td>
-                                <td className="border border-gray-500">TEST COUNT 1</td>
-                                <td className="border border-gray-500">-</td>
-                                {Array(8).fill("").map((_, j) => <td key={j} className="border border-gray-500"></td>)}
-                                <td className="border border-gray-500">-</td>
-                            </tr>
-                        ))}
-
-                        {/* Pending to Cut */}
-                        <tr className="text-red-700 font-bold italic">
-                            <td colSpan={5} className="border border-gray-500 text-center">PENDING TO CUT / EXCESS CUT.</td>
-                            <td className="border border-gray-500">(11)</td>
-                            <td className="border border-gray-500">4</td>
-                            <td className="border border-gray-500">8</td>
-                            <td className="border border-gray-500">23</td>
-                            {["", "", "", ""].map((v, i) => <td key={i} className="border border-gray-500">{v}</td>)}
-                            <td className="border border-gray-500">(24)</td>
-                        </tr>
-                    </tbody>
-                </table>
+                        )
+                    )
+                }
             </div>
         </DashboardLayout>
     );

@@ -1,15 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Save, X } from "lucide-react";
 import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
 import useAxiosPublic from "../../hooks/Axios";
+import { useParams } from "react-router-dom";
 
 const NewOrder = () => {
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState('success');
     const [isClicked, setIsClicked] = useState(false)
+    const { jobNumber } = useParams();
+    const [styleData, setStyleData] = useState([]);
+    const [rows, setRows] = useState([]);
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
         workOrderNo: "",
@@ -27,6 +31,19 @@ const NewOrder = () => {
         orderQTY: "",
     });
     const axios = useAxiosPublic();
+
+    useEffect(() => {
+        const styleReq = async () => {
+            if (!jobNumber) return;
+            const req = await axios.get(`/api/styles/${jobNumber}`)
+            setStyleData(req.data.data);
+            console.log(req.data.data);
+            setRows(req.data.data[0]?.rows || []);
+        }
+        if (styleData.length === 0) styleReq();
+
+    })
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -39,6 +56,9 @@ const NewOrder = () => {
         setToastMessage(message);
         setToastType(type);
         setShowToast(true);
+    };
+    const handleRemoveRow = (index) => {
+        setRows(prev => prev.filter((_, i) => i !== index));
     };
     console.log(formData, "formdata");
     const handleSubmit = async (e) => {
@@ -78,191 +98,177 @@ const NewOrder = () => {
             )}
 
             <div className="bg-white rounded-md border border-gray-200 p-6 md:p-8">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Row 1 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <Input
-                            label="Work Order Place Date"
-                            name="workOrderPlaceDate"
-                            type="date"
-                            value={formData.workOrderPlaceDate}
-                            onChange={handleChange}
-                            required
-                        />
+                {
+                    styleData?.map((style, i) => {
+                        return (
+                            <form key={i} onSubmit={handleSubmit} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <Input
+                                        label="Work Order Place Date"
+                                        name="workOrderPlaceDate"
+                                        type="date"
+                                        value={formData.workOrderPlaceDate}
+                                        onChange={handleChange}
+                                        required
+                                    />
 
-                        <Input
-                            label="Work Order No"
-                            name="workOrderNo"
-                            type="text"
-                            value={formData.workOrderNo}
-                            onChange={handleChange}
-                            placeholder="Enter work order number"
-                            required
-                        />
+                                    <Input
+                                        label="Work Order No"
+                                        name="workOrderNo"
+                                        type="text"
+                                        value={formData.workOrderNo}
+                                        onChange={handleChange}
+                                        placeholder="Enter work order number"
+                                        required
+                                    />
 
-                        <Input
-                            label="Month"
-                            name="month"
-                            type="text"
-                            value={formData.month}
-                            onChange={handleChange}
-                            placeholder="Select Month"
-                            required
-                        />
-                    </div>
+                                    <Input
+                                        label="Month"
+                                        name="month"
+                                        type="text"
+                                        value={formData.month}
+                                        onChange={handleChange}
+                                        placeholder="Select Month"
+                                        required
+                                    />
+                                </div>
 
-                    {/* Row 2 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <Input
-                            label="Sales Contract No"
-                            name="salesContractNo"
-                            value={formData.salesContractNo}
-                            onChange={handleChange}
-                            placeholder="Select Contract"
-                            required
-                        />
+                                <div className="grid grid-cols-3 gap-6">
+                                    <Input
+                                        label="Job No"
+                                        name="jobNo"
+                                        readOnly
+                                        value={style.jobNo}
+                                        onChange={handleChange}
+                                        placeholder="e.g., SM26-3429/JAN"
+                                        required
+                                    />
+                                    <Input
+                                        label={"Process Loss"}
+                                        name={"processLoss"}
+                                        value={style.processLoss}
+                                        readOnly
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Wastage %"
+                                    />
+                                    <Input
+                                        label={"Order Type"}
+                                        name={"orderType"}
+                                        value={formData.orderType}
+                                        type="select"
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Order Type"
+                                        options={dyeingOrderType}
+                                    />
 
-                        <Input
-                            label="Buyer"
-                            name="buyer"
-                            value={formData.buyer}
-                            onChange={handleChange}
-                            type="text"
-                            placeholder="Select Buyer"
-                            required
-                        />
+                                </div>
 
-                        <Input
-                            label="Job No"
-                            name="jobNo"
-                            type="text"
-                            value={formData.jobNo}
-                            onChange={handleChange}
-                            placeholder="e.g., SM26-3429/JAN"
-                            required
-                        />
-                    </div>
+                                {
+                                    rows.map((styleRow, index) => {
+                                        return (
+                                            <div key={index} className="grid grid-cols-5 gap-6 items-center">
+                                                <Input
+                                                    label={`Composition ${index + 1}`}
+                                                    name="color"
+                                                    readOnly
+                                                    value={styleRow.composition}
+                                                    onChange={handleChange}
+                                                    placeholder="e.g., SM26-3429/JAN"
+                                                    required
+                                                />
+                                                <Input
+                                                    label={`Color ${index + 1}`}
+                                                    name={"Color"}
+                                                    value={styleRow.color}
+                                                    readOnly
+                                                    onChange={handleChange}
+                                                    required
+                                                    placeholder="Wastage %"
+                                                />
+                                                <Input
+                                                    label={`Order Qty ${index + 1}`}
+                                                    name={"orderQty"}
+                                                    value={styleRow.orderQty}
+                                                    onChange={handleChange}
+                                                    required
+                                                    placeholder="Order Type"
+                                                />
+                                                <Input
+                                                    label={`Work Order Qty ${index + 1}`}
+                                                    name={"workOrderQty"}
+                                                    onChange={handleChange}
+                                                    required
+                                                    placeholder="Work Order Qty"
+                                                />
+                                                {/* Remove button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveRow(index)}
+                                                    className="flex items-center justify-center gap-1 px-4 py-2.5 bg-red-500 text-white font-medium rounded-md hover:bg-red-600 transition-all duration-200"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        )
+                                    })
+                                }
 
-                    {/* Row 3 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <Input
-                            label="PO No"
-                            name="poNo"
-                            type="text"
-                            value={formData.poNo}
-                            onChange={handleChange}
-                            placeholder="e.g., P-264702"
-                            required
-                        />
+                                <div className="grid grid-cols-3 gap-6">
+                                    <Input
+                                        label="Factory Name"
+                                        name="FactoryName"
+                                        onChange={handleChange}
+                                        placeholder="Factory Name"
+                                        required
+                                    />
+                                    <Input
+                                        label={"Stich Length"}
+                                        name={"stichLength"}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Wastage %"
+                                    />
+                                    <Input
+                                        label={"Lot No"}
+                                        name={"lotNo"}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Lot No"
+                                    />
 
-                        <Input
-                            label="Style"
-                            name="style"
-                            type="text"
-                            value={formData.style}
-                            onChange={handleChange}
-                            placeholder="e.g., WGR-538"
-                            required
-                        />
-
-                        <Input
-                            label="Color"
-                            name="color"
-                            type="text"
-                            value={formData.color}
-                            onChange={handleChange}
-                            placeholder="e.g., WHITE SWAN (12-0000 TCX)"
-                            required
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-6">
-                        <Input
-                            label={"Process Loss"}
-                            name={"processLoss"}
-                            value={formData.processLoss}
-                            type="text"
-                            onChange={handleChange}
-                            required
-                            placeholder="Wastage %"
-                        />
-                        <Input
-                            label={"Order Type"}
-                            name={"orderType"}
-                            value={formData.orderType}
-                            type="select"
-                            onChange={handleChange}
-                            required
-                            placeholder="Order Type"
-                            options={dyeingOrderType}
-                        />
-
-                    </div>
-
-                    {/* Row 4 */}
-                    <div className="grid grid-cols-2 gap-6">
-
-                        <Input
-                            label="Order Qty"
-                            name="orderQTY"
-                            type="text"
-                            value={formData.orderQTY}
-                            onChange={handleChange}
-                            placeholder="e.g., 95% CTN 5% ELASTANE S.J 175 GSM"
-                            required
-                        />
-
-                        <Input
-                            label="Factory Name"
-                            name="factoryName"
-                            type="text"
-                            value={formData.factoryName}
-                            onChange={handleChange}
-                            placeholder="Factory Name"
-                            required
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 gap-6">
-
-                        <Input
-                            label="Composition"
-                            name="composition"
-                            type="text"
-                            value={formData.composition}
-                            onChange={handleChange}
-                            placeholder="e.g., 95% CTN 5% ELASTANE S.J 175 GSM"
-                            required
-                        />
-                    </div>
+                                </div>
 
 
+                                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
+                                    {
+                                        isClicked ? <button
+                                            disabled
+                                            className="flex  items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                                        >
+                                            <span className="rotate-180"><Loader2 size={18} /></span>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                        {
-                            isClicked ? <button
-                                disabled
-                                className="flex  items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
-                            >
-                                <span className="rotate-180"><Loader2 size={18} /></span>
-                                
-                            </button> : <button
-                                type="submit"
-                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
-                            >
-                                <Save size={18} />
-                                Create Order
-                            </button>
-                        }
-                        <button
-                            type="button"
-                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-all duration-200 border border-gray-200"
-                        >
-                            <X size={18} />
-                            Cancel
-                        </button>
-                    </div>
-                </form>
+                                        </button> : <button
+                                            type="submit"
+                                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
+                                        >
+                                            <Save size={18} />
+                                            Create Order
+                                        </button>
+                                    }
+                                    <button
+                                        type="button"
+                                        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-all duration-200 border border-gray-200"
+                                    >
+                                        <X size={18} />
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        )
+                    })
+                }
             </div>
         </DashboardLayout>
     );

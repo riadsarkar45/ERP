@@ -37,7 +37,7 @@ const routers = createBrowserRouter([
                         element: <KnittingOrders />
                     },
                     {
-                        path: "new-order",
+                        path: "new-order/:jobNumber",
                         element: <NewOrder />
                     },
                     {

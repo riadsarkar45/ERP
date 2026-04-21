@@ -8,28 +8,10 @@ export const updateJobStatus = async (req: Request, res: Response) => {
         return res.send({ message: "Something went wrong", type: "error" })
     }
 
-    const checkIfJobExist = await prisma.job.findUnique(
-        {
-            where: { id: Number(jobId) }
-        }
-    )
+   
 
-    if (!checkIfJobExist) {
-        return res.send({ message: "No data found to update", type: "error" })
-    }
 
-    const update = await prisma.job.update(
-        {
-            where: { id: Number(jobId) },
-            data: {
-                status: status
-            }
-        }
-    )
-
-    if (!update) {
-        return res.send({ message: "Failed to update", type: "error" })
-    }
+    
 
     res.status(201).send({ message: "Update successful", type: "success" })
 }

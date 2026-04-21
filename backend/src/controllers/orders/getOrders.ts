@@ -18,50 +18,17 @@ export const getAllOrders = async (req: Request, res: Response) => {
                         select: {
 
                             workOrderNo: true,
-                            workOrderPlaceDate: true,
-                            salesContractNo: true,
-                            bookingColor: true,
                             composition: true,
-                            dia: true,
                             yarnCount: true,
                             brandLot: true,
-                            yarnDyeingColor: true,
-                            yarnDeliveryForYD: true,
-                            yarnDyedWorkOrderQty: true,
-                            yarnReturnReceived: true,
-                            yarnStock: true,
-                            finishYarnReceived: true,
-                            ydProcessLossVariation: true,
-                            ydPricePerKg: true,
                             ydProcessLoss: true,
-                            greyReceivedFromYD: true,
-                            processLossAfterYD: true,
-                            delShortExcess: true,
-                            totalBillingAmount: true,
-                            deductionForDebitNote: true,
-                            pendingBillingAmount: true,
-                            paidBillingAmount: true,
                             billNo: true,
                             remarks: true,
                             createdAt: true,
                             id: true,
-                            orderQty: true,
                             orderType: true,
-                            payableAmount: true,
                         }
-                    },
-                    jobs:{
-                        select:{
-                            jobNo: true,
-                            buyer: true,
-                            poNo: true,
-                            style: true,
-                            month: true,
-                            createdAt: true,
-                            id: true,
-                            status: true,
-                        }
-                    },
+                    }
                 },
 
             }

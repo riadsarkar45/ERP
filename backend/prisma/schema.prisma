@@ -20,7 +20,6 @@ model Factory {
   type        String?
   createdAt   DateTime    @default(now())
   jobId       Int?
-  jobs        Job[]
   workOrders  WorkOrder[]
 }
 
@@ -29,62 +28,26 @@ model Yarns {
   yarnType String @unique
 }
 
-model Job {
-  id          Int         @id @default(autoincrement())
-  jobNo       String      @unique
-  buyer       String?
-  poNo        String?
-  style       String?
-  month       String?
-  createdAt   DateTime    @default(now())
-  factoryId   Int
-  factoryName Factory     @relation(fields: [factoryId], references: [id])
-  workOrders  WorkOrder[]
-  styles      styles?     @relation(fields: [stylesId], references: [id])
-  stylesId    Int?
-  status      String      @default("active")
-  comment     String?     @default("NO COMMENT")
-}
+
 
 model WorkOrder {
   id Int @id @default(autoincrement())
 
-  jobNo                  String
-  jobs                   Job       @relation(fields: [jobNo], references: [jobNo])
-  workOrderPlaceDate     DateTime?
-  workOrderNo            String?
-  orderQty               String
-  salesContractNo        String?
-  bookingColor           String?
-  composition            String?
-  dia                    String?
-  yarnCount              String?
-  brandLot               String?
-  yarnDyeingColor        String?
-  yarnDyedWorkOrderQty   String?
-  yarnDeliveryForYD      String?
-  delShortExcess         String?
-  yarnReturnReceived     String?
-  greyReceivedFromYD     String?
-  finishYarnReceived     String?
-  yarnStock              String?
-  ydProcessLoss          String?
-  processLossAfterYD     String?
-  ydProcessLossVariation String?
-  ydPricePerKg           String?
-  totalBillingAmount     String?
-  deductionForDebitNote  String?
-  payableAmount          String?
-  billNo                 String?
-  paidBillingAmount      String?
-  pendingBillingAmount   String?
-  remarks                String?
-  factory                Factory   @relation(fields: [factoryId], references: [id])
-  orderType              String
-  createdAt              DateTime  @default(now())
-  factoryId              Int
-  challanNo              String?
-  date                   DateTime
+  jobNo              String
+  workOrderNo        String?
+  bookingColor       String?
+  composition        String?
+  yarnCount          String?
+  brandLot           String?
+  bookingQty         String?
+  ydProcessLoss      String?
+  billNo             String?
+  remarks            String?
+  factory            Factory  @relation(fields: [factoryId], references: [id])
+  orderType          String
+  createdAt          DateTime @default(now())
+  factoryId          Int
+  date               DateTime
 }
 
 model StyleRequirement {
@@ -96,6 +59,7 @@ model StyleRequirement {
   styleNo      String                @unique
   processLoss  String
   rows         StyleRequirementRow[]
+  sizes        sizes[]
 }
 
 model StyleRequirementRow {
@@ -109,19 +73,6 @@ model StyleRequirementRow {
   finishRequiredQty  String
 }
 
-model cuttingStyle {
-  id             Int      @id @default(autoincrement())
-  styleName      String   @unique
-  buyerName      String
-  item           String
-  fabricRequired String
-  fabricReceived String
-  color          String
-  styleId        Int      @default(0)
-  createdAt      DateTime
-  size           sizes[]
-}
-
 model sizeWiseCutting {
   id             Int    @id @default(autoincrement())
   cuttingStyleId Int
@@ -131,13 +82,14 @@ model sizeWiseCutting {
 }
 
 model sizes {
-  id               Int               @id @default(autoincrement())
-  sizeName         String
-  styleId          Int               @default(0)
-  createdAt        DateTime
-  cuttingStyle     cuttingStyle?     @relation(fields: [cuttingStyleId], references: [id])
-  cuttingStyleId   Int?
-  sizeWiseCuttings sizeWiseCutting[]
+  id                 Int               @id @default(autoincrement())
+  sizeName           String
+  styleId            Int               @default(0)
+  createdAt          DateTime
+  cuttingStyleId     Int?
+  sizeWiseCuttings   sizeWiseCutting[]
+  styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
+  styleRequirementId Int?
 }
 
 model deliveries {
@@ -161,10 +113,3 @@ model audit {
   auditType      String   @default("pending")
 }
 
-model styles {
-  id        Int      @id @default(autoincrement())
-  styleName String   @unique
-  styleId   Int      @default(0)
-  jobs      Job[]
-  createdAt DateTime
-}
