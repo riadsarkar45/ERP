@@ -12,23 +12,21 @@ export const getAllOrders = async (req: Request, res: Response) => {
                     factoryName: true,
                     createdAt: true,
 
-                    workOrders: {
-                        where: { orderType: orderType },
-                        orderBy: { id: "desc" },
-                        select: {
+                    // where: { orderType: orderType },
+                    //     orderBy: { id: "desc" },
+                    //     select: {
 
-                            workOrderNo: true,
-                            composition: true,
-                            yarnCount: true,
-                            brandLot: true,
-                            ydProcessLoss: true,
-                            billNo: true,
-                            remarks: true,
-                            createdAt: true,
-                            id: true,
-                            orderType: true,
-                        }
-                    }
+                    //         workOrderNo: true,
+                    //         composition: true,
+                    //         yarnCount: true,
+                    //         brandLot: true,
+                    //         ydProcessLoss: true,
+                    //         billNo: true,
+                    //         remarks: true,
+                    //         createdAt: true,
+                    //         id: true,
+                    //         orderType: true,
+                    //     }
                 },
 
             }

@@ -15,12 +15,11 @@ datasource db {
 }
 
 model Factory {
-  id          Int         @id @default(autoincrement())
-  factoryName String      @unique
+  id          Int      @id @default(autoincrement())
+  factoryName String   @unique
   type        String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime @default(now())
   jobId       Int?
-  workOrders  WorkOrder[]
 }
 
 model Yarns {
@@ -28,26 +27,26 @@ model Yarns {
   yarnType String @unique
 }
 
-
-
 model WorkOrder {
-  id Int @id @default(autoincrement())
+  id                 Int               @id @default(autoincrement())
+  workOrderNo        String
+  workOrderPlaceDate String
+  month              String
+  styleNo            String
+  lotNo              String
+  compositions       Composition[]
+  styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
+  styleRequirementId Int?
+}
 
-  jobNo              String
-  workOrderNo        String?
-  bookingColor       String?
-  composition        String?
-  yarnCount          String?
-  brandLot           String?
-  bookingQty         String?
-  ydProcessLoss      String?
-  billNo             String?
-  remarks            String?
-  factory            Factory  @relation(fields: [factoryId], references: [id])
-  orderType          String
-  createdAt          DateTime @default(now())
-  factoryId          Int
-  date               DateTime
+model Composition {
+  id           Int       @id @default(autoincrement())
+  composition  String
+  color        String
+  orderQty     Int
+  workOrderQty Int
+  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId  Int
 }
 
 model StyleRequirement {
@@ -60,6 +59,7 @@ model StyleRequirement {
   processLoss  String
   rows         StyleRequirementRow[]
   sizes        sizes[]
+  workOrders   WorkOrder[]
 }
 
 model StyleRequirementRow {
@@ -112,4 +112,3 @@ model audit {
   auditDesc      String
   auditType      String   @default("pending")
 }
-
