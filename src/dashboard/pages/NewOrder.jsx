@@ -27,9 +27,10 @@ const NewOrder = () => {
         factoryName: "",
         stichLength: "",
         lotNo: "",
+        unitPrice: ""
     });
     const axios = useAxiosPublic();
-
+    console.log(formData);
     useEffect(() => {
         const styleReq = async () => {
             if (!jobNumber) return;
@@ -80,6 +81,7 @@ const NewOrder = () => {
                     color: row.color,
                     orderQty: row.orderQty,
                     workOrderQty: row.workOrderQty,
+                    unitPrice: row.unitPrice
                 }))
             };
 
@@ -174,7 +176,7 @@ const NewOrder = () => {
 
                         {/* Dynamic Rows */}
                         {rows.map((styleRow, index) => (
-                            <div key={index} className="grid grid-cols-5 gap-6 items-center">
+                            <div key={index} className="grid grid-cols-6 gap-4 items-center">
                                 <Input
                                     label={`Composition ${index + 1}`}
                                     readOnly
@@ -189,6 +191,13 @@ const NewOrder = () => {
                                     label={`Order Qty ${index + 1}`}
                                     readOnly
                                     value={styleRow.orderQty}
+                                />
+                                <Input
+                                    label={`Price Per Kg ${index + 1}`}
+                                    value={styleRow.unitPrice}  // ✅ per-row value
+                                    onChange={(e) => handleRowChange(index, "unitPrice", e.target.value)} // ✅ per-row handler
+                                    required
+                                    placeholder="Unite Price"
                                 />
                                 <Input
                                     label={`Work Order Qty ${index + 1}`}

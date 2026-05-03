@@ -1,25 +1,25 @@
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Printer } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Input from "./Input";
 import Modal from "./Modal";
 
 const COLUMNS = [
-    { header: "YARN DYED FACTORY NAME", width: "18mm" },
+    { header: "FACTORY NAME", width: "18mm" },
     { header: "JOB NO.", width: "10mm" },
     { header: "BUYER NAME", width: "14mm" },
     { header: "PO NO", width: "12mm" },
     { header: "COMPOSITION", width: "12mm" },
     { header: "STYLE", width: "12mm" },
     { header: "MONTH", width: "10mm" },
-    { header: "BOOKING COLOR", width: "14mm" },
+    { header: "COLOR", width: "14mm" },
     { header: "ORDER QTY", width: "10mm" },
-    { header: "Y/D PRICE PER KG", width: "11mm" },
-    { header: "YARN DYED WORK ORDER QTY", width: "13mm" },
-    { header: "YARN DELIVERY FOR Y/D", width: "13mm" },
+    { header: "PRICE PER KG", width: "11mm" },
+    { header: "WORK ORDER QTY", width: "13mm" },
+    { header: "DELIVERY", width: "13mm" },
     { header: "DEL. SHORT & EXCESS", width: "12mm" },
     { header: "YARN RETURN RECEIVED", width: "13mm" },
-    { header: "GREY RECEIVED FROM Y/D", width: "13mm" },
+    { header: "GREY RECEIVED FROM", width: "13mm" },
     { header: "FINISH YARN RECEIVED", width: "12mm" },
     { header: "YARN RCVD SHORT & EXCESS", width: "13mm" },
     { header: "PROCESS LOSS AFTER Y/D", width: "13mm" },
@@ -32,37 +32,13 @@ const COLUMNS = [
 
 const AllOrders = ({ orderType }) => {
     const axiosPublic = useAxiosPublic();
-    const [editRowData, setEditRowData] = useState({
-        bookingColor: "",
-        yarnDyeingOrder: "",
-        ydPricePerKg: 0,
-        buyer: "",
-        poNo: "",
-        style: "",
-        month: "",
-        orderQty: "",
-        date: "",
-        yarnDyedWorkOrderQty: 0,
-        yarnCount: "",
-        yarnDeliveryForYD: "",
-        lotNo: "",
-        delShortExcess: "",
-        yarnReturnReceived: "",
-        greyReceivedFromYD: "",
-        finishYarnReceived: "",
-        processLossAfterYD: "",
-        totalBillingAmount: "",
-        paidBillingAmount: "",
-        pendingBillingAmount: "",
-        editingIndex: null,
-        editingField: "",
-        challanNo: 0,
-    });
-    const [orderId, setOrderId] = useState(0);
+
+    const [jobId, setOrderId] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
     const [changedField, setChangedField] = useState({});
     const [styleNo, setStyleNo] = useState("");
+    const [alertType, setAlertType] = useState("");
     const [search, setSearch] = useState({
         buyerName: "",
         jobNo: "",
@@ -74,6 +50,7 @@ const AllOrders = ({ orderType }) => {
         const fetchOrders = async () => {
             try {
                 const res = await axiosPublic.get(`/api/work-order/${orderType}`);
+                console.log(res.data, "data");
                 setOrders(res.data);
             } catch (err) {
                 console.log(err);
@@ -82,62 +59,38 @@ const AllOrders = ({ orderType }) => {
         fetchOrders();
     }, [axiosPublic, orderType]);
 
-    const filteredOrders = useMemo(() => {
-        const { buyerName, jobNo, styleName, poNo } = search;
-        const hasQuery = buyerName || jobNo || styleName || poNo;
-        if (!hasQuery) return orders;
 
-        return orders
-            .map(factory => {
-                const matchingJobs = (factory.jobs || []).filter(job => {
-                    const buyerMatch = (job.buyer || "").toLowerCase().includes(buyerName.toLowerCase());
-                    const jobMatch = (job.jobNo || "").toLowerCase().includes(jobNo.toLowerCase());
-                    const styleMatch = (job.style || "").toLowerCase().includes(styleName.toLowerCase());
-                    const poMatch = (job.poNo || "").toLowerCase().includes(poNo.toLowerCase());
-                    return buyerMatch && jobMatch && styleMatch && poMatch;
-                });
 
-                if (matchingJobs.length === 0) return null;
-
-                const matchingWorkOrders = (factory.workOrders || []).filter(order =>
-                    matchingJobs.some(j => j.jobNo === order.workOrderNo)
-                );
-
-                return { ...factory, jobs: matchingJobs, workOrders: matchingWorkOrders };
-            })
-            .filter(Boolean);
-    }, [search, orders]);
-
-    const handleEditRowData = useCallback((indexId, editingText, editingField, orderId, styleNo) => {
-        setEditRowData(prev => ({
-            ...prev,
-            editingField,
-            editingIndex: indexId,
-            [editingField]: editingText,
-        }));
+    const handleEditRowData = (yarnId) => {
+        // setEditRowData(prev => ({
+        //     ...prev,
+        //     editingField,
+        //     editingIndex: indexId,
+        //     [editingField]: editingText,
+        // }));
+        console.log("clicked", yarnId);
         setStyleNo(styleNo);
-        setOrderId(orderId);
+        setOrderId(yarnId);
         setIsEditing(true);
-    }, []);
+    };
 
     const handleEditOnChange = (e) => {
         const { name, value } = e.target;
-        setEditRowData(prev => ({ ...prev, [name]: value }));
         setIsEditing(true);
         setChangedField(prev => ({ ...prev, [name]: value }));
     };
-
+    console.log(changedField, "changed field");
     const handleSubmit = async () => {
         const update = await axiosPublic.patch(
-            `/api/update-order/${orderId}/${styleNo}`,
-            changedField
+            `/api/update-order/${jobId}`, changedField
         );
+        console.log(jobId, "job id");
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
             setOrders(res.data);
             setChangedField({});
-            setEditRowData(prev => ({ ...prev, editingIndex: null, editingField: null }));
             setIsEditing(false);
+            setAlertType(update.data.type);
         }
     };
 
@@ -216,6 +169,16 @@ const AllOrders = ({ orderType }) => {
             `}</style>
 
             <div>
+                {
+                    alertType && (
+                        <div className={`${alertType === "success" ? "bg-green-600 border-green-500 text-green-600" : "bg-red-600 border-red-500 text-red-600"}  bg-opacity-25 border  p-2 rounded-md`}>
+                            <h2>
+                                {alertType === "success" ? "Update Successful" : "Something went wrong, please try again few minutes later"}
+                            </h2>
+                        </div>
+
+                    )
+                }
                 <div className="mb-5 bg-white p-2 rounded-sm">
                     {(!orders || orders.length < 1) && (
                         <div>No order found</div>
@@ -273,9 +236,7 @@ const AllOrders = ({ orderType }) => {
                                 setIsEditing={setIsEditing}
                                 handleSubmit={handleSubmit}
                                 handleEditOnChange={handleEditOnChange}
-                                setEditRowData={setEditRowData}
-                                editRowData={editRowData}
-                                orderId={orderId}
+                                orderId={jobId}
                                 orders={orders}
                             />
                         )}
@@ -301,48 +262,77 @@ const AllOrders = ({ orderType }) => {
                             </thead>
 
                             <tbody>
-                                {filteredOrders?.map((factory, factoryIndex) => {
-                                    return factory.workOrders.map((order, orderIndex) => {
-                                        let sum = 0;
-                                        if (order.finishYarnReceived) {
-                                            sum = order.finishYarnReceived
-                                                .split("+")
-                                                .reduce((acc, n) => acc + Number(n.trim()), 0);
-                                        }
-                                        const job = factory.jobs.find(j => j.jobNo === order.workOrderNo);
-                                        return (
-                                            <tr className={`${job.status === "cancel" && "bg-red-500 bg-opacity-30 "}`} key={`${factoryIndex}-${order.workOrderNo}`}>
-                                                {orderIndex === 0 && (
-                                                    <td
-                                                        rowSpan={factory.workOrders.length}
-                                                        className="px-3 py-2 align-middle font-semibold bg-primary-50 text-primary-700 text-sm border border-gray-300"
-                                                    >
-                                                        {factory.factoryName}
-                                                    </td>
-                                                )}
-                                                <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{order.workOrderNo}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.buyer, "buyer", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.buyer}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.poNo, "poNo", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.poNo}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.composition, "composition", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.composition}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.style, "style", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.style}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, job.month, "month", job.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{job.month}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.bookingColor, "bookingColor", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.bookingColor}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.orderQty, "orderQty", order.id, job.style)} className="px-3 py-2 text-gray-700 text-sm border border-gray-300">{order.orderQty}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.ydPricePerKg, "ydPricePerKg", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.ydPricePerKg}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDyedWorkOrderQty, "yarnDyedWorkOrderQty", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.yarnDyedWorkOrderQty}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnDeliveryForYD, "yarnDeliveryForYD", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.yarnDeliveryForYD}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.delShortExcess, "delShortExcess", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">{order.delShortExcess}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.yarnReturnReceived, "yarnReturnReceived", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.yarnReturnReceived}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.greyReceivedFromYD, "greyReceivedFromYD", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.greyReceivedFromYD}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.finishYarnReceived, "finishYarnReceived", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{sum}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.totalBillingAmount, "totalBillingAmount", order.id, job.style)} className="px-3 py-2 text-right font-semibold text-gray-800 text-sm border border-gray-300">{order.totalBillingAmount}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.processLossAfterYD, "processLossAfterYD", order.id, job.style)} className="px-3 py-2 text-right text-red-600 text-sm font-medium border border-gray-300">{order.processLossAfterYD}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.payableAmount, "payableAmount", order.id, job.style)} className="px-3 py-2 text-right text-red-600 font-semibold text-sm border border-gray-300">{order.payableAmount}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.paidBillingAmount, "paidBillingAmount", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.paidBillingAmount}</td>
-                                                <td onDoubleClick={() => handleEditRowData(orderIndex + 1, order.pendingBillingAmount, "pendingBillingAmount", order.id, job.style)} className="px-3 py-2 text-right text-gray-700 text-sm border border-gray-300">{order.pendingBillingAmount}</td>
-                                            </tr>
-                                        );
-                                    });
+                                {orders?.map((job, factoryIndex) => {
+
+                                    return (
+                                        <tr className={""} key={`${factoryIndex}`}>
+
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderPlaceDate}</td>
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderNo}</td>
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"BUYER NAME IS STATIC FOR NOW"}</td>
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"static po no"}</td>
+                                            <td>
+                                                <div className="space-y-1">
+                                                    {
+                                                        job.compositions.map((comp, i) =>
+                                                            <div key={i} className="border-b py-1">
+                                                                {comp.composition}
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.styleNo}</td>
+
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"month"}</td>
+
+                                            <td>
+                                                <div className="space-y-1">
+                                                    {
+                                                        job.compositions.map((comp, i) =>
+                                                            <div key={i} className="border-b py-1">
+                                                                {comp.color}
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="space-y-1">
+                                                    {
+                                                        job.compositions.map((comp, i) =>
+                                                            <div key={i} className="border-b py-1">
+                                                                {comp.orderQty}
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="space-y-1">
+                                                    {
+                                                        job.compositions.map((comp, i) =>
+                                                            <div key={i} className="border-b py-1">
+                                                                {comp.unitePrice | "PRICE PER KG"}
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="space-y-1">
+                                                    {
+                                                        job.compositions.map((comp, i) =>
+                                                            <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
+                                                                {comp.workOrderQty} t
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+
                                 })}
                             </tbody>
                         </table>

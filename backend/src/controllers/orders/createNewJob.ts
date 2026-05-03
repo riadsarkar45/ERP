@@ -4,14 +4,13 @@ export const createNewJob = async (req: Request, res: Response) => {
     // res.send({ message: "request received" })
     const {
         compositions,
-
+        orderType
     } = req.body as {
-        compositions: { composition: string; color: string; workOrderQty: string, orderQty: string }[];
-
+        compositions: { composition: string; color: string; workOrderQty: string, orderQty: string, unitPrice: string, }[];
+        orderType: string;
     };
-    console.log(compositions);
-    console.log(req.body);
 
+    console.log(req.body);
     try {
         const workOrder = await prisma.workOrder.create(
             {
@@ -21,13 +20,15 @@ export const createNewJob = async (req: Request, res: Response) => {
                     month: req.body.month,
                     styleNo: req.body.styleNo,
                     lotNo: req.body.lotNo,
+                    orderType: orderType,
                     compositions: {
                         createMany: {
-                            data: compositions.map(({ composition, color, orderQty, workOrderQty }) => ({
+                            data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({
                                 composition,
                                 color,
                                 orderQty: Number(orderQty),
                                 workOrderQty: Number(workOrderQty),
+                                unitePrice: unitPrice
                             }))
                         }
                     }

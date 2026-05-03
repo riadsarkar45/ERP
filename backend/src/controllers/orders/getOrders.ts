@@ -4,38 +4,48 @@ export const getAllOrders = async (req: Request, res: Response) => {
     const { orderType } = req.params as {orderType: string};
     console.log(orderType);
     try {
-        const factoryOrderDetail = await prisma.factory.findMany(
+        const jobs = await prisma.workOrder.findMany(
             {
+                where: {
+                    orderType: orderType
+                },
                 select: {
 
                     id: true,
-                    factoryName: true,
-                    createdAt: true,
+                    workOrderNo: true,
+                    workOrderPlaceDate: true,
+                    month: true,
+                    styleNo: true,
+                    lotNo: true,
+                    orderType: true,
+                    compositions: {
+                        select: {
+                            id: true,
+                            composition: true,
+                            color: true,
+                            orderQty: true,
+                            workOrderQty: true,
+                            unitePrice: true,
+                            deliveries: {
+                                select: {
+                                    id: true,
+                                    deliveryQty: true,
+                                    deliveryType: true,
+                                }
+                            }
+                        }
+                    }
 
-                    // where: { orderType: orderType },
-                    //     orderBy: { id: "desc" },
-                    //     select: {
-
-                    //         workOrderNo: true,
-                    //         composition: true,
-                    //         yarnCount: true,
-                    //         brandLot: true,
-                    //         ydProcessLoss: true,
-                    //         billNo: true,
-                    //         remarks: true,
-                    //         createdAt: true,
-                    //         id: true,
-                    //         orderType: true,
-                    //     }
+                   
                 },
 
             }
         )
 
-        if (!factoryOrderDetail) {
+        if (!jobs) {
             return res.status(404).send({ message: "No factory order details found" });
         }
-        res.status(200).send(factoryOrderDetail);
+        res.status(200).send(jobs);
     } catch (e) {
         console.log(e);
     }

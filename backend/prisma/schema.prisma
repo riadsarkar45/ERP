@@ -34,18 +34,21 @@ model WorkOrder {
   month              String
   styleNo            String
   lotNo              String
+  orderType          String
   compositions       Composition[]
   styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
   styleRequirementId Int?
 }
 
 model Composition {
-  id           Int       @id @default(autoincrement())
+  id           Int          @id @default(autoincrement())
   composition  String
+  unitePrice   String
   color        String
   orderQty     Int
   workOrderQty Int
-  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
+  deliveries   deliveries[]
   workOrderId  Int
 }
 
@@ -93,15 +96,14 @@ model sizes {
 }
 
 model deliveries {
-  id                 Int      @id @default(autoincrement())
-  challanNo          Int?
-  yarnReturnReceived String?
-  greyReceivedFromYd String?
-  yarnDeliveryForYD  String?
-  finishYarnReceived String?
-  deliveryDate       DateTime
-  jobId              Int      @unique
-  styleId            Int      @default(0)
+  id           Int          @id @default(autoincrement())
+  challanNo    Int
+  deliveryDate DateTime
+  deliveryQty  Int
+  deliveryType String
+  yarnId       Int
+  composition  Composition? @relation(fields: [yarnCompId], references: [id])
+  yarnCompId   Int?
 }
 
 model audit {
