@@ -324,11 +324,32 @@ const AllOrders = ({ orderType }) => {
                                                     {
                                                         job.compositions.map((comp, i) =>
                                                             <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
-                                                                {comp.workOrderQty} t
+                                                                {comp.workOrderQty}
                                                             </div>
                                                         )
                                                     }
                                                 </div>
+                                            </td>
+                                            <td>
+                                                <div className="space-y-1">
+                                                    {
+                                                        job.compositions.map((comp, i) =>
+                                                            <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
+                                                                {comp.totalYarnDelivery}
+                                                            </div>
+                                                        )
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {
+                                                    job.compositions.map((comp, i) =>
+
+                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
+                                                            {comp.workOrderQty - comp.totalYarnDelivery}
+                                                        </div>
+                                                    )
+                                                }
                                             </td>
                                         </tr>
                                     );

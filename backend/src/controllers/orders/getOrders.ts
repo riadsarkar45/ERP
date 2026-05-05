@@ -1,7 +1,7 @@
 import prisma from "../../database/prismaClient/prisma";
 import type { Request, Response } from "express";
 export const getAllOrders = async (req: Request, res: Response) => {
-    const { orderType } = req.params as {orderType: string};
+    const { orderType } = req.params as { orderType: string };
     console.log(orderType);
     try {
         const jobs = await prisma.workOrder.findMany(
@@ -36,7 +36,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                         }
                     }
 
-                   
+
                 },
 
             }
@@ -45,7 +45,17 @@ export const getAllOrders = async (req: Request, res: Response) => {
         if (!jobs) {
             return res.status(404).send({ message: "No factory order details found" });
         }
-        res.status(200).send(jobs);
+
+        const result = jobs.map(job => ({
+            ...job,
+            compositions: job.compositions.map(comp => ({
+                ...comp,
+                totalYarnDelivery: comp.deliveries.reduce(
+                    (sum, delivery) => sum + delivery.deliveryQty, 0
+                ),
+            }))
+        }))
+        res.status(200).send(result);
     } catch (e) {
         console.log(e);
     }
