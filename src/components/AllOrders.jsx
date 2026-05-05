@@ -7,12 +7,12 @@ import Modal from "./Modal";
 const COLUMNS = [
     { header: "FACTORY NAME", width: "18mm" },
     { header: "JOB NO.", width: "10mm" },
-    { header: "BUYER NAME", width: "14mm" },
+    { header: "BUYER NAME", width: "30mm" },
     { header: "PO NO", width: "12mm" },
-    { header: "COMPOSITION", width: "12mm" },
-    { header: "STYLE", width: "12mm" },
+    { header: "COMPOSITION", width: "20mm" },
+    { header: "STYLE", width: "305mm" },
     { header: "MONTH", width: "10mm" },
-    { header: "COLOR", width: "14mm" },
+    { header: "COLOR", width: "50mm" },
     { header: "ORDER QTY", width: "10mm" },
     { header: "PRICE PER KG", width: "11mm" },
     { header: "WORK ORDER QTY", width: "13mm" },
@@ -269,8 +269,8 @@ const AllOrders = ({ orderType }) => {
 
                                             <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderPlaceDate}</td>
                                             <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderNo}</td>
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"BUYER NAME IS STATIC FOR NOW"}</td>
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"static po no"}</td>
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"BUYER NAME"}</td>
+                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"static"}</td>
                                             <td>
                                                 <div className="space-y-1">
                                                     {
@@ -347,6 +347,16 @@ const AllOrders = ({ orderType }) => {
 
                                                         <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
                                                             {comp.workOrderQty - comp.totalYarnDelivery}
+                                                        </div>
+                                                    )
+                                                }
+                                            </td>
+                                            <td>
+                                                {
+                                                    job.compositions.map((comp, i) =>
+
+                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
+                                                            {comp.totalYarnReturn}
                                                         </div>
                                                     )
                                                 }

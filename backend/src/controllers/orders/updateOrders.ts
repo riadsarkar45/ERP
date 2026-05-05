@@ -4,7 +4,7 @@ import prisma from "../../database/prismaClient/prisma";
 export const updateJobs = async (req: Request, res: Response) => {
     try {
         const { yarnId } = req.params as { yarnId: string };
-        const { date, challanNo, yarnDelivery } = req.body as { date: string, challanNo: number, yarnDelivery: number };
+        const { date, challanNo, yarnDelivery, deliveryType } = req.body as { date: string, challanNo: number, yarnDelivery: number, deliveryType: string };
         
         if(!date || !challanNo || !yarnDelivery) {
             return res.status(400).json({ type: "error", message: "Missing required fields" });
@@ -29,8 +29,8 @@ export const updateJobs = async (req: Request, res: Response) => {
                 data: {
                     deliveryDate: new Date(date),
                     challanNo: Number(challanNo),
-                    deliveryQty: Number(yarnDelivery),
-                    deliveryType: "Yarn Delivery",
+                    deliveryQty: Number(yarnDelivery), // delivery qty
+                    deliveryType: deliveryType, // delivery type
                     yarnId: checkYarnIfExist.id,
                     yarnCompId: checkYarnIfExist.id
                 }

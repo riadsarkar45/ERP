@@ -3,6 +3,7 @@ import Input from './Input';
 
 const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
     console.log(orderId);
+    const deliveryTypes = ["Yarn Delivery", "Yarn Return"];
     return (
         <>
             {/* Backdrop */}
@@ -31,7 +32,7 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
                     {/* Content */}
                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
                         {
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <Input
                                         label="Date"
                                         name="date"
@@ -59,6 +60,17 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
                                         // value={editRowData.yarnDelivery}
                                         placeholder="Qty"
                                         required
+                                    />
+                                    <Input
+                                        label="Delivery Qty"
+                                        name="deliveryType"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        type="select"
+                                        // value={editRowData.yarnDelivery}
+                                        placeholder="Qty"
+                                        required
+                                        options={deliveryTypes}
                                     />
 
                                 </div>
