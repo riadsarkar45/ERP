@@ -102,6 +102,8 @@ model deliveries {
   deliveryQty  Int
   deliveryType String
   yarnId       Int
+  toFactory    String
+  fromFactory  String
   composition  Composition? @relation(fields: [yarnCompId], references: [id])
   yarnCompId   Int?
 }

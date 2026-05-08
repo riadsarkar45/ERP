@@ -27,10 +27,18 @@ export const styleRequirements = async (req: Request, res: Response) => {
                         finishRequiredQty: true,
                     }
                 },
+                
                 sizes: {
                     select: {
                         id: true,
                         sizeName: true,
+                    }
+                },
+
+                workOrders:{
+                    select:{
+                        orderType: true,
+                        compositions:true,
                     }
                 }
 

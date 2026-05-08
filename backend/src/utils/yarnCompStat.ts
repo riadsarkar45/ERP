@@ -7,6 +7,10 @@ export const calculateYarnCompStat = (compositions: any[]) => {
                 (delivery: any) => delivery.deliveryType === "Yarn Delivery" 
             );
 
+            const greyDeliveries = c.deliveries.filter(
+                (delivery: any) => delivery.deliveryType === "Grey Received"
+            );
+
             const yarnReturns = c.deliveries.filter(
                 (delivery: any) => delivery.deliveryType === "Yarn Return"
             );
@@ -19,10 +23,15 @@ export const calculateYarnCompStat = (compositions: any[]) => {
                 (sum: number, delivery: any) => sum + delivery.deliveryQty, 0
             );
 
+            const greyReceived = greyDeliveries.reduce(
+                (sum: number, delivery: any) => sum + delivery.deliveryQty, 0
+            );
+
             return {
                 ...c,
                 totalYarnDelivery,
                 totalYarnReturn,
+                greyReceived
             };
         })
     }));

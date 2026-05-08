@@ -4,9 +4,9 @@ import prisma from "../../database/prismaClient/prisma";
 export const updateJobs = async (req: Request, res: Response) => {
     try {
         const { yarnId } = req.params as { yarnId: string };
-        const { date, challanNo, yarnDelivery, deliveryType } = req.body as { date: string, challanNo: number, yarnDelivery: number, deliveryType: string };
-        
-        if(!date || !challanNo || !yarnDelivery) {
+        const { toFactory, fromFactory, date, challanNo, yarnDelivery, deliveryType } = req.body as { toFactory: string, fromFactory: string, date: string, challanNo: number, yarnDelivery: number, deliveryType: string };
+
+        if (!toFactory || !fromFactory || !date || !challanNo || !yarnDelivery) {
             return res.status(400).json({ type: "error", message: "Missing required fields" });
         }
         const checkYarnIfExist = await prisma.composition.findUnique(
@@ -32,6 +32,8 @@ export const updateJobs = async (req: Request, res: Response) => {
                     deliveryQty: Number(yarnDelivery), // delivery qty
                     deliveryType: deliveryType, // delivery type
                     yarnId: checkYarnIfExist.id,
+                    fromFactory: fromFactory,
+                    toFactory: toFactory,
                     yarnCompId: checkYarnIfExist.id
                 }
             }

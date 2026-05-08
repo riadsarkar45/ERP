@@ -3,7 +3,7 @@ import Input from './Input';
 
 const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
     console.log(orderId);
-    const deliveryTypes = ["Yarn Delivery", "Yarn Return"];
+    const deliveryTypes = ["Yarn Delivery", "Yarn Return", "Grey Received"];
     return (
         <>
             {/* Backdrop */}
@@ -32,7 +32,7 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
                     {/* Content */}
                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
                         {
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                                     <Input
                                         label="Date"
                                         name="date"
@@ -62,7 +62,7 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
                                         required
                                     />
                                     <Input
-                                        label="Delivery Qty"
+                                        label="Delivery Type"
                                         name="deliveryType"
                                         type="text"
                                         onChange={handleEditOnChange}
@@ -71,6 +71,24 @@ const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
                                         placeholder="Qty"
                                         required
                                         options={deliveryTypes}
+                                    />
+                                    <Input
+                                        label="To Factory"
+                                        name="toFactory"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        // value={editRowData.yarnDelivery}
+                                        placeholder="Qty"
+                                        required
+                                    />
+                                    <Input
+                                        label="From Factory"
+                                        name="fromFactory"
+                                        type="text"
+                                        onChange={handleEditOnChange}
+                                        // value={editRowData.yarnDelivery}
+                                        placeholder="Qty"
+                                        required
                                     />
 
                                 </div>

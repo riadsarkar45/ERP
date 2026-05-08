@@ -20,14 +20,10 @@ const COLUMNS = [
     { header: "DEL. SHORT & EXCESS", width: "12mm" },
     { header: "YARN RETURN RECEIVED", width: "13mm" },
     { header: "GREY RECEIVED FROM", width: "13mm" },
-    { header: "FINISH YARN RECEIVED", width: "12mm" },
-    { header: "YARN RCVD SHORT & EXCESS", width: "13mm" },
-    { header: "PROCESS LOSS AFTER Y/D", width: "13mm" },
+    { header: "RCVD SHORT & EXCESS", width: "13mm" },
     { header: "PAYABLE AMOUNT", width: "12mm" },
     { header: "PAID BILLING AMOUNT", width: "12mm" },
     { header: "PENDING BILLING AMOUNT", width: "12mm" },
-    { header: "FROM FACTORY", width: "10mm" },
-    { header: "TO FACTORY", width: "10mm" },
 ];
 
 const AllOrders = ({ orderType }) => {
@@ -357,6 +353,36 @@ const AllOrders = ({ orderType }) => {
 
                                                         <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
                                                             {comp.totalYarnReturn}
+                                                        </div>
+                                                    )
+                                                }
+                                            </td>
+                                            <td>
+                                                {
+                                                    job.compositions.map((comp, i) =>
+
+                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
+                                                            {comp.greyReceived}
+                                                        </div>
+                                                    )
+                                                }
+                                            </td>
+                                            <td>
+                                                {
+                                                    job.compositions.map((comp, i) =>
+
+                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
+                                                            {comp.workOrderQty - comp.greyReceived}
+                                                        </div>
+                                                    )
+                                                }
+                                            </td>
+                                            <td>
+                                                {
+                                                    job.compositions.map((comp, i) =>
+
+                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-pink-500 border-b py-1">
+                                                            {comp.unitePrice * comp.greyReceived}
                                                         </div>
                                                     )
                                                 }
