@@ -36,3 +36,32 @@ export const calculateYarnCompStat = (compositions: any[]) => {
         })
     }));
 };
+
+export const calculateOrdersForStyleSummary = (styles: any[]) => {
+    return styles.map((s: any) => {
+        const workOrders = s.workOrders ?? [];
+
+        const summary: Record<string, number> = {};
+
+        workOrders.forEach((w: any) => {
+            const type = w.orderType || "Unknown";
+
+            w.compositions?.forEach((c: any) => {
+                Object.entries(c).forEach(([key, value]) => {
+                    if (typeof value === "number") {
+                        const summaryKey = `${type}_${key}`;
+                        if (!summary[summaryKey]) summary[summaryKey] = 0;
+                        summary[summaryKey] += value;
+                    }
+                });
+            });
+        });
+
+        
+
+        return {
+            ...s,
+            summary
+        };
+    });
+};

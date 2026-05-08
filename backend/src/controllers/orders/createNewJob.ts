@@ -10,6 +10,18 @@ export const createNewJob = async (req: Request, res: Response) => {
         orderType: string;
     };
 
+    const findStyleNo = await prisma.styleRequirement.findUnique(
+        {
+            where: { styleNo: req.body.styleNo }
+        },
+    )
+
+    if(!findStyleNo){
+        return res.status(400).send({ message: "Style No not found", type: "error" })
+    }
+
+    console.log(findStyleNo);
+
     console.log(req.body);
     try {
         const workOrder = await prisma.workOrder.create(
@@ -21,6 +33,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                     styleNo: req.body.styleNo,
                     lotNo: req.body.lotNo,
                     orderType: orderType,
+                    styleRequirementId: findStyleNo.id,
                     compositions: {
                         createMany: {
                             data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({
@@ -28,7 +41,8 @@ export const createNewJob = async (req: Request, res: Response) => {
                                 color,
                                 orderQty: Number(orderQty),
                                 workOrderQty: Number(workOrderQty),
-                                unitePrice: unitPrice
+                                unitePrice: unitPrice,
+
                             }))
                         }
                     }

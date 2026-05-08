@@ -5,18 +5,18 @@ import Input from "./Input";
 import Modal from "./Modal";
 
 const COLUMNS = [
-    { header: "FACTORY NAME", width: "18mm" },
-    { header: "JOB NO.", width: "10mm" },
-    { header: "BUYER NAME", width: "30mm" },
-    { header: "PO NO", width: "12mm" },
-    { header: "COMPOSITION", width: "20mm" },
-    { header: "STYLE", width: "305mm" },
-    { header: "MONTH", width: "10mm" },
-    { header: "COLOR", width: "50mm" },
-    { header: "ORDER QTY", width: "10mm" },
-    { header: "PRICE PER KG", width: "11mm" },
-    { header: "WORK ORDER QTY", width: "13mm" },
-    { header: "DELIVERY", width: "13mm" },
+    { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
+    { header: "JOB NO.", width: "10mm", inputName: "workOrderNo" },
+    { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
+    { header: "PO NO", width: "12mm", inputName: "poNo" },
+    { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+    { header: "STYLE", width: "30mm", inputName: "styleNo" },
+    { header: "MONTH", width: "10mm", inputName: "month" },
+    { header: "COLOR", width: "50mm", inputName: "color" },
+    { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+    { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
+    { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+    { header: "DELIVERY", width: "13mm", inputName: "totalYarnDelivery" },
     { header: "DEL. SHORT & EXCESS", width: "12mm" },
     { header: "YARN RETURN RECEIVED", width: "13mm" },
     { header: "GREY RECEIVED FROM", width: "13mm" },
@@ -35,12 +35,8 @@ const AllOrders = ({ orderType }) => {
     const [changedField, setChangedField] = useState({});
     const [styleNo, setStyleNo] = useState("");
     const [alertType, setAlertType] = useState("");
-    const [search, setSearch] = useState({
-        buyerName: "",
-        jobNo: "",
-        styleName: "",
-        poNo: "",
-    });
+    const [filters, setFilters] = useState({})
+
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -70,6 +66,43 @@ const AllOrders = ({ orderType }) => {
         setIsEditing(true);
     };
 
+    const handleFilter = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
+
+    }
+    const filteredOrders = orders?.filter(job => {
+        const matchesJob =
+            (!filters.workOrderNo || job.workOrderNo?.includes(filters.workOrderNo)) &&
+            (!filters.styleNo || job.styleNo?.toLowerCase().includes(filters.styleNo.toLowerCase())) &&
+            (!filters.month || job.month?.toLowerCase().includes(filters.month.toLowerCase()));
+
+        const matchedCompositions = job.compositions.filter(comp =>
+            (!filters.composition || comp.composition?.toLowerCase().includes(filters.composition.toLowerCase())) &&
+            (!filters.color || comp.color?.toLowerCase().includes(filters.color.toLowerCase())) &&
+            (!filters.orderQty || String(comp.orderQty).includes(filters.orderQty)) &&
+            (!filters.unitePrice || String(comp.unitePrice).includes(filters.unitePrice)) &&
+            (!filters.workOrderQty || String(comp.workOrderQty).includes(filters.workOrderQty)) &&
+            (!filters.totalYarnDelivery || String(comp.totalYarnDelivery).includes(filters.totalYarnDelivery))
+        );
+
+        return matchesJob && matchedCompositions.length > 0;
+    }).map(job => ({
+        ...job,
+        compositions: job.compositions.filter(comp =>
+            (!filters.composition || comp.composition?.toLowerCase().includes(filters.composition.toLowerCase())) &&
+            (!filters.color || comp.color?.toLowerCase().includes(filters.color.toLowerCase())) &&
+            (!filters.orderQty || String(comp.orderQty).includes(filters.orderQty)) &&
+            (!filters.unitePrice || String(comp.unitePrice).includes(filters.unitePrice)) &&
+            (!filters.workOrderQty || String(comp.workOrderQty).includes(filters.workOrderQty)) &&
+            (!filters.totalYarnDelivery || String(comp.totalYarnDelivery).includes(filters.totalYarnDelivery))
+        )
+    }));
+
+
+
+    console.log(filteredOrders, "filters");
+
     const handleEditOnChange = (e) => {
         const { name, value } = e.target;
         setIsEditing(true);
@@ -90,10 +123,7 @@ const AllOrders = ({ orderType }) => {
         }
     };
 
-    const handleSearch = (e) => {
-        const { name, value } = e.target;
-        setSearch(prev => ({ ...prev, [name]: value }));
-    };
+
 
     return (
         <>
@@ -175,54 +205,10 @@ const AllOrders = ({ orderType }) => {
 
                     )
                 }
-                <div className="mb-5 bg-white p-2 rounded-sm">
+                <div className="mb-5 p-2 rounded-sm">
                     {(!orders || orders.length < 1) && (
                         <div>No order found</div>
                     )}
-                    <div className="flex items-end gap-4 flex-wrap">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
-                            <Input
-                                label=""
-                                name="buyerName"
-                                type="text"
-                                value={search.buyerName}
-                                onChange={handleSearch}
-                                placeholder="Search by Buyer"
-                            />
-                            <Input
-                                label=""
-                                name="jobNo"
-                                type="text"
-                                value={search.jobNo}
-                                onChange={handleSearch}
-                                placeholder="Search by Job No"
-                            />
-                            <Input
-                                label=""
-                                name="styleName"
-                                type="text"
-                                value={search.styleName}
-                                onChange={handleSearch}
-                                placeholder="Search by Style"
-                            />
-                            <Input
-                                label=""
-                                name="poNo"
-                                type="text"
-                                value={search.poNo}
-                                onChange={handleSearch}
-                                placeholder="Search by PO No"
-                            />
-                        </div>
-
-                        <button
-                            onClick={() => window.print()}
-                            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-700 text-white font-medium rounded-md hover:bg-gray-800 transition-all duration-200 shrink-0"
-                        >
-                            <Printer size={18} />
-                            Print
-                        </button>
-                    </div>
                 </div>
 
                 <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -251,14 +237,22 @@ const AllOrders = ({ orderType }) => {
                                             key={i}
                                             className="px-3 py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200 whitespace-nowrap"
                                         >
-                                            {col.header}
+                                            <div className="grid">
+                                                {col.header}
+                                                {
+                                                    col.inputName && (
+                                                        <input onChange={(e) => handleFilter(e)} className="border uppercase rounded-md p-1" placeholder={col.inputName} type="text" name={col.inputName} />
+
+                                                    )
+                                                }
+                                            </div>
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
 
                             <tbody>
-                                {orders?.map((job, factoryIndex) => {
+                                {filteredOrders?.map((job, factoryIndex) => {
 
                                     return (
                                         <tr className={""} key={`${factoryIndex}`}>

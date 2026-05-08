@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
+import { calculateOrdersForStyleSummary } from "../../utils/yarnCompStat";
 export const styleRequirements = async (req: Request, res: Response) => {
     const { jobNo } = req.params as { jobNo: string | undefined }; const whereClause: any = {};
 
@@ -27,7 +28,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                         finishRequiredQty: true,
                     }
                 },
-                
+
                 sizes: {
                     select: {
                         id: true,
@@ -35,16 +36,28 @@ export const styleRequirements = async (req: Request, res: Response) => {
                     }
                 },
 
-                workOrders:{
-                    select:{
+                workOrders: {
+                    select: {
                         orderType: true,
-                        compositions:true,
+                        compositions: {
+                            select: {
+                                workOrderQty: true,
+                            }
+                        },
+
                     }
                 }
+
+
 
             }
         }
     )
 
-    res.status(200).send({ data: styles, type: "success" })
+    if(styles.length === 0){
+        return res.status(404).send({ message: "No style requirements found", type: "error" })
+    }
+     const summaryData = calculateOrdersForStyleSummary(styles);
+
+    res.status(200).send({ data: summaryData, type: "success" })
 }
