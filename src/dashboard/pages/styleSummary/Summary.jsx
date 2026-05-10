@@ -205,6 +205,67 @@ export default function Summary() {
                                         ))}
                                     </div>
                                 </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {/* {row.summary.knittingOrder_Yarn_Delivery} */}
+                                            raw yarn delivery for dyed
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {/* {row.summary.knittingOrder_Yarn_Delivery} */}
+                                            raw yarn received after dyed
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {/* {row.summary.knittingOrder_Yarn_Delivery} */}
+                                            party stock (short & excess)
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {/* {row.summary.knittingOrder_Yarn_Delivery} */}
+                                            total knitting (grey)
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {row.summary.knittingOrder_Yarn_Return}
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {/* {row.summary.knittingOrder_Yarn_Delivery} */}
+                                            balance (+/-)
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {row.summary.knittingOrder_Yarn_Delivery}
+                                        </div>
+
+                                    </div>
+                                </td>
 
                             </tr>
                         ))}
