@@ -40,28 +40,29 @@ export const calculateYarnCompStat = (compositions: any[]) => {
 export const calculateOrdersForStyleSummary = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
-
         const summary: Record<string, number> = {};
 
         workOrders.forEach((w: any) => {
             const type = w.orderType || "Unknown";
 
             w.compositions?.forEach((c: any) => {
-                Object.entries(c).forEach(([key, value]) => {
-                    if (typeof value === "number") {
-                        const summaryKey = `${type}_${key}`;
-                        if (!summary[summaryKey]) summary[summaryKey] = 0;
-                        summary[summaryKey] += value;
-                    }
+
+                // ── Work Order Qty ──
+                if (typeof c.workOrderQty === "number") {
+                    const summaryKey = `${type}_workOrderQty`;
+                    summary[summaryKey] = (summary[summaryKey] ?? 0) + c.workOrderQty;
+                }
+
+                // ── Deliveries ──
+                const deliveries = c.deliveries ?? [];
+
+                deliveries.forEach((d: any) => {
+                    const deliveryKey = `${type}_${d.deliveryType.replace(/\s+/g, "_")}`;
+                    summary[deliveryKey] = (summary[deliveryKey] ?? 0) + (d.deliveryQty || 0);
                 });
             });
         });
 
-        
-
-        return {
-            ...s,
-            summary
-        };
+        return { ...s, summary };
     });
 };

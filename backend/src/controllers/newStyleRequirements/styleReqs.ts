@@ -42,6 +42,12 @@ export const styleRequirements = async (req: Request, res: Response) => {
                         compositions: {
                             select: {
                                 workOrderQty: true,
+                                deliveries: {
+                                    select: {
+                                        deliveryType: true,
+                                        deliveryQty: true,
+                                    }
+                                },
                             }
                         },
 

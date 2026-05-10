@@ -9,8 +9,8 @@ import { useNavigate } from "react-router-dom";
 const COLUMNS = [
     "SALES CONTACT NO", "BUYER", "JOB NO", "STYLE", "PO NO", "COLOR", "COMPOSITION",
     "FINISH DIA", "ORDER QTY", "1st BOOKING", "ADDITIONAL BOOKING",
-    "TOTAL REQUIRED YARN BOOKING", "KNITTING WORK ORDER QTY",
-    "WORK ORDER SHORT & EXCESS", "RAW YARN DELIVERY", "SHORT & EXCESS (+/-)",
+    "REQUIRED YARN QTY", "KNITTING WORK ORDER QTY",
+    "SHORT & EXCESS", "YARN DELIVERY", "SHORT & EXCESS (+/-)",
     "RAW YARN DELIVERY FOR DYED", "YARN RECEIVED AFTER DYED",
     "PARTY STOCK (SHORT & EXCESS)", "TOTAL KNITTING (GREY)", "RETURN YARN RECEIVED",
     "BALANCE (+/-)", "GREY DELIVERY FOR DYEING", "GREY RETURN FROM DYEING",
@@ -71,7 +71,7 @@ export default function Summary() {
                             {
                                 COLUMNS.map((col, index) => {
                                     return (
-                                        <th key={index} scope="col" className="px-6 py-3 font-medium">
+                                        <th key={index} scope="col" className="px-6 py-3 font-medium whitespace-nowrap">
                                             {col}
                                         </th>
                                     )
@@ -92,7 +92,7 @@ export default function Summary() {
                                 <td>
                                     <div className="space-y-1">
                                         {row.rows.map((cell, j) => (
-                                            <div key={j} className="border-b py-1">
+                                            <div key={j} className="py-1">
                                                 {cell.color}
                                             </div>
                                         ))}
@@ -102,7 +102,7 @@ export default function Summary() {
                                 <td>
                                     <div className="space-y-1">
                                         {row.rows.map((cell, j) => (
-                                            <div key={j} className="border-b py-1">
+                                            <div key={j} className=" py-1">
                                                 {cell.composition}
                                             </div>
                                         ))}
@@ -112,7 +112,7 @@ export default function Summary() {
                                 <td>
                                     <div className="space-y-1">
                                         {row.rows.map((cell, j) => (
-                                            <div key={j} className="border-b py-1">
+                                            <div key={j} className=" py-1">
                                                 {cell.finishDia}
                                             </div>
                                         ))}
@@ -122,7 +122,7 @@ export default function Summary() {
                                 <td>
                                     <div className="space-y-1">
                                         {row.rows.map((cell, j) => (
-                                            <div key={j} className="border-b py-1">
+                                            <div key={j} className=" py-1">
                                                 {cell.orderQty}
                                             </div>
                                         ))}
@@ -132,8 +132,75 @@ export default function Summary() {
                                 <td>
                                     <div className="space-y-1">
                                         {row.rows.map((cell, j) => (
-                                            <div key={j} className="border-b py-1">
-                                                {cell.finishRequiredQty}
+                                            <div key={j} className=" py-1">
+                                                {(
+                                                    Number(cell.finishRequiredQty) +
+                                                    Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100)
+                                                ).toFixed(2)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        {row.rows.map((cell, j) => (
+                                            <div key={j} className=" py-1">
+                                                additional
+                                            </div>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1"> 
+                                        {/* // TOTAL REQUIRED QTY  */}
+                                        {row.rows.map((cell, j) => (
+                                            <div key={j} className=" py-1">
+                                                {(
+                                                    Number(cell.finishRequiredQty) +
+                                                    Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100)
+                                                ).toFixed(2)} 
+                                            </div>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {row.summary.knittingOrder_workOrderQty}
+                                        </div>
+
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        {row.rows.map((cell, j) => (
+                                            <div key={j} className=" py-1">
+                                                {(
+                                                    Number(cell.finishRequiredQty) +
+                                                    Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100) - Number(row.summary.knittingOrder_workOrderQty)
+                                                ).toFixed(2)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="space-y-1">
+                                        <div className=" py-1">
+                                            {row.summary.knittingOrder_Yarn_Delivery}
+                                        </div>
+
+                                    </div>
+                                </td>
+
+                                 <td>
+                                    <div className="space-y-1"> 
+                                        {/* // TOTAL REQUIRED QTY  */}
+                                        {row.rows.map((cell, j) => (
+                                            <div key={j} className=" py-1">
+                                                {(
+                                                    Number(cell.finishRequiredQty) +
+                                                    Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100) - Number(row.summary.knittingOrder_Yarn_Delivery)
+                                                ).toFixed(2)} 
                                             </div>
                                         ))}
                                     </div>

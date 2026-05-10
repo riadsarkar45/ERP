@@ -235,9 +235,9 @@ const AllOrders = ({ orderType }) => {
                                     {COLUMNS.map((col, i) => (
                                         <th
                                             key={i}
-                                            className="px-3 py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200 whitespace-nowrap"
+                                            className="whitespace-nowrap px-3 py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200"
                                         >
-                                            <div className="grid">
+                                            <div className="grid ">
                                                 {col.header}
                                                 {
                                                     col.inputName && (
@@ -251,16 +251,16 @@ const AllOrders = ({ orderType }) => {
                                 </tr>
                             </thead>
 
-                            <tbody>
+                            <tbody className="whitespace-nowrap">
                                 {filteredOrders?.map((job, factoryIndex) => {
 
                                     return (
                                         <tr className={""} key={`${factoryIndex}`}>
 
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderPlaceDate}</td>
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderNo}</td>
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"BUYER NAME"}</td>
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"static"}</td>
+                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderPlaceDate}</td>
+                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderNo}</td>
+                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"BUYER NAME"}</td>
+                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"static"}</td>
                                             <td>
                                                 <div className="space-y-1">
                                                     {
