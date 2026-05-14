@@ -4,6 +4,7 @@ import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
 import { useNavigate } from "react-router-dom";
+import Deliveries from "../../../components/Deliveries";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -61,7 +62,9 @@ export default function Summary() {
             {showModal && <StyleReqModal setRawData={setRawData} setShowModal={setShowModal} />}
 
 
-
+            <div>
+                <Deliveries />
+            </div>
 
 
             <div className="relative overflow-x-auto bg-neutral-primary-soft shadow-xs rounded-base border border-default">
@@ -151,14 +154,14 @@ export default function Summary() {
                                     </div>
                                 </td>
                                 <td>
-                                    <div className="space-y-1"> 
+                                    <div className="space-y-1">
                                         {/* // TOTAL REQUIRED QTY  */}
                                         {row.rows.map((cell, j) => (
                                             <div key={j} className=" py-1">
                                                 {(
                                                     Number(cell.finishRequiredQty) +
                                                     Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100)
-                                                ).toFixed(2)} 
+                                                ).toFixed(2)}
                                             </div>
                                         ))}
                                     </div>
@@ -192,15 +195,15 @@ export default function Summary() {
                                     </div>
                                 </td>
 
-                                 <td>
-                                    <div className="space-y-1"> 
+                                <td>
+                                    <div className="space-y-1">
                                         {/* // TOTAL REQUIRED QTY  */}
                                         {row.rows.map((cell, j) => (
                                             <div key={j} className=" py-1">
                                                 {(
                                                     Number(cell.finishRequiredQty) +
                                                     Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100) - Number(row.summary.knittingOrder_Yarn_Delivery)
-                                                ).toFixed(2)} 
+                                                ).toFixed(2)}
                                             </div>
                                         ))}
                                     </div>

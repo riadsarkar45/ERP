@@ -36,14 +36,15 @@ const AllOrders = ({ orderType }) => {
     const [styleNo, setStyleNo] = useState("");
     const [alertType, setAlertType] = useState("");
     const [filters, setFilters] = useState({})
-
-
+    const [deliveries, setDeliveries] = useState({});
+    const [workOrderId, setWorkOrderId] = useState(null);
     useEffect(() => {
         const fetchOrders = async () => {
             try {
                 const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-                console.log(res.data, "data");
+
                 setOrders(res.data);
+
             } catch (err) {
                 console.log(err);
             }
@@ -53,17 +54,24 @@ const AllOrders = ({ orderType }) => {
 
 
 
-    const handleEditRowData = (yarnId) => {
+    const handleEditRowData = async (yarnId, workOrderNo) => {
         // setEditRowData(prev => ({
         //     ...prev,
         //     editingField,
         //     editingIndex: indexId,
         //     [editingField]: editingText,
         // }));
-        console.log("clicked", yarnId);
+        setIsEditing(true);
+
+        const res = await axiosPublic.get(`/api/deliveries/${yarnId}`);
+        console.log(res);
+        setDeliveries({
+            deliveries: res.data.deliveries,
+            workOrder: res.data.workOrder
+        });
+        setWorkOrderId(workOrderNo);
         setStyleNo(styleNo);
         setOrderId(yarnId);
-        setIsEditing(true);
     };
 
     const handleFilter = (e) => {
@@ -101,19 +109,16 @@ const AllOrders = ({ orderType }) => {
 
 
 
-    console.log(filteredOrders, "filters");
 
     const handleEditOnChange = (e) => {
         const { name, value } = e.target;
         setIsEditing(true);
         setChangedField(prev => ({ ...prev, [name]: value }));
     };
-    console.log(changedField, "changed field");
     const handleSubmit = async () => {
         const update = await axiosPublic.patch(
             `/api/update-order/${jobId}`, changedField
         );
-        console.log(jobId, "job id");
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
             setOrders(res.data);
@@ -215,6 +220,8 @@ const AllOrders = ({ orderType }) => {
                     <div className="table-container printable-table-area overflow-x-auto">
                         {isEditing && (
                             <Modal
+                                workOrderId={workOrderId}
+                                deliveries={deliveries}
                                 setIsEditing={setIsEditing}
                                 handleSubmit={handleSubmit}
                                 handleEditOnChange={handleEditOnChange}
@@ -313,8 +320,8 @@ const AllOrders = ({ orderType }) => {
                                                 <div className="space-y-1">
                                                     {
                                                         job.compositions.map((comp, i) =>
-                                                            <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
-                                                                {comp.workOrderQty}
+                                                            <div onClick={() => handleEditRowData(comp.id, comp.id)} key={i} className="border-b py-1">
+                                                                {comp.workOrderQty}dd = {comp.id}
                                                             </div>
                                                         )
                                                     }
@@ -376,7 +383,7 @@ const AllOrders = ({ orderType }) => {
                                                     job.compositions.map((comp, i) =>
 
                                                         <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-pink-500 border-b py-1">
-                                                            {comp.unitePrice * comp.greyReceived}
+                                                            {Number(comp.unitePrice) * Number(comp.greyReceived)}
                                                         </div>
                                                     )
                                                 }

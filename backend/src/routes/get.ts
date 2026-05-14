@@ -5,6 +5,7 @@ import { getOrderSummaryByStyle } from "../controllers/orders/styleWiseOrder";
 import { allAudits } from "../controllers/audit/allAudits";
 import { getAllJobs } from "../controllers/jobs/allJobs";
 import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
+import { deliveryDetail } from "../controllers/deliveries/deliveries";
 
 const getRouters = express.Router();
 
@@ -23,5 +24,7 @@ getRouters.get("/jobs", getAllJobs);
 getRouters.get("/styles", styleRequirements);
 
 getRouters.get("/styles/:jobNo", styleRequirements);
+
+getRouters.get("/deliveries/:id", deliveryDetail);
 
 export default getRouters;

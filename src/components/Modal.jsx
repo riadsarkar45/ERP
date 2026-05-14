@@ -1,136 +1,75 @@
 import { X, Save } from 'lucide-react';
 import Input from './Input';
+import Deliveries from './Deliveries';
 
-const Modal = ({ setIsEditing, handleSubmit, orderId, handleEditOnChange }) => {
-    console.log(orderId);
+const Modal = ({ setIsEditing, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
     const deliveryTypes = ["Yarn Delivery", "Yarn Return", "Grey Received"];
+
     return (
         <>
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black bg-opacity-50 z-50 animate-fade-in"
-                onClick={() => setIsEditing(false)}
-            />
+            <div className="fixed inset-0 bg-slate-500/30 z-50" onClick={() => setIsEditing(false)} />
 
-            {/* Modal */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
                 <div
-                    className="bg-white rounded-md border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden pointer-events-auto animate-slide-in"
-                    onClick={(e) => e.stopPropagation()}
+                    className="pointer-events-auto w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl overflow-hidden bg-white border border-gray-200 shadow-xl"
+                    onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold uppercase text-gray-800">Edit Order</h2>
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-sm font-bold uppercase tracking-widest text-gray-900" style={{ fontFamily: 'Syne, sans-serif' }}>
+                                Edit Order
+                            </h2>
+                            <span className="text-xs font-medium text-indigo-500 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">
+                                WO #{workOrderId}
+                            </span>
+                        </div>
                         <button
                             onClick={() => setIsEditing(false)}
-                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
                         >
-                            <X size={20} />
+                            <X size={14} />
                         </button>
                     </div>
 
-                    {/* Content */}
-                    <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                        {
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-                                    <Input
-                                        label="Date"
-                                        name="date"
-                                        type="date"
-                                        onChange={handleEditOnChange}
-                                        required
-                                    />
+                    {/* Scrollable body */}
+                    <div className="overflow-y-auto flex-1 flex flex-col">
 
-                                    <Input
-                                        label="Challan No"
-                                        name="challanNo"
-                                        type="text"
-                                        onChange={handleEditOnChange}
-                                        // value={editRowData.challan}
+                        <Deliveries deliveries={deliveries} workOrderId={workOrderId} />
 
-                                        placeholder="Enter Challan No"
-                                        required
-                                    />
-
-                                    <Input
-                                        label="Yarn Delivery Qty"
-                                        name="yarnDelivery"
-                                        type="text"
-                                        onChange={handleEditOnChange}
-                                        // value={editRowData.yarnDelivery}
-                                        placeholder="Qty"
-                                        required
-                                    />
-                                    <Input
-                                        label="Delivery Type"
-                                        name="deliveryType"
-                                        type="text"
-                                        onChange={handleEditOnChange}
-                                        type="select"
-                                        // value={editRowData.yarnDelivery}
-                                        placeholder="Qty"
-                                        required
-                                        options={deliveryTypes}
-                                    />
-                                    <Input
-                                        label="To Factory"
-                                        name="toFactory"
-                                        type="text"
-                                        onChange={handleEditOnChange}
-                                        // value={editRowData.yarnDelivery}
-                                        placeholder="Qty"
-                                        required
-                                    />
-                                    <Input
-                                        label="From Factory"
-                                        name="fromFactory"
-                                        type="text"
-                                        onChange={handleEditOnChange}
-                                        // value={editRowData.yarnDelivery}
-                                        placeholder="Qty"
-                                        required
-                                    />
-
-                                </div>
-                            
-                        }
-
-                        <div className="flex flex-col sm:flex-row gap-3 mt-10 border-gray-200">
-                            <button
-                                type="submit"
-                                onClick={() => handleSubmit()}
-                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
-                            >
-                                <Save size={18} />
-                                Update Order
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsEditing(false)}
-                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-all duration-200 border border-gray-200"
-                            >
-                                <X size={18} />
-                                Cancel
-                            </button>
+                        {/* Form */}
+                        <div className="px-6 py-5 shrink-0">
+                            <span className="text-[10px] font-semibold tracking-[0.14em] text-gray-300 uppercase block mb-4">
+                                Add New Delivery
+                            </span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+                                <Input label="Date"          name="date"         type="date"   onChange={handleEditOnChange} required />
+                                <Input label="Challan No"    name="challanNo"    type="text"   onChange={handleEditOnChange} placeholder="CH-005" required />
+                                <Input label="Delivery Qty"  name="yarnDelivery" type="text"   onChange={handleEditOnChange} placeholder="0 kg" required />
+                                <Input label="Delivery Type" name="deliveryType" type="select" onChange={handleEditOnChange} options={deliveryTypes} required />
+                                <Input label="To Factory"    name="toFactory"    type="text"   onChange={handleEditOnChange} placeholder="Factory" required />
+                                <Input label="From Factory"  name="fromFactory"  type="text"   onChange={handleEditOnChange} placeholder="Factory" required />
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white shrink-0">
+                        <button
+                            onClick={handleSubmit}
+                            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold tracking-wide transition-colors"
+                        >
+                            <Save size={14} /> Update Order
+                        </button>
+                        <button
+                            onClick={() => setIsEditing(false)}
+                            className="flex items-center gap-2 px-5 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 text-xs font-medium transition-colors"
+                        >
+                            <X size={14} /> Cancel
+                        </button>
                     </div>
                 </div>
             </div>
-
-            <style>{`
-                @keyframes fade-in {
-                    from {
-                        opacity: 0;
-                    }
-                    to {
-                        opacity: 1;
-                    }
-                }
-
-                .animate-fade-in {
-                    animation: fade-in 0.2s ease-out;
-                }
-            `}</style>
         </>
     );
 };

@@ -35,7 +35,18 @@ export const getAllOrders = async (req: Request, res: Response) => {
                                 }
                             }
                         }
-                    }
+                    },
+                    styleRequirement:{
+                        
+                        select: {
+                            processLoss: true,
+                            buyerName: true,
+                            styleNo: true,
+                               
+                        }
+                        
+                    },
+                    
 
 
                 },

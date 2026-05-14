@@ -1,10 +1,12 @@
+import prisma from "../database/prismaClient/prisma";
+
 export const calculateYarnCompStat = (compositions: any[]) => {
     return compositions.map(comp => ({
         ...comp,
         compositions: comp.compositions.map((c: any) => {
 
             const yarnDeliveries = c.deliveries.filter(
-                (delivery: any) => delivery.deliveryType === "Yarn Delivery" 
+                (delivery: any) => delivery.deliveryType === "Yarn Delivery"
             );
 
             const greyDeliveries = c.deliveries.filter(
@@ -66,3 +68,15 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
         return { ...s, summary };
     });
 };
+
+export const findDeliveryDetail = async (id: number) => {
+
+    if (!id) return null;
+
+    // This function should ideally query the database to find the delivery detail by ID.
+    const detail = await prisma.$queryRaw`SELECT * FROM composition WHERE id=${id}`;
+
+    if (!detail) return null;
+
+    return detail;
+}
