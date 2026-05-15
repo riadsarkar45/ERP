@@ -1,8 +1,8 @@
-import { X, Save } from 'lucide-react';
+import { X, Save, Loader2 } from 'lucide-react';
 import Input from './Input';
 import Deliveries from './Deliveries';
 
-const Modal = ({ setIsEditing, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
+const Modal = ({ setIsEditing, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
     const deliveryTypes = ["Yarn Delivery", "Yarn Return", "Grey Received"];
 
     return (
@@ -35,7 +35,11 @@ const Modal = ({ setIsEditing, workOrderId, deliveries, handleSubmit, orderId, h
                     {/* Scrollable body */}
                     <div className="overflow-y-auto flex-1 flex flex-col">
 
-                        <Deliveries deliveries={deliveries} workOrderId={workOrderId} />
+                        {
+                            deliveriesLoading ? <div>
+                                <span className='animate-spin'><Loader2 size={30} /></span>
+                            </div> : <Deliveries deliveries={deliveries} workOrderId={workOrderId} />
+                        }
 
                         {/* Form */}
                         <div className="px-6 py-5 shrink-0">
@@ -43,24 +47,30 @@ const Modal = ({ setIsEditing, workOrderId, deliveries, handleSubmit, orderId, h
                                 Add New Delivery
                             </span>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
-                                <Input label="Date"          name="date"         type="date"   onChange={handleEditOnChange} required />
-                                <Input label="Challan No"    name="challanNo"    type="text"   onChange={handleEditOnChange} placeholder="CH-005" required />
-                                <Input label="Delivery Qty"  name="yarnDelivery" type="text"   onChange={handleEditOnChange} placeholder="0 kg" required />
+                                <Input label="Date" name="date" type="date" onChange={handleEditOnChange} required />
+                                <Input label="Challan No" name="challanNo" type="text" onChange={handleEditOnChange} placeholder="CH-005" required />
+                                <Input label="Delivery Qty" name="yarnDelivery" type="text" onChange={handleEditOnChange} placeholder="0 kg" required />
                                 <Input label="Delivery Type" name="deliveryType" type="select" onChange={handleEditOnChange} options={deliveryTypes} required />
-                                <Input label="To Factory"    name="toFactory"    type="text"   onChange={handleEditOnChange} placeholder="Factory" required />
-                                <Input label="From Factory"  name="fromFactory"  type="text"   onChange={handleEditOnChange} placeholder="Factory" required />
+                                <Input label="To Factory" name="toFactory" type="text" onChange={handleEditOnChange} placeholder="Factory" required />
+                                <Input label="From Factory" name="fromFactory" type="text" onChange={handleEditOnChange} placeholder="Factory" required />
                             </div>
                         </div>
                     </div>
 
                     {/* Footer */}
                     <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white shrink-0">
-                        <button
-                            onClick={handleSubmit}
-                            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold tracking-wide transition-colors"
-                        >
-                            <Save size={14} /> Update Order
-                        </button>
+                        {
+                            isLoading ? <button
+                                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold tracking-wide transition-colors"
+                            >
+                                <Loader2 className='animate-spin' size={14} />
+                            </button> : <button
+                                onClick={handleSubmit}
+                                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold tracking-wide transition-colors"
+                            >
+                                <Save size={14} /> Update Order
+                            </button>
+                        }
                         <button
                             onClick={() => setIsEditing(false)}
                             className="flex items-center gap-2 px-5 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 text-xs font-medium transition-colors"

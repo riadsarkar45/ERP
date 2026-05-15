@@ -3,10 +3,15 @@ import prisma from "../../database/prismaClient/prisma";
 
 export const deliveryDetail = async (req: Request, res: Response) => {
     const { id } = req.params;
+    console.log(id);
     const deliveries = await prisma.composition.findUnique({
         where: { id: Number(id) },
         select: {
+            composition: true,
+            workOrderQty: true,
+            orderQty: true,
             deliveries: {
+                where: {yarnId: Number(id)},
                 select: {
                     deliveryType: true,
                     deliveryQty: true,
@@ -17,6 +22,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                 }
             },
             workOrder: {
+                
                 select: {
                     styleRequirement: {
                         select: {

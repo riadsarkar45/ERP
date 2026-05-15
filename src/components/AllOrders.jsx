@@ -38,6 +38,8 @@ const AllOrders = ({ orderType }) => {
     const [filters, setFilters] = useState({})
     const [deliveries, setDeliveries] = useState({});
     const [workOrderId, setWorkOrderId] = useState(null);
+    const[isLoading, setIsLoading] = useState(false);
+    const[loadingDeliveries, setLoadingDeliveries] = useState(false);
     useEffect(() => {
         const fetchOrders = async () => {
             try {
@@ -61,19 +63,24 @@ const AllOrders = ({ orderType }) => {
         //     editingIndex: indexId,
         //     [editingField]: editingText,
         // }));
+        setLoadingDeliveries(true);
+        console.log(yarnId, "yarnId");
         setIsEditing(true);
 
         const res = await axiosPublic.get(`/api/deliveries/${yarnId}`);
-        console.log(res);
-        setDeliveries({
-            deliveries: res.data.deliveries,
-            workOrder: res.data.workOrder
-        });
+        console.log(res.data, "deliveries");
+        if(res.data){
+            setLoadingDeliveries(false);
+        }
+        setDeliveries(res.data);
+        
+
+        setDeliveries(res.data);
         setWorkOrderId(workOrderNo);
         setStyleNo(styleNo);
         setOrderId(yarnId);
     };
-
+    console.log(jobId, "jobId");
     const handleFilter = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
@@ -116,14 +123,18 @@ const AllOrders = ({ orderType }) => {
         setChangedField(prev => ({ ...prev, [name]: value }));
     };
     const handleSubmit = async () => {
+        setIsLoading(true);
         const update = await axiosPublic.patch(
             `/api/update-order/${jobId}`, changedField
         );
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
+            const devs = await axiosPublic.get(`/api/deliveries/${jobId}`);
+            setDeliveries(devs.data);
+            console.log('fetched');
             setOrders(res.data);
+            setIsLoading(false);
             setChangedField({});
-            setIsEditing(false);
             setAlertType(update.data.type);
         }
     };
@@ -221,6 +232,8 @@ const AllOrders = ({ orderType }) => {
                         {isEditing && (
                             <Modal
                                 workOrderId={workOrderId}
+                                isLoading={isLoading}
+                                deliveriesLoading={loadingDeliveries}
                                 deliveries={deliveries}
                                 setIsEditing={setIsEditing}
                                 handleSubmit={handleSubmit}
@@ -321,7 +334,7 @@ const AllOrders = ({ orderType }) => {
                                                     {
                                                         job.compositions.map((comp, i) =>
                                                             <div onClick={() => handleEditRowData(comp.id, comp.id)} key={i} className="border-b py-1">
-                                                                {comp.workOrderQty}dd = {comp.id}
+                                                                {comp.workOrderQty}
                                                             </div>
                                                         )
                                                     }
