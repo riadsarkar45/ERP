@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Printer } from "lucide-react";
+import { Loader2, Printer } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Input from "./Input";
 import Modal from "./Modal";
+import { useFetchData } from "../hooks/fetch";
 
 const COLUMNS = [
     { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
@@ -38,42 +39,36 @@ const AllOrders = ({ orderType }) => {
     const [filters, setFilters] = useState({})
     const [deliveries, setDeliveries] = useState({});
     const [workOrderId, setWorkOrderId] = useState(null);
-    const[isLoading, setIsLoading] = useState(false);
-    const[loadingDeliveries, setLoadingDeliveries] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingDeliveries, setLoadingDeliveries] = useState(false);
+    const { fetchData, error, loading } = useFetchData();
     useEffect(() => {
-        const fetchOrders = async () => {
-            try {
-                const res = await axiosPublic.get(`/api/work-order/${orderType}`);
+        fetchData(`/api/work-order/${orderType}`).then(data => {
+            if (data) setOrders(data);
+        });
+    }, [orderType]);
 
-                setOrders(res.data);
+    if (error) {
+        return <div className="p-4 bg-red-100 text-red-700 rounded">Something went wrong please try again later</div>
+    }
 
-            } catch (err) {
-                console.log(err);
-            }
-        };
-        fetchOrders();
-    }, [axiosPublic, orderType]);
-
-
+    if(loading) {
+        return <div className="p-4 text-gray-500"><Loader2 className="animate-spin" size={40}/></div>
+    }
 
     const handleEditRowData = async (yarnId, workOrderNo) => {
-        // setEditRowData(prev => ({
-        //     ...prev,
-        //     editingField,
-        //     editingIndex: indexId,
-        //     [editingField]: editingText,
-        // }));
+
         setLoadingDeliveries(true);
         console.log(yarnId, "yarnId");
         setIsEditing(true);
 
         const res = await axiosPublic.get(`/api/deliveries/${yarnId}`);
         console.log(res.data, "deliveries");
-        if(res.data){
+        if (res.data) {
             setLoadingDeliveries(false);
         }
         setDeliveries(res.data);
-        
+
 
         setDeliveries(res.data);
         setWorkOrderId(workOrderNo);
