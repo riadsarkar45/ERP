@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -19,7 +13,6 @@ model Factory {
   factoryName String   @unique
   type        String?
   createdAt   DateTime @default(now())
-  jobId       Int?
 }
 
 model Yarns {
@@ -38,18 +31,24 @@ model WorkOrder {
   compositions       Composition[]
   styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
   styleRequirementId Int?
+
+  @@index([styleRequirementId])
+  @@index([styleNo])
 }
 
 model Composition {
   id           Int          @id @default(autoincrement())
   composition  String
-  unitePrice   String
+  unitePrice   Float        // ← was Decimal
   color        String
   orderQty     Int
   workOrderQty Int
   workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
   deliveries   deliveries[]
   workOrderId  Int
+
+  @@index([workOrderId])
+  @@index([color])
 }
 
 model StyleRequirement {
@@ -71,9 +70,11 @@ model StyleRequirementRow {
   styleRequirement   StyleRequirement @relation(fields: [styleRequirementId], references: [id])
   color              String
   composition        String
-  finishDia          String
-  orderQty           String
-  finishRequiredQty  String
+  finishDia          Float            // ← was String
+  orderQty           Int              // ← was String
+  finishRequiredQty  Float            // ← was String
+
+  @@index([styleRequirementId])
 }
 
 model sizeWiseCutting {
@@ -81,18 +82,21 @@ model sizeWiseCutting {
   cuttingStyleId Int
   sizeId         Int
   size           sizes  @relation(fields: [sizeId], references: [id])
-  cutQty         String
+  cutQty         Int    // ← was String
+
+  @@index([sizeId])
+  @@index([cuttingStyleId])
 }
 
 model sizes {
   id                 Int               @id @default(autoincrement())
   sizeName           String
-  styleId            Int               @default(0)
-  createdAt          DateTime
-  cuttingStyleId     Int?
+  createdAt          DateTime          @default(now())
   sizeWiseCuttings   sizeWiseCutting[]
   styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
   styleRequirementId Int?
+
+  @@index([styleRequirementId])
 }
 
 model deliveries {
@@ -106,6 +110,11 @@ model deliveries {
   fromFactory  String
   composition  Composition? @relation(fields: [yarnCompId], references: [id])
   yarnCompId   Int?
+
+  @@index([yarnCompId])
+  @@index([deliveryDate])
+  @@index([challanNo])
+  @@index([yarnId])
 }
 
 model audit {

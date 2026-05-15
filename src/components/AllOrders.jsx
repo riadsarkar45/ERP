@@ -222,8 +222,8 @@ const AllOrders = ({ orderType }) => {
                     )}
                 </div>
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <div className="table-container printable-table-area overflow-x-auto">
+                <div className="bg-white rounded-lg border border-gray-200">
+                    <div className="table-container printable-table-area">
                         {isEditing && (
                             <Modal
                                 workOrderId={workOrderId}

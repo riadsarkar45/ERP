@@ -41,7 +41,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                                 color,
                                 orderQty: Number(orderQty),
                                 workOrderQty: Number(workOrderQty),
-                                unitePrice: unitPrice,
+                                unitePrice: Number(unitPrice),
 
                             }))
                         }

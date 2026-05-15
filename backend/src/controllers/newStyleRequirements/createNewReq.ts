@@ -7,7 +7,6 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
     if (!orderInfo || !rows) {
         return res.status(400).send({ message: "No data provided", type: "error" })
     }
-    console.log(req.body, "body");
     try {
         await prisma.$transaction(async (tx) => {
             let styleId = null;
@@ -45,9 +44,9 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                         styleRequirementId: Number(styleId),  // foreign key
                         color: row.color,
                         composition: row.composition,
-                        finishDia: row.finishDia,
-                        orderQty: row.orderQty,
-                        finishRequiredQty: row.finishRequiredQty,
+                        finishDia: Number(row.finishDia),
+                        orderQty: Number(row.orderQty),
+                        finishRequiredQty: Number(row.finishRequiredQty),
                     }))
                 }
             )
