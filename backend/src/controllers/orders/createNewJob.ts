@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
+import { checkDataExist } from "../../utils/checkIfDataExist";
 export const createNewJob = async (req: Request, res: Response) => {
     // res.send({ message: "request received" })
     const {
@@ -20,10 +21,16 @@ export const createNewJob = async (req: Request, res: Response) => {
         return res.status(400).send({ message: "Style No not found", type: "error" })
     }
 
-    console.log(findStyleNo);
-
-    console.log(req.body);
     try {
+        let jobId = null;
+        const getJobNo  = await checkDataExist(req.body.jobNo);
+        
+        jobId = getJobNo?.id || null;
+
+        if(jobId === null){
+            return res.status(400).send({ message: "Failed to create job", type: "error" })
+        }
+
         const workOrder = await prisma.workOrder.create(
             {
                 data: {
@@ -32,7 +39,9 @@ export const createNewJob = async (req: Request, res: Response) => {
                     month: req.body.month,
                     styleNo: req.body.styleNo,
                     lotNo: req.body.lotNo,
+                    jobNo: req.body.jobNo,
                     orderType: orderType,
+                    jobId: jobId,
                     styleRequirementId: findStyleNo.id,
                     compositions: {
                         createMany: {

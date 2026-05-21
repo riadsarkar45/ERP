@@ -3,6 +3,7 @@ import Input from './Input';
 import { useState } from 'react';
 import useAxiosPublic from '../hooks/Axios';
 import { RefreshCcw } from "lucide-react";
+import { usePostData } from '../hooks/post';
 
 const defaultRow = () => ({
     id: Date.now() + Math.random(),
@@ -25,9 +26,9 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             processLoss: '',
         }
     )
-    const [isLoading, setIsLoading] = useState(false);
 
     const axiosPublic = useAxiosPublic();
+    const { postData, loading, error } = usePostData();
     console.log(orderInfo, "order info");
 
     const addRow = () => setRows((prev) => [...prev, defaultRow()]);
@@ -41,7 +42,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         );
 
     const createNewRequirement = async () => {
-        setIsLoading(true);
         const payload = {
             orderInfo,
             rows: rows.map(row => ({
@@ -53,14 +53,27 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             }))
         };
 
-        const res = await axiosPublic.post("/api/new-style-requirements", payload)
-        if (res.data.type === "success") {
-            axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), setIsLoading(false) });
+        try {
+            // const res = await axiosPublic.post("/api/new-style-requirements", payload)
+            // if (res.data.type === "success") {
+            //     axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), setIsLoading(false) });
 
+            // }
+            const res = await postData("/api/new-style-requirements", payload);
+            if (res?.type === "success") {
+                axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data) });
+            }
+        } catch (e) {
+            console.log(e.response.data.message);
+            console.log(e.response.data.type);
+            
         }
+
 
         console.log(payload, "data converted to object");
     }
+
+    console.log(error, "error", loading, "loading");
 
     return (
         <>
@@ -68,6 +81,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             <div
                 className="fixed inset-0 bg-black bg-opacity-50 z-50 animate-fade-in"
             />
+
 
             {/* Modal */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
@@ -85,6 +99,13 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             <X size={20} />
                         </button>
                     </div>
+
+                    {
+                        error && (
+                            <div className='bg-yellow-500 p-3 rounded-md mt-3  bg-opacity-25 border-yellow-500 text-yellow-700'>{error.message}</div>
+                        )
+                    }
+
 
                     {/* Content */}
                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
@@ -217,9 +238,9 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                         {/* Action buttons - original design */}
                         <div className="flex flex-col sm:flex-row gap-3 mt-10 border-gray-200">
                             {
-                                isLoading ? (
+                                loading ? (
                                     <button
-                                        onClick={() => setIsLoading(false)}
+                                        
                                         className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
                                     >
                                         <Save size={18} />

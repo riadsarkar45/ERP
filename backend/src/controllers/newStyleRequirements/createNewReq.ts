@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
+import { checkDataExist } from "../../utils/checkIfDataExist";
 
 export const createNewStyleRequirement = async (req: Request, res: Response) => {
     const { orderInfo, rows } = req.body;
@@ -7,8 +8,17 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
     if (!orderInfo || !rows) {
         return res.status(400).send({ message: "No data provided", type: "error" })
     }
+    // console.log(orderInfo.jobNo, "job no");
     try {
+
+        const checkIfExist = await checkDataExist(orderInfo.jobNo)
+        console.log(checkIfExist);
+        if(!checkIfExist?.created){
+            return res.status(400).send({ message: "Job No already exist", type: "error" })
+        }
+
         await prisma.$transaction(async (tx) => {
+
             let styleId = null;
             const findStyleName = await tx.styleRequirement.findUnique(
                 {
@@ -44,7 +54,7 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                         styleRequirementId: Number(styleId),  // foreign key
                         color: row.color,
                         composition: row.composition,
-                        finishDia: Number(row.finishDia),
+                        finishDia: row.finishDia,
                         orderQty: Number(row.orderQty),
                         finishRequiredQty: Number(row.finishRequiredQty),
                     }))

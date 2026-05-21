@@ -32,8 +32,12 @@ export default function Summary() {
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
     useEffect(() => {
-        axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), console.log(res.data.data) });
+        try {
+            axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), console.log(res.data.message) });
 
+        } catch (e) {
+            console.log(e.response.data.message);
+        }
     }, [axiosPublic]);
 
 

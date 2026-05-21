@@ -27,19 +27,23 @@ model WorkOrder {
   month              String
   styleNo            String
   lotNo              String
+  jobNo              String
   orderType          String
   compositions       Composition[]
   styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
   styleRequirementId Int?
+  jobs               jobs?             @relation(fields: [jobId], references: [id])
+  jobId             Int?
 
   @@index([styleRequirementId])
   @@index([styleNo])
+  @@index([jobId])
 }
 
 model Composition {
   id           Int          @id @default(autoincrement())
   composition  String
-  unitePrice   Float        // ← was Decimal
+  unitePrice   Float // ← was Decimal
   color        String
   orderQty     Int
   workOrderQty Int
@@ -70,19 +74,19 @@ model StyleRequirementRow {
   styleRequirement   StyleRequirement @relation(fields: [styleRequirementId], references: [id])
   color              String
   composition        String
-  finishDia          Float            // ← was String
-  orderQty           Int              // ← was String
-  finishRequiredQty  Float            // ← was String
+  finishDia          String // ← NOW String
+  orderQty           Int // ← was String
+  finishRequiredQty  Float // ← was String
 
   @@index([styleRequirementId])
 }
 
 model sizeWiseCutting {
-  id             Int    @id @default(autoincrement())
+  id             Int   @id @default(autoincrement())
   cuttingStyleId Int
   sizeId         Int
-  size           sizes  @relation(fields: [sizeId], references: [id])
-  cutQty         Int    // ← was String
+  size           sizes @relation(fields: [sizeId], references: [id])
+  cutQty         Int // ← was String
 
   @@index([sizeId])
   @@index([cuttingStyleId])
@@ -124,4 +128,11 @@ model audit {
   auditEndDate   DateTime
   auditDesc      String
   auditType      String   @default("pending")
+}
+
+model jobs {
+  id         Int         @id @default(autoincrement())
+  jobNo      String      @unique
+  createdAt  DateTime    @default(now())
+  workOrders WorkOrder[]
 }

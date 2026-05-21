@@ -41,10 +41,14 @@ const NewOrder = () => {
                 ...row,
                 workOrderQty: "",
             })) || []);
+            setFormData(prev => ({
+                ...prev,
+                jobNo: req.data.data[0]?.jobNo || "",
+            }))
         };
         styleReq();
-    }, [jobNumber]); // ✅ only jobNumber, nothing else
-
+    }, [jobNumber]);
+        console.log(rows, "rows");
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -100,7 +104,7 @@ const NewOrder = () => {
     };
 
     const dyeingOrderType = ["knittingOrder", "aopOrder", "fabricBookingOrder", "masterDyeingOrder", "yarnDyeingOrder"];
-
+    console.log(formData, "formData");
     return (
         <DashboardLayout title="Add New Order">
             {showToast && (
@@ -152,7 +156,7 @@ const NewOrder = () => {
                                 label="Job No"
                                 name="jobNo"
                                 readOnly
-                                value={style.jobNo}
+                                value={formData.jobNo}
                                 placeholder="e.g., SM26-3429/JAN"
                             />
                             <Input
