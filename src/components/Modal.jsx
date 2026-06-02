@@ -3,7 +3,7 @@ import Input from './Input';
 import Deliveries from './Deliveries';
 
 const Modal = ({ setIsEditing, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
-    const deliveryTypes = ["Yarn Delivery", "Yarn Return", "Grey Received"];
+    const deliveryTypes = ["Yarn Delivery", "Yarn Return", "Grey Received", "Grey Receive From Dyeing", "Finish Fabric Received", "Grey Delivery"];
 
     return (
         <>

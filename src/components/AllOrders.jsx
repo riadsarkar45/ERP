@@ -4,15 +4,17 @@ import useAxiosPublic from "../hooks/Axios";
 import Input from "./Input";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
+import InlineEdit from "./inlineEdit/InlineEdit";
 
 const COLUMNS = [
     { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
     { header: "JOB NO.", width: "10mm", inputName: "workOrderNo" },
+    { header: "WORK ORDER NO", width: "10mm", inputName: "workOrderNo" },
     { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
-    { header: "PO NO", width: "12mm", inputName: "poNo" },
-    { header: "COMPOSITION", width: "20mm", inputName: "composition" },
     { header: "STYLE", width: "30mm", inputName: "styleNo" },
     { header: "MONTH", width: "10mm", inputName: "month" },
+
+    { header: "COMPOSITION", width: "20mm", inputName: "composition" },
     { header: "COLOR", width: "50mm", inputName: "color" },
     { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
     { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
@@ -20,7 +22,7 @@ const COLUMNS = [
     { header: "DELIVERY", width: "13mm", inputName: "totalYarnDelivery" },
     { header: "DEL. SHORT & EXCESS", width: "12mm" },
     { header: "YARN RETURN RECEIVED", width: "13mm" },
-    { header: "GREY RECEIVED FROM", width: "13mm" },
+    { header: "YARN RECEIVED", width: "13mm" },
     { header: "RCVD SHORT & EXCESS", width: "13mm" },
     { header: "PAYABLE AMOUNT", width: "12mm" },
     { header: "PAID BILLING AMOUNT", width: "12mm" },
@@ -35,12 +37,11 @@ const AllOrders = ({ orderType }) => {
     const [orders, setOrders] = useState([]);
     const [changedField, setChangedField] = useState({});
     const [styleNo, setStyleNo] = useState("");
-    const [alertType, setAlertType] = useState("");
-    const [filters, setFilters] = useState({})
     const [deliveries, setDeliveries] = useState({});
     const [workOrderId, setWorkOrderId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
+    const [editCellId, setEditCellId] = useState(null);
     const { fetchData, error, loading } = useFetchData();
     useEffect(() => {
         fetchData(`/api/work-order/${orderType}`).then(data => {
@@ -52,8 +53,8 @@ const AllOrders = ({ orderType }) => {
         return <div className="p-4 bg-red-100 text-red-700 rounded">Something went wrong please try again later</div>
     }
 
-    if(loading) {
-        return <div className="p-4 text-gray-500"><Loader2 className="animate-spin" size={40}/></div>
+    if (loading) {
+        return <div className="p-4 text-gray-500"><Loader2 className="animate-spin" size={40} /></div>
     }
 
     const handleEditRowData = async (yarnId, workOrderNo) => {
@@ -76,38 +77,11 @@ const AllOrders = ({ orderType }) => {
         setOrderId(yarnId);
     };
     console.log(jobId, "jobId");
-    const handleFilter = (e) => {
-        const { name, value } = e.target;
-        setFilters(prev => ({ ...prev, [name]: value }));
+    const handleFilter = () => {
+        // const { name, value } = e.target;
 
     }
-    const filteredOrders = orders?.filter(job => {
-        const matchesJob =
-            (!filters.workOrderNo || job.workOrderNo?.includes(filters.workOrderNo)) &&
-            (!filters.styleNo || job.styleNo?.toLowerCase().includes(filters.styleNo.toLowerCase())) &&
-            (!filters.month || job.month?.toLowerCase().includes(filters.month.toLowerCase()));
 
-        const matchedCompositions = job.compositions.filter(comp =>
-            (!filters.composition || comp.composition?.toLowerCase().includes(filters.composition.toLowerCase())) &&
-            (!filters.color || comp.color?.toLowerCase().includes(filters.color.toLowerCase())) &&
-            (!filters.orderQty || String(comp.orderQty).includes(filters.orderQty)) &&
-            (!filters.unitePrice || String(comp.unitePrice).includes(filters.unitePrice)) &&
-            (!filters.workOrderQty || String(comp.workOrderQty).includes(filters.workOrderQty)) &&
-            (!filters.totalYarnDelivery || String(comp.totalYarnDelivery).includes(filters.totalYarnDelivery))
-        );
-
-        return matchesJob && matchedCompositions.length > 0;
-    }).map(job => ({
-        ...job,
-        compositions: job.compositions.filter(comp =>
-            (!filters.composition || comp.composition?.toLowerCase().includes(filters.composition.toLowerCase())) &&
-            (!filters.color || comp.color?.toLowerCase().includes(filters.color.toLowerCase())) &&
-            (!filters.orderQty || String(comp.orderQty).includes(filters.orderQty)) &&
-            (!filters.unitePrice || String(comp.unitePrice).includes(filters.unitePrice)) &&
-            (!filters.workOrderQty || String(comp.workOrderQty).includes(filters.workOrderQty)) &&
-            (!filters.totalYarnDelivery || String(comp.totalYarnDelivery).includes(filters.totalYarnDelivery))
-        )
-    }));
 
 
 
@@ -130,83 +104,20 @@ const AllOrders = ({ orderType }) => {
             setOrders(res.data);
             setIsLoading(false);
             setChangedField({});
-            setAlertType(update.data.type);
         }
     };
 
-
+    const inlineEditing = (id) => {
+        console.log(id, "id");
+        setEditCellId(id);
+    }
 
     return (
         <>
-            <style>{`
-                @media print {
-                    @page {
-                        size: A4 landscape;
-                        margin: 8mm;
-                    }
 
-                    body * { visibility: hidden; }
-
-                    .printable-table-area,
-                    .printable-table-area * { visibility: visible; }
-
-                    .printable-table-area {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        overflow: visible !important;
-                    }
-
-                    /* ✅ Remove screen min-width, use explicit col widths instead of fixed layout */
-                    .factory-table {
-                        width: 100% !important;
-                        min-width: unset !important;
-                        table-layout: auto !important;
-                        border-collapse: collapse;
-                    }
-
-                    /* ✅ Apply explicit widths from <col> elements */
-                    .factory-table col {
-                        width: auto;
-                    }
-
-                    .factory-table th {
-                        font-size: 6px !important;
-                        padding: 2px 2px !important;
-                        white-space: normal !important;
-                        word-break: break-word !important;
-                        text-align: center !important;
-                        vertical-align: bottom !important;
-                        border: 0.5px solid #999 !important;
-                        background-color: #f3f4f6 !important;
-                        -webkit-print-color-adjust: exact;
-                        print-color-adjust: exact;
-                        line-height: 1.1 !important;
-                    }
-
-                    .factory-table td {
-                        font-size: 6.5px !important;
-                        padding: 2px 2px !important;
-                        white-space: normal !important;
-                        word-break: break-word !important;
-                        border: 0.5px solid #999 !important;
-                        line-height: 1.2 !important;
-                    }
-
-                    /* ✅ Repeat header on every page */
-                    .factory-table thead {
-                        display: table-header-group;
-                    }
-
-                    .factory-table tbody {
-                        display: table-row-group;
-                    }
-                }
-            `}</style>
 
             <div>
-                {
+                {/* {
                     alertType && (
                         <div className={`${alertType === "success" ? "bg-green-600 border-green-500 text-green-600" : "bg-red-600 border-red-500 text-red-600"}  bg-opacity-25 border  p-2 rounded-md`}>
                             <h2>
@@ -215,7 +126,7 @@ const AllOrders = ({ orderType }) => {
                         </div>
 
                     )
-                }
+                } */}
                 <div className="mb-5 p-2 rounded-sm">
                     {(!orders || orders.length < 1) && (
                         <div>No order found</div>
@@ -267,138 +178,201 @@ const AllOrders = ({ orderType }) => {
                             </thead>
 
                             <tbody className="whitespace-nowrap">
-                                {filteredOrders?.map((job, factoryIndex) => {
+                                {orders?.map((job, factoryIndex) => {
+
+                                    // ✅ FLATTEN compositions ONCE (IMPORTANT)
+                                    const compositions =
+                                        job.workOrders?.flatMap(w => w.compositions || []) || [];
 
                                     return (
-                                        <tr className={""} key={`${factoryIndex}`}>
+                                        <tr key={factoryIndex}>
 
-                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderPlaceDate}</td>
-                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.workOrderNo}</td>
-                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"BUYER NAME"}</td>
-                                            <td className="whitespace-nowrap px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"static"}</td>
-                                            <td>
-                                                <div className="space-y-1">
-                                                    {
-                                                        job.compositions.map((comp, i) =>
-                                                            <div key={i} className="border-b py-1">
-                                                                {comp.composition}
-                                                            </div>
-                                                        )
-                                                    }
-                                                </div>
+                                            {/* JOB INFO */}
+                                            <td className="whitespace-nowrap px-3 py-2 text-sm border">
+                                                {job.workOrderPlaceDate}
                                             </td>
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{job.styleNo}</td>
 
-                                            <td className="px-3 py-2 align-middle text-gray-700 text-sm border border-gray-300">{"month"}</td>
+                                            <td className="whitespace-nowrap px-3 py-2 text-sm border">
+                                                {job.jobNo}
+                                            </td>
 
-                                            <td>
+                                            {/* WORK ORDERS */}
+                                            <td className="border ">
                                                 <div className="space-y-1">
-                                                    {
-                                                        job.compositions.map((comp, i) =>
-                                                            <div key={i} className="border-b py-1">
-                                                                {comp.color}
-                                                            </div>
-                                                        )
-                                                    }
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="space-y-1">
-                                                    {
-                                                        job.compositions.map((comp, i) =>
-                                                            <div key={i} className="border-b py-1">
-                                                                {comp.orderQty}
-                                                            </div>
-                                                        )
-                                                    }
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="space-y-1">
-                                                    {
-                                                        job.compositions.map((comp, i) =>
-                                                            <div key={i} className="border-b py-1">
-                                                                {comp.unitePrice | "PRICE PER KG"}
-                                                            </div>
-                                                        )
-                                                    }
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="space-y-1">
-                                                    {
-                                                        job.compositions.map((comp, i) =>
-                                                            <div onClick={() => handleEditRowData(comp.id, comp.id)} key={i} className="border-b py-1">
-                                                                {comp.workOrderQty}
-                                                            </div>
-                                                        )
-                                                    }
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="space-y-1">
-                                                    {
-                                                        job.compositions.map((comp, i) =>
-                                                            <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
-                                                                {comp.totalYarnDelivery}
-                                                            </div>
-                                                        )
-                                                    }
-                                                </div>
-                                            </td>
-                                            <td>
-                                                {
-                                                    job.compositions.map((comp, i) =>
-
-                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
-                                                            {comp.workOrderQty - comp.totalYarnDelivery}
+                                                    {(job.workOrders || []).map((work, i) => (
+                                                        <div key={i} className="border-b hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
+                                                            {work.workOrderNo}
                                                         </div>
-                                                    )
-                                                }
+                                                    ))}
+                                                </div>
                                             </td>
-                                            <td>
-                                                {
-                                                    job.compositions.map((comp, i) =>
 
-                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
-                                                            {comp.totalYarnReturn}
-                                                        </div>
-                                                    )
-                                                }
+                                            {/* BUYER (static) */}
+                                            <td className="border">
+                                                static buyer name
                                             </td>
-                                            <td>
-                                                {
-                                                    job.compositions.map((comp, i) =>
 
-                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-red-700 border-b py-1">
-                                                            {comp.greyReceived}
+                                            {/* STYLE */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {(job.workOrders || []).map((work, i) => (
+                                                        <div onClick={() => inlineEditing(work.id)} key={i} className="border-b  hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
+                                                            {
+                                                                editCellId === work.id ? <InlineEdit /> : work.styleNo
+                                                            }
                                                         </div>
-                                                    )
-                                                }
+                                                    ))}
+                                                </div>
                                             </td>
-                                            <td>
-                                                {
-                                                    job.compositions.map((comp, i) =>
 
-                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="border-b py-1">
-                                                            {comp.workOrderQty - comp.greyReceived}
+                                            {/* MONTH */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {(job.workOrders || []).map((work, i) => (
+                                                        <div key={i} className="border-b hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
+                                                            {work.month} month
                                                         </div>
-                                                    )
-                                                }
+                                                    ))}
+                                                </div>
                                             </td>
-                                            <td>
-                                                {
-                                                    job.compositions.map((comp, i) =>
 
-                                                        <div onClick={() => handleEditRowData(comp.id)} key={i} className="text-pink-500 border-b py-1">
-                                                            {Number(comp.unitePrice) * Number(comp.greyReceived)}
+                                            {/* COMPOSITION */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                            {c.composition}
                                                         </div>
-                                                    )
-                                                }
+                                                    ))}
+                                                </div>
                                             </td>
+
+                                            {/* COLOR */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                            {c.color}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            {/* ORDER QTY */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                            {c.orderQty}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            {/* UNIT PRICE */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div onDoubleClick={() => inlineEditing(c.id)} key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                            {
+                                                                editCellId === c.id ? <InlineEdit
+                                                                    value={c.unitePrice}
+                                                                    fieldName="unitePrice"
+                                                                />
+                                                                    :
+                                                                    c.unitePrice
+                                                            }
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            {/* WORK ORDER QTY */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div
+                                                            key={i}
+                                                            className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25"
+                                                            onClick={() => handleEditRowData(c.id, c.id)}
+                                                        >
+                                                            {c.workOrderQty}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            {/* DELIVERY */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b">
+                                                            {c.totalYarnDelivery || 0}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            {/* SHORTAGE / EXCESS */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => {
+                                                        const diff =
+                                                            Number(c.workOrderQty || 0) -
+                                                            Number(c.totalYarnDelivery || 0);
+
+                                                        return (
+                                                            <div key={i} className="border-b">
+                                                                {diff < 0 ? diff : `(${diff})`} ex
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </td>
+
+                                            {/* GREY RECEIVED */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b">
+                                                            {c.totalYarnReturn} {/*  total yarn return */}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b">
+                                                            {c.greyReceived} {/*  total gray received */}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            {/* shor excess */}
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b text-pink-500">
+                                                            {Number(c.unitePrice || 0) * Number(c.greyReceived || 0)}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            <td className="border">
+                                                <div className="space-y-1">
+                                                    {compositions.map((c, i) => (
+                                                        <div key={i} className="border-b text-pink-500">
+                                                            {Number(c.unitePrice || 0) * Number(c.greyReceived || 0)}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+
                                         </tr>
                                     );
-
                                 })}
                             </tbody>
                         </table>

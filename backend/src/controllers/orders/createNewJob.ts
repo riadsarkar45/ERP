@@ -28,7 +28,7 @@ export const createNewJob = async (req: Request, res: Response) => {
         jobId = getJobNo?.id || null;
 
         if(jobId === null){
-            return res.status(400).send({ message: "Failed to create job", type: "error" })
+            return res.status(400).send({ message: "Job no is missing", type: "error" })
         }
 
         const workOrder = await prisma.workOrder.create(

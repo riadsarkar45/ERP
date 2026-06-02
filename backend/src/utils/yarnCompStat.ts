@@ -1,41 +1,54 @@
 import prisma from "../database/prismaClient/prisma";
 
-export const calculateYarnCompStat = (compositions: any[]) => {
-    return compositions.map(comp => ({
-        ...comp,
-        compositions: comp.compositions.map((c: any) => {
+export const calculateYarnCompStat = (orders: any[]) => {
+    return orders.map(order => ({
+        ...order,
 
-            const yarnDeliveries = c.deliveries.filter(
-                (delivery: any) => delivery.deliveryType === "Yarn Delivery"
-            );
+        workOrders: (order.workOrders || []).map((work: any) => ({
+            ...work,
 
-            const greyDeliveries = c.deliveries.filter(
-                (delivery: any) => delivery.deliveryType === "Grey Received"
-            );
+            compositions: (work.compositions || []).map((c: any) => {
 
-            const yarnReturns = c.deliveries.filter(
-                (delivery: any) => delivery.deliveryType === "Yarn Return"
-            );
+                const deliveries = c.deliveries || [];
 
-            const totalYarnDelivery = yarnDeliveries.reduce(
-                (sum: number, delivery: any) => sum + delivery.deliveryQty, 0
-            );
+                const yarnDeliveries = deliveries.filter(
+                    (d: any) => d.deliveryType === "Yarn Delivery"
+                );
 
-            const totalYarnReturn = yarnReturns.reduce(
-                (sum: number, delivery: any) => sum + delivery.deliveryQty, 0
-            );
+                const greyDeliveries = deliveries.filter(
+                    (d: any) => d.deliveryType === "Grey Received"
+                );
 
-            const greyReceived = greyDeliveries.reduce(
-                (sum: number, delivery: any) => sum + delivery.deliveryQty, 0
-            );
+                const yarnReturns = deliveries.filter(
+                    (d: any) => d.deliveryType === "Yarn Return"
+                );
 
-            return {
-                ...c,
-                totalYarnDelivery,
-                totalYarnReturn,
-                greyReceived
-            };
-        })
+                const totalYarnDelivery = yarnDeliveries.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
+                const totalYarnReturn = yarnReturns.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
+                const greyReceived = greyDeliveries.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
+                return {
+                    ...c,
+                    totalYarnDelivery,
+                    totalYarnReturn,
+                    greyReceived
+                };
+            })
+        }))
     }));
 };
 

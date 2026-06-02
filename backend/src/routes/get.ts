@@ -6,25 +6,26 @@ import { allAudits } from "../controllers/audit/allAudits";
 import { getAllJobs } from "../controllers/jobs/allJobs";
 import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
 import { deliveryDetail } from "../controllers/deliveries/deliveries";
+import { apiLimiter } from "../middleware/apiLimiter";
 
 const getRouters = express.Router();
 
 console.log("getRouters loaded");
 
-getRouters.get("/work-order/:orderType", getAllOrders);
+getRouters.get("/work-order/:orderType", apiLimiter, getAllOrders);
 
-getRouters.get("/dashboard-detail", dashboardController);
+getRouters.get("/dashboard-detail", apiLimiter, dashboardController);
 
-getRouters.get("/style-requirement", getOrderSummaryByStyle);
+getRouters.get("/style-requirement", apiLimiter, getOrderSummaryByStyle);
 
-getRouters.get("/audits", allAudits);
+getRouters.get("/audits", apiLimiter, allAudits);
 
-getRouters.get("/jobs", getAllJobs);
+getRouters.get("/jobs", apiLimiter, getAllJobs);
 
-getRouters.get("/styles", styleRequirements);
+getRouters.get("/styles", apiLimiter, styleRequirements);
 
-getRouters.get("/styles/:jobNo", styleRequirements);
+getRouters.get("/styles/:jobNo", apiLimiter, styleRequirements);
 
-getRouters.get("/deliveries/:id", deliveryDetail);
+getRouters.get("/deliveries/:id", apiLimiter, deliveryDetail);
 
 export default getRouters;
