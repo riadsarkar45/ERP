@@ -9,6 +9,7 @@ import { initSocket } from "./middleware/socket.io/socket";
 import { trackRequests } from "./middleware/rateLimiter/trackRequest";
 const app = express();
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
+app.set('trust proxy', 1); // Trust the first proxy (if behind a reverse proxy)
 app.use(cors(
   {
     origin: corsOrigins,
