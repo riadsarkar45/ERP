@@ -7,7 +7,7 @@ const SocketContext = createContext(null);
 
 export const SocketProvider = ({ children }) => {
   const [socket] = useState(() => 
-    io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000', {
+    io(import.meta.env.VITE_BACKEND_URL || 'https://erp-three-pied.vercel.app', {
       withCredentials: true,
     })
   );
