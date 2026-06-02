@@ -5,6 +5,8 @@ import cors from "cors";
 import router from "./routes/post";
 import getRouters from "./routes/get";
 import updateRouters from "./routes/update";
+import { initSocket } from "./middleware/socket.io/socket";
+import { trackRequests } from "./middleware/rateLimiter/trackRequest";
 const app = express();
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
 app.use(cors(
@@ -16,12 +18,16 @@ app.use(cors(
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello");
 });
+app.use(trackRequests);
 
 app.use(express.json());
 app.use("/api", router)
 app.use("/api", getRouters)
 app.use("/api", updateRouters)
 
+initSocket(app.listen(3000, () => {
+  console.log("Server is running on port 3000");
+}));
 
 process.on("SIGINT", async () => {
   await disconnectDatabase();

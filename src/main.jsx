@@ -4,9 +4,12 @@ import './index.css'
 import App from './App.jsx'
 import { RouterProvider } from 'react-router-dom'
 import routers from './routes/Routes.jsx'
+import { SocketProvider } from './hooks/socket.io/socketContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <RouterProvider router={routers} />
+    <SocketProvider>
+      <RouterProvider router={routers} />
+    </SocketProvider>
   </StrictMode>,
 )

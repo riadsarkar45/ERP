@@ -14,6 +14,7 @@ import AllAudits from "../dashboard/pages/audit/AllAudits";
 import Jobs from "../dashboard/pages/jobs/Jobs";
 import Cutting from "../dashboard/pages/cutting/DailyFabricCutting";
 import DailyFabricCutting from "../dashboard/pages/cutting/DailyFabricCutting";
+import ApiMonitoring from "../dashboard/pages/monitoring/ApiMonitoring";
 
 const routers = createBrowserRouter([
     {
@@ -75,6 +76,10 @@ const routers = createBrowserRouter([
                     {
                         path: "cutting",
                         element: <DailyFabricCutting />
+                    },
+                    {
+                        path: "monitoring",
+                        element: <ApiMonitoring />
                     },
                 ]
             }

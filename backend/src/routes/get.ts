@@ -6,7 +6,7 @@ import { allAudits } from "../controllers/audit/allAudits";
 import { getAllJobs } from "../controllers/jobs/allJobs";
 import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
 import { deliveryDetail } from "../controllers/deliveries/deliveries";
-import { apiLimiter } from "../middleware/apiLimiter";
+import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 
 const getRouters = express.Router();
 
