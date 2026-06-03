@@ -7,6 +7,7 @@ import getRouters from "./routes/get";
 import updateRouters from "./routes/update";
 import { initSocket } from "./middleware/socket.io/socket";
 import { trackRequests } from "./middleware/rateLimiter/trackRequest";
+import { connectRedis } from "./lib/redis";
 const app = express();
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
 app.set('trust proxy', 1); // Trust the first proxy (if behind a reverse proxy)
@@ -22,13 +23,9 @@ app.get("/", (req: Request, res: Response) => {
 app.use(trackRequests);
 
 app.use(express.json());
-app.use("/api", router)
-app.use("/api", getRouters)
-app.use("/api", updateRouters)
 
-initSocket(app.listen(3000, () => {
-  console.log("Server is running on port 3000");
-}));
+
+
 
 process.on("SIGINT", async () => {
   await disconnectDatabase();
@@ -43,9 +40,15 @@ const PORT = 3000;
 
 const start = async () => {
   await connectDatabase();
-  app.listen(PORT, () => {
+  await connectRedis();
+
+  app.use("/api", router)
+  app.use("/api", getRouters)
+  app.use("/api", updateRouters)
+  const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
+  initSocket(server);
 };
 
 start();
