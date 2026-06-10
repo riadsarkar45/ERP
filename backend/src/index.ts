@@ -7,7 +7,6 @@ import getRouters from "./routes/get";
 import updateRouters from "./routes/update";
 import { initSocket } from "./middleware/socket.io/socket";
 import { trackRequests } from "./middleware/rateLimiter/trackRequest";
-import { connectRedis } from "./lib/redis";
 const app = express();
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
 app.set('trust proxy', 1); // Trust the first proxy (if behind a reverse proxy)
@@ -40,7 +39,6 @@ const PORT = 3000;
 
 const start = async () => {
   await connectDatabase();
-  await connectRedis();
 
   app.use("/api", router)
   app.use("/api", getRouters)

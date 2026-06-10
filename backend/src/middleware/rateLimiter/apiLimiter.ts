@@ -1,6 +1,4 @@
 import rateLimit from "express-rate-limit";
-import { RedisStore } from "rate-limit-redis";
-import { redisClient } from "../../lib/redis";
 
 export const apiLimiter = () => {
   return rateLimit({
@@ -10,10 +8,7 @@ export const apiLimiter = () => {
     standardHeaders: "draft-8",
     legacyHeaders: false,
 
-    store: new RedisStore({
-      sendCommand: (...args: string[]) =>
-        redisClient.sendCommand(args),
-    }),
+   
 
     handler: (req, res) => {
       const resetTime = (req as any).rateLimit?.resetTime as Date | undefined;
