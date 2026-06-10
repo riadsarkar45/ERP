@@ -8,7 +8,6 @@ import updateRouters from "./routes/update";
 import { initSocket } from "./middleware/socket.io/socket";
 import { trackRequests } from "./middleware/rateLimiter/trackRequest";
 import { errorHandler } from "./middleware/errorHandler";
-import { connectRedis } from "./lib/redis";
 
 const app = express();
 
@@ -43,7 +42,6 @@ process.on("SIGTERM", async () => {
 const start = async () => {
   try {
     await connectDatabase();
-    await connectRedis();
 
     app.use("/api", router);
     app.use("/api", getRouters);
