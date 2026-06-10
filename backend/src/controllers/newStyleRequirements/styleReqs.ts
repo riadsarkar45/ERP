@@ -1,15 +1,13 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 import { calculateOrdersForStyleSummary } from "../../utils/yarnCompStat";
-export const styleRequirements = async (req: Request, res: Response) => {
-    const { jobNo } = req.params as { jobNo: string | undefined }; const whereClause: any = {};
+import { successResponse, errorResponse } from "../../utils/responseHandler";
 
-    if (jobNo) {
-        console.log(jobNo);
-        whereClause.jobNo = jobNo;
-    }
-    const styles = await prisma.styleRequirement.findMany(
-        {
+export const styleRequirements = async (req: Request, res: Response) => {
+    const { jobNo } = req.params as { jobNo: string | undefined };
+
+    try {
+        const styles = await prisma.styleRequirement.findMany({
             where: jobNo ? { jobNo } : {},
             select: {
                 salesContact: true,
@@ -50,20 +48,19 @@ export const styleRequirements = async (req: Request, res: Response) => {
                                 },
                             }
                         },
-
                     }
                 }
-
-
-
             }
+        });
+
+        if (styles.length === 0) {
+            return res.status(200).json(successResponse([], "No style requirements found"));
         }
-    )
 
-    if(styles.length === 0){
-        return res.status(404).send({ message: "No style requirements found", type: "error" })
+        const summaryData = calculateOrdersForStyleSummary(styles);
+        res.status(200).json(successResponse(summaryData, "Style requirements fetched successfully"));
+    } catch (error) {
+        console.error("StyleRequirements error:", error);
+        res.status(500).json(errorResponse("Failed to fetch style requirements"));
     }
-     const summaryData = calculateOrdersForStyleSummary(styles);
-
-    res.status(200).send({ data: summaryData, type: "success" })
-}
+};

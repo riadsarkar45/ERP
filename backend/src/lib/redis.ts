@@ -6,8 +6,16 @@ export const redisClient = createClient({
 });
 
 redisClient.on("error", (err) => console.error("Redis Client Error:", err));
-redisClient.on("connect", () => console.log("Redis connected"));
+redisClient.on("connect", () => console.log("✅ Redis connected"));
+redisClient.on("ready", () => console.log("✅ Redis ready"));
 
 export const connectRedis = async () => {
-  await redisClient.connect();
+  try {
+    await redisClient.connect();
+  } catch (error) {
+    console.error("Failed to connect Redis:", error);
+    console.warn("⚠️ Redis connection failed. Rate limiting will use in-memory store.");
+  }
 };
+
+export const isRedisConnected = () => redisClient.isOpen;

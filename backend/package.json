@@ -4,6 +4,7 @@
   "main": "index.js",
   "dependencies": {
     "@prisma/client": "^6.19.2",
+    "zod": "^3.22.0",
     "accepts": "^2.0.0",
     "body-parser": "^2.2.2",
     "bytes": "^3.1.2",
@@ -95,6 +96,9 @@
     "xtend": "^4.0.2"
   },
   "scripts": {
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
