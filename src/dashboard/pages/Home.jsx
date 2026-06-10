@@ -126,41 +126,6 @@ const Home = () => {
                 })}
             </div>
 
-            {/* Factories Section */}
-            {/* <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-800 mb-3">Factories</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                    {factories.map((factory, index) => (
-                        <Link key={index} to={`/dashboard/factory-wise-report/${factory}`}>
-                            <button
-                                className="w-full bg-primary-50 text-gray-700 py-3 px-3 border border-gray-200 hover:border-gray-200 hover:bg-primary-100 hover:text-primary-600 rounded-lg transition-all text-sm font-medium text-center"
-                            >
-                                {factory}
-                            </button>
-                        </Link>
-                    ))}
-                </div>
-            </div> */}
-
-            {/* Recent Orders Section */}
-            {/* <div>
-                <h3 className="text-base font-semibold text-gray-800 mb-3">Recent Orders</h3>
-                <Table
-                    columns={[
-                        { header: "Sr#", accessor: "sr", render: (row) => <span className="font-medium text-gray-900">{row.sr}</span> },
-                        { header: "Factory Name", accessor: "factory" },
-                        { header: "Yarn Composition", accessor: "yarn" },
-                        { header: "Price", accessor: "price" },
-                        { header: "Qty", accessor: "qty" }
-                    ]}
-                    data={[
-                        { sr: 1, factory: "That's It Knit", yarn: "100% Cotton 2/32", price: "$2,999", qty: "231" },
-                        { sr: 2, factory: "Fair Apparels Ltd", yarn: "95% CTN 5% ELASTANE", price: "$3,499", qty: "450" },
-                        { sr: 3, factory: "Tj Sweaters Ltd", yarn: "100% Polyester", price: "$1,899", qty: "320" }
-                    ]}
-                    emptyMessage="No recent orders"
-                />
-            </div> */}
         </DashboardLayout>
     );
 };
