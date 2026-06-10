@@ -9,5 +9,5 @@ export const dashboardController = async (req: Request, res: Response) => {
             }
         }
     )
-    console.log(jobs);
+    res.send(jobs)
 }
