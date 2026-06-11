@@ -19,8 +19,8 @@ const Home = () => {
         const countOrders = async () => {
             const res = await axiosPublic.get("api/dashboard-detail")
             console.log(res.data);
-            setAudits({ audits: res?.data?.audits, upComing: res?.data?.upComing, pending: res?.data?.pending });
-            setCountOrders(res?.data?.data);
+            // setAudits({ audits: res?.data?.audits, upComing: res?.data?.upComing, pending: res?.data?.pending });
+            // setCountOrders(res?.data?.data);
         }
         countOrders();
     }, [axiosPublic])
