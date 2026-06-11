@@ -1,5 +1,5 @@
 export const jobsByType = (jobs: any) => {
-    if(!jobs || jobs.length === 0) {
+    if (!jobs || jobs.length === 0) {
         return {};
     }
     const jobCountByType: { [key: string]: number } = {};
@@ -12,4 +12,6 @@ export const jobsByType = (jobs: any) => {
             jobCountByType[orderType] = 1;
         }
     });
-}
+
+    return jobCountByType;
+};
