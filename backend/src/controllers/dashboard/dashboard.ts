@@ -5,7 +5,7 @@ import { jobsByType } from "../../helpers/dashboard-data/dashboard";
 export const dashboardController = async (req: Request, res: Response) => {
     try {
         const jobs = await prisma.workOrder.findMany({
-            select: { orderType: true },
+            select: { orderType: true, workOrderPlaceDate: true },
         });
         const jobsType = jobsByType(jobs);
         return res.json(jobsType);
