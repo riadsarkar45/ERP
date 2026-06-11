@@ -1,81 +1,69 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 import { checkDataExist } from "../../utils/checkIfDataExist";
-import { successResponse, errorResponse, validationError } from "../../utils/responseHandler";
-
 export const createNewJob = async (req: Request, res: Response) => {
+    // res.send({ message: "request received" })
     const {
         compositions,
-        orderType,
-        jobNo,
-        workOrderNo,
-        workOrderPlaceDate,
-        month,
-        styleNo,
-        lotNo
+        orderType
     } = req.body as {
         compositions: { composition: string; color: string; workOrderQty: string, orderQty: string, unitPrice: string, }[];
         orderType: string;
-        jobNo: string;
-        workOrderNo: string;
-        workOrderPlaceDate: string;
-        month: string;
-        styleNo: string;
-        lotNo: string;
     };
 
+    const findStyleNo = await prisma.styleRequirement.findUnique(
+        {
+            where: { styleNo: req.body.styleNo }
+        },
+    )
+
+    if(!findStyleNo){
+        return res.status(400).send({ message: "Style No not found", type: "error" })
+    }
+
     try {
-        if (!jobNo || !workOrderNo || !styleNo) {
-            return res.status(400).json(validationError("Job number, work order number, and style number are required"));
+        let jobId = null;
+        const getJobNo  = await checkDataExist(req.body.jobNo);
+        
+        jobId = getJobNo?.id || null;
+
+        if(jobId === null){
+            return res.status(400).send({ message: "Job no is missing", type: "error" })
         }
 
-        const findStyleNo = await prisma.styleRequirement.findUnique({
-            where: { styleNo: styleNo }
-        });
+        const workOrder = await prisma.workOrder.create(
+            {
+                data: {
+                    workOrderPlaceDate: req.body.workOrderPlaceDate,
+                    workOrderNo: req.body.workOrderNo,
+                    month: req.body.month,
+                    styleNo: req.body.styleNo,
+                    lotNo: req.body.lotNo,
+                    jobNo: req.body.jobNo,
+                    orderType: orderType,
+                    jobId: jobId,
+                    styleRequirementId: findStyleNo.id,
+                    compositions: {
+                        createMany: {
+                            data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({
+                                composition,
+                                color,
+                                orderQty: Number(orderQty),
+                                workOrderQty: Number(workOrderQty),
+                                unitePrice: Number(unitPrice),
 
-        if (!findStyleNo) {
-            return res.status(400).json(validationError("Style number not found"));
-        }
-
-        const getJobNo = await checkDataExist(jobNo);
-        const jobId = getJobNo?.id || null;
-
-        if (jobId === null) {
-            return res.status(400).json(validationError("Failed to create or fetch job"));
-        }
-
-        const workOrder = await prisma.workOrder.create({
-            data: {
-                workOrderPlaceDate: workOrderPlaceDate || new Date().toISOString(),
-                workOrderNo,
-                month,
-                styleNo,
-                lotNo,
-                jobNo,
-                orderType,
-                jobId,
-                styleRequirementId: findStyleNo.id,
-                compositions: {
-                    createMany: {
-                        data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({
-                            composition,
-                            color,
-                            orderQty: Number(orderQty),
-                            workOrderQty: Number(workOrderQty),
-                            unitePrice: Number(unitPrice),
-                        }))
+                            }))
+                        }
                     }
                 }
             }
-        });
-
+        )
         if (!workOrder) {
-            return res.status(500).json(errorResponse("Failed to save work order"));
+            return res.status(500).send({ message: "Failed to save data", type: "error" })
         }
-
-        res.status(201).json(successResponse(workOrder, "Work order created successfully"));
-    } catch (error) {
-        console.error("CreateNewJob error:", error);
-        res.status(500).json(errorResponse("Failed to create job"));
+        return res.status(201).send({ message: "Data saved", type: "success" })
+    } catch (e) {
+        console.log(e);
     }
-};
+
+}
