@@ -2,15 +2,19 @@ export const jobsByType = (jobs: any) => {
     if (!jobs || jobs.length === 0) {
         return {};
     }
-    const jobCountByType: { [key: string]: number } = {};
+
+    const jobCountByType: { [type: string]: { [date: string]: number } } = {};
 
     jobs.forEach((job: any) => {
         const orderType = job.orderType;
-        if (jobCountByType[orderType]) {
-            jobCountByType[orderType]++;
-        } else {
-            jobCountByType[orderType] = 1;
+        const date = new Date(job.workOrderPlaceDate);
+        const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; // "2025-01"
+
+        if (!jobCountByType[orderType]) {
+            jobCountByType[orderType] = {};
         }
+
+        jobCountByType[orderType][dateKey] = (jobCountByType[orderType][dateKey] ?? 0) + 1;
     });
 
     return jobCountByType;
