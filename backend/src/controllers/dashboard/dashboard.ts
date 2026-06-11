@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
+import { jobsByType } from "../../helpers/dashboard-data/dashboard";
 
 export const dashboardController = async (req: Request, res: Response) => {
     const jobs = await prisma.workOrder.findMany(
@@ -9,5 +10,6 @@ export const dashboardController = async (req: Request, res: Response) => {
             }
         }
     )
-    res.send(jobs)
+    const jobsType = jobsByType(jobs);
+    return res.json( jobsType );
 }
