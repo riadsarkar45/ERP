@@ -87,44 +87,8 @@ const Home = () => {
 
     return (
         <DashboardLayout title="Dashboard">
-            {/* AUDIT STATS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {audits.map((stat, index) => {
-                    const Icon = stat.icon;
-                    return (
-                        <div key={index} className={`${stat.bgOpacity} rounded-lg border ${stat.borderOpacity} px-6 py-8`}>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                                    <p className={`text-xl font-normal ${stat.color}`}>{stat.value}</p>
-                                </div>
-                                <div className={`${stat.bg} ${stat.color} p-3 rounded-lg`}>
-                                    <Icon size={24} />
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {stats.map((stat, index) => {
-                    const Icon = stat.icon;
-                    return (
-                        <div key={index} className={`${stat.bgOpacity} rounded-lg border ${stat.borderOpacity} px-6 py-8`}>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                                    <p className={`text-xl font-normal ${stat.color}`}>{stat.value}</p>
-                                </div>
-                                <div className={`${stat.bg} ${stat.color} p-3 rounded-lg`}>
-                                    <Icon size={24} />
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+           
+            
 
         </DashboardLayout>
     );

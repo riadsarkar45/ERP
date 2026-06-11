@@ -11,5 +11,6 @@ export const dashboardController = async (req: Request, res: Response) => {
         }
     )
     const jobsType = jobsByType(jobs);
+    console.log(jobsType, "jobType");
     return res.json( jobsType );
 }
