@@ -1,95 +1,185 @@
-import { Link } from "react-router-dom";
-import DashboardLayout from "../../components/DashboardLayout";
-import Table from "../../components/Table";
-import { Package, Palette, FileText, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
+import DashboardLayout from "../../components/DashboardLayout";
 import useAxiosPublic from "../../hooks/Axios";
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    ArcElement,
+    Tooltip,
+    Legend,
+} from "chart.js";
+import { Bar, Pie } from "react-chartjs-2";
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+
+const TYPE_COLORS = [
+    { bg: "#378ADD", border: "#185FA5" },
+    { bg: "#1D9E75", border: "#0F6E56" },
+    { bg: "#D85A30", border: "#993C1D" },
+    { bg: "#7F77DD", border: "#534AB7" },
+    { bg: "#BA7517", border: "#854F0B" },
+];
 
 const Home = () => {
-    const [countOrders, setCountOrders] = useState({})
     const axiosPublic = useAxiosPublic();
-    const [aud, setAudits] = useState({
-        audits: 0,
-        upComing: 0,
-        pending: 0,
-
-    })
+    const [data, setData] = useState({});
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const countOrders = async () => {
-            const res = await axiosPublic.get("api/dashboard-detail")
-            console.log(res.data);
-            // setAudits({ audits: res?.data?.audits, upComing: res?.data?.upComing, pending: res?.data?.pending });
-            // setCountOrders(res?.data?.data);
-        }
-        countOrders();
-    }, [axiosPublic])
-    const stats = [
-        {
-            label: "Knitting Order",
-            value: countOrders.knittingOrder || 0,
-            icon: Package,
-            color: "text-primary-500",
-            bg: "bg-primary-50",
-            borderColor: "border-primary-500",
-            bgOpacity: "bg-primary-500/10",
-            borderOpacity: "border-primary-500/10"
-        },
+        const fetchData = async () => {
+            try {
+                const res = await axiosPublic.get("api/dashboard-detail");
+                setData(res.data);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [axiosPublic]);
 
-        {
-            label: "Fabric Booking",
-            value: countOrders.fabricBookingOrder || 0,
-            icon: Palette,
-            color: "text-blue-600",
-            bg: "bg-blue-50",
-            borderColor: "border-blue-600",
-            bgOpacity: "bg-blue-600/10",
-            borderOpacity: "border-blue-600/10"
-        },
-        {
-            label: "Yarn Dye Order",
-            value: countOrders.yarnDyeingOrder || 0,
-            icon: TrendingUp,
-            color: "text-green-600",
-            bg: "bg-green-50",
-            borderColor: "border-green-600",
-            bgOpacity: "bg-green-600/10",
-            borderOpacity: "border-green-600/10"
-        },
-        {
-            label: "AOP Order",
-            value: countOrders.aopOrder || 0,
-            icon: FileText,
-            color: "text-purple-600",
-            bg: "bg-purple-50",
-            borderColor: "border-purple-600",
-            bgOpacity: "bg-purple-600/10",
-            borderOpacity: "border-purple-600/10"
-        },
-    ];
-    const audits = [
-        { label: "Completed Audits", value: aud?.audits || 0, icon: Package, color: "text-primary-500", bg: "bg-primary-50", borderColor: "border-primary-500", bgOpacity: "bg-primary-500/10", borderOpacity: "border-primary-500/10" },
-        { label: "Pending Audits", value: aud?.pending || 0, icon: Palette, color: "text-blue-600", bg: "bg-blue-50", borderColor: "border-blue-600", bgOpacity: "bg-blue-600/10", borderOpacity: "border-blue-600/10" },
-        { label: "Upcoming Audits", value: aud?.upComing || 0, icon: TrendingUp, color: "text-green-600", bg: "bg-green-50", borderColor: "border-green-600", bgOpacity: "bg-green-600/10", borderOpacity: "border-green-600/10" },
-    ];
+    // ── Bar chart (jobsType) ──────────────────────────────────────────
+    const types = Object.keys(data.jobsType || {});
+    const allMonths = [
+        ...new Set(types.flatMap((t) => Object.keys((data.jobsType || {})[t]))),
+    ].sort();
 
-    // const factories = [
-    //     "That's It Knit",
-    //     "Fair Apparels Ltd",
-    //     "Tj Sweaters Ltd",
-    //     "Winter Dress Ltd",
-    //     "Optimum Sourcing",
-    //     "Styletex Ltd",
-    //     "Fashion Knitwear",
-    //     "Textile Solutions",
-    //     "Global Knits"
-    // ];
+    const barData = {
+        labels: allMonths,
+        datasets: types.map((type, i) => ({
+            label: type,
+            data: allMonths.map((m) => (data.jobsType[type][m] ?? 0)),
+            backgroundColor: TYPE_COLORS[i % TYPE_COLORS.length].bg + "CC",
+            borderColor: TYPE_COLORS[i % TYPE_COLORS.length].border,
+            borderWidth: 1.5,
+            borderRadius: 4,
+        })),
+    };
+
+    const barOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y} jobs`,
+                },
+            },
+        },
+        scales: {
+            x: {
+                ticks: { autoSkip: false, color: "#888780" },
+                grid: { color: "rgba(136,135,128,0.12)" },
+            },
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1,
+                    color: "#888780",
+                    callback: (v) => (Number.isInteger(v) ? v : null),
+                },
+                grid: { color: "rgba(136,135,128,0.12)" },
+            },
+        },
+    };
+
+    // ── Pie chart (jobsDate) ──────────────────────────────────────────
+    const dateLabels = Object.keys(data.jobsDate || {});
+    const dateValues = Object.values(data.jobsDate || {});
+
+    const pieData = {
+        labels: dateLabels,
+        datasets: [
+            {
+                data: dateValues,
+                backgroundColor: TYPE_COLORS.map((c) => c.bg + "CC"),
+                borderColor: TYPE_COLORS.map((c) => c.border),
+                borderWidth: 1.5,
+            },
+        ],
+    };
+
+    const pieOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: "right",
+                labels: { color: "#888780", font: { size: 12 } },
+            },
+            tooltip: {
+                callbacks: {
+                    label: (ctx) => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} qty`,
+                },
+            },
+        },
+    };
 
     return (
         <DashboardLayout title="Dashboard">
-           
-            
+            <div className="p-6">
+                <div className="grid grid-cols-2 gap-6">
 
+                    {/* ── Bar chart card ── */}
+                    <div className="bg-white border border-slate-100 rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-medium text-slate-700">Jobs by type</p>
+                            <div className="flex flex-wrap gap-3">
+                                {types.map((type, i) => (
+                                    <span
+                                        key={type}
+                                        className="flex items-center gap-1.5 text-xs text-slate-500"
+                                    >
+                                        <span
+                                            className="inline-block w-2.5 h-2.5 rounded-sm"
+                                            style={{ background: TYPE_COLORS[i % TYPE_COLORS.length].bg }}
+                                        />
+                                        {type}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+
+                        {loading ? (
+                            <div className="h-64 flex items-center justify-center text-slate-400 text-sm">
+                                Loading…
+                            </div>
+                        ) : allMonths.length === 0 ? (
+                            <div className="h-64 flex items-center justify-center text-slate-400 text-sm">
+                                No data yet
+                            </div>
+                        ) : (
+                            <div style={{ height: 280 }}>
+                                <Bar data={barData} options={barOptions} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Pie chart card ── */}
+                    <div className="bg-white border border-slate-100 rounded-xl p-5">
+                        <p className="text-sm font-medium text-slate-700 mb-4">
+                            Quantity by date
+                        </p>
+
+                        {loading ? (
+                            <div className="h-64 flex items-center justify-center text-slate-400 text-sm">
+                                Loading…
+                            </div>
+                        ) : dateLabels.length === 0 ? (
+                            <div className="h-64 flex items-center justify-center text-slate-400 text-sm">
+                                No data yet
+                            </div>
+                        ) : (
+                            <div style={{ height: 280 }}>
+                                <Pie data={pieData} options={pieOptions} />
+                            </div>
+                        )}
+                    </div>
+
+                </div>
+            </div>
         </DashboardLayout>
     );
 };
