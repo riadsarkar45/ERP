@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
-import { Loader2, Save, X } from "lucide-react";
+import { Loader2, Save, X, Plus } from "lucide-react";
 import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
 import useAxiosPublic from "../../hooks/Axios";
 import { useParams } from "react-router-dom";
+
+const defaultRow = () => ({
+    id: Date.now() + Math.random(),
+    color: '',
+});
 
 const NewOrder = () => {
     const [showToast, setShowToast] = useState(false);
@@ -13,7 +18,9 @@ const NewOrder = () => {
     const [isClicked, setIsClicked] = useState(false);
     const { jobNumber } = useParams();
     const [styleData, setStyleData] = useState([]);
+    const [yarnDyeColorRows, setYarnDyeColorRows] = useState([defaultRow()]);
     const [rows, setRows] = useState([]);
+    const [orderType, setOrderType] = useState("");
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
         workOrderNo: "",
@@ -29,28 +36,40 @@ const NewOrder = () => {
         lotNo: "",
         unitPrice: ""
     });
+
     const axios = useAxiosPublic();
-    console.log(formData);
+
     useEffect(() => {
         const styleReq = async () => {
             if (!jobNumber) return;
             const req = await axios.get(`/api/styles/${jobNumber}`);
             setStyleData(req.data.data);
-            // initialize workOrderQty for each row
             setRows(req.data.data[0]?.rows.map(row => ({
                 ...row,
                 workOrderQty: "",
+                yarnColors: [{ color: "", qty: "" }],
             })) || []);
             setFormData(prev => ({
                 ...prev,
                 jobNo: req.data.data[0]?.jobNo || "",
-            }))
+            }));
         };
         styleReq();
     }, [jobNumber]);
-        console.log(rows, "rows");
+
     const handleChange = (e) => {
         const { name, value } = e.target;
+
+        if (name === "orderType") {
+            setOrderType(value);
+            if (value === "yarnDyeingOrder") {
+                setRows(prev => prev.map(row => ({
+                    ...row,
+                    yarnColors: row.yarnColors ?? [{ color: "", qty: "" }],
+                })));
+            }
+        }
+
         setFormData(prev => ({
             ...prev,
             [name]: value
@@ -67,6 +86,38 @@ const NewOrder = () => {
         setRows(prev => prev.filter((_, i) => i !== index));
     };
 
+    const handleAddYarnColor = (rowIndex) => {
+        setRows(prev => prev.map((row, i) =>
+            i === rowIndex
+                ? { ...row, yarnColors: [...(row.yarnColors ?? [{ color: "", qty: "" }]), { color: "", qty: "" }] }
+                : row
+        ));
+    };
+
+    const handleYarnColorChange = (rowIndex, colorIndex, field, value) => {
+        setRows(prev => prev.map((row, i) =>
+            i === rowIndex
+                ? {
+                    ...row,
+                    yarnColors: (row.yarnColors ?? [{ color: "", qty: "" }]).map((c, ci) =>
+                        ci === colorIndex ? { ...c, [field]: value } : c
+                    )
+                }
+                : row
+        ));
+    };
+
+    const handleRemoveYarnColor = (rowIndex, colorIndex) => {
+        setRows(prev => prev.map((row, i) =>
+            i === rowIndex
+                ? {
+                    ...row,
+                    yarnColors: (row.yarnColors ?? [{ color: "", qty: "" }]).filter((_, ci) => ci !== colorIndex)
+                }
+                : row
+        ));
+    };
+
     const showNotification = (message, type = 'success') => {
         setToastMessage(message);
         setToastType(type);
@@ -75,7 +126,6 @@ const NewOrder = () => {
 
     const handleSubmit = async (styleNo) => {
         setIsClicked(true);
-
         try {
             const payload = {
                 ...formData,
@@ -85,11 +135,10 @@ const NewOrder = () => {
                     color: row.color,
                     orderQty: row.orderQty,
                     workOrderQty: row.workOrderQty,
-                    unitPrice: row.unitPrice
+                    unitPrice: row.unitPrice,
+                    ...(orderType === "yarnDyeingOrder" && { yarnColors: row.yarnColors }),
                 }))
             };
-
-            console.log(payload);
 
             const res = await axios.post("/api/create-job", payload);
             if (res.data.type === "success") {
@@ -103,8 +152,8 @@ const NewOrder = () => {
         }
     };
 
-    const dyeingOrderType = ["knittingOrder", "aopOrder", "fabricBookingOrder", "masterDyeingOrder", "yarnDyeingOrder"];
-    console.log(formData, "formData");
+    const dyeingOrderType = ["knittingOrder", "aopOrder", "dyeingOrder", "yarnDyeingOrder"];
+
     return (
         <DashboardLayout title="Add New Order">
             {showToast && (
@@ -180,43 +229,90 @@ const NewOrder = () => {
 
                         {/* Dynamic Rows */}
                         {rows.map((styleRow, index) => (
-                            <div key={index} className="grid grid-cols-6 gap-4 items-center">
-                                <Input
-                                    label={`Composition ${index + 1}`}
-                                    readOnly
-                                    value={styleRow.composition}
-                                />
-                                <Input
-                                    label={`Color ${index + 1}`}
-                                    readOnly
-                                    value={styleRow.color}
-                                />
-                                <Input
-                                    label={`Order Qty ${index + 1}`}
-                                    readOnly
-                                    value={styleRow.orderQty}
-                                />
-                                <Input
-                                    label={`Price Per Kg ${index + 1}`}
-                                    value={styleRow.unitPrice}  // ✅ per-row value
-                                    onChange={(e) => handleRowChange(index, "unitPrice", e.target.value)} // ✅ per-row handler
-                                    required
-                                    placeholder="Unite Price"
-                                />
-                                <Input
-                                    label={`Work Order Qty ${index + 1}`}
-                                    value={styleRow.workOrderQty}  // ✅ per-row value
-                                    onChange={(e) => handleRowChange(index, "workOrderQty", e.target.value)} // ✅ per-row handler
-                                    required
-                                    placeholder="Work Order Qty"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => handleRemoveRow(index)}
-                                    className="flex items-center justify-center gap-1 px-4 py-2.5 bg-red-500 text-white font-medium rounded-md hover:bg-red-600 transition-all duration-200"
-                                >
-                                    <X size={16} />
-                                </button>
+                            <div key={index} className="space-y-2">
+                                <div className={`grid ${orderType === "yarnDyeingOrder" ? 'grid-cols-5' : 'grid-cols-6'} gap-4 items-end`}>
+                                    <Input
+                                        label={`Composition ${index + 1}`}
+                                        readOnly
+                                        value={styleRow.composition}
+                                    />
+                                    <Input
+                                        label={`Color ${index + 1}`}
+                                        readOnly
+                                        value={styleRow.color}
+                                    />
+                                    <Input
+                                        label={`Order Qty ${index + 1}`}
+                                        readOnly
+                                        value={styleRow.orderQty}
+                                    />
+                                    <Input
+                                        label={`Price Per Kg ${index + 1}`}
+                                        value={styleRow.unitPrice}
+                                        onChange={(e) => handleRowChange(index, "unitPrice", e.target.value)}
+                                        required
+                                        placeholder="Unit Price"
+                                    />
+                                    {
+                                        orderType === "yarnDyeingOrder" ? " " : <Input
+                                            label={`Work Order Qty ${index + 1}`}
+                                            value={styleRow.workOrderQty}
+                                            onChange={(e) => handleRowChange(index, "workOrderQty", e.target.value)}
+                                            required
+                                            placeholder="Work Order Qty"
+                                        />
+                                    }
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveRow(index)}
+                                        className="flex items-center justify-center gap-1 px-4 py-2.5 bg-red-500 text-white font-medium rounded-md hover:bg-red-600 transition-all duration-200"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                {/* Yarn Color sub-rows — only for yarnDyeingOrder */}
+                                {orderType === "yarnDyeingOrder" && (
+                                    <div className="ml-4 pl-4 border-l-2 border-blue-200 space-y-2">
+                                        {(styleRow.yarnColors ?? [{ color: "", qty: "" }]).map((yarnItem, ci) => (
+                                            <div key={ci} className="flex items-end gap-3">
+                                                <div className="w-48">
+                                                    <Input
+                                                        label={ci === 0 ? `Booking Color ${index + 1}` : ""}
+                                                        placeholder="Yarn booking color"
+                                                        value={yarnItem.color}
+                                                        onChange={(e) => handleYarnColorChange(index, ci, "color", e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="w-36">
+                                                    <Input
+                                                        label={ci === 0 ? `Qty ${index + 1}` : ""}
+                                                        placeholder="Qty"
+                                                        value={yarnItem.qty}
+                                                        onChange={(e) => handleYarnColorChange(index, ci, "qty", e.target.value)}
+                                                    />
+                                                </div>
+                                                {(styleRow.yarnColors ?? []).length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveYarnColor(index, ci)}
+                                                        className="flex items-center justify-center px-2.5 py-2.5 bg-red-100 text-red-600 rounded-md hover:bg-red-200 transition-all duration-200"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAddYarnColor(index)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 transition-all duration-200"
+                                        >
+                                            <Plus size={14} />
+                                            Add Color
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))}
 

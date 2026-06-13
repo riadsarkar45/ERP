@@ -15,6 +15,7 @@ import Jobs from "../dashboard/pages/jobs/Jobs";
 import Cutting from "../dashboard/pages/cutting/DailyFabricCutting";
 import DailyFabricCutting from "../dashboard/pages/cutting/DailyFabricCutting";
 import ApiMonitoring from "../dashboard/pages/monitoring/ApiMonitoring";
+import DyeingOrders from "../dashboard/pages/DyeingOrders";
 
 const routers = createBrowserRouter([
     {
@@ -81,6 +82,10 @@ const routers = createBrowserRouter([
                         path: "monitoring",
                         element: <ApiMonitoring />
                     },
+                    {
+                        path: "dyeing-order",
+                        element: <DyeingOrders />
+                    }
                 ]
             }
         ]

@@ -6,28 +6,7 @@ import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
 import InlineEdit from "./inlineEdit/InlineEdit";
 
-const COLUMNS = [
-    { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
-    { header: "JOB NO.", width: "10mm", inputName: "workOrderNo" },
-    { header: "WORK ORDER NO", width: "10mm", inputName: "workOrderNo" },
-    { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
-    { header: "STYLE", width: "30mm", inputName: "styleNo" },
-    { header: "MONTH", width: "10mm", inputName: "month" },
 
-    { header: "COMPOSITION", width: "20mm", inputName: "composition" },
-    { header: "COLOR", width: "50mm", inputName: "color" },
-    { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
-    { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
-    { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
-    { header: "DELIVERY", width: "13mm", inputName: "totalYarnDelivery" },
-    { header: "DEL. SHORT & EXCESS", width: "12mm" },
-    { header: "YARN RETURN RECEIVED", width: "13mm" },
-    { header: "YARN RECEIVED", width: "13mm" },
-    { header: "RCVD SHORT & EXCESS", width: "13mm" },
-    { header: "PAYABLE AMOUNT", width: "12mm" },
-    { header: "PAID BILLING AMOUNT", width: "12mm" },
-    { header: "PENDING BILLING AMOUNT", width: "12mm" },
-];
 
 const AllOrders = ({ orderType }) => {
     const axiosPublic = useAxiosPublic();
@@ -55,6 +34,100 @@ const AllOrders = ({ orderType }) => {
 
     if (loading) {
         return <div className="p-4 text-gray-500"><Loader2 className="animate-spin" size={40} /></div>
+    }
+
+    const COLUMNS = [];
+
+    if (orderType === "knittingOrder") {
+        COLUMNS.push(
+            { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
+            { header: "JOB NO.", width: "10mm", inputName: "workOrderNo" },
+            { header: "WORK ORDER NO", width: "10mm", inputName: "workOrderNo" },
+            { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
+            { header: "STYLE", width: "30mm", inputName: "styleNo" },
+            { header: "MONTH", width: "10mm", inputName: "month" },
+
+            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "COLOR", width: "50mm", inputName: "color" },
+            { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+            { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
+            { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+            { header: "DELIVERY", width: "13mm", inputName: "totalYarnDelivery" },
+            { header: "DEL. SHORT & EXCESS", width: "12mm" },
+            { header: "YARN RETURN RECEIVED", width: "13mm" },
+            { header: "YARN RECEIVED", width: "13mm" },
+            { header: "RCVD SHORT & EXCESS", width: "13mm" },
+            { header: "PAYABLE AMOUNT", width: "12mm" },
+            { header: "PAID BILLING AMOUNT", width: "12mm" },
+            { header: "PENDING BILLING AMOUNT", width: "12mm" },
+        )
+    }
+
+    if (orderType === "dyeingOrder") {
+        COLUMNS.push(
+            { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
+            { header: "JOB NO.", width: "10mm", inputName: "workOrderNo" },
+            { header: "WORK ORDER NO", width: "10mm", inputName: "workOrderNo" },
+            { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
+            { header: "STYLE", width: "30mm", inputName: "styleNo" },
+            { header: "MONTH", width: "10mm", inputName: "month" },
+            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "BOOKING COLOR", width: "50mm", inputName: "bookingColor" },
+            { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+            { header: "ORDER COLOR", width: "50mm", inputName: "orderColor" },
+            { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
+            { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+            { header: "GREY RECEIVED", width: "13mm", inputName: "greyReceived" },
+            { header: "GREY RETURN", width: "13mm", inputName: "greyReturn" },
+            { header: "FINISH RECEIVED", width: "13mm", inputName: "finishReceived" },
+            { header: "FINISH RETURN", width: "13mm", inputName: "finishReturn" },
+        )
+    }
+
+    if (orderType === "yarnDyeingOrder") {
+        COLUMNS.push(
+            { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
+            { header: "JOB NO.", width: "10mm", inputName: "jobNo" },
+            { header: "WORK ORDER NO", width: "10mm", inputName: "workOrderNo" },
+            { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
+            { header: "STYLE", width: "30mm", inputName: "styleNo" },
+            { header: "MONTH", width: "10mm", inputName: "month" },
+            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+            { header: "BOOKING COLOR", width: "50mm", inputName: "bookingColor" },
+            { header: "ORDER COLOR", width: "50mm", inputName: "orderColor" },
+            { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
+            { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+            { header: "GREY RECEIVED", width: "13mm", inputName: "greyReceived" },
+            { header: "GREY RETURN", width: "13mm", inputName: "greyReturn" },
+            { header: "FINISH RECEIVED", width: "13mm", inputName: "finishReceived" },
+            { header: "FINISH RETURN", width: "13mm", inputName: "finishReturn" },
+        )
+    }
+
+    if (orderType === "aopOrder") {
+        COLUMNS.push(
+            { header: "FACTORY NAME", width: "18mm", inputName: "factoryName" },
+            { header: "JOB NO.", width: "10mm", inputName: "workOrderNo" },
+            { header: "WORK ORDER NO", width: "10mm", inputName: "workOrderNo" },
+            { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
+            { header: "STYLE", width: "30mm", inputName: "styleNo" },
+            { header: "MONTH", width: "10mm", inputName: "month" },
+            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "COLOR", width: "50mm", inputName: "color" },
+            { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+            { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
+            { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+            { header: "SENT FOR AOP", width: "13mm", inputName: "totalYarnDelivery" },
+            { header: "DEL. SHORT & EXCESS", width: "12mm" },
+            { header: "RECEIVED FROM AOP", width: "13mm" },
+            { header: "SENT FOR COMPACTING", width: "13mm" },
+            { header: "RECEIVED FROM COMPACTING", width: "13mm" },
+            { header: "RCVD SHORT & EXCESS", width: "13mm" },
+            { header: "PAYABLE AMOUNT", width: "12mm" },
+            { header: "PAID BILLING AMOUNT", width: "12mm" },
+            { header: "PENDING BILLING AMOUNT", width: "12mm" },
+        )
     }
 
     const handleEditRowData = async (yarnId, workOrderNo) => {
@@ -146,6 +219,7 @@ const AllOrders = ({ orderType }) => {
                                 handleEditOnChange={handleEditOnChange}
                                 orderId={jobId}
                                 orders={orders}
+                                orderType={orderType}
                             />
                         )}
                         <table className="w-full border-collapse factory-table" style={{ minWidth: '1200px' }}>
@@ -200,7 +274,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border ">
                                                 <div className="space-y-1">
                                                     {(job.workOrders || []).map((work, i) => (
-                                                        <div key={i} className="border-b hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
+                                                        <div key={i} className="hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
                                                             {work.workOrderNo}
                                                         </div>
                                                     ))}
@@ -216,7 +290,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {(job.workOrders || []).map((work, i) => (
-                                                        <div onClick={() => inlineEditing(work.id)} key={i} className="border-b  hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
+                                                        <div onClick={() => inlineEditing(work.id)} key={i} className="  hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
                                                             {
                                                                 editCellId === work.id ? <InlineEdit /> : work.styleNo
                                                             }
@@ -229,7 +303,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {(job.workOrders || []).map((work, i) => (
-                                                        <div key={i} className="border-b hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
+                                                        <div key={i} className=" hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
                                                             {work.month} month
                                                         </div>
                                                     ))}
@@ -240,7 +314,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                        <div key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
                                                             {c.composition}
                                                         </div>
                                                     ))}
@@ -251,7 +325,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                        <div key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
                                                             {c.color}
                                                         </div>
                                                     ))}
@@ -262,7 +336,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                        <div key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
                                                             {c.orderQty}
                                                         </div>
                                                     ))}
@@ -273,7 +347,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div onDoubleClick={() => inlineEditing(c.id)} key={i} className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
+                                                        <div onDoubleClick={() => inlineEditing(c.id)} key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
                                                             {
                                                                 editCellId === c.id ? <InlineEdit
                                                                     value={c.unitePrice}
@@ -293,7 +367,7 @@ const AllOrders = ({ orderType }) => {
                                                     {compositions.map((c, i) => (
                                                         <div
                                                             key={i}
-                                                            className="border-b hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25"
+                                                            className="hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25"
                                                             onClick={() => handleEditRowData(c.id, c.id)}
                                                         >
                                                             {c.workOrderQty}
@@ -306,7 +380,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b">
+                                                        <div key={i} className="">
                                                             {c.totalYarnDelivery || 0}
                                                         </div>
                                                     ))}
@@ -322,8 +396,8 @@ const AllOrders = ({ orderType }) => {
                                                             Number(c.totalYarnDelivery || 0);
 
                                                         return (
-                                                            <div key={i} className="border-b">
-                                                                {diff < 0 ? diff : `(${diff})`} ex
+                                                            <div key={i} className="    ">
+                                                                {diff < 0 ? diff : `(${diff})`}
                                                             </div>
                                                         );
                                                     })}
@@ -334,7 +408,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b">
+                                                        <div key={i} className="">
                                                             {c.totalYarnReturn} {/*  total yarn return */}
                                                         </div>
                                                     ))}
@@ -343,7 +417,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b">
+                                                        <div key={i} className="">
                                                             {c.greyReceived} {/*  total gray received */}
                                                         </div>
                                                     ))}
@@ -354,7 +428,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b text-pink-500">
+                                                        <div key={i} className="text-pink-500">
                                                             {Number(c.unitePrice || 0) * Number(c.greyReceived || 0)}
                                                         </div>
                                                     ))}
@@ -364,7 +438,7 @@ const AllOrders = ({ orderType }) => {
                                             <td className="border">
                                                 <div className="space-y-1">
                                                     {compositions.map((c, i) => (
-                                                        <div key={i} className="border-b text-pink-500">
+                                                        <div key={i} className="border text-pink-500">
                                                             {Number(c.unitePrice || 0) * Number(c.greyReceived || 0)}
                                                         </div>
                                                     ))}

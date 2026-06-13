@@ -24,6 +24,7 @@ const Sidebar = () => {
 
     const orderSubItems = [
         { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
+        { path: "/dashboard/dyeing-order", label: "Dyeing Orders", icon: Package },
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Package },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: Package },
     ];
@@ -31,6 +32,7 @@ const Sidebar = () => {
     const navItems = [
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
+        { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
     ];
 
     // Auto-open dropdown if current route is an order sub-route

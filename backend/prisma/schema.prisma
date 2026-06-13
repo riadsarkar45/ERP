@@ -33,11 +33,22 @@ model WorkOrder {
   styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
   styleRequirementId Int?
   jobs               jobs?             @relation(fields: [jobId], references: [id])
-  jobId             Int?
+  jobId              Int?
+  yarnDyeingJobs     yarnDyeingJobs[]
 
   @@index([styleRequirementId])
   @@index([styleNo])
   @@index([jobId])
+}
+
+model yarnDyeingJobs {
+  id          Int        @id @default(autoincrement())
+  color       String
+  qty         Float
+  composition String
+  createdAt   DateTime   @default(now())
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  workOrderId Int?
 }
 
 model Composition {

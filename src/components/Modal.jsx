@@ -2,9 +2,25 @@ import { X, Save, Loader2 } from 'lucide-react';
 import Input from './Input';
 import Deliveries from './Deliveries';
 
-const Modal = ({ setIsEditing, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
-    const deliveryTypes = ["Yarn Delivery", "Yarn Return", "Grey Received", "Grey Receive From Dyeing", "Finish Fabric Received", "Grey Delivery"];
+const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
+    const deliveryTypes = [];
+    // "Yarn Delivery", "Yarn Return", "Grey Received", "Grey Receive From Dyeing", "Finish Fabric Received", "Grey Delivery"
 
+    if (orderType === "knittingOrder") {
+        deliveryTypes.push("Yarn Delivery", "Yarn Return");
+    }
+
+    if (orderType === "dyeingOrder") {
+        deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Receive From Dyeing", "Finish Fabric Received", "Sent for Compacting", "Received From Compacting");
+    }
+
+    if (orderType === "aopOrder") {
+        deliveryTypes.push("Sent for AOP", "Received from AOP", "Sent for Compacting", "Received From Compacting");
+    }
+
+    if (orderType === "yarnDyeingOrder") {
+        deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Grey Recived", "Grey Return", "Finish Recived", "Finish Return");
+    }
     return (
         <>
             <div className="fixed inset-0 bg-slate-500/30 z-50" onClick={() => setIsEditing(false)} />
