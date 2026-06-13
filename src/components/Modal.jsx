@@ -4,7 +4,6 @@ import Deliveries from './Deliveries';
 
 const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
     const deliveryTypes = [];
-    // "Yarn Delivery", "Yarn Return", "Grey Received", "Grey Receive From Dyeing", "Finish Fabric Received", "Grey Delivery"
 
     if (orderType === "knittingOrder") {
         deliveryTypes.push("Yarn Delivery", "Yarn Return");

@@ -11,7 +11,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
             workOrderQty: true,
             orderQty: true,
             deliveries: {
-                where: {yarnId: Number(id)},
+                where: { yarnId: Number(id) },
                 select: {
                     deliveryType: true,
                     deliveryQty: true,
@@ -22,8 +22,15 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                 }
             },
             workOrder: {
-                
+
                 select: {
+                    yarnDyeingJobs: {
+                        select: {
+                            qty: true,
+                            color: true,
+                            composition: true,
+                        }
+                    },
                     styleRequirement: {
                         select: {
                             processLoss: true,

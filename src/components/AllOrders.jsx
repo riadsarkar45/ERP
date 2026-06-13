@@ -5,6 +5,7 @@ import Input from "./Input";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
 import InlineEdit from "./inlineEdit/InlineEdit";
+import YarnDyeOrders from "./YarnDyeOrders";
 
 
 
@@ -131,7 +132,7 @@ const AllOrders = ({ orderType }) => {
     }
 
     const handleEditRowData = async (yarnId, workOrderNo) => {
-
+        console.log(yarnId, workOrderNo);
         setLoadingDeliveries(true);
         console.log(yarnId, "yarnId");
         setIsEditing(true);
@@ -143,8 +144,6 @@ const AllOrders = ({ orderType }) => {
         }
         setDeliveries(res.data);
 
-
-        setDeliveries(res.data);
         setWorkOrderId(workOrderNo);
         setStyleNo(styleNo);
         setOrderId(yarnId);
@@ -180,10 +179,6 @@ const AllOrders = ({ orderType }) => {
         }
     };
 
-    const inlineEditing = (id) => {
-        console.log(id, "id");
-        setEditCellId(id);
-    }
 
     return (
         <>
@@ -250,205 +245,11 @@ const AllOrders = ({ orderType }) => {
                                     ))}
                                 </tr>
                             </thead>
-
-                            <tbody className="whitespace-nowrap">
-                                {orders?.map((job, factoryIndex) => {
-
-                                    // ✅ FLATTEN compositions ONCE (IMPORTANT)
-                                    const compositions =
-                                        job.workOrders?.flatMap(w => w.compositions || []) || [];
-
-                                    return (
-                                        <tr key={factoryIndex}>
-
-                                            {/* JOB INFO */}
-                                            <td className="whitespace-nowrap px-3 py-2 text-sm border">
-                                                {job.workOrderPlaceDate}
-                                            </td>
-
-                                            <td className="whitespace-nowrap px-3 py-2 text-sm border">
-                                                {job.jobNo}
-                                            </td>
-
-                                            {/* WORK ORDERS */}
-                                            <td className="border ">
-                                                <div className="space-y-1">
-                                                    {(job.workOrders || []).map((work, i) => (
-                                                        <div key={i} className="hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
-                                                            {work.workOrderNo}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* BUYER (static) */}
-                                            <td className="border">
-                                                static buyer name
-                                            </td>
-
-                                            {/* STYLE */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {(job.workOrders || []).map((work, i) => (
-                                                        <div onClick={() => inlineEditing(work.id)} key={i} className="  hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
-                                                            {
-                                                                editCellId === work.id ? <InlineEdit /> : work.styleNo
-                                                            }
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* MONTH */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {(job.workOrders || []).map((work, i) => (
-                                                        <div key={i} className=" hover:bg-blue-500/10 hover:text-blue-500 cursor-pointer bg-opacity-25">
-                                                            {work.month} month
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* COMPOSITION */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
-                                                            {c.composition}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* COLOR */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
-                                                            {c.color}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* ORDER QTY */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
-                                                            {c.orderQty}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* UNIT PRICE */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div onDoubleClick={() => inlineEditing(c.id)} key={i} className=" hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25">
-                                                            {
-                                                                editCellId === c.id ? <InlineEdit
-                                                                    value={c.unitePrice}
-                                                                    fieldName="unitePrice"
-                                                                />
-                                                                    :
-                                                                    c.unitePrice
-                                                            }
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* WORK ORDER QTY */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div
-                                                            key={i}
-                                                            className="hover:bg-red-500/10 hover:text-red-500 cursor-pointer bg-opacity-25"
-                                                            onClick={() => handleEditRowData(c.id, c.id)}
-                                                        >
-                                                            {c.workOrderQty}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* DELIVERY */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className="">
-                                                            {c.totalYarnDelivery || 0}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* SHORTAGE / EXCESS */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => {
-                                                        const diff =
-                                                            Number(c.workOrderQty || 0) -
-                                                            Number(c.totalYarnDelivery || 0);
-
-                                                        return (
-                                                            <div key={i} className="    ">
-                                                                {diff < 0 ? diff : `(${diff})`}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </td>
-
-                                            {/* GREY RECEIVED */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className="">
-                                                            {c.totalYarnReturn} {/*  total yarn return */}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className="">
-                                                            {c.greyReceived} {/*  total gray received */}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            {/* shor excess */}
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className="text-pink-500">
-                                                            {Number(c.unitePrice || 0) * Number(c.greyReceived || 0)}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                            <td className="border">
-                                                <div className="space-y-1">
-                                                    {compositions.map((c, i) => (
-                                                        <div key={i} className="border text-pink-500">
-                                                            {Number(c.unitePrice || 0) * Number(c.greyReceived || 0)}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
+                            <YarnDyeOrders
+                                orders={orders}
+                                handleEditRowData={handleEditRowData}
+                            />
+                            
                         </table>
                     </div>
                 </div>

@@ -19,8 +19,13 @@ export const getAllOrders = async (req: Request, res: Response) => {
                         styleNo: true,
                         lotNo: true,
                         orderType: true,
-
-                        // ✅ compositions (array relation)
+                        yarnDyeingJobs:{
+                            select: {
+                                qty: true,
+                                color: true,
+                                composition:true,
+                            }
+                        },
                         compositions: {
                             select: {
                                 id: true,
