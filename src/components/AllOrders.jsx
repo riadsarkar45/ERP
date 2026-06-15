@@ -6,6 +6,7 @@ import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
 import InlineEdit from "./inlineEdit/InlineEdit";
 import YarnDyeOrders from "./YarnDyeOrders";
+import KnittingOrder from "./KnittingOrder";
 
 
 
@@ -245,7 +246,11 @@ const AllOrders = ({ orderType }) => {
                                     ))}
                                 </tr>
                             </thead>
-                            <YarnDyeOrders
+                            {/* <YarnDyeOrders
+                                orders={orders}
+                                handleEditRowData={handleEditRowData}
+                            /> */}
+                            <KnittingOrder 
                                 orders={orders}
                                 handleEditRowData={handleEditRowData}
                             />

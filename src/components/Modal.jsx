@@ -6,7 +6,7 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
     const deliveryTypes = [];
 
     if (orderType === "knittingOrder") {
-        deliveryTypes.push("Yarn Delivery", "Yarn Return");
+        deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Received");
     }
 
     if (orderType === "dyeingOrder") {
