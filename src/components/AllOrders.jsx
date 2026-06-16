@@ -79,6 +79,7 @@ const AllOrders = ({ orderType }) => {
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
             { header: "DYEING WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
             { header: "GREY DELIVERY", width: "13mm", inputName: "greyReceived" },
+            { header: "DELIVERY SHORT & EXCESS", width: "13mm", inputName: "greyReceived" },
             { header: "GREY RETURN RECEIVE", width: "13mm", inputName: "greyReturn" },
             { header: "GREY RECEIVED FROM DYEING", width: "13mm", inputName: "greyReturn" },
             { header: "FINISH FABRIC RECEIVED", width: "13mm", inputName: "greyReturn" },

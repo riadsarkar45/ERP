@@ -89,6 +89,19 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                                 ))
                             )}
                         </td>
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                            {workOrders.map((wo, i) =>
+                                wo.compositions?.map((wrk, j) => {
+                                    const diff =  wrk.totalGreyDelivery - wrk.workOrderQty;
+                                    const exceeded = diff > 0;
+                                    return (
+                                        <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
+                                            {exceeded ? diff : `(${Math.abs(diff)})`}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </td>
 
                         {/* TOTAL YARN DELIVERY - Changed to inline span */}
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
@@ -128,7 +141,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                                     const exceeded = diff < 0;
                                     return (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                            {exceeded ? diff : `(${Math.abs(diff)})`}
+                                            {exceeded ? diff : `(${Math.abs(diff)})`}xxxx
                                         </div>
                                     );
                                 })
@@ -159,7 +172,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap',}}>
+                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
                                         {wrk.totalReceivedFromCompacting || "NOT SENT YET"}
                                     </div>
                                 ))
@@ -170,8 +183,8 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalGreyReceivedFromDyeing * wrk.unitePrice }
-                                        
+                                        {wrk.totalGreyReceivedFromDyeing * wrk.unitePrice}
+
                                     </div>
                                 ))
                             )}
@@ -186,7 +199,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                                 ))
                             )}
                         </td>
-                       
+
 
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
@@ -198,7 +211,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                                 ))
                             )}
                         </td>
-                       
+
 
                     </tr>
                 );

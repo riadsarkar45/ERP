@@ -8,7 +8,7 @@ let io: SocketIOServer;
 export const initSocket = (server: HTTPServer): SocketIOServer => {
   io = new SocketIOServer(server, {
     cors: {
-      origin: process.env.CORS_ORIGIN || "https://erp-three-pied.vercel.app", // Adjust to your frontend URL
+      origin: process.env.CORS_ORIGIN || "https://erp-backend-ruby.vercel.app", // Adjust to your frontend URL
       methods: ["GET", "POST"],
       credentials: true
     }
