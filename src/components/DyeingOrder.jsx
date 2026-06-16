@@ -141,7 +141,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                                     const exceeded = diff < 0;
                                     return (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                            {exceeded ? diff : `(${Math.abs(diff)})`}xxxx
+                                            {exceeded ? diff : `(${Math.abs(diff)})`}
                                         </div>
                                     );
                                 })
