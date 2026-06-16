@@ -10,7 +10,7 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
     }
 
     if (orderType === "dyeingOrder") {
-        deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Receive From Dyeing", "Finish Fabric Received", "Sent for Compacting", "Received From Compacting");
+        deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return Received", "Grey Received From Dyeing", "Finish Fabric Received", "Sent For Compacting", "Received From Compacting");
     }
 
     if (orderType === "aopOrder") {

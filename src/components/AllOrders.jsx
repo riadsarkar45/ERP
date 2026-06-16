@@ -7,6 +7,7 @@ import { useFetchData } from "../hooks/fetch";
 import InlineEdit from "./inlineEdit/InlineEdit";
 import YarnDyeOrders from "./YarnDyeOrders";
 import KnittingOrder from "./KnittingOrder";
+import DyeingOrder from "./DyeingOrder";
 
 
 
@@ -74,15 +75,20 @@ const AllOrders = ({ orderType }) => {
             { header: "STYLE", width: "30mm", inputName: "styleNo" },
             { header: "MONTH", width: "10mm", inputName: "month" },
             { header: "COMPOSITION", width: "20mm", inputName: "composition" },
-            { header: "BOOKING COLOR", width: "50mm", inputName: "bookingColor" },
+            { header: "COLOR", width: "50mm", inputName: "bookingColor" },
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
-            { header: "ORDER COLOR", width: "50mm", inputName: "orderColor" },
+            { header: "DYEING WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+            { header: "GREY DELIVERY", width: "13mm", inputName: "greyReceived" },
+            { header: "GREY RETURN RECEIVE", width: "13mm", inputName: "greyReturn" },
+            { header: "GREY RECEIVED FROM DYEING", width: "13mm", inputName: "greyReturn" },
+            { header: "FINISH FABRIC RECEIVED", width: "13mm", inputName: "greyReturn" },
+            { header: "BALANCE", width: "13mm", inputName: "greyReturn" },
             { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
-            { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
-            { header: "GREY RECEIVED", width: "13mm", inputName: "greyReceived" },
-            { header: "GREY RETURN", width: "13mm", inputName: "greyReturn" },
-            { header: "FINISH RECEIVED", width: "13mm", inputName: "finishReceived" },
-            { header: "FINISH RETURN", width: "13mm", inputName: "finishReturn" },
+            { header: "TOTAL SENT FOR COMPACTING", width: "11mm", inputName: "sentForCompacting" },
+            { header: "TOTAL RECEIVED FROM COMPACTING", width: "11mm", inputName: "receivedFromCompacting" },
+            { header: "TOTAL BILLING AMOUNT", width: "11mm", inputName: "unitePrice" },
+            { header: "PAYABLE AMOUNT", width: "11mm", inputName: "unitePrice" },
+            { header: "PENDING BILLING AMOUNT", width: "11mm", inputName: "unitePrice" },
         )
     }
 
@@ -246,15 +252,32 @@ const AllOrders = ({ orderType }) => {
                                     ))}
                                 </tr>
                             </thead>
-                            {/* <YarnDyeOrders
-                                orders={orders}
-                                handleEditRowData={handleEditRowData}
-                            /> */}
-                            <KnittingOrder 
-                                orders={orders}
-                                handleEditRowData={handleEditRowData}
-                            />
-                            
+                            {
+                                orderType === "yarnDyeingOrder" && (
+                                    <YarnDyeOrders
+                                        orders={orders}
+                                        handleEditRowData={handleEditRowData}
+                                    />
+                                )
+                            }
+                            {
+                                orderType === "knittingOrder" && (
+                                    <KnittingOrder
+                                        orders={orders}
+                                        handleEditRowData={handleEditRowData}
+                                    />
+                                )
+                            }
+                            {
+                                orderType === "dyeingOrder" && (
+                                    <DyeingOrder
+                                        orders={orders}
+                                        handleEditRowData={handleEditRowData}
+
+                                    />
+                                )
+                            }
+
                         </table>
                     </div>
                 </div>

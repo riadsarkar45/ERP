@@ -19,11 +19,71 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     (d: any) => d.deliveryType === "Grey Received"
                 );
 
+                const greyDelivery = deliveries.filter(
+                    (d: any) => d.deliveryType === "Grey Delivery"
+                )
+
+                const greyReturnReceived = deliveries.filter(
+                    (d: any) => d.deliveryType === "Grey Return Received"
+                )
+
+                const greyReceivedFromDyeing = deliveries.filter(
+                    (d: any) => d.deliveryType === "Grey Received From Dyeing"
+                )
+
                 const yarnReturns = deliveries.filter(
                     (d: any) => d.deliveryType === "Yarn Return"
                 );
 
+                const finishFabricReceived = deliveries.filter(
+                    (d: any) => d.deliveryType === "Finish Fabric Received"
+                );
+
+                const sentForCompacting = deliveries.filter(
+                    (d: any) => d.deliveryType === "Sent For Compacting"
+                );
+
+                const receivedFromCompacting = deliveries.filter(
+                    (d: any) => d.deliveryType === "Received From Compacting"
+                );
+
+                const totalReceivedFromCompacting = receivedFromCompacting.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+                const totalSentForCompacting = sentForCompacting.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
+
+                const totalGreyReceivedFromDyeing = greyReceivedFromDyeing.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
+
+                const totalFinishFabricReceived = finishFabricReceived.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
                 const totalYarnDelivery = yarnDeliveries.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+
+                const totalGreyReturnReceived = greyReturnReceived.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+                const totalGreyDelivery = greyDelivery.reduce(
                     (sum: number, d: any) =>
                         sum + Number(d.deliveryQty || 0),
                     0
@@ -45,7 +105,13 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     ...c,
                     totalYarnDelivery,
                     totalYarnReturn,
-                    greyReceived
+                    greyReceived,
+                    totalGreyDelivery,
+                    totalGreyReceivedFromDyeing,
+                    totalGreyReturnReceived,
+                    totalFinishFabricReceived,
+                    totalSentForCompacting,
+                    totalReceivedFromCompacting
                 };
             })
         }))
