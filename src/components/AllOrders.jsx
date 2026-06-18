@@ -55,7 +55,7 @@ const AllOrders = ({ orderType }) => {
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
             { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
             { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
-            { header: "DELIVERY", width: "13mm", inputName: "totalYarnDelivery" },
+            { header: "YARN DELIVERY", width: "13mm", inputName: "totalYarnDelivery" },
             { header: "DEL. SHORT & EXCESS", width: "12mm" },
             { header: "YARN RETURN RECEIVED", width: "13mm" },
             { header: "YARN RECEIVED", width: "13mm" },

@@ -126,19 +126,23 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
         workOrders.forEach((w: any) => {
             const type = w.orderType || "Unknown";
 
-            w.compositions?.forEach((c: any) => {
+            w.compositions?.forEach((c: any, compIndex: number) => {
+                // 1. Determine the composition identifier
+                // If your composition object has a 'composition' or 'name' field, use it.
+                // Otherwise, we fallback to the index to ensure unique keys.
+                const compName = c.composition || c.name || `Composition_${compIndex}`;
+                const safeCompName = compName.replace(/\s+/g, "_");
 
                 // ── Work Order Qty ──
                 if (typeof c.workOrderQty === "number") {
-                    const summaryKey = `${type}_workOrderQty`;
+                    const summaryKey = `${type}_${safeCompName}_workOrderQty`;
                     summary[summaryKey] = (summary[summaryKey] ?? 0) + c.workOrderQty;
                 }
 
                 // ── Deliveries ──
                 const deliveries = c.deliveries ?? [];
-
                 deliveries.forEach((d: any) => {
-                    const deliveryKey = `${type}_${d.deliveryType.replace(/\s+/g, "_")}`;
+                    const deliveryKey = `${type}_${safeCompName}_${d.deliveryType.replace(/\s+/g, "_")}`;
                     summary[deliveryKey] = (summary[deliveryKey] ?? 0) + (d.deliveryQty || 0);
                 });
             });
