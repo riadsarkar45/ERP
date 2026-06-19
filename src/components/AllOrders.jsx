@@ -24,7 +24,7 @@ const AllOrders = ({ orderType }) => {
     const [workOrderId, setWorkOrderId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
-    const [editCellId, setEditCellId] = useState(null);
+    // const [editCellId, setEditCellId] = useState(null);
     const { fetchData, error, loading } = useFetchData();
     useEffect(() => {
         fetchData(`/api/work-order/${orderType}`).then(data => {

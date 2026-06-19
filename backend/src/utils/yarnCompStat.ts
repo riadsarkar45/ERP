@@ -40,7 +40,7 @@ export const calculateYarnCompStat = (orders: any[]) => {
                 );
 
                 const sentForCompacting = deliveries.filter(
-                    (d: any) => d.deliveryType === "Sent for Compacting"
+                    (d: any) => d.deliveryType === "Sent For Compacting"
                 );
 
                 const receivedFromCompacting = deliveries.filter(
