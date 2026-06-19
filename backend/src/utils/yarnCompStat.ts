@@ -40,13 +40,31 @@ export const calculateYarnCompStat = (orders: any[]) => {
                 );
 
                 const sentForCompacting = deliveries.filter(
-                    (d: any) => d.deliveryType === "Sent For Compacting"
+                    (d: any) => d.deliveryType === "Sent for Compacting"
                 );
 
                 const receivedFromCompacting = deliveries.filter(
                     (d: any) => d.deliveryType === "Received From Compacting"
                 );
 
+                const sentForAop = deliveries.filter(
+                    (d: any) => d.deliveryType === "Sent for AOP"
+                );
+
+                const receivedFromAop = deliveries.filter(
+                    (d: any) => d.deliveryType === "Received from AOP"
+                );
+
+                const totalReceivedForAop = receivedFromAop.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
+                const totalSentForAop = sentForAop.reduce(
+                    (sum: number, d: any) =>
+                        sum + Number(d.deliveryQty || 0),
+                    0
+                );
                 const totalReceivedFromCompacting = receivedFromCompacting.reduce(
                     (sum: number, d: any) =>
                         sum + Number(d.deliveryQty || 0),
@@ -111,7 +129,9 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     totalGreyReturnReceived,
                     totalFinishFabricReceived,
                     totalSentForCompacting,
-                    totalReceivedFromCompacting
+                    totalReceivedFromCompacting,
+                    totalSentForAop,
+                    totalReceivedForAop
                 };
             })
         }))

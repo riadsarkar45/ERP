@@ -8,6 +8,7 @@ import InlineEdit from "./inlineEdit/InlineEdit";
 import YarnDyeOrders from "./YarnDyeOrders";
 import KnittingOrder from "./KnittingOrder";
 import DyeingOrder from "./DyeingOrder";
+import AopOrder from "./AopOrder";
 
 
 
@@ -275,6 +276,15 @@ const AllOrders = ({ orderType }) => {
                                         orders={orders}
                                         handleEditRowData={handleEditRowData}
 
+                                    />
+                                )
+                            }
+
+                            {
+                                orderType === "aopOrder" && (
+                                    <AopOrder
+                                        orders={orders}
+                                        handleEditRowData={handleEditRowData}
                                     />
                                 )
                             }
