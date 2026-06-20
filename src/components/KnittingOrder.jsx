@@ -7,7 +7,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                     <tr key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders?.map((wo, i) => (
-                                <div key={i}>{wo.factoryName || "NO FACTORY FOUND"}</div>
+                                wo.factoryName === "NULL" ? <div>NO FACTORY SET YET</div> : <div className="text-green-500 font-bold " key={i}> <span>{wo.factoryName}</span> </div>
                             ))}
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>

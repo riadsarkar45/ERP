@@ -18,6 +18,8 @@ export const createNewJob = async (req: Request, res: Response) => {
         orderType: string;
     };
 
+    console.log(req.body);
+
     const findStyleNo = await prisma.styleRequirement.findUnique({
         where: { styleNo: req.body.styleNo }
     });
@@ -42,6 +44,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                 styleNo: req.body.styleNo,
                 lotNo: req.body.lotNo,
                 jobNo: req.body.jobNo,
+                factoryName: req.body.factoryName,
                 orderType,
                 jobId,
                 styleRequirementId: findStyleNo.id,

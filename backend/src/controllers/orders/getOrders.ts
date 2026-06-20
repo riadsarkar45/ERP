@@ -19,6 +19,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                         styleNo: true,
                         lotNo: true,
                         orderType: true,
+                        factoryName:true,
                         yarnDyeingJobs:{
                             select: {
                                 id: true,
