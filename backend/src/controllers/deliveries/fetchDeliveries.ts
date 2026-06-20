@@ -26,6 +26,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                 select: {
                     yarnDyeingJobs: {
                         select: {
+                            id: true,
                             qty: true,
                             color: true,
                             composition: true,

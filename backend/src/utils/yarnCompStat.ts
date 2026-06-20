@@ -1,6 +1,13 @@
+import { de } from "zod/v4/locales";
 import prisma from "../database/prismaClient/prisma";
+import { any } from "zod";
 
 export const calculateYarnCompStat = (orders: any[]) => {
+    const sumByType = (deliveries: any[], type: string) =>
+        deliveries
+            .filter((d: any) => d.deliveryType === type)
+            .reduce((sum: number, d: any) => sum + Number(d.deliveryQty || 0), 0);
+
     return orders.map(order => ({
         ...order,
 
@@ -9,118 +16,46 @@ export const calculateYarnCompStat = (orders: any[]) => {
 
             compositions: (work.compositions || []).map((c: any) => {
 
+                // 1. FIND THE BOOKING COLOR: Match the composition and color from yarnDyeingJobs
+                const bookingColor = work.yarnDyeingJobs?.find(
+                    (ydj: any) => ydj.composition === c.composition && ydj.color === c.color
+                )?.color || c.color;
+
                 const deliveries = c.deliveries || [];
 
-                const yarnDeliveries = deliveries.filter(
-                    (d: any) => d.deliveryType === "Yarn Delivery"
-                );
+                const totalYarnDelivery = sumByType(deliveries, "Yarn Delivery");
+                const greyReceived = sumByType(deliveries, "Grey Received");
+                const totalGreyDelivery = sumByType(deliveries, "Grey Delivery");
+                const totalGreyReturnReceived = sumByType(deliveries, "Grey Return Received");
+                const totalGreyReceivedFromDyeing = sumByType(deliveries, "Grey Received From Dyeing");
+                const totalYarnReturn = sumByType(deliveries, "Yarn Return");
+                const totalFinishFabricReceived = sumByType(deliveries, "Finish Fabric Received");
+                const totalSentForCompacting = sumByType(deliveries, "Sent For Compacting");
+                const totalReceivedFromCompacting = sumByType(deliveries, "Received From Compacting");
+                const totalSentForAop = sumByType(deliveries, "Sent for AOP");
+                const totalReceivedForAop = sumByType(deliveries, "Received from AOP");
+                const totalYarnDeliveryYarnDye = sumByType(deliveries, "Yarn Delivery For Yarn Dye");
+                // 2. INJECT COLOR INTO DELIVERIES: Map over deliveries to add the booking color
+                const deliveriesWithColor2 = deliveries.map((d: any) => ({
+                    ...d,
+                    deliveryType: d.deliveryType,
+                    color: bookingColor
+                }));
 
-                const greyDeliveries = deliveries.filter(
-                    (d: any) => d.deliveryType === "Grey Received"
-                );
+                const YarnDeliveryWithColorDeliveryType: Record<string, number> = {};
+                deliveriesWithColor2.forEach((ele: any) => {
+                    if (ele.color === bookingColor) {
+                        const key = ele.deliveryType.replace(/\s+/g, "")
+                        YarnDeliveryWithColorDeliveryType[key] =
+                            (YarnDeliveryWithColorDeliveryType[key] || 0) + ele.deliveryQty;
+                    }
+                });
 
-                const greyDelivery = deliveries.filter(
-                    (d: any) => d.deliveryType === "Grey Delivery"
-                )
-
-                const greyReturnReceived = deliveries.filter(
-                    (d: any) => d.deliveryType === "Grey Return Received"
-                )
-
-                const greyReceivedFromDyeing = deliveries.filter(
-                    (d: any) => d.deliveryType === "Grey Received From Dyeing"
-                )
-
-                const yarnReturns = deliveries.filter(
-                    (d: any) => d.deliveryType === "Yarn Return"
-                );
-
-                const finishFabricReceived = deliveries.filter(
-                    (d: any) => d.deliveryType === "Finish Fabric Received"
-                );
-
-                const sentForCompacting = deliveries.filter(
-                    (d: any) => d.deliveryType === "Sent For Compacting"
-                );
-
-                const receivedFromCompacting = deliveries.filter(
-                    (d: any) => d.deliveryType === "Received From Compacting"
-                );
-
-                const sentForAop = deliveries.filter(
-                    (d: any) => d.deliveryType === "Sent for AOP"
-                );
-
-                const receivedFromAop = deliveries.filter(
-                    (d: any) => d.deliveryType === "Received from AOP"
-                );
-
-                const totalReceivedForAop = receivedFromAop.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-                const totalSentForAop = sentForAop.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-                const totalReceivedFromCompacting = receivedFromCompacting.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-                const totalSentForCompacting = sentForCompacting.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-
-
-                const totalGreyReceivedFromDyeing = greyReceivedFromDyeing.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-
-
-                const totalFinishFabricReceived = finishFabricReceived.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-
-                const totalYarnDelivery = yarnDeliveries.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-
-                const totalGreyReturnReceived = greyReturnReceived.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-                const totalGreyDelivery = greyDelivery.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-
-                const totalYarnReturn = yarnReturns.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
-
-                const greyReceived = greyDeliveries.reduce(
-                    (sum: number, d: any) =>
-                        sum + Number(d.deliveryQty || 0),
-                    0
-                );
+                // console.log(YarnDeliveryWithColorDeliveryType, "test purpose");
 
                 return {
                     ...c,
+                    yarnDeliveriesWithColor: YarnDeliveryWithColorDeliveryType, // <-- Return the updated deliveries array
                     totalYarnDelivery,
                     totalYarnReturn,
                     greyReceived,
@@ -131,7 +66,8 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     totalSentForCompacting,
                     totalReceivedFromCompacting,
                     totalSentForAop,
-                    totalReceivedForAop
+                    totalReceivedForAop,
+                    totalYarnDeliveryYarnDye
                 };
             })
         }))

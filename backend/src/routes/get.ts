@@ -5,7 +5,7 @@ import { getOrderSummaryByStyle } from "../controllers/orders/styleWiseOrder";
 import { allAudits } from "../controllers/audit/allAudits";
 import { getAllJobs } from "../controllers/jobs/allJobs";
 import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
-import { deliveryDetail } from "../controllers/deliveries/deliveries";
+import { deliveryDetail } from "../controllers/deliveries/fetchDeliveries";
 import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 
 const getRouters = express.Router();

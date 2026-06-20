@@ -1,7 +1,7 @@
 const YarnDyeOrders = ({ orders, handleEditRowData }) => {
 
     const cellClass = " cursor-pointer px-3 py-1.5 border-b border-gray-200 last:border-b-0";
-    const compCellClass = "hover:bg-red-500/10 hover:text-red-500 cursor-pointer px-3 py-1.5 border-b border-gray-200 last:border-b-0";
+    const compCellClass = "hover:bg-red-500/10 hover:text-red-500 cursor-pointer px-3 py-1.5 border-gray-200 last:border-b-0";
 
     return (
         <tbody className="whitespace-nowrap">
@@ -79,9 +79,11 @@ const YarnDyeOrders = ({ orders, handleEditRowData }) => {
                                     <div key={i} className={compCellClass}>
                                         {yarnJobs.length > 0
                                             ? yarnJobs.map((y, yi) => (
-                                                <div key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">{y.color}</div>
+                                                <div onClick={() => handleEditRowData(c.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">{y.color} y id {"=>"} {y.id}  </div>
                                             ))
                                             : "-"}
+                                        
+                                        booking color
                                     </div>
                                 );
                             })}
@@ -106,7 +108,7 @@ const YarnDyeOrders = ({ orders, handleEditRowData }) => {
                                     <div key={i} className={compCellClass}>
                                         {yarnJobs.length > 0
                                             ? yarnJobs.map((y, yi) => (
-                                                <div onClick={() => handleEditRowData(c.id, c.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">
+                                                <div onClick={() => handleEditRowData(c.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">
                                                     {y.qty}
                                                 </div>
                                             ))
@@ -126,7 +128,7 @@ const YarnDyeOrders = ({ orders, handleEditRowData }) => {
                         {/* WORK ORDER QTY */}
                         <td className="border border-gray-200 align-top">
                             {compositions.map((c, i) => (
-                                <div key={i} className={compCellClass}>{c.workOrderQty}</div>
+                                <div key={i} className={compCellClass}>{c.yarnDeliveriesWithColor.YarnDeliveryForYarnDye || "NOT DELIVERED YET"}</div>
                             ))}
                         </td>
 

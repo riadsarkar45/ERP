@@ -1,5 +1,5 @@
 import express from "express";
-import { updateJobs } from "../controllers/orders/updateOrders";
+import { updateJobs } from "../controllers/orders/deliveries";
 import { updateAuditStatus } from "../controllers/audit/updateAuditStatus";
 import { updateJobStatus } from "../controllers/jobs/updateJobStatus";
 

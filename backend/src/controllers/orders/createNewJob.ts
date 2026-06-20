@@ -77,6 +77,9 @@ export const createNewJob = async (req: Request, res: Response) => {
             if (yarnRows.length > 0) {
                 await prisma.yarnDyeingJobs.createMany({ data: yarnRows });
             }
+// tomorrows plan
+            // tomorrow need to get yarnDyeingJobs unique id and set it yarnDeliveries prisma models 
+            //create complete separated model for color wise yarn deliveries 
         }
 
         return res.status(201).send({ message: "Data saved", type: "success" });

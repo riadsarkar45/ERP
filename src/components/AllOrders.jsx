@@ -103,15 +103,19 @@ const AllOrders = ({ orderType }) => {
             { header: "STYLE", width: "30mm", inputName: "styleNo" },
             { header: "MONTH", width: "10mm", inputName: "month" },
             { header: "COMPOSITION", width: "20mm", inputName: "composition" },
-            { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
             { header: "BOOKING COLOR", width: "50mm", inputName: "bookingColor" },
-            { header: "ORDER COLOR", width: "50mm", inputName: "orderColor" },
+                        { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+
+            { header: "COLOR WISE ORDER QTY", width: "50mm", inputName: "orderColor" },
             { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
-            { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
-            { header: "GREY RECEIVED", width: "13mm", inputName: "greyReceived" },
-            { header: "GREY RETURN", width: "13mm", inputName: "greyReturn" },
-            { header: "FINISH RECEIVED", width: "13mm", inputName: "finishReceived" },
+            // { header: "WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
+            { header: "YARN DELIVERY FOR Y/D", width: "13mm", inputName: "yarnDeliveryForYd" },
+            { header: "DEL.SHORT & EXCESS", width: "13mm", },
+            { header: "YARN RETURN RECEIVED", width: "13mm", inputName: "yarnReturnReceived" },
+            { header: "YARN RECEIVED FROM Y/D", width: "13mm", inputName: "greyReceivedFromYd" },
+            { header: "FINISH YARN RECEIVED", width: "13mm", inputName: "finishReceived" },
             { header: "FINISH RETURN", width: "13mm", inputName: "finishReturn" },
+            { header: "YARN STOCK", width: "13mm" },
         )
     }
 
@@ -140,12 +144,11 @@ const AllOrders = ({ orderType }) => {
         )
     }
 
-    const handleEditRowData = async (yarnId, workOrderNo) => {
-        console.log(yarnId, workOrderNo);
+    const handleEditRowData = async (yarnId, color) => {
         setLoadingDeliveries(true);
-        console.log(yarnId, "yarnId");
+        console.log(color, "yarnId");
         setIsEditing(true);
-
+        console.log(color, "color id");
         const res = await axiosPublic.get(`/api/deliveries/${yarnId}`);
         console.log(res.data, "deliveries");
         if (res.data) {
@@ -153,11 +156,10 @@ const AllOrders = ({ orderType }) => {
         }
         setDeliveries(res.data);
 
-        setWorkOrderId(workOrderNo);
+        setWorkOrderId(2);
         setStyleNo(styleNo);
         setOrderId(yarnId);
     };
-    console.log(jobId, "jobId");
     const handleFilter = () => {
         // const { name, value } = e.target;
 

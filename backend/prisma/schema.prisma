@@ -42,13 +42,21 @@ model WorkOrder {
 }
 
 model yarnDyeingJobs {
-  id          Int        @id @default(autoincrement())
-  color       String
-  qty         Float
-  composition String
-  createdAt   DateTime   @default(now())
-  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
-  workOrderId Int?
+  id             Int              @id @default(autoincrement())
+  color          String
+  qty            Float
+  composition    String
+  createdAt      DateTime         @default(now())
+  workOrder      WorkOrder?       @relation(fields: [workOrderId], references: [id])
+  workOrderId    Int?
+  yarnDeliveries yarnDeliveries[]
+}
+
+model yarnDeliveries {
+  id Int @id @default(autoincrement())
+
+  yarnDyeingJobs   yarnDyeingJobs? @relation(fields: [yarnDyeingJobsId], references: [id])
+  yarnDyeingJobsId Int?
 }
 
 model Composition {

@@ -284,14 +284,103 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 28-37: Placeholder cells for remaining columns to match COLUMNS length */}
-                                    {Array.from({ length: COLUMNS.length - 27 }).map((_, idx) => (
-                                        <td key={idx} className="border p-0 align-top">
-                                            <div className="divide-y divide-gray-200">
-                                                {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">_</div>)}
-                                            </div>
-                                        </td>
-                                    ))}
+                                    {/* 28. PROCESS LOSS % */}
+                                    <td className="border p-0 align-top">
+                                        <div className="divide-y divide-gray-200">
+                                            {row.rows.map((_, j) => (
+                                                <div key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {row.processLoss || 0}%
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+
+                                    {/* 29. FINISH DELIVERY FROM AOP */}
+                                    {renderCompCell(compSummary, 'aopOrder_Sent_for_AOP')}
+
+                                    {/* 30. FINISH RECEIVED FROM AOP */}
+                                    {renderCompCell(compSummary, 'aopOrder_Received_from_AOP')}
+
+                                    {/* 31. AOP FAB. BALANCE (+/-) */}
+                                    <td className="border p-0 align-top">
+                                        <div className="divide-y divide-gray-200">
+                                            {compSummary.map((cs, j) => {
+                                                const sent = cs.aopOrder_Sent_for_AOP || 0;
+                                                const received = cs.aopOrder_Received_from_AOP || 0;
+                                                const diff = received - sent;
+                                                const isExceeded = diff > 0;
+                                                return (
+                                                    <div key={j} className={`px-3 py-2 whitespace-nowrap ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                        {sent === 0 && received === 0 ? "_" : (isExceeded ? `(${diff})` : Math.abs(diff))}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+
+                                    {/* 32. AOP PROCESS LOSS (%) */}
+                                    <td className="border p-0 align-top">
+                                        <div className="divide-y divide-gray-200">
+                                            {compSummary.map((cs, j) => {
+                                                const sent = cs.aopOrder_Sent_for_AOP || 0;
+                                                const received = cs.aopOrder_Received_from_AOP || 0;
+                                                const loss = sent > 0 ? (((sent - received) / sent) * 100).toFixed(2) : "_";
+                                                return (
+                                                    <div key={j} className="px-3 py-2 whitespace-nowrap">
+                                                        {loss === "_" ? "_" : `${loss}%`}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+
+                                    {/* 33. SENT FOR RE-PROCESS */}
+                                    {renderCompCell(compSummary, 'reProcessOrder_Sent_for_Re_Process')}
+
+                                    {/* 34. RETURN RCVD */}
+                                    {renderCompCell(compSummary, 'reProcessOrder_Return_Received')}
+
+                                    {/* 35. RECEIVED AFTER RE-PROCESS (GREY) */}
+                                    {renderCompCell(compSummary, 'reProcessOrder_Received_After_Re_Process_Grey')}
+
+                                    {/* 36. RECEIVED AFTER RE-PROCESS (FINISH) */}
+                                    {renderCompCell(compSummary, 'reProcessOrder_Received_After_Re_Process_Finish')}
+
+                                    {/* 37. RE-PROCESS FAB. BALANCE (+/-) */}
+                                    <td className="border p-0 align-top">
+                                        <div className="divide-y divide-gray-200">
+                                            {compSummary.map((cs, j) => {
+                                                const sent = cs.reProcessOrder_Sent_for_Re_Process || 0;
+                                                const receivedGrey = cs.reProcessOrder_Received_After_Re_Process_Grey || 0;
+                                                const receivedFinish = cs.reProcessOrder_Received_After_Re_Process_Finish || 0;
+                                                const diff = (receivedGrey + receivedFinish) - sent;
+                                                const isExceeded = diff > 0;
+                                                return (
+                                                    <div key={j} className={`px-3 py-2 whitespace-nowrap ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                        {sent === 0 && receivedGrey === 0 && receivedFinish === 0 ? "_" : (isExceeded ? `(${diff})` : Math.abs(diff))}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+
+                                    {/* 38. RE-PROCESS PROCESS LOSS (%) */}
+                                    <td className="border p-0 align-top">
+                                        <div className="divide-y divide-gray-200">
+                                            {compSummary.map((cs, j) => {
+                                                const sent = cs.reProcessOrder_Sent_for_Re_Process || 0;
+                                                const receivedGrey = cs.reProcessOrder_Received_After_Re_Process_Grey || 0;
+                                                const receivedFinish = cs.reProcessOrder_Received_After_Re_Process_Finish || 0;
+                                                const loss = sent > 0 ? (((sent - (receivedGrey + receivedFinish)) / sent) * 100).toFixed(2) : "_";
+                                                return (
+                                                    <div key={j} className="px-3 py-2 whitespace-nowrap">
+                                                        {loss === "_" ? "_" : `${loss}%`}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+
                                 </tr>
                             )
                         })}

@@ -50,9 +50,9 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((col, j) => (
-                                    <span onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
+                                    <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
                                         {col.color || "NO COLOR FOUND"}
-                                    </span>
+                                    </div>
                                 ))
                             )}
                         </td>

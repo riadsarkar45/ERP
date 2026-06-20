@@ -18,7 +18,7 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
     }
 
     if (orderType === "yarnDyeingOrder") {
-        deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Grey Recived", "Grey Return", "Finish Recived", "Finish Return");
+        deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Recived", "Finish Return");
     }
     return (
         <>
@@ -47,13 +47,13 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
                         </button>
                     </div>
 
-                    {/* Scrollable body */}
+                    {/* Scrollable body */} bbbbbbb
                     <div className="overflow-y-auto flex-1 flex flex-col">
 
                         {
                             deliveriesLoading ? <div>
                                 <span className='animate-spin'><Loader2 size={30} /></span>
-                            </div> : <Deliveries deliveries={deliveries} workOrderId={workOrderId} />
+                            </div> : <Deliveries deliveries={deliveries} orderType={orderType} workOrderId={workOrderId} />
                         }
 
                         {/* Form */}
