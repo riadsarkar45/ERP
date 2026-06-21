@@ -41,6 +41,8 @@ export const styleRequirements = async (req: Request, res: Response) => {
                         orderType: true,
                         compositions: {
                             select: {
+                                color: true,        // ← add this
+                                composition: true,  // ← add this
                                 workOrderQty: true,
                                 deliveries: {
                                     select: {
@@ -50,7 +52,6 @@ export const styleRequirements = async (req: Request, res: Response) => {
                                 },
                             }
                         },
-
                     }
                 }
 
@@ -60,7 +61,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
         }
     )
 
-    if(styles.length === 0){
+    if (styles.length === 0) {
         return res.status(404).send({ message: "No style requirements found", type: "error" })
     }
      const summaryData = calculateOrdersForStyleSummary(styles);

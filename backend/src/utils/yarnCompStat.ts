@@ -77,34 +77,43 @@ export const calculateYarnCompStat = (orders: any[]) => {
 export const calculateOrdersForStyleSummary = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
-        const summary: Record<string, number> = {};
+        const rows = s.rows ?? [];
+        
+        // Create an array that maps 1-to-1 with your table rows
+        const compBreakdown = rows.map(() => ({}));
 
         workOrders.forEach((w: any) => {
-            const type = w.orderType || "Unknown";
+            const orderType = w.orderType || "Unknown";
 
-            w.compositions?.forEach((c: any, compIndex: number) => {
-                // 1. Determine the composition identifier
-                // If your composition object has a 'composition' or 'name' field, use it.
-                // Otherwise, we fallback to the index to ensure unique keys.
-                const compName = c.composition || c.name || `Composition_${compIndex}`;
-                const safeCompName = compName.replace(/\s+/g, "_");
-
-                // ── Work Order Qty ──
+            w.compositions?.forEach((c: any) => {
+                // ✅ Find the EXACT row by matching BOTH color AND composition
+                const matchingRowIndex = rows.findIndex((row: any) => 
+                    row.color === c.color && 
+                    row.composition === c.composition
+                );
+                
+                if (matchingRowIndex === -1) return; // No match found
+                
+                const breakdown = compBreakdown[matchingRowIndex];
+                
+                // ─ Work Order Qty ──
                 if (typeof c.workOrderQty === "number") {
-                    const summaryKey = `${type}_${safeCompName}_workOrderQty`;
-                    summary[summaryKey] = (summary[summaryKey] ?? 0) + c.workOrderQty;
+                    const key = `${orderType}_workOrderQty`;
+                    breakdown[key] = (breakdown[key] ?? 0) + c.workOrderQty;
                 }
 
                 // ── Deliveries ──
                 const deliveries = c.deliveries ?? [];
                 deliveries.forEach((d: any) => {
-                    const deliveryKey = `${type}_${safeCompName}_${d.deliveryType.replace(/\s+/g, "_")}`;
-                    summary[deliveryKey] = (summary[deliveryKey] ?? 0) + (d.deliveryQty || 0);
+                    const safeDeliveryType = d.deliveryType.replace(/\s+/g, "_");
+                    const deliveryKey = `${orderType}_${safeDeliveryType}`;
+                    breakdown[deliveryKey] = (breakdown[deliveryKey] ?? 0) + (d.deliveryQty || 0);
                 });
             });
         });
 
-        return { ...s, summary };
+        // Return the style with the new compBreakdown array
+        return { ...s, compBreakdown };
     });
 };
 
