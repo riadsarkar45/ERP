@@ -2,7 +2,7 @@ import { X, Save, Loader2 } from 'lucide-react';
 import Input from './Input';
 import Deliveries from './Deliveries';
 
-const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
+const Modal = ({ setIsEditing, orderType, changedField, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
     const deliveryTypes = [];
 
     if (orderType === "knittingOrder") {
@@ -26,7 +26,7 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
 
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
                 <div
-                    className="pointer-events-auto w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl overflow-hidden bg-white border border-gray-200 shadow-xl"
+                    className="pointer-events-auto w-full max-w-7xl max-h-[100vh] flex flex-col rounded-xl overflow-hidden bg-white border border-gray-200 shadow-xl"
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
@@ -47,17 +47,24 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
                         </button>
                     </div>
 
-                    {/* Scrollable body */} bbbbbbb
-                    <div className="overflow-y-auto flex-1 flex flex-col">
+                    {/* Scrollable body */}
+                    {/* <div className="overflow-y-auto flex-1 flex flex-col"> */}
 
-                        {
-                            deliveriesLoading ? <div>
-                                <span className='animate-spin'><Loader2 size={30} /></span>
-                            </div> : <Deliveries deliveries={deliveries} orderType={orderType} workOrderId={workOrderId} />
-                        }
+                    {
+                        deliveriesLoading ? <div>
+                            <span className='animate-spin'><Loader2 size={30} /></span>
+                        </div> : <Deliveries
+                            isLoading={isLoading}
+                            handleSubmit={handleSubmit}
+                            handleEditOnChange={handleEditOnChange}
+                            deliveries={deliveries}
+                            orderType={orderType}
+                            changedField={changedField}
+                            />
+                    }
 
-                        {/* Form */}
-                        <div className="px-6 py-5 shrink-0">
+                    {/* Form */}
+                    {/* <div className="px-6 py-5 shrink-0">
                             <span className="text-[10px] font-semibold tracking-[0.14em] text-gray-300 uppercase block mb-4">
                                 Add New Delivery
                             </span>
@@ -69,11 +76,11 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
                                 <Input label="To Factory" name="toFactory" type="text" onChange={handleEditOnChange} placeholder="Factory" required />
                                 <Input label="From Factory" name="fromFactory" type="text" onChange={handleEditOnChange} placeholder="Factory" required />
                             </div>
-                        </div>
-                    </div>
+                        </div> */}
+                    {/* </div> */}
 
                     {/* Footer */}
-                    <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white shrink-0">
+                    {/* <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white shrink-0">
                         {
                             isLoading ? <button
                                 className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold tracking-wide transition-colors"
@@ -92,7 +99,7 @@ const Modal = ({ setIsEditing, orderType, deliveriesLoading, isLoading, workOrde
                         >
                             <X size={14} /> Cancel
                         </button>
-                    </div>
+                    </div> */}
                 </div>
             </div>
         </>

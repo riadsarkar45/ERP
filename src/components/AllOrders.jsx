@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Printer } from "lucide-react";
+import { Loader2, Printer, } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Input from "./Input";
 import Modal from "./Modal";
@@ -104,7 +104,7 @@ const AllOrders = ({ orderType }) => {
             { header: "MONTH", width: "10mm", inputName: "month" },
             { header: "COMPOSITION", width: "20mm", inputName: "composition" },
             { header: "BOOKING COLOR", width: "50mm", inputName: "bookingColor" },
-                        { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
+            { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
 
             { header: "COLOR WISE ORDER QTY", width: "50mm", inputName: "orderColor" },
             { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
@@ -144,12 +144,10 @@ const AllOrders = ({ orderType }) => {
         )
     }
 
-    const handleEditRowData = async (yarnId, color) => {
+    const handleEditRowData = async (jobNumber) => {
         setLoadingDeliveries(true);
-        console.log(color, "yarnId");
         setIsEditing(true);
-        console.log(color, "color id");
-        const res = await axiosPublic.get(`/api/deliveries/${yarnId}`);
+        const res = await axiosPublic.get(`/api/deliveries/${jobNumber}`);
         console.log(res.data, "deliveries");
         if (res.data) {
             setLoadingDeliveries(false);
@@ -158,26 +156,40 @@ const AllOrders = ({ orderType }) => {
 
         setWorkOrderId(2);
         setStyleNo(styleNo);
-        setOrderId(yarnId);
     };
     const handleFilter = () => {
         // const { name, value } = e.target;
 
     }
 
-
+    // looks like you are not clear what i need i said when deliveryType selected the 2 input will be visible 1. greyReceivedQty 2.finishReceivedQty i will need seperate Delivery Type Grey R
 
 
 
     const handleEditOnChange = (e) => {
         const { name, value } = e.target;
         setIsEditing(true);
-        setChangedField(prev => ({ ...prev, [name]: value }));
+
+        setChangedField(prev => {
+            const updated = { ...prev, [name]: value };
+
+            const deliveries = [
+                { deliveryType: updated.deliveryType, qty: updated.greyReceivedQty },
+                ...(updated.finishReceivedQty
+                    ? [{ deliveryType: "Finish Received", qty: updated.finishReceivedQty }]
+                    : []
+                ),
+            ];
+
+            return { ...updated, deliveries };
+        });
     };
-    const handleSubmit = async () => {
+    console.log(changedField, "changed field");
+    const handleSubmit = async (yarnId) => {
         setIsLoading(true);
+        console.log(yarnId, "YARN ID");
         const update = await axiosPublic.patch(
-            `/api/update-order/${jobId}`, changedField
+            `/api/update-order/${yarnId}`, changedField
         );
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
@@ -226,6 +238,7 @@ const AllOrders = ({ orderType }) => {
                                 orderId={jobId}
                                 orders={orders}
                                 orderType={orderType}
+                                changedField={changedField}
                             />
                         )}
                         <table className="w-full border-collapse factory-table" style={{ minWidth: '1200px' }}>

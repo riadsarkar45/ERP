@@ -86,7 +86,7 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
             const orderType = w.orderType || "Unknown";
 
             w.compositions?.forEach((c: any) => {
-                // ✅ Find the EXACT row by matching BOTH color AND composition
+                //  Find the EXACT row by matching BOTH color AND composition
                 const matchingRowIndex = rows.findIndex((row: any) => 
                     row.color === c.color && 
                     row.composition === c.composition

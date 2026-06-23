@@ -1,7 +1,7 @@
 import express from "express";
-import { updateJobs } from "../controllers/orders/deliveries";
 import { updateAuditStatus } from "../controllers/audit/updateAuditStatus";
 import { updateJobStatus } from "../controllers/jobs/updateJobStatus";
+import { updateJobs } from "../controllers/deliveries/newDelivery";
 
 const updateRouters = express.Router();
 

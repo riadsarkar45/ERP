@@ -11,7 +11,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                                 <div key={i}>{wo.factoryName || "NO FACTORY FOUND"}</div>
                             ))}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td onClick={() => handleEditRowData(job.jobNo)} style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {job.jobNo || "NO JOB FOUND"}
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
@@ -92,7 +92,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
-                                    const diff =  wrk.totalGreyDelivery - wrk.workOrderQty;
+                                    const diff = wrk.totalGreyDelivery - wrk.workOrderQty;
                                     const exceeded = diff > 0;
                                     return (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>

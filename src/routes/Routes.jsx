@@ -16,6 +16,7 @@ import Cutting from "../dashboard/pages/cutting/DailyFabricCutting";
 import DailyFabricCutting from "../dashboard/pages/cutting/DailyFabricCutting";
 import ApiMonitoring from "../dashboard/pages/monitoring/ApiMonitoring";
 import DyeingOrders from "../dashboard/pages/DyeingOrders";
+import UploadFile from "../dashboard/pages/upload/UploadFile";
 
 const routers = createBrowserRouter([
     {
@@ -85,6 +86,10 @@ const routers = createBrowserRouter([
                     {
                         path: "dyeing-order",
                         element: <DyeingOrders />
+                    },
+                    {
+                        path: "upload",
+                        element: <UploadFile />
                     }
                 ]
             }

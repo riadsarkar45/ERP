@@ -6,9 +6,11 @@ import { Server as HTTPServer } from 'http';
 let io: SocketIOServer;
 
 export const initSocket = (server: HTTPServer): SocketIOServer => {
+  const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
+
   io = new SocketIOServer(server, {
     cors: {
-      origin: process.env.CORS_ORIGIN || "https://erp-three-pied.vercel.app", // Adjust to your frontend URL
+      origin: process.env.CORS_ORIGIN || corsOrigins, // Adjust to your frontend URL
       methods: ["GET", "POST"],
       credentials: true
     }

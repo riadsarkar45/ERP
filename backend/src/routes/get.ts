@@ -7,6 +7,7 @@ import { getAllJobs } from "../controllers/jobs/allJobs";
 import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
 import { deliveryDetail } from "../controllers/deliveries/fetchDeliveries";
 import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
+import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 
 const getRouters = express.Router();
 
@@ -26,6 +27,6 @@ getRouters.get("/styles", apiLimiter, styleRequirements);
 
 getRouters.get("/styles/:jobNo", apiLimiter, styleRequirements);
 
-getRouters.get("/deliveries/:id", apiLimiter, deliveryDetail);
+getRouters.get("/deliveries/:jobNumber", apiLimiter, getDeliveryData);
 
 export default getRouters;

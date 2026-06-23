@@ -10,7 +10,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                                 wo.factoryName === "NULL" ? <div>NO FACTORY SET YET</div> : <div className="text-green-500 font-bold " key={i}> <span>{wo.factoryName}</span> </div>
                             ))}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td onClick={() => handleEditRowData(job.jobNo)} style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {job.jobNo || "NO JOB FOUND"}
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>

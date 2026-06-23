@@ -1,16 +1,16 @@
 import express from "express";
 import multer from "multer";
-// import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 import { createNewAudit } from "../controllers/audit/newAudit";
 import { createNewStyleRequirement } from "../controllers/newStyleRequirements/createNewReq";
 import { cuttingDataUpdate } from "../controllers/fabricCutting/fabricCuttingData";
 import { createNewJob } from "../controllers/orders/createNewJob";
+import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 
 const router = express.Router();
 
 const upload = multer({ dest: "uploads/" });
 
-// router.post("/upload", upload.single("file"), fileUpload);
+router.post("/upload", upload.single("file"), fileUpload as any);
 
 router.post("/create-job", createNewJob)
 
