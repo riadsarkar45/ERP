@@ -2,13 +2,14 @@ import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
 export const getDeliveryData = async (req: Request, res: Response) => {
-    const { jobNumber } = req.params as any;
+    const { jobNumber, orderType } = req.params as any;
     if (!jobNumber) {
         return res.send({ message: "No job number provided", type: "error" })
     }
+    console.log(orderType);
     const findJobsDetail = await prisma.workOrder.findMany(
         {
-            where: { jobNo: jobNumber },
+            where: { jobNo: jobNumber, orderType: orderType },
             select: {
                 jobId: true,
                 jobNo: true,
@@ -25,6 +26,7 @@ export const getDeliveryData = async (req: Request, res: Response) => {
                     }
                 },
                 compositions: {
+                    where: { orderType: orderType },
                     select: {
                         id: true,
                         composition: true,

@@ -12,7 +12,7 @@ const Deliveries = ({ deliveries, orderType, changedField, handleEditOnChange, h
   const styleReq = deliveries?.data?.[0]?.styleRequirement;
   const allCompositions = list.flatMap(item => item.compositions || []);
   const totalOrderQty = deliveries?.data?.[0]?.styleRequirement?.rows?.reduce((sum, r) => sum + (r.orderQty || 0), 0) || 0;
-  console.log(changedField.deliveryType, "changedField");
+  console.log(changedField, "changedField");
   const baseRows = list.flatMap((item, i) =>
     (item.compositions || []).map((comp, j) => ({
       id: `${item.jobNo}-${i}-${j}`,
@@ -40,7 +40,7 @@ const Deliveries = ({ deliveries, orderType, changedField, handleEditOnChange, h
   const deliveryTypes = [];
 
   if (orderType === "knittingOrder") {
-    deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Received");
+    deliveryTypes.push("Yarn Delivery", "Yarn Return", "Yarn Received");
   }
   if (orderType === "dyeingOrder") {
     deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return Received", "Grey Received From Dyeing", "Finish Fabric Received", "Sent For Compacting", "Received From Compacting");

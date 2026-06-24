@@ -32,22 +32,44 @@ export const updateJobs = async (req: Request, res: Response) => {
             return res.status(404).json({ type: "error", message: "Yarn not found" });
         }
 
-        await prisma.$transaction(
-            deliveries.map((delivery) =>
-                prisma.deliveries.create({
-                    data: {
-                        deliveryDate: new Date(date),
-                        challanNo: Number(challanNo),
-                        deliveryQty: Number(delivery.qty),
-                        deliveryType: delivery.deliveryType,
-                        yarnId: checkYarnIfExist.id,
-                        fromFactory,
-                        toFactory,
-                        yarnCompId: checkYarnIfExist.id,
-                    }
-                })
-            )
+        const delivers = req.body.deliveries.filter(
+            (d: any) => d.deliveryType !== undefined && d.qty !== undefined
         );
+
+        if (delivers.length > 0) {
+            await prisma.$transaction(
+                deliveries.map((delivery: any) =>
+                    prisma.deliveries.create({
+                        data: {
+                            deliveryDate: new Date(date),
+                            challanNo: Number(challanNo),
+                            deliveryQty: Number(delivery.qty),
+                            deliveryType: delivery.deliveryType,
+                            yarnId: checkYarnIfExist.id,
+                            fromFactory,
+                            toFactory,
+                            yarnCompId: checkYarnIfExist.id,
+                        }
+                    })
+                )
+            );
+        } else {
+            await prisma.deliveries.create({
+                data: {
+                    deliveryDate: new Date(date),
+                    challanNo: Number(challanNo),
+                    deliveryQty: Number(req.body.yarnDelivery),
+                    deliveryType: req.body.deliveryType,
+                    toFactory: req.body.toFactory,
+                    fromFactory: req.body.fromFactory,
+                    yarnId: Number(checkYarnIfExist.id),
+                    yarnCompId: Number(checkYarnIfExist.id)
+                }
+            });
+        }
+
+
+
 
         return res.status(200).json({ type: "success", message: "Delivery quantity updated successfully" });
 

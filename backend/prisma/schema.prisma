@@ -35,7 +35,7 @@ model WorkOrder {
   jobs               jobs?             @relation(fields: [jobId], references: [id])
   jobId              Int?
   yarnDyeingJobs     yarnDyeingJobs[]
-  factoryName        String @default("NULL")
+  factoryName        String            @default("NULL")
 
   @@index([styleRequirementId])
   @@index([styleNo])
@@ -43,13 +43,13 @@ model WorkOrder {
 }
 
 model yarnDyeingJobs {
-  id             Int              @id @default(autoincrement())
-  color          String
-  qty            Float
-  composition    String
-  createdAt      DateTime         @default(now())
-  workOrder      WorkOrder?       @relation(fields: [workOrderId], references: [id])
-  workOrderId    Int?
+  id          Int        @id @default(autoincrement())
+  color       String
+  qty         Float
+  composition String
+  createdAt   DateTime   @default(now())
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  workOrderId Int?
   // yarnDeliveries yarnDeliveries[]
 }
 
@@ -70,6 +70,7 @@ model Composition {
   workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
   deliveries   deliveries[]
   workOrderId  Int
+  orderType    String @default("null")
 
   @@index([workOrderId])
   @@index([color])

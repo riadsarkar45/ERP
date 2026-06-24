@@ -25,6 +25,7 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     // const [editCellId, setEditCellId] = useState(null);
+
     const { fetchData, error, loading } = useFetchData();
     useEffect(() => {
         fetchData(`/api/work-order/${orderType}`).then(data => {
@@ -41,6 +42,7 @@ const AllOrders = ({ orderType }) => {
     }
 
     const COLUMNS = [];
+
 
     if (orderType === "knittingOrder") {
         COLUMNS.push(
@@ -135,9 +137,6 @@ const AllOrders = ({ orderType }) => {
             { header: "SENT FOR AOP", width: "13mm", inputName: "totalYarnDelivery" },
             { header: "DEL. SHORT & EXCESS", width: "12mm" },
             { header: "RECEIVED FROM AOP", width: "13mm" },
-            { header: "SENT FOR COMPACTING", width: "13mm" },
-            { header: "RECEIVED FROM COMPACTING", width: "13mm" },
-            { header: "RCVD SHORT & EXCESS", width: "13mm" },
             { header: "PAYABLE AMOUNT", width: "12mm" },
             { header: "PAID BILLING AMOUNT", width: "12mm" },
             { header: "PENDING BILLING AMOUNT", width: "12mm" },
@@ -147,7 +146,7 @@ const AllOrders = ({ orderType }) => {
     const handleEditRowData = async (jobNumber) => {
         setLoadingDeliveries(true);
         setIsEditing(true);
-        const res = await axiosPublic.get(`/api/deliveries/${jobNumber}`);
+        const res = await axiosPublic.get(`/api/deliveries/${jobNumber}/${orderType}`);
         console.log(res.data, "deliveries");
         if (res.data) {
             setLoadingDeliveries(false);
@@ -193,7 +192,7 @@ const AllOrders = ({ orderType }) => {
         );
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-            const devs = await axiosPublic.get(`/api/deliveries/${jobId}`);
+            const devs = await axiosPublic.get(`/api/deliveries/${jobId}/${orderType}`);
             setDeliveries(devs.data);
             console.log('fetched');
             setOrders(res.data);

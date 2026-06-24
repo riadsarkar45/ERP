@@ -56,6 +56,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                             orderQty: Number(orderQty),
                             workOrderQty: Number(workOrderQty),
                             unitePrice: Number(unitPrice),
+                            orderType: orderType
                         }))
                     }
                 }

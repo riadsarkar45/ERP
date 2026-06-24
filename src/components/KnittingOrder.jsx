@@ -1,13 +1,21 @@
-const KnittingOrder = ({ orders, handleEditRowData }) => {
+import { useState } from "react";
+
+const KnittingOrder = ({ orders, handleEditRowData, getFrozenStyle }) => {
+    const [getJobIndex, setJobIndex] = useState("")
+
+    const hoverColorChange = (jobId) => {
+        console.log(jobId, "job id");
+        setJobIndex(jobId)
+    }
     return (
         <tbody>
             {orders?.map((job, jobIndex) => {
                 const workOrders = job.workOrders || [];
                 return (
-                    <tr key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                    <tr className={`${getJobIndex === jobIndex && "bg-green-600 bg-opacity-15"}`} onClick={() => hoverColorChange(jobIndex)} key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={getFrozenStyle} className="" style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders?.map((wo, i) => (
-                                wo.factoryName === "NULL" ? <div>NO FACTORY SET YET</div> : <div className="text-green-500 font-bold " key={i}> <span>{wo.factoryName}</span> </div>
+                                wo.factoryName === "NULL" ? <div className="border-b">NO FACTORY SET YET</div> : <div className="text-green-500 font-bold " key={i}> <span>{wo.factoryName}</span> </div>
                             ))}
                         </td>
                         <td onClick={() => handleEditRowData(job.jobNo)} style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
@@ -38,8 +46,8 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((comp, j) => (
-                                    <span key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {comp.composition || "NO COMPOSITION FOUND"}
+                                    <span key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'grid' }}>
+                                        {comp.composition || "-"}
                                     </span>
                                 ))
                             )}
@@ -50,7 +58,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((col, j) => (
                                     <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
-                                        {col.color || "NO COLOR FOUND"}
+                                        {col.color || "-"}
                                     </div>
                                 ))
                             )}
@@ -61,7 +69,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((ord, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {ord.orderQty || "NO QTY FOUND"}
+                                        {ord.orderQty || "-"}
                                     </div>
                                 ))
                             )}
@@ -72,7 +80,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((unt, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {unt.unitePrice || "NO PRICE FOUND"}
+                                        {unt.unitePrice || "-"}
                                     </div>
                                 ))
                             )}
@@ -83,7 +91,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.workOrderQty || "NO WO QTY FOUND"}
+                                        {wrk.workOrderQty || "-"}
                                     </div>
                                 ))
                             )}
@@ -94,7 +102,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalYarnDelivery || "NOT DELIVERED YET"}
+                                        {wrk.yarnDeliveriesWithColor.YarnDelivery || "-"}
                                     </div>
                                 ))
                             )}
@@ -118,17 +126,19 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {wrk.totalYarnReturn || <span>NOT YARN RETURNED   YET</span>}
+                                    <div key={`${i}-${j}`} className="text-red-600 font-extrabold" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
+                                        {wrk.yarnDeliveriesWithColor.YarnReturn || <span>-</span>}
                                     </div>
                                 ))
                             )}
                         </td>
+                        {/* yarn received header and column */}
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {wrk.greyReceived || <span>NO YARN RETURNED   YET</span>}
+                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap' }}>
+                                        {wrk.yarnDeliveriesWithColor.YarnReceived || <span>-</span>}
+
                                     </div>
                                 ))
                             )}
@@ -137,9 +147,9 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
                                     // 1. Safe Math: Convert to numbers, fallback to 0 if missing to prevent "NaN"
-                                    const grey = Number(wrk.greyReceived) || 0;
-                                    const ret = Number(wrk.totalYarnReturn) || 0;
-                                    const del = Number(wrk.totalYarnDelivery) || 0;
+                                    const grey = Number(wrk.yarnDeliveriesWithColor.YarnReceived) || 0;
+                                    const ret = Number(wrk.yarnDeliveriesWithColor.YarnReturn) || 0;
+                                    const del = Number(wrk.yarnDeliveriesWithColor.YarnDelivery) || 0;
 
                                     const diff2 = grey + ret - del;
                                     const exceed = diff2 < 0;
@@ -169,8 +179,8 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {wrk.greyReceived * wrk.unitePrice || <span>NO PAYABLE AMOUNT IS SET YET</span>}
+                                    <div key={`${i}-${j}`} className="text-red-600 font-extrabold" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
+                                        {wrk.yarnDeliveriesWithColor.YarnReceived * wrk.unitePrice || "-"}
                                     </div>
                                 ))
                             )}
@@ -178,7 +188,7 @@ const KnittingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                                    <div key={`${i}-${j}`} className="text-red-600 font-extrabold" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
                                         PAID BILLING AMOUNT
                                     </div>
                                 ))

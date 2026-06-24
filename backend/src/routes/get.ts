@@ -27,6 +27,6 @@ getRouters.get("/styles", apiLimiter, styleRequirements);
 
 getRouters.get("/styles/:jobNo", apiLimiter, styleRequirements);
 
-getRouters.get("/deliveries/:jobNumber", apiLimiter, getDeliveryData);
+getRouters.get("/deliveries/:jobNumber/:orderType", apiLimiter, getDeliveryData);
 
 export default getRouters;

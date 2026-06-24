@@ -8,7 +8,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                     <tr key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders?.map((wo, i) => (
-                                <div key={i}>{wo.factoryName || "NO FACTORY FOUND"}</div>
+                                <div key={i}>{wo.factoryName || "-"}</div>
                             ))}
                         </td>
                         <td onClick={() => handleEditRowData(job.jobNo)} style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
@@ -16,22 +16,22 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders?.map((wo, i) => (
-                                <div key={i}>{wo.workOrderNo || "NO WORK ORDER FOUND"}</div>
+                                <div key={i}>{wo.workOrderNo || "-"}</div>
                             ))}
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) => (
-                                <div key={i}>{wo.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}</div>
+                                <div key={i}>{wo.styleRequirement?.buyerName || "-"}</div>
                             ))}
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) => (
-                                <div key={i}>{wo.styleRequirement?.styleNo || "NO STYLE NO FOUND"}</div>
+                                <div key={i}>{wo.styleRequirement?.styleNo || "-"}</div>
                             ))}
                         </td>
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders?.map((mon, i) => (
-                                <div key={i}>{mon.month || "NO MONTH NAME FOUND"}</div>
+                                <div key={i}>{mon.month || "-"}</div>
                             ))}
                         </td>
 
@@ -40,7 +40,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((comp, j) => (
                                     <span key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {comp.composition || "NO COMPOSITION FOUND"}
+                                        {comp.composition || "-"}
                                     </span>
                                 ))
                             )}
@@ -51,7 +51,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((col, j) => (
                                     <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
-                                        {col.color || "NO COLOR FOUND"}
+                                        {col.color || "-"}
                                     </div>
                                 ))
                             )}
@@ -62,7 +62,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((ord, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {ord.orderQty || "NO QTY FOUND"}
+                                        {ord.orderQty || "-"}
                                     </div>
                                 ))
                             )}
@@ -73,7 +73,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((unt, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {unt.workOrderQty || "NO PRICE FOUND"}
+                                        {unt.workOrderQty || "-"}
                                     </div>
                                 ))
                             )}
@@ -84,7 +84,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalGreyDelivery || "NOT DELIVERED YET"}
+                                        {wrk.totalGreyDelivery || "-"}
                                     </div>
                                 ))
                             )}
@@ -108,7 +108,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalGreyReturnReceived || "NOT RETURNED YET"}
+                                        {wrk.yarnDeliveriesWithColor.GreyReturnReceived || "-"}
                                     </div>
                                 ))
                             )}
@@ -118,7 +118,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalGreyReceivedFromDyeing || "NOT RECEIVED    YET"}
+                                        {wrk.yarnDeliveriesWithColor.GreyReceived || "-"}
                                     </div>
                                 ))
                             )}
@@ -127,7 +127,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalFinishFabricReceived || "NOT RECEIVED    YET"}
+                                        {wrk.yarnDeliveriesWithColor.FinishReceived || "-"}
                                     </div>
                                 ))
                             )}
@@ -137,11 +137,11 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                         <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
-                                    const diff = wrk.workOrderQty - wrk.totalYarnDelivery;
-                                    const exceeded = diff < 0;
+                                    const diff = wrk.yarnDeliveriesWithColor.FinishReceived - wrk.yarnDeliveriesWithColor.GreyReceived || 0
+                                    const exceeded = diff < 0 || 0;
                                     return (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                            {exceeded ? diff : `(${Math.abs(diff)})`}
+                                            {exceeded ? Math.abs(diff) : `(${Math.abs(diff)})` }
                                         </div>
                                     );
                                 })
@@ -152,7 +152,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.unitePrice || "PRICE NOT SET YET"}
+                                        {wrk.unitePrice || "-"}
                                     </div>
                                 ))
                             )}
@@ -162,7 +162,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalSentForCompacting || "NOT SENT YET"}
+                                        {wrk.yarnDeliveriesWithColor.SentForCompacting || "-"}
                                     </div>
                                 ))
                             )}
@@ -173,7 +173,7 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
-                                        {wrk.totalReceivedFromCompacting || "NOT SENT YET"}
+                                        {wrk.yarnDeliveriesWithColor.ReceivedFromCompacting || "-"}
                                     </div>
                                 ))
                             )}
@@ -183,8 +183,8 @@ const DyeingOrder = ({ orders, handleEditRowData }) => {
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.totalGreyReceivedFromDyeing * wrk.unitePrice}
-
+                                        {wrk.yarnDeliveriesWithColor.GreyReceived * wrk.unitePrice || "-"}
+                                        
                                     </div>
                                 ))
                             )}
