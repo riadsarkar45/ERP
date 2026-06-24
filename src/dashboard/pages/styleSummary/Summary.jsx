@@ -495,7 +495,7 @@ export default function Summary() {
                                                 const isExceeded = diff > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 whitespace-nowrap ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
-                                                        {sent === 0 && received === 0 ? "_" : (isExceeded ? `(${diff})` : Math.abs(diff))}
+                                                        {sent === 0 && received === 0 ? "_" : (isExceeded ? `(${Math.abs(diff)})` : Math.abs(diff))}
                                                     </div>
                                                 );
                                             })}

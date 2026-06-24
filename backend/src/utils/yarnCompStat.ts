@@ -29,7 +29,7 @@ export const calculateYarnCompStat = (orders: any[]) => {
                 const totalGreyReturnReceived = sumByType(deliveries, "Grey Return Received");
                 const totalGreyReceivedFromDyeing = sumByType(deliveries, "Grey Received From Dyeing");
                 const totalYarnReturn = sumByType(deliveries, "Yarn Return");
-                const totalFinishFabricReceived = sumByType(deliveries, "Finish Fabric Received");
+                const totalFinishFabricReceived = sumByType(deliveries, "Finish Received");
                 const totalSentForCompacting = sumByType(deliveries, "Sent For Compacting");
                 const totalReceivedFromCompacting = sumByType(deliveries, "Received From Compacting");
                 const totalSentForAop = sumByType(deliveries, "Sent for AOP");
