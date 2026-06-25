@@ -410,7 +410,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 20. TOTAL KNITTING (GREY) */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Grey_Received', 19)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Received', 19)}
 
                                     {/* 21. RETURN YARN RECEIVED */}
                                     {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Return', 20)}
@@ -422,7 +422,7 @@ export default function Summary() {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
-                                                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Received');
+                                                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Yarn_Received');
                                                 const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
                                                 const balance = (greyReceived + yarnReturn) - (workOrderQty - yarnDelivery);
                                                 return (
@@ -441,10 +441,10 @@ export default function Summary() {
                                     {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return_Received', 23)}
 
                                     {/* 25. GREY RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received_From_Dyeing', 24)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 24)}
 
                                     {/* 26. FINISH RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Finish_Fabric_Received', 25)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Finish_Received', 25)}
 
                                     {/* 27. GREY BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(26)}>
