@@ -197,7 +197,6 @@ export default function Summary() {
     const [activeFilters, setActiveFilters] = useState({});
     // Which dropdown is open: colIndex or null
     const [openFilter, setOpenFilter] = useState(null);
-    const [anchorEl, setAnchorEl] = useState(null);
     // Position of open dropdown
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
