@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon } from "lucide-react";
+import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
 import { useNavigate } from "react-router-dom";
+import { useFetchData } from "../../../hooks/fetch";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -26,13 +27,13 @@ const COLUMNS = [
 // type "row"    → value lives directly on the row object
 // type "subrow" → value lives in row.rows[] sub-array; row matches if ANY sub-row matches
 const FILTERABLE_COLS = {
-    0: { key: "salesContact",  type: "row" },
-    1: { key: "buyerName",     type: "row" },
-    2: { key: "jobNo",         type: "row" },
-    3: { key: "styleNo",       type: "row" },
-    4: { key: "poNo",          type: "row" },
-    5: { key: "color",         type: "subrow" },
-    6: { key: "composition",   type: "subrow" },
+    0: { key: "salesContact", type: "row" },
+    1: { key: "buyerName", type: "row" },
+    2: { key: "jobNo", type: "row" },
+    3: { key: "styleNo", type: "row" },
+    4: { key: "poNo", type: "row" },
+    5: { key: "color", type: "subrow" },
+    6: { key: "composition", type: "subrow" },
 };
 
 // ── Frozen column widths ─────────────────────────────────────────────────────
@@ -197,6 +198,11 @@ export default function Summary() {
     const [activeFilters, setActiveFilters] = useState({});
     // Which dropdown is open: colIndex or null
     const [openFilter, setOpenFilter] = useState(null);
+    const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "" })
+    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "" })
+    const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
+    const { fetchData, error, loading } = useFetchData();
+
     // Position of open dropdown
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
@@ -275,7 +281,7 @@ export default function Summary() {
     const applyFilter = (colIndex, selectedSet) => {
         setActiveFilters(prev => {
             const next = { ...prev };
-        if (selectedSet.size === 0) {
+            if (selectedSet.size === 0) {
                 delete next[colIndex];
             } else {
                 next[colIndex] = selectedSet;
@@ -335,6 +341,49 @@ export default function Summary() {
         borderBottom: '1px solid #e5e7eb',
     });
 
+    const handleEdit = (rowId, editingField, currentValue) => {
+        setIsEditing({ rowId, isEdit: false, editingField });
+        setChangedField({ editingRow: editingField, editingValue: currentValue });
+    }
+
+    const handleOnChange = (e) => {
+        const { name, value } = e.target;
+        if (name !== changedField.editingRow) {
+            setChangedField({ editingRow: name, editingValue: value });
+            return; // ← stop here
+        }
+        setChangedField({ editingValue: value, editingRow: name })
+        setIsEditing(prev => ({ ...prev, isEdit: true }));
+
+        console.log(value, name);
+    }
+
+    const handleSubmit = async () => {
+        setIsLoading({ loadAfterUpdate: true })
+        console.log(isEditing, "isEditing");
+        console.log(changedField, "changedField");
+        const updatedData = {
+            [isEditing.editingField]: changedField.editingValue
+        }
+        const sendDataToUpdate = await axiosPublic.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
+        console.log(sendDataToUpdate.data.type);
+        if (sendDataToUpdate.data.type === "success") {
+            const getUpdatedStyles = await axiosPublic.get("/api/styles")
+            setRawData(getUpdatedStyles.data.data);
+            setIsLoading({ loadAfterUpdate: false })
+            setIsEditing({ isEdit: false })
+        }
+    }
+
+    const handleRefresh = () => {
+        setIsLoading({ refreshLoading: true })
+        fetchData(`/api/styles`).then(data => {
+            if (data) setRawData(data.data);
+            setIsLoading({ refreshLoading: false })
+
+        });
+    }
+
     return (
         <DashboardLayout>
             {/* ── Action Bar ─────────────────────────────────────────────────── */}
@@ -345,9 +394,27 @@ export default function Summary() {
                 >
                     <PlusCircle size={18} />
                 </button>
-                <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
-                    <RefreshCcw size={18} />
-                </button>
+                {
+                    isLoading.refreshLoading ?
+                        <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
+                            <span className="animate-spin"><RefreshCcw size={18} /></span>
+                        </button> :
+                        <button onClick={() => handleRefresh()} className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
+                            <RefreshCcw size={18} />
+                        </button>
+                }
+
+                {
+                    isEditing.isEdit && (
+                        isLoading.loadAfterUpdate ?
+                            <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
+                                <Loader size={18} />
+                            </button> :
+                            <button onClick={() => handleSubmit()} className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
+                                <Save size={18} />
+                            </button>
+                    )
+                }
 
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
@@ -464,11 +531,10 @@ export default function Summary() {
                                                     ref={el => filterBtnRefs.current[index] = el}
                                                     onClick={(e) => openFilterDropdown(index, e)}
                                                     title={hasFilter ? "Filter active" : "Filter"}
-                                                    className={`flex-shrink-0 flex items-center justify-center w-5 h-5 rounded transition-colors ${
-                                                        hasFilter
-                                                            ? 'bg-blue-500 text-white'
-                                                            : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200'
-                                                    }`}
+                                                    className={`flex-shrink-0 flex items-center justify-center w-5 h-5 rounded transition-colors ${hasFilter
+                                                        ? 'bg-blue-500 text-white'
+                                                        : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200'
+                                                        }`}
                                                 >
                                                     <Filter size={11} />
                                                 </button>
@@ -488,19 +554,83 @@ export default function Summary() {
                                 <tr key={i} className="group">
 
                                     {/* 1. SALES CONTACT */}
-                                    <td className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>{row.salesContact}</td>
+                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>
+                                        {
+                                            isEditing.editingField === "salesContact" && isEditing.rowId === row.id ?
+                                                <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                    name="salesContract"
+                                                    className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : row.salesContact
+                                        }
+                                    </td>
 
                                     {/* 2. BUYER */}
-                                    <td className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>{row.buyerName}</td>
+                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>
+                                        {/* {row.buyerName} */}
+                                        {
+                                            isEditing.editingField === "buyerName" && isEditing.rowId === row.id ?
+                                                <input
+                                                    onChange={(e) => handleOnChange(e)}
+                                                    name="buyerName"
+                                                    value={changedField.editingValue}
+                                                    className="border outline-none w-full p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                    type="text" /> : row.buyerName
+                                        }
+                                    </td>
 
                                     {/* 3. JOB NO */}
-                                    <td onDoubleClick={() => handleRedirect(row.jobNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center cursor-pointer hover:text-blue-600 group-hover:bg-gray-50" style={getFrozenStyle(2)}>{row.jobNo}</td>
+                                    <td onDoubleClick={() => handleRedirect(row.jobNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center cursor-pointer hover:text-blue-600 group-hover:bg-gray-50" style={getFrozenStyle(2)}>
+                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)} >
+
+
+                                            {
+                                                isEditing.editingField === "jobNo" && isEditing.rowId === row.id ?
+                                                    <input
+                                                        onChange={(e) => handleOnChange(e)}
+                                                        value={changedField.editingValue}
+                                                        name="jobNo"
+                                                        className=" bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md" type="text" /> : row.jobNo
+                                            }
+                                        </span>
+                                    </td>
 
                                     {/* 4. STYLE */}
-                                    <td className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>{row.styleNo}</td>
+                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>
+                                        {/* {row.styleNo} */}
+                                        {
+                                            isEditing.editingField === "styleNo" && isEditing.rowId === row.id ?
+                                                <input
+                                                    value={changedField.editingValue}
+                                                    name="jobNo"
+                                                    value={row.styleNo}
+                                                    className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                    type="text"
+                                                    style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
+                                                    onChange={(e) => {
+                                                        e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
+                                                        handleOnChange(e)
+                                                    }}
+                                                /> : row.styleNo
+                                        }
+                                    </td>
 
                                     {/* 5. PO NO */}
-                                    <td className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>{row.poNo}</td>
+                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>
+
+                                        {
+                                            isEditing.editingField === "poNo" && isEditing.rowId === row.id ? <input
+                                                name="poNo"
+                                                value={changedField.editingValue}
+                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
+                                                onChange={(e) => {
+                                                    e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
+                                                    handleOnChange(e)
+                                                }}
+                                            /> : row.poNo
+                                        }
+
+                                    </td>
 
                                     {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
