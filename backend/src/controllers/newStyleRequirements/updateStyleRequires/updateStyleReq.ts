@@ -17,6 +17,15 @@ export const updateStyleReq = async (req: Request, res: Response) => {
         }
     })
 
+    const checkIfJobExist = await prisma.jobs.findUnique(
+        {
+            where: {jobNo: jobNo},
+            select: {
+                id: true,
+            }
+        }
+    )
+
     if (!checkIfDataExist) {
         return res.send({ message: "Requested data not updated", type: "error" });
     }
@@ -36,7 +45,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
 
     if (jobNo) {
         await prisma.jobs.update({
-            where: { jobNo: jobNo },
+            where: { id: Number(checkIfDataExist) },
             data: {
                 jobNo: jobNo
             }
