@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
 export const updateStyleReq = async (req: Request, res: Response) => {
-    const { salesContact, buyerName, styleNo, poNo } = req.body as 
-    { salesContact: string, buyerName: string, styleNo: string, poNo: string }
+    const { salesContact, buyerName, styleNo, poNo, jobNo } = req.body as
+        { salesContact: string, buyerName: string, styleNo: string, poNo: string, jobNo: string }
 
     const { jobId } = req.params as { jobId: string };
     const jobIdToNumber = Number(jobId)
@@ -28,10 +28,20 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                 salesContact: salesContact,
                 buyerName: buyerName,
                 styleNo: styleNo,
+                jobNo: jobNo,
                 poNo: poNo,
             }
         }
     )
+
+    if (jobNo) {
+        await prisma.jobs.update({
+            where: { jobNo: jobNo },
+            data: {
+                jobNo: jobNo
+            }
+        })
+    }
 
     if (!update) {
         return res.send({ message: "Update Failed", type: "error" })
