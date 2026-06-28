@@ -29,6 +29,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
             id: true,
             rows: {
                 select: {
+                    id: true,
                     color: true,
                     composition: true,
                     finishDia: true,

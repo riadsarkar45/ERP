@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader } from "lucide-react";
+import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
 import { useNavigate } from "react-router-dom";
 import { useFetchData } from "../../../hooks/fetch";
-
+import * as XLSX from "xlsx";
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
     "SALES CONTACT NO", "BUYER", "JOB NO", "STYLE", "PO NO", "COLOR", "COMPOSITION",
@@ -198,8 +198,8 @@ export default function Summary() {
     const [activeFilters, setActiveFilters] = useState({});
     // Which dropdown is open: colIndex or null
     const [openFilter, setOpenFilter] = useState(null);
-    const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "" })
-    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "" })
+    const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
+    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const { fetchData, error, loading } = useFetchData();
 
@@ -215,12 +215,6 @@ export default function Summary() {
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
-    const scrollHorizontal = (direction) => {
-        scrollContainerRef.current?.scrollBy({ left: direction === 'left' ? -300 : 300, behavior: 'smooth' });
-    };
-    const scrollVertical = (direction) => {
-        scrollContainerRef.current?.scrollBy({ top: direction === 'up' ? -150 : 150, behavior: 'smooth' });
-    };
 
     // ── Get unique values for a column filtered by all OTHER active filters ───
     // Mirrors Excel: the dropdown for column X only shows values that exist in
@@ -341,9 +335,10 @@ export default function Summary() {
         borderBottom: '1px solid #e5e7eb',
     });
 
-    const handleEdit = (rowId, editingField, currentValue) => {
-        setIsEditing({ rowId, isEdit: false, editingField });
-        setChangedField({ editingRow: editingField, editingValue: currentValue });
+    const handleEdit = (rowId, editingField, currentValue, changedTable) => {
+        console.log(rowId, editingField, currentValue, changedTable);
+        setIsEditing({ rowId, isEdit: false, editingField, changedRow: changedTable });
+        setChangedField({ editingRow: editingField, editingValue: currentValue, changedRow: changedTable });
     }
 
     const handleOnChange = (e) => {
@@ -363,8 +358,11 @@ export default function Summary() {
         console.log(isEditing, "isEditing");
         console.log(changedField, "changedField");
         const updatedData = {
-            [isEditing.editingField]: changedField.editingValue
+            [isEditing.editingField]: changedField.editingValue,
+            changedTable: isEditing.changedRow,
+            rowId: isEditing.rowId
         }
+        console.log(isEditing.rowId, "row id");
         const sendDataToUpdate = await axiosPublic.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
         console.log(sendDataToUpdate.data.type);
         if (sendDataToUpdate.data.type === "success") {
@@ -383,6 +381,104 @@ export default function Summary() {
 
         });
     }
+
+    const handleExportExcel = () => {
+        const wsData = [];
+
+        // Header row
+        wsData.push(COLUMNS);
+
+        // Data rows — mirrors exactly what the table renders
+        filteredData.forEach(row => {
+            const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
+            const numSubRows = row.rows.length;
+
+            for (let j = 0; j < numSubRows; j++) {
+                const cell = row.rows[j];
+                const cb = compBreakdown[j] || {};
+
+                const finishQty = Number(cell.finishRequiredQty) || 0;
+                const processLoss = Number(row.processLoss) || 0;
+                const totalRequired = finishQty + finishQty * (processLoss / 100);
+                const knittingWOQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
+
+                const shortExcess0 = cb?.status ? "_" : (totalRequired - knittingWOQty).toFixed(2);
+                const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
+                const shortExcess1 = totalRequired === 0 ? "_" : (totalRequired - yarnDelivery).toFixed(2);
+
+                const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
+                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Yarn_Received');
+                const balance = (greyReceived + yarnReturn) - (knittingWOQty - yarnDelivery);
+
+                const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
+                const greyReceivedDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing');
+                const greyDelivery = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
+                const greyBalance = greyReturnRcvd + greyReceivedDyeing - greyDelivery;
+                const hasGreyData = greyReturnRcvd || greyReceivedDyeing || greyDelivery;
+
+                const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_for_AOP');
+                const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_from_AOP');
+                const aopBalance = aopReceived - aopSent;
+                const aopLoss = aopSent > 0 ? (((aopSent - aopReceived) / aopSent) * 100).toFixed(2) + "%" : "_";
+
+                const rpSent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
+                const rpGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
+                const rpFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
+                const rpBalance = (rpGrey + rpFinish) - rpSent;
+                const rpLoss = rpSent > 0 ? (((rpSent - (rpGrey + rpFinish)) / rpSent) * 100).toFixed(2) + "%" : "_";
+
+                wsData.push([
+                    j === 0 ? row.salesContact : "",           // SALES CONTACT NO
+                    j === 0 ? row.buyerName : "",              // BUYER
+                    j === 0 ? row.jobNo : "",                  // JOB NO
+                    j === 0 ? row.styleNo : "",                // STYLE
+                    j === 0 ? row.poNo : "",                   // PO NO
+                    cell.color,                                // COLOR
+                    cell.composition,                          // COMPOSITION
+                    cell.finishDia,                            // FINISH DIA
+                    cell.orderQty,                             // ORDER QTY
+                    totalRequired.toFixed(2),                  // 1st BOOKING
+                    "additional",                              // ADDITIONAL BOOKING
+                    totalRequired.toFixed(2),                  // REQUIRED YARN QTY
+                    cb?.status ? "_" : knittingWOQty,          // KNITTING WORK ORDER QTY
+                    cb?.status ? "_" : shortExcess0,           // SHORT & EXCESS
+                    cb?.status ? "_" : yarnDelivery,           // YARN DELIVERY
+                    cb?.status ? "_" : shortExcess1,           // SHORT & EXCESS (+/-)
+                    cb?.status ? "_" : getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye'),
+                    cb?.status ? "_" : getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye'),
+                    "party stock",                             // PARTY STOCK
+                    cb?.status ? "_" : greyReceived,           // TOTAL KNITTING (GREY)
+                    cb?.status ? "_" : yarnReturn,             // RETURN YARN RECEIVED
+                    cb?.status ? "_" : balance.toFixed(2),     // BALANCE (+/-)
+                    cb?.status ? "_" : greyDelivery,           // GREY DELIVERY FOR DYEING
+                    cb?.status ? "_" : greyReturnRcvd,         // GREY RETURN FROM DYEING
+                    cb?.status ? "_" : getBreakdownValue(cb, 'dyeingOrder_Grey_Received'),
+                    cb?.status ? "_" : getBreakdownValue(cb, 'dyeingOrder_Finish_Received'),
+                    cb?.status ? "_" : (!hasGreyData ? "_" : greyBalance),
+                    `${processLoss}%`,                         // PROCESS LOSS %
+                    cb?.status ? "_" : aopSent,
+                    cb?.status ? "_" : aopReceived,
+                    cb?.status ? "_" : (aopSent === 0 && aopReceived === 0 ? "_" : Math.abs(aopBalance)),
+                    cb?.status ? "_" : aopLoss,
+                    cb?.status ? "_" : rpSent,
+                    cb?.status ? "_" : getBreakdownValue(cb, 'reProcessOrder_Return_Received'),
+                    cb?.status ? "_" : rpGrey,
+                    cb?.status ? "_" : rpFinish,
+                    cb?.status ? "_" : (rpSent === 0 && rpGrey === 0 && rpFinish === 0 ? "_" : Math.abs(rpBalance)),
+                    cb?.status ? "_" : rpLoss,
+                ]);
+            }
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Column widths
+        ws['!cols'] = COLUMNS.map((_, i) => ({ wch: i < FROZEN_COUNT ? 20 : 18 }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Summary");
+        XLSX.writeFile(wb, `Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
 
     return (
         <DashboardLayout>
@@ -420,14 +516,13 @@ export default function Summary() {
 
                 {/* Scroll controls */}
                 <div className="flex items-center gap-1">
-                    <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Scroll:</span>
-                    <button onClick={() => scrollHorizontal('left')} className="flex items-center justify-center w-9 h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm" title="Scroll Left"><ChevronLeft size={18} className="text-gray-600" /></button>
-                    <button onClick={() => scrollHorizontal('right')} className="flex items-center justify-center w-9 h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm" title="Scroll Right"><ChevronRight size={18} className="text-gray-600" /></button>
+                    {/* <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Export:</span> */}
+                    <button onClick={() => handleExportExcel()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export"><Download size={18} className="text-gray-600" /> Export</button>
                 </div>
-                <div className="flex items-center gap-1">
+                {/* <div className="flex items-center gap-1">
                     <button onClick={() => scrollVertical('up')} className="flex items-center justify-center w-9 h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm" title="Scroll Up"><ChevronUp size={18} className="text-gray-600" /></button>
                     <button onClick={() => scrollVertical('down')} className="flex items-center justify-center w-9 h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm" title="Scroll Down"><ChevronDown size={18} className="text-gray-600" /></button>
-                </div>
+                </div> */}
 
                 {/* Active filter pills */}
                 {hasActiveFilters && (
@@ -594,7 +689,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 4. STYLE */}
-                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>
+                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>
                                         {/* {row.styleNo} */}
                                         {
                                             isEditing.editingField === "styleNo" && isEditing.rowId === row.id ?
@@ -614,7 +709,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 5. PO NO */}
-                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>
+                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>
 
                                         {
                                             isEditing.editingField === "poNo" && isEditing.rowId === row.id ? <input
@@ -635,7 +730,17 @@ export default function Summary() {
                                     {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{cell.color}</div>)}
+                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                {/* {cell.color} */}
+
+                                                {
+                                                    isEditing.editingField === "color" && isEditing.rowId === cell.id ?
+                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                            name="composition"
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.color
+                                                }
+
+                                            </div>)}
                                         </div>
                                     </td>
 
@@ -643,7 +748,15 @@ export default function Summary() {
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(6)}>
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => (
-                                                <div key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>{cell.composition}</div>
+                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>
+                                                    {
+                                                        isEditing.editingField === "composition" && isEditing.rowId === cell.id ?
+                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                                name="composition"
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.composition
+                                                    }
+                                                    {/* {cell.composition} */}
+                                                </div>
                                             ))}
                                         </div>
                                     </td>
@@ -651,14 +764,32 @@ export default function Summary() {
                                     {/* 8. FINISH DIA */}
                                     <td className="p-0 align-top" style={getCellStyle(7)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{cell.finishDia}</div>)}
+                                            {row.rows.map((cell, j) =>
+                                                <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {/* {cell.finishDia} */}
+                                                    {
+                                                        isEditing.editingField === "finishDia" && isEditing.rowId === cell.id ?
+                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                                name="finishDia"
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.finishDia
+                                                    }
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
 
                                     {/* 9. ORDER QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{cell.orderQty}</div>)}
+                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                {/* {cell.orderQty} */}
+                                                {
+                                                    isEditing.editingField === "orderQty" && isEditing.rowId === cell.id ?
+                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                            name="orderQty"
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.orderQty
+                                                }
+                                            </div>)}
                                         </div>
                                     </td>
 

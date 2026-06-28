@@ -1,173 +1,250 @@
 import { useState } from "react";
+import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 const KnittingOrder = ({ orders, handleEditRowData, getFrozenStyle }) => {
-    const [getJobIndex, setJobIndex] = useState("")
+    const [getJobIndex, setJobIndex] = useState(null);
+
+
+    const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
+
 
     const hoverColorChange = (jobId) => {
-        console.log(jobId, "job id");
-        setJobIndex(jobId)
-    }
+        setJobIndex(jobId);
+    };
+    // Outer cell border
+    const tdClasses = "border border-gray-400 px-0 py-0 text-center align-middle";
+
+    // Inner item border - EACH item gets a bottom border, last one doesn't
+    const innerItem = "border-b border-gray-300 px-3 py-2 last:border-b-0";
+
+
+
     return (
         <tbody>
             {orders?.map((job, jobIndex) => {
                 const workOrders = job.workOrders || [];
                 return (
-                    <tr className={`${getJobIndex === jobIndex && "bg-green-600 bg-opacity-15"}`} onClick={() => hoverColorChange(jobIndex)} key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={getFrozenStyle} className="" style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                    <tr
+                        className={`${getJobIndex === jobIndex ? "bg-green-600 bg-opacity-15" : ""}`}
+                        onClick={() => hoverColorChange(jobIndex)}
+                        key={jobIndex}
+                    >
+                        {/* FACTORY NAME */}
+                        <td style={getFrozenStyle} className={tdClasses}>
                             {workOrders?.map((wo, i) => (
-                                wo.factoryName === "NULL" ? <div className="border-b">NO FACTORY SET YET</div> : <div className="text-green-500 font-bold " key={i}> <span>{wo.factoryName}</span> </div>
-                            ))}
-                        </td>
-                        <td onClick={() => handleEditRowData(job.jobNo)} style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {job.jobNo || "NO JOB FOUND"}
-                        </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {workOrders?.map((wo, i) => (
-                                <div key={i}>{wo.workOrderNo || "NO WORK ORDER FOUND"}</div>
-                            ))}
-                        </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {workOrders.map((wo, i) => (
-                                <div key={i}>{wo.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}</div>
-                            ))}
-                        </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {workOrders.map((wo, i) => (
-                                <div key={i}>{wo.styleRequirement?.styleNo || "NO STYLE NO FOUND"}</div>
-                            ))}
-                        </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {workOrders?.map((mon, i) => (
-                                <div key={i}>{mon.month || "NO MONTH NAME FOUND"}</div>
+                                wo.factoryName === "NULL" ? (
+                                    <div key={i} className={`${innerItem} text-gray-500`}>-</div>
+                                ) : (
+                                    <div onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} key={i} className={`${innerItem} text-green-500 font-bold`}>
+                                        {/* {wo.factoryName} */}
+                                        {
+                                            isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ?
+                                                <input
+                                                    type="text"
+                                                    name="factoryName"
+                                                    className="p-2 outline-none border rounded-md"
+                                                    value={changedField.currentValue}
+                                                    onChange={
+                                                        (e) => handleOnChange(e)
+                                                    }
+                                                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+
+                                                /> : wo.factoryName
+                                        }
+                                    </div>
+                                )
                             ))}
                         </td>
 
-                        {/* COMPOSITION - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* JOB NO */}
+                        <td onClick={() => handleEditRowData(job.jobNo)} className={`${tdClasses} cursor-pointer hover:text-blue-600`}>
+                            <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                        </td>
+
+                        {/* WORK ORDER NO */}
+                        <td className={tdClasses}>
+                            {workOrders?.map((wo, i) => (
+                                <div key={i} className={innerItem}>
+                                    {wo.workOrderNo || "NO WORK ORDER FOUND"}
+                                </div>
+                            ))}
+                        </td>
+
+                        {/* BUYER NAME */}
+                        <td className={tdClasses}>
+                            {workOrders.map((wo, i) => (
+                                <div key={i} className={innerItem}>
+                                    {wo.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}
+                                </div>
+                            ))}
+                        </td>
+
+                        {/* STYLE NO */}
+                        <td className={tdClasses}>
+                            {workOrders.map((wo, i) => (
+                                <div key={i} className={innerItem}>
+                                    {wo.styleRequirement?.styleNo || "NO STYLE NO FOUND"}
+                                </div>
+                            ))}
+                        </td>
+
+                        {/* MONTH */}
+                        <td className={tdClasses}>
+                            {workOrders?.map((mon, i) => (
+                                <div key={i} className={innerItem}>
+                                    {mon.month || "NO MONTH NAME FOUND"}
+                                </div>
+                            ))}
+                        </td>
+
+                        {/* COMPOSITION */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((comp, j) => (
-                                    <span key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'grid' }}>
-                                        {comp.composition || "-"}
-                                    </span>
+                                    <div key={`${i}-${j}`} className={`${innerItem} w-[25rem]`}>                                        {comp.composition || "-"}
+                                    </div>
                                 ))
                             )}
                         </td>
 
-                        {/* COLOR - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* COLOR */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((col, j) => (
-                                    <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
+                                    <div
+                                        onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }}
+                                        key={`${i}-${j}`}
+                                        className={`${innerItem} w-[20rem] cursor-pointer hover:text-blue-500`}
+                                    >
                                         {col.color || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* ORDER QTY - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* ORDER QTY */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((ord, j) => (
-                                    <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                    <div key={`${i}-${j}`} className={innerItem}>
                                         {ord.orderQty || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* UNIT PRICE - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* UNIT PRICE */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {unt.unitePrice || "-"}
+                                    <div onClick={() => handleInlineEdit(wo.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} key={`${i}-${j}`} className={innerItem}>
+                                        {/* {unt.unitePrice || "-"} */}
+                                        {
+                                            isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === wo.id ?
+                                                <input
+                                                    type="text"
+                                                    className="p-2 outline-none border rounded-md"
+                                                    name="factoryName"
+                                                    value={changedField.currentValue}
+                                                    onChange={(e) => handleOnChange(e)}
+                                                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                                                /> : unt.unitePrice
+                                        }
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* WORK ORDER QTY - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* WORK ORDER QTY */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.workOrderQty || "-"}
+                                    <div onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} key={`${i}-${j}`} className={innerItem}>
+                                        {/* {wrk.workOrderQty || "-"} */}
+                                        {
+                                            isEdit.updatedFieldName === "workOrderQty" && isEdit.rowId === wo.id ?
+                                                <input
+                                                    type="text"
+                                                    className="p-2 outline-none border rounded-md"
+                                                    name="factoryName"
+                                                    value={changedField.currentValue}
+                                                    onChange={(e) => handleOnChange(e)}
+                                                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                                                /> : wrk.workOrderQty
+                                        }
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* TOTAL YARN DELIVERY - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* TOTAL YARN DELIVERY */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.yarnDeliveriesWithColor.YarnDelivery || "-"}
+                                    <div key={`${i}-${j}`} className={innerItem}>
+                                        {wrk.yarnDeliveriesWithColor?.YarnDelivery || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* DIFFERENCE - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* DIFFERENCE */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
-                                    const diff = wrk.workOrderQty - wrk.totalYarnDelivery;
+                                    const workOrderQty = Number(wrk.workOrderQty) || 0;
+                                    const totalYarnDelivery = Number(wrk.totalYarnDelivery) || 0;
+                                    const diff = workOrderQty - totalYarnDelivery;
                                     const exceeded = diff > 0;
                                     return (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "green" : "red", fontWeight: "bold" }}>
+                                        <div
+                                            key={`${i}-${j}`}
+                                            className={`${innerItem} font-bold`}
+                                            style={{ color: exceeded ? "green" : "red" }}
+                                        >
                                             {exceeded ? `(${Math.abs(diff)})` : Math.abs(diff)}
                                         </div>
                                     );
                                 })
                             )}
                         </td>
-                        {/* TOTAL YARN RETURN  */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {workOrders.map((wo, i) =>
-                                wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="text-red-600 font-extrabold" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
-                                        {wrk.yarnDeliveriesWithColor.YarnReturn || <span>-</span>}
-                                    </div>
-                                ))
-                            )}
-                        </td>
-                        {/* yarn received header and column */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
-                            {workOrders.map((wo, i) =>
-                                wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap' }}>
-                                        {wrk.yarnDeliveriesWithColor.YarnReceived || <span>-</span>}
 
+                        {/* TOTAL YARN RETURN */}
+                        <td className={tdClasses}>
+                            {workOrders.map((wo, i) =>
+                                wo.compositions?.map((wrk, j) => (
+                                    <div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>
+                                        {wrk.yarnDeliveriesWithColor?.YarnReturn || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+
+                        {/* YARN RECEIVED */}
+                        <td className={tdClasses}>
+                            {workOrders.map((wo, i) =>
+                                wo.compositions?.map((wrk, j) => (
+                                    <div key={`${i}-${j}`} className={innerItem}>
+                                        {wrk.yarnDeliveriesWithColor?.YarnReceived || "-"}
+                                    </div>
+                                ))
+                            )}
+                        </td>
+
+                        {/* DIFFERENCE 2 */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
-                                    // 1. Safe Math: Convert to numbers, fallback to 0 if missing to prevent "NaN"
-                                    const grey = Number(wrk.yarnDeliveriesWithColor.YarnReceived) || 0;
-                                    const ret = Number(wrk.yarnDeliveriesWithColor.YarnReturn) || 0;
-                                    const del = Number(wrk.yarnDeliveriesWithColor.YarnDelivery) || 0;
-
+                                    const grey = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                                    const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
+                                    const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
                                     const diff2 = grey + ret - del;
                                     const exceed = diff2 < 0;
-
-                                    // 2. Set the color based on the condition
-                                    const textColor = exceed ? "red" : "green";
-
                                     return (
-                                        // 3. Changed back to <span> for perfect inline behavior
                                         <div
                                             key={`${i}-${j}`}
-                                            className="grid grid-cols-1"
-                                            style={{
-                                                marginRight: '8px',
-                                                whiteSpace: 'nowrap',
-                                                color: textColor,
-                                                fontWeight: 'bold'
-                                            }}
+                                            className={`${innerItem} font-bold`}
+                                            style={{ color: exceed ? "red" : "green" }}
                                         >
                                             {exceed ? `(${Math.abs(diff2)})` : diff2}
                                         </div>
@@ -176,25 +253,32 @@ const KnittingOrder = ({ orders, handleEditRowData, getFrozenStyle }) => {
                             )}
                         </td>
 
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* TOTAL VALUE */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
-                                wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="text-red-600 font-extrabold" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
-                                        {wrk.yarnDeliveriesWithColor.YarnReceived * wrk.unitePrice || "-"}
-                                    </div>
-                                ))
+                                wo.compositions?.map((wrk, j) => {
+                                    const received = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                                    const price = Number(wrk.unitePrice) || 0;
+                                    const total = received * price;
+                                    return (
+                                        <div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>
+                                            {total > 0 ? total.toFixed(2) : "-"}
+                                        </div>
+                                    );
+                                })
                             )}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+
+                        {/* PAID BILLING AMOUNT */}
+                        <td className={tdClasses}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="text-red-600 font-extrabold" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
+                                    <div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>
                                         PAID BILLING AMOUNT
                                     </div>
                                 ))
                             )}
                         </td>
-
                     </tr>
                 );
             })}

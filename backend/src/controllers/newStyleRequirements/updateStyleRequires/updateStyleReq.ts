@@ -2,59 +2,109 @@ import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
 
 export const updateStyleReq = async (req: Request, res: Response) => {
-    const { salesContact, buyerName, styleNo, poNo, jobNo } = req.body as {
-        salesContact: string;
-        buyerName: string;
-        styleNo: string;
-        poNo: string;
-        jobNo: string;
+    const { salesContact, buyerName, styleNo, rowId, poNo, jobNo, changedTable, composition, finishDia, orderQty, color, } = req.body as {
+        salesContact?: string;
+        buyerName?: string;
+        styleNo?: string;
+        poNo?: string;
+        jobNo?: string;
+        changedTable?: string;
+        composition?: string;
+        finishDia?: string;
+        orderQty?: number;
+        rowId?: number;
+        color: string;
     };
 
     const { jobId } = req.params as { jobId: string };
-    const jobIdToNumber = Number(jobId);
-
+    console.log(jobId);
     try {
-        // Find the existing styleRequirement and grab its current jobNo
+        if (changedTable === "styleRequirementRows") {
+            if (!rowId) {
+                return res.status(400).send({ message: "rowId is required", type: "error" });
+            }
+
+            // get styleRequirementId from the row itself
+            const existingRow = await prisma.styleRequirementRow.findUnique({
+                where: { id: rowId },
+                select: { id: true, styleRequirementId: true },
+            });
+
+            if (!existingRow) {
+                return res.status(404).send({ message: "Row not found", type: "error" });
+            }
+
+            const updateStyleReqRow = await prisma.styleRequirementRow.update({
+                where: { id: existingRow.id },
+                data: {
+                    ...(composition !== undefined && { composition }),
+                    ...(finishDia !== undefined && { finishDia }),
+                    ...(orderQty !== undefined && { orderQty: Number(orderQty) }),
+                    ...(color !== undefined && { color: color })
+                },
+            });
+
+            await prisma.composition.update(
+                {
+                    where: { id: Number(jobId) },
+                    data: {
+                        ...(composition !== undefined && ({ composition: composition }))
+                    }
+                }
+            )
+
+            if (updateStyleReqRow) {
+                await prisma.composition.update(
+                    {
+                        where: { id: existingRow.id },
+                        data: {
+                            ...(color !== undefined && { color: color })
+                        }
+                    }
+                )
+            }
+
+            return res.status(200).send({ message: "Update Successful", type: "success" });
+        }
+
+        // updating styleRequirement parent fields
+        const jobIdToNumber = Number(jobId);
+
         const existingStyleReq = await prisma.styleRequirement.findUnique({
             where: { id: jobIdToNumber },
-            select: {
-                id: true,
-                jobNo: true,
-            },
+            select: { id: true, jobNo: true },
         });
 
         if (!existingStyleReq) {
-            return res.status(404).send({ message: "Requested data not found", type: "error" });
+            return res.status(404).send({ message: "Style Requirement not found", type: "error" });
         }
 
-        // Find the linked job using the CURRENT jobNo from DB (not the incoming one)
-        const existingJob = await prisma.jobs.findUnique({
-            where: { jobNo: existingStyleReq.jobNo },
-            select: { id: true },
-        });
-
-        // Build transaction operations
         const transactionOps: any[] = [
             prisma.styleRequirement.update({
                 where: { id: jobIdToNumber },
                 data: {
-                    salesContact,
-                    buyerName,
-                    styleNo,
-                    jobNo,
-                    poNo,
+                    ...(salesContact !== undefined && { salesContact }),
+                    ...(buyerName !== undefined && { buyerName }),
+                    ...(styleNo !== undefined && { styleNo }),
+                    ...(jobNo !== undefined && { jobNo }),
+                    ...(poNo !== undefined && { poNo }),
                 },
             }),
         ];
 
-        // Only update jobs table if a linked job exists and jobNo has changed
-        if (existingJob && jobNo !== existingStyleReq.jobNo) {
-            transactionOps.push(
-                prisma.jobs.update({
-                    where: { id: existingJob.id },
-                    data: { jobNo },
-                })
-            );
+        if (jobNo && jobNo !== existingStyleReq.jobNo) {
+            const existingJob = await prisma.jobs.findUnique({
+                where: { jobNo: existingStyleReq.jobNo },
+                select: { id: true },
+            });
+            if (existingJob) {
+                transactionOps.push(
+                    prisma.jobs.update({
+                        where: { id: existingJob.id },
+                        data: { jobNo },
+                    })
+                );
+            }
         }
 
         await prisma.$transaction(transactionOps);

@@ -3,7 +3,7 @@ import multer from "multer";
 import { createNewAudit } from "../controllers/audit/newAudit";
 import { createNewStyleRequirement } from "../controllers/newStyleRequirements/createNewReq";
 import { cuttingDataUpdate } from "../controllers/fabricCutting/fabricCuttingData";
-import { createNewJob } from "../controllers/orders/createNewJob";
+import { createNewJob } from "../controllers/orders/newWorkOrder";
 import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 
 const router = express.Router();

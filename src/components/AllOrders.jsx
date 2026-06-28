@@ -4,11 +4,11 @@ import useAxiosPublic from "../hooks/Axios";
 import Input from "./Input";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
-import InlineEdit from "./inlineEdit/InlineEdit";
 import YarnDyeOrders from "./YarnDyeOrders";
 import KnittingOrder from "./KnittingOrder";
 import DyeingOrder from "./DyeingOrder";
 import AopOrder from "./AopOrder";
+import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 
 
@@ -25,12 +25,18 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     // const [editCellId, setEditCellId] = useState(null);
+    const { handleRefresh, isUpdated } = InlineEdit();
 
     const { fetchData, error, loading } = useFetchData();
     useEffect(() => {
         fetchData(`/api/work-order/${orderType}`).then(data => {
             if (data) setOrders(data);
         });
+        if (isUpdated === "success") {
+            fetchData(`/api/work-order/${orderType}`).then(data => {
+                if (data) setOrders(data);
+            });
+        }
     }, [orderType]);
 
     if (error) {
@@ -53,7 +59,7 @@ const AllOrders = ({ orderType }) => {
             { header: "STYLE", width: "30mm", inputName: "styleNo" },
             { header: "MONTH", width: "10mm", inputName: "month" },
 
-            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "COMPOSITION", width: "60mm", inputName: "composition" },
             { header: "COLOR", width: "50mm", inputName: "color" },
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
             { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
@@ -77,7 +83,7 @@ const AllOrders = ({ orderType }) => {
             { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
             { header: "STYLE", width: "30mm", inputName: "styleNo" },
             { header: "MONTH", width: "10mm", inputName: "month" },
-            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "COMPOSITION", width: "60mm", inputName: "composition" },
             { header: "COLOR", width: "50mm", inputName: "bookingColor" },
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
             { header: "DYEING WORK ORDER QTY", width: "13mm", inputName: "workOrderQty" },
@@ -104,7 +110,7 @@ const AllOrders = ({ orderType }) => {
             { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
             { header: "STYLE", width: "30mm", inputName: "styleNo" },
             { header: "MONTH", width: "10mm", inputName: "month" },
-            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "COMPOSITION", width: "60mm", inputName: "composition" },
             { header: "BOOKING COLOR", width: "50mm", inputName: "bookingColor" },
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
 
@@ -129,7 +135,7 @@ const AllOrders = ({ orderType }) => {
             { header: "BUYER NAME", width: "30mm", inputName: "buyerName" },
             { header: "STYLE", width: "30mm", inputName: "styleNo" },
             { header: "MONTH", width: "10mm", inputName: "month" },
-            { header: "COMPOSITION", width: "20mm", inputName: "composition" },
+            { header: "COMPOSITION", width: "60mm", inputName: "composition" },
             { header: "COLOR", width: "50mm", inputName: "color" },
             { header: "ORDER QTY", width: "10mm", inputName: "orderQty" },
             { header: "PRICE PER KG", width: "11mm", inputName: "unitePrice" },
@@ -217,6 +223,12 @@ const AllOrders = ({ orderType }) => {
 
                     )
                 } */}
+                {/* <RefreshButton onClick={handleRefresh} /> */}
+                <button onClick={handleRefresh}>Refresh</button>
+                {/* {
+                    isEdit.isEditing && <button>Save</button>
+                } */}
+
                 <div className="mb-5 p-2 rounded-sm">
                     {(!orders || orders.length < 1) && (
                         <div>No order found</div>
@@ -240,7 +252,7 @@ const AllOrders = ({ orderType }) => {
                                 changedField={changedField}
                             />
                         )}
-                        <table className="w-full border-collapse factory-table" style={{ minWidth: '1200px' }}>
+                        <table className="w-full border-collapse factory-table" style={{ minWidth: '1400px' }}>
 
                             <colgroup>
                                 {COLUMNS.map((col, i) => (
@@ -255,7 +267,7 @@ const AllOrders = ({ orderType }) => {
                                             key={i}
                                             className="whitespace-nowrap px-3 py-2 text-left font-semibold text-gray-700 text-sm border-b border-gray-200"
                                         >
-                                            <div className="grid ">
+                                            <div className="grid w-full">
                                                 {col.header}
                                                 {
                                                     col.inputName && (
@@ -279,6 +291,7 @@ const AllOrders = ({ orderType }) => {
                             {
                                 orderType === "knittingOrder" && (
                                     <KnittingOrder
+
                                         orders={orders}
                                         handleEditRowData={handleEditRowData}
                                     />
