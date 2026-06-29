@@ -1,7 +1,8 @@
 import { useState } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) => {
+// 1. Accept the NEW props from AllOrders
+const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [getJobIndex, setJobIndex] = useState("")
     const [hoveredIndex, setHoveredIndex] = useState(null);
     const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
@@ -22,16 +23,15 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
         verticalAlign: "middle",
     };
 
-    // Frozen td — must use solid opaque bg, never transparent
+    // 2. Use the dynamic props passed from the parent
     const stickyTd = (colIndex, isHovered) => ({
         ...baseTd,
         position: "sticky",
-        left: `${FROZEN_LEFTS_LOCAL[colIndex]}px`,
+        left: `${currentFrozenLefts[colIndex]}px`, // Updated
         zIndex: 3,
-        // solid color — no rgba, no opacity, no Tailwind bg class
         backgroundColor: isHovered ? "#bbf7d0" : "#ffffff",
-        width: `${FROZEN_WIDTHS[colIndex]}px`,
-        minWidth: `${FROZEN_WIDTHS[colIndex]}px`,
+        width: `${currentFrozenWidths[colIndex]}px`, // Updated
+        minWidth: `${currentFrozenWidths[colIndex]}px`, // Updated
         boxShadow: colIndex === FROZEN_COUNT - 1
             ? "2px 0 5px -1px rgba(0,0,0,0.18)"
             : "none",
@@ -40,15 +40,11 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
     // Non-frozen td
     const plainTd = (isHovered) => ({
         ...baseTd,
-        // solid color here too — no opacity tricks
         backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
     });
 
-    // Recompute lefts locally from FROZEN_WIDTHS prop
-    const FROZEN_LEFTS_LOCAL = FROZEN_WIDTHS.reduce((acc, w, i) => {
-        if (i === 0) return [0];
-        return [...acc, acc[i - 1] + FROZEN_WIDTHS[i - 1]];
-    }, []);
+    // REMOVED: The old FROZEN_LEFTS_LOCAL calculation is completely gone!
+
     return (
         <tbody>
             {
@@ -58,7 +54,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
 
                     return (
                         <tr onClick={() => hoverColorChange(jobIndex)} className={`${getJobIndex === jobIndex && "bg-green-600 bg-opacity-15"}`} key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                            <td   style={stickyTd(0, isHovered)}>
+                            <td style={stickyTd(0, isHovered)}>
                                 {workOrders?.map((wo, i) => (
                                     <div key={i}>{wo.factoryName || "-"}</div>
                                 ))}
@@ -66,7 +62,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                             <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(job.jobNo)}>
                                 {job.jobNo || "NO JOB FOUND"}
                             </td>
-                            <td  style={stickyTd(2, isHovered)}>
+                            <td style={stickyTd(2, isHovered)}>
                                 {workOrders?.map((wo, i) => (
                                     <div key={i}>{wo.workOrderNo || "-"}</div>
                                 ))}
@@ -87,7 +83,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                                 ))}
                             </td>
 
-                            {/* COMPOSITION - Changed to inline span */}
+                            {/* COMPOSITION */}
                             <td style={stickyTd(6, isHovered)}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((comp, j) => (
@@ -98,7 +94,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                                 )}
                             </td>
 
-                            {/* COLOR - Changed to inline span */}
+                            {/* COLOR */}
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((col, j) => (
@@ -109,7 +105,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                                 )}
                             </td>
 
-                            {/* ORDER QTY - Changed to inline span */}
+                            {/* ORDER QTY */}
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((ord, j) => (
@@ -120,7 +116,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                                 )}
                             </td>
 
-                            {/* UNIT PRICE - Changed to inline span */}
+                            {/* UNIT PRICE */}
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((unt, j) => (
@@ -140,12 +136,12 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                                 )}
                             </td>
 
-                            {/* WORK ORDER QTY - Changed to inline span */}
+                            {/* WORK ORDER QTY */}
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {wrk.yarnDeliveriesWithColor.SentforAOP || "-"}
+                                            {wrk.yarnDeliveriesWithColor?.SentforAOP || "-"}
                                         </div>
                                     ))
                                 )}
@@ -153,8 +149,8 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
-                                        const diff = wrk.yarnDeliveriesWithColor.SentforAOP - wrk.workOrderQty || 0;
-                                        const exceeded = diff > 0 || 0;
+                                        const diff = (wrk.yarnDeliveriesWithColor?.SentforAOP || 0) - (wrk.workOrderQty || 0);
+                                        const exceeded = diff > 0;
                                         return (
                                             <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
                                                 {exceeded ? diff : `(${Math.abs(diff)})`}
@@ -164,32 +160,26 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) =>
                                 )}
                             </td>
 
-                            {/* TOTAL YARN DELIVERY - Changed to inline span */}
+                            {/* TOTAL YARN DELIVERY */}
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {wrk.yarnDeliveriesWithColor.ReceivedfromAOP || "-"}
-
+                                            {wrk.yarnDeliveriesWithColor?.ReceivedfromAOP || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {wrk.yarnDeliveriesWithColor.ReceivedfromAOP * wrk.unitePrice || "-"}
+                                            {(wrk.yarnDeliveriesWithColor?.ReceivedfromAOP || 0) * (wrk.unitePrice || 0) || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
-
-
-
-
                         </tr>
                     )
                 })

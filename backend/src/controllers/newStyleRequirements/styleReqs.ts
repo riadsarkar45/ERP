@@ -35,6 +35,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                     finishDia: true,
                     orderQty: true,
                     finishRequiredQty: true,
+                    additional: true,
                 }
             },
             sizes: {
@@ -51,6 +52,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             color: true,
                             composition: true,
                             workOrderQty: true,
+                            additional: true,
                             deliveries: {
                                 select: {
                                     deliveryType: true,

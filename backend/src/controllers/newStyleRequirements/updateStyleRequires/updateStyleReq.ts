@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
 
 export const updateStyleReq = async (req: Request, res: Response) => {
-    const { salesContact, buyerName, styleNo, rowId, poNo, jobNo, changedTable, composition, finishDia, orderQty, color, } = req.body as {
+    const { salesContact, buyerName, styleNo, additional, rowId, poNo, jobNo, changedTable, composition, finishDia, orderQty, color, } = req.body as {
         salesContact?: string;
         buyerName?: string;
         styleNo?: string;
@@ -14,10 +14,11 @@ export const updateStyleReq = async (req: Request, res: Response) => {
         orderQty?: number;
         rowId?: number;
         color: string;
+        additional: string
     };
 
     const { jobId } = req.params as { jobId: string };
-    console.log(jobId);
+    console.log(req.body);
     try {
         if (changedTable === "styleRequirementRows") {
             if (!rowId) {
@@ -65,6 +66,28 @@ export const updateStyleReq = async (req: Request, res: Response) => {
             }
 
             return res.status(200).send({ message: "Update Successful", type: "success" });
+        }
+
+        if (changedTable === "compositionAdd") {
+            await prisma.styleRequirementRow.update(
+                {
+                    where: { id: Number(rowId) },
+                    data: {
+                        additional: additional
+                    }
+                }
+            )
+            await prisma.composition.update(
+                {
+                    where: { id: Number(rowId) },
+                    data: {
+                        additional: additional
+                    }
+                }
+            )
+
+            return res.status(200).send({ message: "Update Successful", type: "success" });
+
         }
 
         // updating styleRequirement parent fields

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
@@ -6,10 +6,11 @@ import useAxiosPublic from "../../../hooks/Axios";
 import { useNavigate } from "react-router-dom";
 import { useFetchData } from "../../../hooks/fetch";
 import * as XLSX from "xlsx";
+
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
     "SALES CONTACT NO", "BUYER", "JOB NO", "STYLE", "PO NO", "COLOR", "COMPOSITION",
-    "FINISH DIA", "ORDER QTY", "1st BOOKING", "ADDITIONAL BOOKING",
+    "FINISH DIA", "ORDER QTY", "1st BOOKING", "FINISH REQUIRED QTY", "ADDITIONAL BOOKING",
     "REQUIRED YARN QTY", "KNITTING WORK ORDER QTY",
     "SHORT & EXCESS", "YARN DELIVERY", "SHORT & EXCESS (+/-)",
     "RAW YARN DELIVERY FOR DYED", "YARN RECEIVED AFTER DYED",
@@ -24,8 +25,6 @@ const COLUMNS = [
 ];
 
 // ── Filterable columns config ─────────────────────────────────────────────────
-// type "row"    → value lives directly on the row object
-// type "subrow" → value lives in row.rows[] sub-array; row matches if ANY sub-row matches
 const FILTERABLE_COLS = {
     0: { key: "salesContact", type: "row" },
     1: { key: "buyerName", type: "row" },
@@ -45,6 +44,80 @@ const FROZEN_LEFTS = FROZEN_WIDTHS.reduce((acc, width, idx) => {
     return acc;
 }, []);
 
+// ── Helper: Deep filter function (Excel-like) ────────────────────────────────
+const applyDeepFiltersSummary = (data, activeFilters) => {
+    if (!data || Object.keys(activeFilters).length === 0) return data;
+
+    return data.reduce((acc, row) => {
+        // 1. Check top-level (row) filters (e.g., Job No, Buyer)
+        for (const [ci, selectedSet] of Object.entries(activeFilters)) {
+            if (!selectedSet || selectedSet.size === 0) continue;
+            const col = FILTERABLE_COLS[Number(ci)];
+            if (!col || col.type !== "row") continue;
+
+            if (!selectedSet.has(String(row[col.key] ?? ""))) {
+                return acc; // Skip this entire row if it doesn't match
+            }
+        }
+
+        // 2. Clone row and filter sub-rows (e.g., Color, Composition)
+        const clonedRow = { ...row };
+        const subRows = clonedRow.rows || [];
+        const breakdowns = clonedRow.compBreakdown || [];
+
+        const hasSubFilters = Object.entries(activeFilters).some(([ci, selectedSet]) => {
+            if (!selectedSet || selectedSet.size === 0) return false;
+            const col = FILTERABLE_COLS[Number(ci)];
+            return col && col.type === "subrow";
+        });
+
+        if (hasSubFilters) {
+            const filteredSubRows = [];
+            const filteredBreakdowns = [];
+
+            for (let j = 0; j < subRows.length; j++) {
+                const sr = subRows[j];
+                let srValid = true;
+
+                for (const [ci, selectedSet] of Object.entries(activeFilters)) {
+                    if (!selectedSet || selectedSet.size === 0) continue;
+                    const col = FILTERABLE_COLS[Number(ci)];
+                    if (!col || col.type !== "subrow") continue;
+
+                    if (!selectedSet.has(String(sr[col.key] ?? ""))) {
+                        srValid = false;
+                        break;
+                    }
+                }
+
+                if (srValid) {
+                    filteredSubRows.push(sr);
+                    // Keep the breakdown data perfectly aligned with the sub-rows!
+                    if (j < breakdowns.length) {
+                        filteredBreakdowns.push(breakdowns[j]);
+                    } else {
+                        filteredBreakdowns.push({});
+                    }
+                }
+            }
+
+            clonedRow.rows = filteredSubRows;
+            clonedRow.compBreakdown = filteredBreakdowns;
+        } else {
+            if (!clonedRow.compBreakdown && subRows.length > 0) {
+                clonedRow.compBreakdown = subRows.map(() => ({}));
+            }
+        }
+
+        // 3. Only keep the row if it still has valid sub-rows left
+        if (clonedRow.rows.length > 0) {
+            acc.push(clonedRow);
+        }
+
+        return acc;
+    }, []);
+};
+
 // ── Helper ───────────────────────────────────────────────────────────────────
 const getBreakdownValue = (item, key) => {
     if (!item) return 0;
@@ -55,13 +128,11 @@ const getBreakdownValue = (item, key) => {
 // ── Filter Dropdown Component ─────────────────────────────────────────────────
 function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, onClear, onClose, anchorRef }) {
     const [search, setSearch] = useState("");
-    // activeValues=null means no filter saved → start all checked
     const [selected, setSelected] = useState(
         activeValues !== null ? new Set(activeValues) : new Set(allValues)
     );
     const dropRef = useRef(null);
 
-    // Close on outside click
     useEffect(() => {
         const handler = (e) => {
             if (dropRef.current && !dropRef.current.contains(e.target) &&
@@ -194,16 +265,13 @@ export default function Summary() {
     const navigate = useNavigate();
     const scrollContainerRef = useRef(null);
 
-    // Filter state: { colIndex: Set<string> }
     const [activeFilters, setActiveFilters] = useState({});
-    // Which dropdown is open: colIndex or null
     const [openFilter, setOpenFilter] = useState(null);
     const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
     const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const { fetchData, error, loading } = useFetchData();
 
-    // Position of open dropdown
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
@@ -215,48 +283,35 @@ export default function Summary() {
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
-
     // ── Get unique values for a column filtered by all OTHER active filters ───
-    // Mirrors Excel: the dropdown for column X only shows values that exist in
-    // the data remaining after every other active filter has been applied.
     const getColValues = useCallback((colIndex) => {
         const col = FILTERABLE_COLS[colIndex];
         if (!col) return [];
 
-        // Filter rawData by every active filter except colIndex's own
-        const otherFiltered = rawData.filter(row =>
-            Object.entries(activeFilters).every(([ci, selectedSet]) => {
-                if (Number(ci) === colIndex) return true;
-                if (!selectedSet || selectedSet.size === 0) return true;
-                const c = FILTERABLE_COLS[Number(ci)];
-                if (!c) return true;
-                if (c.type === "row") return selectedSet.has(String(row[c.key] ?? ""));
-                return (row.rows || []).some(sr => selectedSet.has(String(sr[c.key] ?? "")));
-            })
-        );
+        // Create a temporary filter set that excludes the current column's filter
+        const tempFilters = { ...activeFilters };
+        delete tempFilters[colIndex];
+
+        // Apply deep filters with the temporary set to get cascading options
+        const tempFilteredData = applyDeepFiltersSummary(rawData, tempFilters);
 
         if (col.type === "row") {
-            const set = new Set(otherFiltered.map(row => String(row[col.key] ?? "")));
+            const set = new Set(tempFilteredData.map(row => String(row[col.key] ?? "")));
             return Array.from(set).sort();
         }
+
+        // For sub-rows, extract unique values from the filtered sub-rows
         const set = new Set();
-        otherFiltered.forEach(row => (row.rows || []).forEach(sr => set.add(String(sr[col.key] ?? ""))));
+        tempFilteredData.forEach(row => {
+            (row.rows || []).forEach(sr => set.add(String(sr[col.key] ?? "")));
+        });
         return Array.from(set).sort();
     }, [rawData, activeFilters]);
 
-    // ── Filtered data ─────────────────────────────────────────────────────────
-    const filteredData = rawData.filter(row => {
-        return Object.entries(activeFilters).every(([colIndex, selectedSet]) => {
-            if (!selectedSet || selectedSet.size === 0) return true;
-            const col = FILTERABLE_COLS[Number(colIndex)];
-            if (!col) return true;
-            if (col.type === "row") {
-                return selectedSet.has(String(row[col.key] ?? ""));
-            }
-            // subrow: row passes if at least one sub-row value is in selectedSet
-            return (row.rows || []).some(sr => selectedSet.has(String(sr[col.key] ?? "")));
-        });
-    });
+    // ── Filtered data (Deeply filtered like Excel) ────────────────────────────
+    const filteredData = useMemo(() => {
+        return applyDeepFiltersSummary(rawData, activeFilters);
+    }, [rawData, activeFilters]);
 
     const openFilterDropdown = (colIndex, e) => {
         e.stopPropagation();
@@ -345,7 +400,7 @@ export default function Summary() {
         const { name, value } = e.target;
         if (name !== changedField.editingRow) {
             setChangedField({ editingRow: name, editingValue: value });
-            return; // ← stop here
+            return;
         }
         setChangedField({ editingValue: value, editingRow: name })
         setIsEditing(prev => ({ ...prev, isEdit: true }));
@@ -384,11 +439,8 @@ export default function Summary() {
 
     const handleExportExcel = () => {
         const wsData = [];
-
-        // Header row
         wsData.push(COLUMNS);
 
-        // Data rows — mirrors exactly what the table renders
         filteredData.forEach(row => {
             const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
             const numSubRows = row.rows.length;
@@ -428,34 +480,34 @@ export default function Summary() {
                 const rpLoss = rpSent > 0 ? (((rpSent - (rpGrey + rpFinish)) / rpSent) * 100).toFixed(2) + "%" : "_";
 
                 wsData.push([
-                    j === 0 ? row.salesContact : "",           // SALES CONTACT NO
-                    j === 0 ? row.buyerName : "",              // BUYER
-                    j === 0 ? row.jobNo : "",                  // JOB NO
-                    j === 0 ? row.styleNo : "",                // STYLE
-                    j === 0 ? row.poNo : "",                   // PO NO
-                    cell.color,                                // COLOR
-                    cell.composition,                          // COMPOSITION
-                    cell.finishDia,                            // FINISH DIA
-                    cell.orderQty,                             // ORDER QTY
-                    totalRequired.toFixed(2),                  // 1st BOOKING
-                    "additional",                              // ADDITIONAL BOOKING
-                    totalRequired.toFixed(2),                  // REQUIRED YARN QTY
-                    cb?.status ? "_" : knittingWOQty,          // KNITTING WORK ORDER QTY
-                    cb?.status ? "_" : shortExcess0,           // SHORT & EXCESS
-                    cb?.status ? "_" : yarnDelivery,           // YARN DELIVERY
-                    cb?.status ? "_" : shortExcess1,           // SHORT & EXCESS (+/-)
+                    j === 0 ? row.salesContact : "",
+                    j === 0 ? row.buyerName : "",
+                    j === 0 ? row.jobNo : "",
+                    j === 0 ? row.styleNo : "",
+                    j === 0 ? row.poNo : "",
+                    cell.color,
+                    cell.composition,
+                    cell.finishDia,
+                    cell.orderQty,
+                    totalRequired.toFixed(2),
+                    "additional",
+                    totalRequired.toFixed(2),
+                    cb?.status ? "_" : knittingWOQty,
+                    cb?.status ? "_" : shortExcess0,
+                    cb?.status ? "_" : yarnDelivery,
+                    cb?.status ? "_" : shortExcess1,
                     cb?.status ? "_" : getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye'),
                     cb?.status ? "_" : getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye'),
-                    "party stock",                             // PARTY STOCK
-                    cb?.status ? "_" : greyReceived,           // TOTAL KNITTING (GREY)
-                    cb?.status ? "_" : yarnReturn,             // RETURN YARN RECEIVED
-                    cb?.status ? "_" : balance.toFixed(2),     // BALANCE (+/-)
-                    cb?.status ? "_" : greyDelivery,           // GREY DELIVERY FOR DYEING
-                    cb?.status ? "_" : greyReturnRcvd,         // GREY RETURN FROM DYEING
+                    "party stock",
+                    cb?.status ? "_" : greyReceived,
+                    cb?.status ? "_" : yarnReturn,
+                    cb?.status ? "_" : balance.toFixed(2),
+                    cb?.status ? "_" : greyDelivery,
+                    cb?.status ? "_" : greyReturnRcvd,
                     cb?.status ? "_" : getBreakdownValue(cb, 'dyeingOrder_Grey_Received'),
                     cb?.status ? "_" : getBreakdownValue(cb, 'dyeingOrder_Finish_Received'),
                     cb?.status ? "_" : (!hasGreyData ? "_" : greyBalance),
-                    `${processLoss}%`,                         // PROCESS LOSS %
+                    `${processLoss}%`,
                     cb?.status ? "_" : aopSent,
                     cb?.status ? "_" : aopReceived,
                     cb?.status ? "_" : (aopSent === 0 && aopReceived === 0 ? "_" : Math.abs(aopBalance)),
@@ -471,10 +523,7 @@ export default function Summary() {
         });
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-        // Column widths
         ws['!cols'] = COLUMNS.map((_, i) => ({ wch: i < FROZEN_COUNT ? 20 : 18 }));
-
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Summary");
         XLSX.writeFile(wb, `Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -514,17 +563,10 @@ export default function Summary() {
 
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
-                {/* Scroll controls */}
                 <div className="flex items-center gap-1">
-                    {/* <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Export:</span> */}
                     <button onClick={() => handleExportExcel()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export"><Download size={18} className="text-gray-600" /> Export</button>
                 </div>
-                {/* <div className="flex items-center gap-1">
-                    <button onClick={() => scrollVertical('up')} className="flex items-center justify-center w-9 h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm" title="Scroll Up"><ChevronUp size={18} className="text-gray-600" /></button>
-                    <button onClick={() => scrollVertical('down')} className="flex items-center justify-center w-9 h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm" title="Scroll Down"><ChevronDown size={18} className="text-gray-600" /></button>
-                </div> */}
 
-                {/* Active filter pills */}
                 {hasActiveFilters && (
                     <>
                         <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
@@ -552,7 +594,6 @@ export default function Summary() {
                     </>
                 )}
 
-                {/* Row count */}
                 <span className="ml-auto text-xs text-gray-400">
                     {filteredData.length} / {rawData.length} rows
                 </span>
@@ -560,7 +601,6 @@ export default function Summary() {
 
             {showModal && <StyleReqModal setRawData={setRawData} setShowModal={setShowModal} />}
 
-            {/* ── Filter Dropdown (portal-style via fixed position) ─────────── */}
             {openFilter !== null && (
                 <FilterDropdown
                     colIndex={openFilter}
@@ -575,7 +615,6 @@ export default function Summary() {
                 />
             )}
 
-            {/* position the dropdown */}
             <style>{`
                 .filter-dropdown {
                     top: ${dropdownPos.top}px !important;
@@ -583,7 +622,6 @@ export default function Summary() {
                 }
             `}</style>
 
-            {/* ── Scrollable Table ──────────────────────────────────────────── */}
             <div
                 ref={scrollContainerRef}
                 className="relative overflow-auto shadow-xs rounded-base border border-default"
@@ -593,7 +631,6 @@ export default function Summary() {
                     className="w-full text-sm text-left rtl:text-right text-body"
                     style={{ borderCollapse: 'separate', borderSpacing: 0 }}
                 >
-                    {/* ── Sticky Header ───────────────────────────────────── */}
                     <thead className="sticky top-0 z-30 text-sm text-body">
                         <tr>
                             {COLUMNS.map((col, index) => {
@@ -660,7 +697,6 @@ export default function Summary() {
 
                                     {/* 2. BUYER */}
                                     <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>
-                                        {/* {row.buyerName} */}
                                         {
                                             isEditing.editingField === "buyerName" && isEditing.rowId === row.id ?
                                                 <input
@@ -675,22 +711,20 @@ export default function Summary() {
                                     {/* 3. JOB NO */}
                                     <td onDoubleClick={() => handleRedirect(row.jobNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center cursor-pointer hover:text-blue-600 group-hover:bg-gray-50" style={getFrozenStyle(2)}>
                                         <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)} >
-
-
                                             {
                                                 isEditing.editingField === "jobNo" && isEditing.rowId === row.id ?
                                                     <input
                                                         onChange={(e) => handleOnChange(e)}
                                                         value={changedField.editingValue}
                                                         name="jobNo"
-                                                        className=" bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md" type="text" /> : row.jobNo
+                                                        className=" bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md"
+                                                         type="text" /> : row.jobNo
                                             }
                                         </span>
                                     </td>
 
                                     {/* 4. STYLE */}
                                     <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>
-                                        {/* {row.styleNo} */}
                                         {
                                             isEditing.editingField === "styleNo" && isEditing.rowId === row.id ?
                                                 <input
@@ -710,7 +744,6 @@ export default function Summary() {
 
                                     {/* 5. PO NO */}
                                     <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>
-
                                         {
                                             isEditing.editingField === "poNo" && isEditing.rowId === row.id ? <input
                                                 name="poNo"
@@ -724,22 +757,19 @@ export default function Summary() {
                                                 }}
                                             /> : row.poNo
                                         }
-
                                     </td>
 
                                     {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                {/* {cell.color} */}
-
                                                 {
                                                     isEditing.editingField === "color" && isEditing.rowId === cell.id ?
                                                         <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                             name="composition"
-                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.color
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                             type="text" /> : cell.color
                                                 }
-
                                             </div>)}
                                         </div>
                                     </td>
@@ -753,9 +783,10 @@ export default function Summary() {
                                                         isEditing.editingField === "composition" && isEditing.rowId === cell.id ?
                                                             <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                                 name="composition"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.composition
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text"
+                                                            />
+                                                            : cell.composition
                                                     }
-                                                    {/* {cell.composition} */}
                                                 </div>
                                             ))}
                                         </div>
@@ -766,12 +797,12 @@ export default function Summary() {
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) =>
                                                 <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {/* {cell.finishDia} */}
                                                     {
                                                         isEditing.editingField === "finishDia" && isEditing.rowId === cell.id ?
                                                             <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                                 name="finishDia"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.finishDia
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                                 type="text" /> : cell.finishDia
                                                     }
                                                 </div>
                                             )}
@@ -782,12 +813,12 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                {/* {cell.orderQty} */}
                                                 {
                                                     isEditing.editingField === "orderQty" && isEditing.rowId === cell.id ?
                                                         <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                             name="orderQty"
-                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : cell.orderQty
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                             type="text" /> : cell.orderQty
                                                 }
                                             </div>)}
                                         </div>
@@ -804,10 +835,35 @@ export default function Summary() {
                                         </div>
                                     </td>
 
+                                    {/* 11. FINISH REQUIRED QTY */}
+                                    <td className="p-0 align-top" style={getCellStyle(10)}>
+                                        <div className="divide-y divide-gray-200">
+                                            {row.rows.map((cell, j) => (
+                                                <div key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {Number(cell.finishRequiredQty)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </td>
+
                                     {/* 11. ADDITIONAL BOOKING */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">additional</div>)}
+                                            {/* {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">additional</div>)} */}
+                                            {row.rows.map((cell, j) => (
+                                                <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {/* {Number(cell.additional)} */}
+                                                    {
+                                                        isEditing.editingField === "additional" && isEditing.rowId === cell.id ?
+                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                                name="additional"
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                                type="text" />
+                                                            :
+                                                            cell.additional || "-"
+                                                    }
+                                                </div>
+                                            ))}
                                         </div>
                                     </td>
 

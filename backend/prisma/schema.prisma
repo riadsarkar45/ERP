@@ -65,12 +65,13 @@ model Composition {
   composition  String
   unitePrice   Float // ← was Decimal
   color        String
+  additional   String       @default("0")
   orderQty     Int
   workOrderQty Int
   workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
   deliveries   deliveries[]
   workOrderId  Int
-  orderType    String @default("null")
+  orderType    String       @default("null")
 
   @@index([workOrderId])
   @@index([color])
@@ -98,6 +99,7 @@ model StyleRequirementRow {
   finishDia          String // ← NOW String
   orderQty           Int // ← was String
   finishRequiredQty  Float // ← was String
+  additional         String           @default("0")
 
   @@index([styleRequirementId])
 }

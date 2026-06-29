@@ -1,7 +1,7 @@
 import { useState } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS }) => {
+const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
     const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
@@ -15,35 +15,27 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
         padding: 0,
         textAlign: "center",
         verticalAlign: "middle",
+        overflow: "hidden", // NEW: Prevents text from overlapping the next column
     };
 
-    // Frozen td — must use solid opaque bg, never transparent
     const stickyTd = (colIndex, isHovered) => ({
         ...baseTd,
         position: "sticky",
-        left: `${FROZEN_LEFTS_LOCAL[colIndex]}px`,
+        left: `${currentFrozenLefts[colIndex]}px`,
         zIndex: 3,
-        // solid color — no rgba, no opacity, no Tailwind bg class
         backgroundColor: isHovered ? "#bbf7d0" : "#ffffff",
-        width: `${FROZEN_WIDTHS[colIndex]}px`,
-        minWidth: `${FROZEN_WIDTHS[colIndex]}px`,
+        width: `${currentFrozenWidths[colIndex]}px`,
+        minWidth: `${currentFrozenWidths[colIndex]}px`,
         boxShadow: colIndex === FROZEN_COUNT - 1
             ? "2px 0 5px -1px rgba(0,0,0,0.18)"
             : "none",
     });
 
-    // Non-frozen td
     const plainTd = (isHovered) => ({
         ...baseTd,
-        // solid color here too — no opacity tricks
         backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
     });
 
-    // Recompute lefts locally from FROZEN_WIDTHS prop
-    const FROZEN_LEFTS_LOCAL = FROZEN_WIDTHS.reduce((acc, w, i) => {
-        if (i === 0) return [0];
-        return [...acc, acc[i - 1] + FROZEN_WIDTHS[i - 1]];
-    }, []);
     return (
         <tbody>
             {orders?.map((job, jobIndex) => {
@@ -81,19 +73,19 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             ))}
                         </td>
 
-                        {/* COMPOSITION - Changed to inline span */}
+                        {/* COMPOSITION - FIXED: Removed whiteSpace: 'nowrap' */}
                         <td style={stickyTd(6, isHovered)}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((comp, j) => (
-                                    <span key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                                    <span key={`${i}-${j}`} style={{ marginRight: '8px', display: 'inline-block' }}>
                                         {comp.composition || "-"}
                                     </span>
                                 ))
                             )}
                         </td>
 
-                        {/* COLOR - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* COLOR - Added overflow: hidden */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((col, j) => (
                                     <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
@@ -103,8 +95,8 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             )}
                         </td>
 
-                        {/* ORDER QTY - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* ORDER QTY */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((ord, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
@@ -114,8 +106,8 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             )}
                         </td>
 
-                        {/* UNIT PRICE - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* UNIT PRICE */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((unt, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
@@ -125,8 +117,8 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             )}
                         </td>
 
-                        {/* WORK ORDER QTY - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* WORK ORDER QTY */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
@@ -135,7 +127,7 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                                 ))
                             )}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
                                     const diff = wrk.totalGreyDelivery - wrk.workOrderQty;
@@ -149,42 +141,42 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             )}
                         </td>
 
-                        {/* TOTAL YARN DELIVERY - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* TOTAL YARN DELIVERY */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.yarnDeliveriesWithColor.GreyReturnReceived || "-"}
+                                        {wrk.yarnDeliveriesWithColor?.GreyReturnReceived || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.yarnDeliveriesWithColor.GreyReceived || "-"}
+                                        {wrk.yarnDeliveriesWithColor?.GreyReceived || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.yarnDeliveriesWithColor.FinishReceived || "-"}
+                                        {wrk.yarnDeliveriesWithColor?.FinishReceived || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* DIFFERENCE - Changed to inline span */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* DIFFERENCE */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => {
-                                    const diff = wrk.yarnDeliveriesWithColor.FinishReceived - wrk.yarnDeliveriesWithColor.GreyReceived || 0
-                                    const exceeded = diff < 0 || 0;
+                                    const diff = (wrk.yarnDeliveriesWithColor?.FinishReceived || 0) - (wrk.yarnDeliveriesWithColor?.GreyReceived || 0);
+                                    const exceeded = diff < 0;
                                     return (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
                                             {exceeded ? Math.abs(diff) : `(${Math.abs(diff)})`}
@@ -194,7 +186,7 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             )}
                         </td>
 
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
@@ -204,61 +196,58 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, FROZEN_WIDTHS })
                             )}
                         </td>
 
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.yarnDeliveriesWithColor.SentForCompacting || "-"}
+                                        {wrk.yarnDeliveriesWithColor?.SentForCompacting || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
 
-                        {/* TOTAL YARN RETURN  */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* TOTAL YARN RETURN - FIXED: Removed whiteSpace: 'nowrap' */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', }}>
-                                        {wrk.yarnDeliveriesWithColor.ReceivedFromCompacting || "-"}
+                                    <div key={`${i}-${j}`} style={{ marginRight: '8px' }}>
+                                        {wrk.yarnDeliveriesWithColor?.ReceivedFromCompacting || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
-                        {/* TOTAL YARN RETURN  */}
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                        {wrk.yarnDeliveriesWithColor.GreyReceived * wrk.unitePrice || "-"}
-
+                                        {(wrk.yarnDeliveriesWithColor?.GreyReceived || 0) * (wrk.unitePrice || 0) || "-"}
                                     </div>
                                 ))
                             )}
                         </td>
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+
+                        {/* PAYABLE AMOUNT - FIXED: Removed whiteSpace: 'nowrap' */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {/* {wrk.greyReceived || <span>NO YARN RETURNED   YET</span>} */}
+                                    <div key={`${i}-${j}`} style={{ marginRight: '8px' }}>
                                         PAYABLE AMOUNT
                                     </div>
                                 ))
                             )}
                         </td>
 
-
-                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
+                        {/* PENDING BILLING AMOUNT - FIXED: Removed whiteSpace: 'nowrap' */}
+                        <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                             {workOrders.map((wo, i) =>
                                 wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className="" style={{ marginRight: '8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                                        {/* {wrk.greyReceived * wrk.unitePrice || <span>NO PAYABLE AMOUNT IS SET YET</span>} */}
+                                    <div key={`${i}-${j}`} style={{ marginRight: '8px' }}>
                                         PENDING BILLING AMOUNT
                                     </div>
                                 ))
                             )}
                         </td>
-
-
                     </tr>
                 );
             })}
