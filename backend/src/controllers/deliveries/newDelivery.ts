@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
+import { challanValidation } from "../../helpers/challanValidation/challanValidation";
 
 interface DeliveryItem {
     deliveryType: string;
@@ -18,7 +19,8 @@ export const updateJobs = async (req: Request, res: Response) => {
     try {
         const { yarnId } = req.params as { yarnId: string };
         const { toFactory, fromFactory, date, challanNo, deliveries } = req.body as UpdateJobsBody;
-
+        console.log(req.body, "body");
+        console.log(req.params, "params");
         if (!toFactory || !fromFactory || !date || !challanNo || !deliveries?.length) {
             return res.status(400).json({ type: "error", message: "Missing required fields" });
         }
@@ -36,9 +38,14 @@ export const updateJobs = async (req: Request, res: Response) => {
             (d: any) => d.deliveryType !== undefined && d.qty !== undefined
         );
 
+
+        // if (verifyChallan) {
+        //     return res.send({ deliveries: verifyChallan })
+        // }
+
         if (delivers.length > 0) {
             await prisma.$transaction(
-                deliveries.map((delivery: any) =>
+                delivers.map((delivery: any) => // ✅ Changed to 'delivers'
                     prisma.deliveries.create({
                         data: {
                             deliveryDate: new Date(date),
@@ -58,20 +65,22 @@ export const updateJobs = async (req: Request, res: Response) => {
                 data: {
                     deliveryDate: new Date(date),
                     challanNo: Number(challanNo),
-                    deliveryQty: Number(req.body.yarnDelivery),
+                    deliveryQty: Number(req.body.deliveryQty),
                     deliveryType: req.body.deliveryType,
                     toFactory: req.body.toFactory,
                     fromFactory: req.body.fromFactory,
                     yarnId: Number(checkYarnIfExist.id),
-                    yarnCompId: Number(checkYarnIfExist.id)
+                    yarnCompId: Number(checkYarnIfExist.id),
+
                 }
             });
         }
 
 
+        const verifyChallan = await challanValidation(challanNo)
 
 
-        return res.status(200).json({ type: "success", message: "Delivery quantity updated successfully" });
+        return res.status(200).json({ type: "success", deliveries: verifyChallan, message: "Delivery quantity updated successfully" });
 
     } catch (error) {
         console.error(error);

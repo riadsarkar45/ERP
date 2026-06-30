@@ -2,7 +2,7 @@ import { useState } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
-const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [getJobIndex, setJobIndex] = useState("")
     const [hoveredIndex, setHoveredIndex] = useState(null);
     const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
@@ -59,7 +59,7 @@ const AopOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWidths
                                     <div key={i}>{wo.factoryName || "-"}</div>
                                 ))}
                             </td>
-                            <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(job.jobNo)}>
+                            <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
                                 {job.jobNo || "NO JOB FOUND"}
                             </td>
                             <td style={stickyTd(2, isHovered)}>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
-const KnittingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
     const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
 
@@ -59,7 +59,7 @@ const KnittingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenW
                         </td>
 
                         {/* COL 1 — JOB NO */}
-                        <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(job.jobNo)}>
+                        <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
                             <div className={`${innerItem} cursor-pointer hover:text-blue-600`}>{job.jobNo || "NO JOB FOUND"}</div>
                         </td>
 

@@ -2,7 +2,7 @@ import { X, Save, Loader2 } from 'lucide-react';
 import Input from './Input';
 import Deliveries from './Deliveries';
 
-const Modal = ({ setIsEditing, orderType, changedField, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
+const Modal = ({ setIsEditing, orderType, changedField, duplicateChallan, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
     const deliveryTypes = [];
 
     if (orderType === "knittingOrder") {
@@ -48,23 +48,24 @@ const Modal = ({ setIsEditing, orderType, changedField, deliveriesLoading, isLoa
                     </div>
 
                     {/* Scrollable body */}
-                    {/* <div className="overflow-y-auto flex-1 flex flex-col"> */}
+                    <div className="overflow-y-auto flex-1 flex flex-col">
 
-                    {
-                        deliveriesLoading ? <div>
-                            <span className='animate-spin'><Loader2 size={30} /></span>
-                        </div> : <Deliveries
-                            isLoading={isLoading}
-                            handleSubmit={handleSubmit}
-                            handleEditOnChange={handleEditOnChange}
-                            deliveries={deliveries}
-                            orderType={orderType}
-                            changedField={changedField}
+                        {
+                            deliveriesLoading ? <div>
+                                <span className='animate-spin'><Loader2 size={30} /></span>
+                            </div> : <Deliveries
+                                isLoading={isLoading}
+                                handleSubmit={handleSubmit}
+                                handleEditOnChange={handleEditOnChange}
+                                deliveries={deliveries}
+                                duplicateChallan={duplicateChallan}
+                                orderType={orderType}
+                                changedField={changedField}
                             />
-                    }
+                        }
 
-                    {/* Form */}
-                    {/* <div className="px-6 py-5 shrink-0">
+                        {/* Form */}
+                        {/* <div className="px-6 py-5 shrink-0">
                             <span className="text-[10px] font-semibold tracking-[0.14em] text-gray-300 uppercase block mb-4">
                                 Add New Delivery
                             </span>
@@ -77,10 +78,10 @@ const Modal = ({ setIsEditing, orderType, changedField, deliveriesLoading, isLoa
                                 <Input label="From Factory" name="fromFactory" type="text" onChange={handleEditOnChange} placeholder="Factory" required />
                             </div>
                         </div> */}
-                    {/* </div> */}
+                        {/* </div> */}
 
-                    {/* Footer */}
-                    {/* <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white shrink-0">
+                        {/* Footer */}
+                        {/* <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white shrink-0">
                         {
                             isLoading ? <button
                                 className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-semibold tracking-wide transition-colors"
@@ -100,6 +101,7 @@ const Modal = ({ setIsEditing, orderType, changedField, deliveriesLoading, isLoa
                             <X size={14} /> Cancel
                         </button>
                     </div> */}
+                    </div>
                 </div>
             </div>
         </>

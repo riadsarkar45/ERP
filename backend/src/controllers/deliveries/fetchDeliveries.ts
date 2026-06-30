@@ -2,16 +2,21 @@ import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
 export const deliveryDetail = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    console.log(id);
-    const deliveries = await prisma.composition.findUnique({
-        where: { id: Number(id) },
+    const { orderType } = req.params;
+    const { workOrderIds } = req.query;
+    const ids = String(workOrderIds).split(',').map(Number);
+    const deliveries = await prisma.composition.findMany({
+        where: {
+            workOrderId: { in: ids },
+            workOrder: { orderType: orderType as string }
+        },
         select: {
+            id: true,
             composition: true,
             workOrderQty: true,
             orderQty: true,
+            
             deliveries: {
-                where: { yarnId: Number(id) },
                 select: {
                     deliveryType: true,
                     deliveryQty: true,
@@ -22,28 +27,12 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                 }
             },
             workOrder: {
-
                 select: {
-                    yarnDyeingJobs: {
-                        select: {
-                            id: true,
-                            qty: true,
-                            color: true,
-                            composition: true,
-                        }
-                    },
+                    
                     styleRequirement: {
                         select: {
                             processLoss: true,
                             buyerName: true,
-
-                            rows: {
-                                select: {
-                                    composition: true,
-                                    orderQty: true,
-                                    finishRequiredQty: true
-                                }
-                            }
                         }
                     }
                 }

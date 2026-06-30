@@ -49,7 +49,7 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                                 <div key={i}>{wo.factoryName || "-"}</div>
                             ))}
                         </td>
-                        <td onClick={() => handleEditRowData(job.jobNo)} style={stickyTd(1, isHovered)}>
+                        <td onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
                             {job.jobNo || "NO JOB FOUND"}
                         </td>
                         <td style={stickyTd(2, isHovered)}>

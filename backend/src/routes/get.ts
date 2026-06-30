@@ -8,6 +8,7 @@ import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs
 import { deliveryDetail } from "../controllers/deliveries/fetchDeliveries";
 import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
+import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 
 const getRouters = express.Router();
 
@@ -27,6 +28,8 @@ getRouters.get("/styles", apiLimiter, styleRequirements);
 
 getRouters.get("/styles/:jobNo", apiLimiter, styleRequirements);
 
-getRouters.get("/deliveries/:jobNumber/:orderType", apiLimiter, getDeliveryData);
+getRouters.get("/deliveries/:orderType", apiLimiter, deliveryDetail);
+
+getRouters.delete("/delete-delivery/:deliveryId", deleteChallanFromDelivery)
 
 export default getRouters;

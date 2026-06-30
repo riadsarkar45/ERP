@@ -718,7 +718,7 @@ export default function Summary() {
                                                         value={changedField.editingValue}
                                                         name="jobNo"
                                                         className=" bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md"
-                                                         type="text" /> : row.jobNo
+                                                        type="text" /> : row.jobNo
                                             }
                                         </span>
                                     </td>
@@ -768,7 +768,7 @@ export default function Summary() {
                                                         <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                             name="composition"
                                                             className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                             type="text" /> : cell.color
+                                                            type="text" /> : cell.color
                                                 }
                                             </div>)}
                                         </div>
@@ -802,7 +802,7 @@ export default function Summary() {
                                                             <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                                 name="finishDia"
                                                                 className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                                 type="text" /> : cell.finishDia
+                                                                type="text" /> : cell.finishDia
                                                     }
                                                 </div>
                                             )}
@@ -818,7 +818,7 @@ export default function Summary() {
                                                         <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                             name="orderQty"
                                                             className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                             type="text" /> : cell.orderQty
+                                                            type="text" /> : cell.orderQty
                                                 }
                                             </div>)}
                                         </div>
@@ -829,7 +829,7 @@ export default function Summary() {
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => (
                                                 <div key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {(Number(cell.finishRequiredQty) + Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100)).toFixed(2)}
+                                                    {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
                                                 </div>
                                             ))}
                                         </div>
@@ -872,7 +872,7 @@ export default function Summary() {
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => (
                                                 <div key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {(Number(cell.finishRequiredQty) + Number(cell.finishRequiredQty) * (Number(row.processLoss) / 100)).toFixed(2)}
+                                                    {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
                                                 </div>
                                             ))}
                                         </div>
@@ -890,8 +890,7 @@ export default function Summary() {
                                                 const finishRequiredQty = cell.finishRequiredQty || 0;
                                                 const processLoss = row.processLoss || 0;
                                                 const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                                                const diff0 = (Number(finishRequiredQty) + Number(finishRequiredQty) * Number(processLoss) / 100) - Number(knittingWorkOrderQty);
-                                                const isExceeded0 = diff0 > 0;
+                                                const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty); const isExceeded0 = diff0 > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 whitespace-nowrap ${isExceeded0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
                                                         {isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2)}

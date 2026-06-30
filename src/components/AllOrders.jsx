@@ -81,7 +81,7 @@ const applyDeepFilters = (data, activeFilters) => {
 
 const AllOrders = ({ orderType }) => {
     const axiosPublic = useAxiosPublic();
-    const [jobId, setOrderId] = useState(0);
+    const [jobId, setJobId] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
     const [changedField, setChangedField] = useState({});
@@ -91,14 +91,14 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     const [filters, setFilters] = useState({});
-
+    const [duplicateChallan, setDuplicateChallan] = useState([])
     const { handleRefresh, isUpdated } = InlineEdit();
     const { fetchData, error, loading } = useFetchData();
 
     const COLUMNS = useMemo(() => {
         const cols = [];
         const defaultWidths = [160, 100, 120, 180, 180, 100, 260];
-        
+
         if (orderType === "knittingOrder") {
             cols.push(
                 { header: "FACTORY NAME", width: defaultWidths[0], inputName: "factoryName" },
@@ -197,14 +197,14 @@ const AllOrders = ({ orderType }) => {
     });
 
     useEffect(() => {
-        try { localStorage.setItem(`tableColumnWidths_${orderType}`, JSON.stringify(columnWidths)); } 
+        try { localStorage.setItem(`tableColumnWidths_${orderType}`, JSON.stringify(columnWidths)); }
         catch (e) { console.error("Error saving column widths:", e); }
     }, [columnWidths, orderType]);
 
     useEffect(() => {
         const defaultWidths = COLUMNS.map(c => c.width);
         setColumnWidths(getSavedWidths(orderType, defaultWidths));
-        setFilters({}); 
+        setFilters({});
     }, [COLUMNS]);
 
     const currentFrozenWidths = columnWidths.slice(0, FROZEN_COUNT);
@@ -226,7 +226,7 @@ const AllOrders = ({ orderType }) => {
     const getDropdownOptions = (targetColName) => {
         const tempFilters = { ...filters };
         delete tempFilters[targetColName]; // Ignore this column's active filter
-        
+
         const tempFilteredData = applyDeepFilters(orders, tempFilters);
         return getUniqueValues(tempFilteredData, targetColName);
     };
@@ -269,7 +269,7 @@ const AllOrders = ({ orderType }) => {
         e.preventDefault(); e.stopPropagation();
         const startX = e.pageX; const startWidth = columnWidths[colIndex];
         const onMouseMove = (moveEvent) => {
-            const newWidth = Math.max(80, startWidth + (moveEvent.pageX - startX)); 
+            const newWidth = Math.max(80, startWidth + (moveEvent.pageX - startX));
             setColumnWidths(prev => {
                 if (prev[colIndex] === newWidth) return prev;
                 const newWidths = [...prev]; newWidths[colIndex] = newWidth; return newWidths;
@@ -285,21 +285,29 @@ const AllOrders = ({ orderType }) => {
         document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
     };
 
-    const handleEditRowData = async (jobNumber) => {
+    const handleEditRowData = async (workOrderIds) => {
         setLoadingDeliveries(true); setIsEditing(true);
-        const res = await axiosPublic.get(`/api/deliveries/${jobNumber}/${orderType}`);
+        setJobId(workOrderIds)
+        const res = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+            params: { workOrderIds: workOrderIds.join(',') }
+        });
         if (res.data) setLoadingDeliveries(false);
-        setDeliveries(res.data); setWorkOrderId(2); setStyleNo(styleNo);
+        console.log(res.data);
+        setDeliveries(res.data); setWorkOrderId(workOrderIds); setStyleNo(styleNo);
     };
 
     const handleEditOnChange = (e) => {
-        const { name, value } = e.target; setIsEditing(true);
+        const { name, value } = e.target;
+        setIsEditing(true);
+
         setChangedField(prev => {
             const updated = { ...prev, [name]: value };
+
             const deliveries = [
-                { deliveryType: updated.deliveryType, qty: updated.greyReceivedQty },
+                { deliveryType: updated.deliveryType, qty: updated.deliveryQty },  // ✅ Fixed!
                 ...(updated.finishReceivedQty ? [{ deliveryType: "Finish Received", qty: updated.finishReceivedQty }] : []),
             ];
+
             return { ...updated, deliveries };
         });
     };
@@ -307,13 +315,16 @@ const AllOrders = ({ orderType }) => {
     const handleSubmit = async (yarnId) => {
         setIsLoading(true);
         const update = await axiosPublic.patch(`/api/update-order/${yarnId}`, changedField);
+        setDuplicateChallan(update.data.deliveries);
+        console.log(update.data.deliveries, "devs.................>>>>>>>>>>");
         if (update.status === 200) {
             const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-            const devs = await axiosPublic.get(`/api/deliveries/${jobId}/${orderType}`);
+            const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+                params: { workOrderIds: jobId.join(',') }
+            });
             setDeliveries(devs.data); setOrders(res.data); setIsLoading(false); setChangedField({});
         }
     };
-
     return (
         <div>
             <button onClick={handleRefresh}>Refresh</button>
@@ -322,7 +333,21 @@ const AllOrders = ({ orderType }) => {
             <div className="bg-white rounded-lg border border-gray-200">
                 <div style={{ position: "relative", overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}>
                     {isEditing && (
-                        <Modal workOrderId={workOrderId} isLoading={isLoading} deliveriesLoading={loadingDeliveries} deliveries={deliveries} setIsEditing={setIsEditing} handleSubmit={handleSubmit} handleEditOnChange={handleEditOnChange} orderId={jobId} orders={orders} orderType={orderType} changedField={changedField} />
+                        <Modal
+                            workOrderId={workOrderId}
+                            isLoading={isLoading}
+                            deliveriesLoading={loadingDeliveries}
+                            deliveries={deliveries}
+                            duplicateChallan={duplicateChallan}
+                            setIsEditing={setIsEditing}
+                            handleSubmit={handleSubmit}
+                            handleEditOnChange={handleEditOnChange}
+                            orderId={jobId}
+                            orders={orders}
+                            setJobId={setJobId}
+                            orderType={orderType}
+                            changedField={changedField}
+                        />
                     )}
 
                     <table style={{ width: "max-content", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -352,7 +377,7 @@ const AllOrders = ({ orderType }) => {
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{col.header}</span>
                                             {col.inputName && (
-                                                <FilterDropdown 
+                                                <FilterDropdown
                                                     columnName={col.inputName}
                                                     uniqueValues={getDropdownOptions(col.inputName)} // 🔥 CHANGED: Pass cascading options!
                                                     selectedValues={filters[col.inputName]}
@@ -376,9 +401,21 @@ const AllOrders = ({ orderType }) => {
                         </thead>
 
                         {orderType === "yarnDyeingOrder" && <YarnDyeOrders orders={filteredOrders} handleEditRowData={handleEditRowData} FROZEN_COUNT={FROZEN_COUNT} currentFrozenWidths={currentFrozenWidths} currentFrozenLefts={currentFrozenLefts} />}
-                        {orderType === "knittingOrder" && <KnittingOrder orders={filteredOrders} handleEditRowData={handleEditRowData} FROZEN_COUNT={FROZEN_COUNT} currentFrozenWidths={currentFrozenWidths} currentFrozenLefts={currentFrozenLefts} />}
+                        {orderType === "knittingOrder" && <KnittingOrder
+                            orders={filteredOrders}
+                            setJobId={setJobId}
+                            handleEditRowData={handleEditRowData}
+                            FROZEN_COUNT={FROZEN_COUNT}
+                            currentFrozenWidths={currentFrozenWidths}
+                            currentFrozenLefts={currentFrozenLefts} />}
                         {orderType === "dyeingOrder" && <DyeingOrder orders={filteredOrders} handleEditRowData={handleEditRowData} FROZEN_COUNT={FROZEN_COUNT} currentFrozenWidths={currentFrozenWidths} currentFrozenLefts={currentFrozenLefts} />}
-                        {orderType === "aopOrder" && <AopOrder orders={filteredOrders} handleEditRowData={handleEditRowData} FROZEN_COUNT={FROZEN_COUNT} currentFrozenWidths={currentFrozenWidths} currentFrozenLefts={currentFrozenLefts} />}
+                        {orderType === "aopOrder" &&
+                            <AopOrder orders={filteredOrders}
+                                handleEditRowData={handleEditRowData}
+                                setJobId={setJobId}
+                                FROZEN_COUNT={FROZEN_COUNT}
+                                currentFrozenWidths={currentFrozenWidths}
+                                currentFrozenLefts={currentFrozenLefts} />}
                     </table>
                 </div>
             </div>
