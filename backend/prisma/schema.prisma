@@ -18,6 +18,7 @@ model Factory {
 model Yarns {
   id       Int    @id @unique @default(autoincrement())
   yarnType String @unique
+
 }
 
 model WorkOrder {
@@ -61,18 +62,21 @@ model yarnDyeingJobs {
 // }
 
 model Composition {
-  id           Int          @id @default(autoincrement())
-  composition  String
-  unitePrice   Float
-  color        String
-  additional   String       @default("0")
-  orderQty     Int
-  workOrderQty Int
-  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
-  deliveries   deliveries[]
-  workOrderId  Int
-  orderType    String       @default("null")
+  id                   Int                  @id @default(autoincrement())
+  composition          String
+  unitePrice           Float
+  color                String
+  additional           String               @default("0")
+  orderQty             Int
+  workOrderQty         Int
+  workOrder            WorkOrder            @relation(fields: [workOrderId], references: [id])
+  workOrderId          Int
+  deliveries           deliveries[]
+  orderType            String               @default("null")
 
+  // NEW: links this composition back to the StyleRequirementRow it originated from,
+  // so updates to a row can target exact Composition records by id instead of
+  // matching on composition+color strings.
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
 
@@ -104,6 +108,8 @@ model StyleRequirementRow {
   orderQty           Int
   finishRequiredQty  Float
   additional         String           @default("0")
+
+  // NEW: back-relation so a row can see all Composition records derived from it
   compositions       Composition[]
 
   @@index([styleRequirementId])

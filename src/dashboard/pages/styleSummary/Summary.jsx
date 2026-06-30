@@ -49,18 +49,21 @@ const applyDeepFiltersSummary = (data, activeFilters) => {
     if (!data || Object.keys(activeFilters).length === 0) return data;
 
     return data.reduce((acc, row) => {
+        // 1. Check top-level (row) filters (e.g., Job No, Buyer)
         for (const [ci, selectedSet] of Object.entries(activeFilters)) {
             if (!selectedSet || selectedSet.size === 0) continue;
             const col = FILTERABLE_COLS[Number(ci)];
             if (!col || col.type !== "row") continue;
 
             if (!selectedSet.has(String(row[col.key] ?? ""))) {
-                return acc;
+                return acc; // Skip this entire row if it doesn't match
             }
         }
 
+        // 2. Clone row and filter sub-rows (e.g., Color, Composition)
         const clonedRow = { ...row };
         const subRows = clonedRow.rows || [];
+        const breakdowns = clonedRow.compBreakdown || [];
 
         const hasSubFilters = Object.entries(activeFilters).some(([ci, selectedSet]) => {
             if (!selectedSet || selectedSet.size === 0) return false;
@@ -69,22 +72,44 @@ const applyDeepFiltersSummary = (data, activeFilters) => {
         });
 
         if (hasSubFilters) {
-            const filteredSubRows = subRows.filter(sr => {
+            const filteredSubRows = [];
+            const filteredBreakdowns = [];
+
+            for (let j = 0; j < subRows.length; j++) {
+                const sr = subRows[j];
+                let srValid = true;
+
                 for (const [ci, selectedSet] of Object.entries(activeFilters)) {
                     if (!selectedSet || selectedSet.size === 0) continue;
                     const col = FILTERABLE_COLS[Number(ci)];
                     if (!col || col.type !== "subrow") continue;
 
                     if (!selectedSet.has(String(sr[col.key] ?? ""))) {
-                        return false;
+                        srValid = false;
+                        break;
                     }
                 }
-                return true;
-            });
+
+                if (srValid) {
+                    filteredSubRows.push(sr);
+                    // Keep the breakdown data perfectly aligned with the sub-rows!
+                    if (j < breakdowns.length) {
+                        filteredBreakdowns.push(breakdowns[j]);
+                    } else {
+                        filteredBreakdowns.push({});
+                    }
+                }
+            }
 
             clonedRow.rows = filteredSubRows;
+            clonedRow.compBreakdown = filteredBreakdowns;
+        } else {
+            if (!clonedRow.compBreakdown && subRows.length > 0) {
+                clonedRow.compBreakdown = subRows.map(() => ({}));
+            }
         }
 
+        // 3. Only keep the row if it still has valid sub-rows left
         if (clonedRow.rows.length > 0) {
             acc.push(clonedRow);
         }
@@ -99,11 +124,6 @@ const getBreakdownValue = (item, key) => {
     if (item.status) return 0;
     return Number(item[key]) || 0;
 };
-
-const getCbForCell = (cell, compBreakdown) =>
-    (compBreakdown || []).find(
-        (cb) => cb.color === cell.color && cb.composition === cell.composition
-    ) || {};
 
 // ── Filter Dropdown Component ─────────────────────────────────────────────────
 function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, onClear, onClose, anchorRef }) {
@@ -158,6 +178,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
             }}
             className="filter-dropdown"
         >
+            {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide truncate">{colLabel}</span>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0">
@@ -165,6 +186,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 </button>
             </div>
 
+            {/* Search */}
             <div className="px-2 py-2 border-b border-gray-100">
                 <div className="flex items-center gap-1.5 bg-gray-100 rounded px-2 py-1">
                     <Search size={12} className="text-gray-400 flex-shrink-0" />
@@ -183,6 +205,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 </div>
             </div>
 
+            {/* Select All */}
             <div className="px-3 py-1.5 border-b border-gray-100">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
@@ -196,6 +219,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 </label>
             </div>
 
+            {/* Values list */}
             <div style={{ maxHeight: 200, overflowY: "auto" }} className="py-1">
                 {filtered.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-gray-400 text-center">No matches</div>
@@ -214,6 +238,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 )}
             </div>
 
+            {/* Actions */}
             <div className="flex gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50">
                 <button
                     onClick={() => { onApply(selected); onClose(); }}
@@ -242,16 +267,9 @@ export default function Summary() {
 
     const [activeFilters, setActiveFilters] = useState({});
     const [openFilter, setOpenFilter] = useState(null);
-
-    const [isEditing, setIsEditing] = useState({
-        isEdit: false,
-        rowId: null,
-        compId: null,
-        editingField: "",
-        changedRow: ""
-    });
-    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" });
-    const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false });
+    const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
+    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
+    const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const { fetchData, error, loading } = useFetchData();
 
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
@@ -265,13 +283,16 @@ export default function Summary() {
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
+    // ── Get unique values for a column filtered by all OTHER active filters ───
     const getColValues = useCallback((colIndex) => {
         const col = FILTERABLE_COLS[colIndex];
         if (!col) return [];
 
+        // Create a temporary filter set that excludes the current column's filter
         const tempFilters = { ...activeFilters };
         delete tempFilters[colIndex];
 
+        // Apply deep filters with the temporary set to get cascading options
         const tempFilteredData = applyDeepFiltersSummary(rawData, tempFilters);
 
         if (col.type === "row") {
@@ -279,6 +300,7 @@ export default function Summary() {
             return Array.from(set).sort();
         }
 
+        // For sub-rows, extract unique values from the filtered sub-rows
         const set = new Set();
         tempFilteredData.forEach(row => {
             (row.rows || []).forEach(sr => set.add(String(sr[col.key] ?? "")));
@@ -286,6 +308,7 @@ export default function Summary() {
         return Array.from(set).sort();
     }, [rawData, activeFilters]);
 
+    // ── Filtered data (Deeply filtered like Excel) ────────────────────────────
     const filteredData = useMemo(() => {
         return applyDeepFiltersSummary(rawData, activeFilters);
     }, [rawData, activeFilters]);
@@ -327,7 +350,8 @@ export default function Summary() {
     const clearAllFilters = () => setActiveFilters({});
     const hasActiveFilters = Object.keys(activeFilters).length > 0;
 
-    const renderBreakdownCell = (rowsArr, compBreakdown, key, colIndex) => (
+    // ── Cell renderers ────────────────────────────────────────────────────────
+    const renderBreakdownCell = (compBreakdown, key, colIndex) => (
         <td
             className="p-0 align-top"
             style={{
@@ -337,8 +361,7 @@ export default function Summary() {
             }}
         >
             <div className="divide-y divide-gray-200">
-                {rowsArr.map((cell, j) => {
-                    const cb = getCbForCell(cell, compBreakdown);
+                {compBreakdown.map((cb, j) => {
                     if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400 italic">_</div>;
                     const value = cb?.[key];
                     return <div key={j} className="px-3 py-2 whitespace-nowrap">{value !== undefined && value !== null ? value : "_"}</div>;
@@ -367,75 +390,51 @@ export default function Summary() {
         borderBottom: '1px solid #e5e7eb',
     });
 
-    const handleEdit = (rowId, editingField, currentValue, changedTable, compId) => {
-        setIsEditing({
-            rowId: rowId,
-            compId: compId || null,
-            isEdit: false,
-            editingField: editingField,
-            changedRow: changedTable
-        });
-        setChangedField({
-            editingRow: editingField,
-            editingValue: currentValue,
-            changedRow: changedTable
-        });
+    const handleEdit = (rowId, editingField, currentValue, changedTable) => {
+        console.log(rowId, editingField, currentValue, changedTable);
+        setIsEditing({ rowId, isEdit: false, editingField, changedRow: changedTable });
+        setChangedField({ editingRow: editingField, editingValue: currentValue, changedRow: changedTable });
     }
 
     const handleOnChange = (e) => {
         const { name, value } = e.target;
-        setChangedField(prev => ({ ...prev, editingRow: name, editingValue: value }));
-
-        if (name === isEditing.editingField) {
-            setIsEditing(prev => ({ ...prev, isEdit: true }));
+        if (name !== changedField.editingRow) {
+            setChangedField({ editingRow: name, editingValue: value });
+            return;
         }
+        setChangedField({ editingValue: value, editingRow: name })
+        setIsEditing(prev => ({ ...prev, isEdit: true }));
+
+        console.log(value, name);
     }
 
     const handleSubmit = async () => {
-        setIsLoading({ loadAfterUpdate: true, refreshLoading: false });
-
-        const targetId = isEditing.compId || isEditing.rowId;
-
+        setIsLoading({ loadAfterUpdate: true })
+        console.log(isEditing, "isEditing");
+        console.log(changedField, "changedField");
         const updatedData = {
             [isEditing.editingField]: changedField.editingValue,
             changedTable: isEditing.changedRow,
-            rowId: isEditing.rowId,
-            compId: isEditing.compId
-        };
-
-        try {
-            const sendDataToUpdate = await axiosPublic.patch(`/api/update-style-req/${targetId}`, updatedData);
-
-            if (sendDataToUpdate.data.type === "success") {
-                const getUpdatedStyles = await axiosPublic.get("/api/styles");
-                setRawData(getUpdatedStyles.data.data);
-            } else {
-                console.error("Update failed:", sendDataToUpdate.data);
-                alert("Failed to update. Please try again.");
-            }
-        } catch (error) {
-            console.error("API Error:", error);
-            alert("An error occurred while saving.");
-        } finally {
-            setIsLoading({ loadAfterUpdate: false, refreshLoading: false });
-            setIsEditing({ isEdit: false, rowId: null, compId: null, editingField: "", changedRow: "" });
-            setChangedField({ editingRow: "", editingValue: "", changedRow: "" });
+            rowId: isEditing.rowId
+        }
+        console.log(isEditing.rowId, "row id");
+        const sendDataToUpdate = await axiosPublic.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
+        console.log(sendDataToUpdate.data.type);
+        if (sendDataToUpdate.data.type === "success") {
+            const getUpdatedStyles = await axiosPublic.get("/api/styles")
+            setRawData(getUpdatedStyles.data.data);
+            setIsLoading({ loadAfterUpdate: false })
+            setIsEditing({ isEdit: false })
         }
     }
 
     const handleRefresh = () => {
-        setIsLoading({ refreshLoading: true, loadAfterUpdate: false });
+        setIsLoading({ refreshLoading: true })
+        fetchData(`/api/styles`).then(data => {
+            if (data) setRawData(data.data);
+            setIsLoading({ refreshLoading: false })
 
-        fetchData(`/api/styles`)
-            .then(data => {
-                if (data) setRawData(data.data);
-            })
-            .catch(err => {
-                console.error("Refresh failed:", err);
-            })
-            .finally(() => {
-                setIsLoading({ refreshLoading: false, loadAfterUpdate: false });
-            });
+        });
     }
 
     const handleExportExcel = () => {
@@ -443,12 +442,12 @@ export default function Summary() {
         wsData.push(COLUMNS);
 
         filteredData.forEach(row => {
-            const compBreakdown = row.compBreakdown || [];
+            const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
             const numSubRows = row.rows.length;
 
             for (let j = 0; j < numSubRows; j++) {
                 const cell = row.rows[j];
-                const cb = getCbForCell(cell, compBreakdown);
+                const cb = compBreakdown[j] || {};
 
                 const finishQty = Number(cell.finishRequiredQty) || 0;
                 const processLoss = Number(row.processLoss) || 0;
@@ -532,6 +531,7 @@ export default function Summary() {
 
     return (
         <DashboardLayout>
+            {/* ── Action Bar ─────────────────────────────────────────────────── */}
             <div className="flex gap-2 mb-4 items-center flex-wrap">
                 <button
                     onClick={() => setShowModal(true)}
@@ -680,23 +680,23 @@ export default function Summary() {
 
                     <tbody>
                         {filteredData.map((row, i) => {
-                            const compBreakdown = row.compBreakdown || [];
+                            const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
 
                             return (
                                 <tr key={i} className="group">
 
                                     {/* 1. SALES CONTACT */}
-                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>
+                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>
                                         {
                                             isEditing.editingField === "salesContact" && isEditing.rowId === row.id ?
                                                 <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                    name="salesContact"
+                                                    name="salesContract"
                                                     className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : row.salesContact
                                         }
                                     </td>
 
                                     {/* 2. BUYER */}
-                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>
+                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>
                                         {
                                             isEditing.editingField === "buyerName" && isEditing.rowId === row.id ?
                                                 <input
@@ -710,7 +710,7 @@ export default function Summary() {
 
                                     {/* 3. JOB NO */}
                                     <td onDoubleClick={() => handleRedirect(row.jobNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center cursor-pointer hover:text-blue-600 group-hover:bg-gray-50" style={getFrozenStyle(2)}>
-                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo, "styleRequirement")} >
+                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)} >
                                             {
                                                 isEditing.editingField === "jobNo" && isEditing.rowId === row.id ?
                                                     <input
@@ -749,7 +749,7 @@ export default function Summary() {
                                                 value={changedField.editingValue}
                                                 className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
                                                 type="text"
-                                                style={{ width: `${Math.max(row.poNo?.length || 1, 5)}ch` }}
+                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
                                                 onChange={(e) => {
                                                     e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
                                                     handleOnChange(e)
@@ -758,65 +758,36 @@ export default function Summary() {
                                         }
                                     </td>
 
-                                    {/* 6. COLOR — ✅ FIXED: now resolves cb and passes cb.compositionId as compId */}
+                                    {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-
-                                                const isEditingThisCell = isEditing.editingField === "color" &&
-                                                                          isEditing.rowId === cell.id &&
-                                                                          (cb.compositionId ? isEditing.compId === cb.compositionId : !isEditing.compId);
-
-                                                return (
-                                                    <div
-                                                        onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows", cb.compositionId)}
-                                                        key={j}
-                                                        className="px-3 py-2 whitespace-nowrap"
-                                                    >
-                                                        {isEditingThisCell ? (
-                                                            <input
-                                                                value={changedField.editingValue}
-                                                                onChange={(e) => handleOnChange(e)}
-                                                                name="color"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                                type="text"
-                                                            />
-                                                        ) : (
-                                                            cell.color
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                {
+                                                    isEditing.editingField === "color" && isEditing.rowId === cell.id ?
+                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
+                                                            name="color"
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text" /> : cell.color
+                                                }
+                                            </div>)}
                                         </div>
                                     </td>
 
                                     {/* 7. COMPOSITION */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(6)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-
-                                                const isEditingThisCell = isEditing.editingField === "composition" &&
-                                                                          isEditing.rowId === cell.id &&
-                                                                          (cb.compositionId ? isEditing.compId === cb.compositionId : !isEditing.compId);
-
-                                                return (
-                                                    <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows", cb.compositionId)} key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>
-                                                        {isEditingThisCell ? (
+                                            {row.rows.map((cell, j) => (
+                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>
+                                                    {
+                                                        isEditing.editingField === "composition" && isEditing.rowId === cell.id ?
                                                             <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                                 name="composition"
                                                                 className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text"
                                                             />
-                                                        ) : (
-                                                            <div>
-                                                                {cell.composition}
-                                                                {cb.compositionId}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                                            : cell.composition
+                                                    }
+                                                </div>
+                                            ))}
                                         </div>
                                     </td>
 
@@ -905,19 +876,18 @@ export default function Summary() {
                                     </td>
 
                                     {/* 13. KNITTING WORK ORDER QTY */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'knittingOrder_workOrderQty', 12)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_workOrderQty', 12)}
 
                                     {/* 14. SHORT & EXCESS */}
                                     <td className="p-0 align-top" style={getCellStyle(13)}>
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
+                                                const cb = compBreakdown[j] || {};
                                                 if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const finishRequiredQty = cell.finishRequiredQty || 0;
                                                 const processLoss = row.processLoss || 0;
                                                 const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                                                const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty);
-                                                const isExceeded0 = diff0 > 0;
+                                                const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty); const isExceeded0 = diff0 > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 whitespace-nowrap ${isExceeded0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
                                                         {isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2)}
@@ -928,13 +898,13 @@ export default function Summary() {
                                     </td>
 
                                     {/* 15. YARN DELIVERY */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'knittingOrder_Yarn_Delivery', 14)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Delivery', 14)}
 
                                     {/* 16. SHORT & EXCESS (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(15)}>
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
+                                                const cb = compBreakdown[j] || {};
                                                 if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const finishQty = Number(cell.finishRequiredQty) || 0;
                                                 const processLoss = Number(row.processLoss) || 0;
@@ -952,10 +922,10 @@ export default function Summary() {
                                     </td>
 
                                     {/* 17. RAW YARN DELIVERY FOR DYED */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', 16)}
+                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', 16)}
 
                                     {/* 18. YARN RECEIVED AFTER DYED */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', 17)}
+                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', 17)}
 
                                     {/* 19. PARTY STOCK */}
                                     <td className="p-0 align-top" style={getCellStyle(18)}>
@@ -965,17 +935,16 @@ export default function Summary() {
                                     </td>
 
                                     {/* 20. TOTAL KNITTING (GREY) */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'knittingOrder_Yarn_Received', 19)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Received', 19)}
 
                                     {/* 21. RETURN YARN RECEIVED */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'knittingOrder_Yarn_Return', 20)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Return', 20)}
 
                                     {/* 22. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(21)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-                                                if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
+                                            {compBreakdown.map((cb, j) => {
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
                                                 const greyReceived = getBreakdownValue(cb, 'knittingOrder_Yarn_Received');
@@ -991,23 +960,22 @@ export default function Summary() {
                                     </td>
 
                                     {/* 23. GREY DELIVERY FOR DYEING */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'dyeingOrder_Grey_Delivery', 22)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Delivery', 22)}
 
                                     {/* 24. GREY RETURN FROM DYEING */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'dyeingOrder_Grey_Return_Received', 23)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return_Received', 23)}
 
                                     {/* 25. GREY RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'dyeingOrder_Grey_Received', 24)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 24)}
 
                                     {/* 26. FINISH RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'dyeingOrder_Finish_Received', 25)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Finish_Received', 25)}
 
                                     {/* 27. GREY BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(26)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-                                                if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
+                                            {compBreakdown.map((cb, j) => {
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const diff = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received') +
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing') -
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
@@ -1032,17 +1000,16 @@ export default function Summary() {
                                     </td>
 
                                     {/* 29. FINISH DELIVERY FROM AOP */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'aopOrder_Sent_for_AOP', 28)}
+                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_for_AOP', 28)}
 
                                     {/* 30. FINISH RECEIVED FROM AOP */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'aopOrder_Received_from_AOP', 29)}
+                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Received_from_AOP', 29)}
 
                                     {/* 31. AOP FAB. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(30)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-                                                if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
+                                            {compBreakdown.map((cb, j) => {
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_for_AOP');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_from_AOP');
                                                 const diff = received - sent;
@@ -1059,9 +1026,8 @@ export default function Summary() {
                                     {/* 32. AOP PROCESS LOSS (%) */}
                                     <td className="p-0 align-top" style={getCellStyle(31)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-                                                if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
+                                            {compBreakdown.map((cb, j) => {
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_for_AOP');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_from_AOP');
                                                 const loss = sent > 0 ? (((sent - received) / sent) * 100).toFixed(2) : "_";
@@ -1071,23 +1037,22 @@ export default function Summary() {
                                     </td>
 
                                     {/* 33. SENT FOR RE-PROCESS */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'reProcessOrder_Sent_for_Re_Process', 32)}
+                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Sent_for_Re_Process', 32)}
 
                                     {/* 34. RETURN RCVD */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'reProcessOrder_Return_Received', 33)}
+                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Return_Received', 33)}
 
                                     {/* 35. RECEIVED AFTER RE-PROCESS (GREY) */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'reProcessOrder_Received_After_Re_Process_Grey', 34)}
+                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Received_After_Re_Process_Grey', 34)}
 
                                     {/* 36. RECEIVED AFTER RE-PROCESS (FINISH) */}
-                                    {renderBreakdownCell(row.rows, compBreakdown, 'reProcessOrder_Received_After_Re_Process_Finish', 35)}
+                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Received_After_Re_Process_Finish', 35)}
 
                                     {/* 37. RE-PROCESS FAB. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(36)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-                                                if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
+                                            {compBreakdown.map((cb, j) => {
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
@@ -1105,9 +1070,8 @@ export default function Summary() {
                                     {/* 38. RE-PROCESS PROCESS LOSS (%) */}
                                     <td className="p-0 align-top" style={getCellStyle(37)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => {
-                                                const cb = getCbForCell(cell, compBreakdown);
-                                                if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
+                                            {compBreakdown.map((cb, j) => {
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');

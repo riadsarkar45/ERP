@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 import { checkDataExist } from "../../utils/checkIfDataExist";
+import { skip } from "@prisma/client/runtime/library";
 
 export const createNewJob = async (req: Request, res: Response) => {
     const {
@@ -81,7 +82,7 @@ export const createNewJob = async (req: Request, res: Response) => {
             if (yarnRows.length > 0) {
                 await prisma.yarnDyeingJobs.createMany({ data: yarnRows });
             }
-// tomorrows plan
+            // tomorrows plan
             // tomorrow need to get yarnDyeingJobs unique id and set it yarnDeliveries prisma models 
             //create complete separated model for color wise yarn deliveries 
         }

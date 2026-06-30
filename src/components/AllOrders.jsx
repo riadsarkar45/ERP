@@ -312,17 +312,26 @@ const AllOrders = ({ orderType }) => {
         });
     };
 
-    const handleSubmit = async (yarnId) => {
+    const handleSubmit = async (yarnId, workOrderId) => {
         setIsLoading(true);
-        const update = await axiosPublic.patch(`/api/update-order/${yarnId}`, changedField);
-        setDuplicateChallan(update.data.deliveries);
-        console.log(update.data.deliveries, "devs.................>>>>>>>>>>");
-        if (update.status === 200) {
-            const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-            const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
-                params: { workOrderIds: jobId.join(',') }
-            });
-            setDeliveries(devs.data); setOrders(res.data); setIsLoading(false); setChangedField({});
+        console.log(workOrderId);
+        try {
+            const update = await axiosPublic.patch(
+                `/api/update-order`,
+                changedField,
+                { params: { yarnId, workOrderId } } // ✅ Correct way to pass query parameters
+            ); setDuplicateChallan(update.data.deliveries);
+            console.log(update.data.deliveries, "devs.................>>>>>>>>>>");
+            if (update.status === 200) {
+                const res = await axiosPublic.get(`/api/work-order/${orderType}`);
+                const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+                    params: { workOrderIds: jobId.join(',') }
+                });
+                setDeliveries(devs.data); setOrders(res.data); setIsLoading(false); setChangedField({});
+            }
+        } catch (e) {
+            console.log(e.message);
+            setIsLoading(false)
         }
     };
     return (

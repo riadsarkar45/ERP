@@ -2,10 +2,7 @@ import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
 
 export const updateStyleReq = async (req: Request, res: Response) => {
-    const {
-        salesContact, buyerName, styleNo, additional, rowId, compId, poNo, jobNo,
-        changedTable, composition, finishDia, orderQty, color,
-    } = req.body as {
+    const { salesContact, buyerName, styleNo, additional, rowId, poNo, jobNo, changedTable, composition, finishDia, orderQty, color, } = req.body as {
         salesContact?: string;
         buyerName?: string;
         styleNo?: string;
@@ -16,13 +13,12 @@ export const updateStyleReq = async (req: Request, res: Response) => {
         finishDia?: string;
         orderQty?: number;
         rowId?: number;
-        compId?: number;
-        color?: string;
-        additional?: string;
+        color: string;
+        additional: string
     };
 
     const { jobId } = req.params as { jobId: string };
-
+    console.log(req.body);
     try {
         if (changedTable === "styleRequirementRows") {
             if (!rowId) {
@@ -31,116 +27,89 @@ export const updateStyleReq = async (req: Request, res: Response) => {
 
             const existingRow = await prisma.styleRequirementRow.findUnique({
                 where: { id: rowId },
-                select: { id: true },
+                select: { id: true, styleRequirementId: true, composition: true, color: true },
             });
 
             if (!existingRow) {
                 return res.status(404).send({ message: "Row not found", type: "error" });
             }
 
-            // 1. Update the StyleRequirementRow itself
-            await prisma.styleRequirementRow.update({
-                where: { id: existingRow.id },
-                data: {
-                    ...(composition !== undefined && { composition }),
-                    ...(finishDia !== undefined && { finishDia }),
-                    ...(orderQty !== undefined && { orderQty: Number(orderQty) }),
-                    ...(color !== undefined && { color }),
-                },
-            });
+            const ops: any[] = [
+                prisma.styleRequirementRow.update({
+                    where: { id: existingRow.id },
+                    data: {
+                        ...(composition !== undefined && { composition }),
+                        ...(finishDia !== undefined && { finishDia }),
+                        ...(orderQty !== undefined && { orderQty: Number(orderQty) }),
+                        ...(color !== undefined && { color: color }),
+                    },
+                }),
+            ];
 
-            // 2. Keep the related Composition row(s) in sync — identified by
-            //    real foreign key, never by string matching.
-            if (color !== undefined || composition !== undefined) {
-                if (compId) {
-                    // Frontend gave us the exact Composition id — use it directly.
-                    const relatedComp = await prisma.composition.findUnique({
-                        where: { id: Number(compId) },
-                        select: { id: true },
-                    });
-
-                    if (relatedComp) {
-                        await prisma.composition.update({
-                            where: { id: relatedComp.id },
-                            data: {
-                                ...(composition !== undefined && { composition }),
-                                ...(color !== undefined && { color }),
-                            },
-                        });
-                    } else {
-                        console.warn(`Composition ${compId} not found, skipping composition sync.`);
-                    }
-                } else {
-                    // No compId sent — fall back to the real FK relation
-                    // (styleRequirementRowId), not string matching.
-                    const result = await prisma.composition.updateMany({
+            if (composition !== undefined || color !== undefined) {
+                // Primary path: Compositions explicitly linked via styleRequirementRowId
+                ops.push(
+                    prisma.composition.updateMany({
                         where: { styleRequirementRowId: existingRow.id },
                         data: {
                             ...(composition !== undefined && { composition }),
                             ...(color !== undefined && { color }),
                         },
-                    });
+                    })
+                );
 
-                    if (result.count === 0) {
-                        console.warn(
-                            `No Composition rows linked via styleRequirementRowId=${existingRow.id}, skipping sync.`
-                        );
-                    }
-                }
+                // Fallback for legacy rows created before the FK existed:
+                // match by old composition+color string within the same style.
+                ops.push(
+                    prisma.composition.updateMany({
+                        where: {
+                            styleRequirementRowId: null,
+                            workOrder: { styleRequirementId: existingRow.styleRequirementId },
+                            composition: existingRow.composition,
+                            color: existingRow.color,
+                        },
+                        data: {
+                            ...(composition !== undefined && { composition }),
+                            ...(color !== undefined && { color }),
+                        },
+                    })
+                );
             }
+
+            await prisma.$transaction(ops);
 
             return res.status(200).send({ message: "Update Successful", type: "success" });
         }
 
         if (changedTable === "compositionAdd") {
-            if (!rowId) {
-                return res.status(400).send({ message: "rowId is required", type: "error" });
-            }
-
-            const existingRow = await prisma.styleRequirementRow.findUnique({
+            const targetRow = await prisma.styleRequirementRow.findUnique({
                 where: { id: Number(rowId) },
-                select: { id: true },
+                select: { styleRequirementId: true, composition: true, color: true },
             });
 
-            if (!existingRow) {
+            if (!targetRow) {
                 return res.status(404).send({ message: "Row not found", type: "error" });
             }
 
-            await prisma.styleRequirementRow.update({
-                where: { id: Number(rowId) },
-                data: {
-                    ...(additional !== undefined && { additional }),
-                },
-            });
-
-            if (additional !== undefined) {
-                if (compId) {
-                    const relatedComp = await prisma.composition.findUnique({
-                        where: { id: Number(compId) },
-                        select: { id: true },
-                    });
-
-                    if (relatedComp) {
-                        await prisma.composition.update({
-                            where: { id: relatedComp.id },
-                            data: { additional },
-                        });
-                    } else {
-                        console.warn(`Composition ${compId} not found, skipping composition sync.`);
-                    }
-                } else {
-                    const result = await prisma.composition.updateMany({
-                        where: { styleRequirementRowId: existingRow.id },
-                        data: { additional },
-                    });
-
-                    if (result.count === 0) {
-                        console.warn(
-                            `No Composition rows linked via styleRequirementRowId=${existingRow.id}, skipping sync.`
-                        );
-                    }
-                }
-            }
+            await prisma.$transaction([
+                prisma.styleRequirementRow.update({
+                    where: { id: Number(rowId) },
+                    data: { additional: additional },
+                }),
+                prisma.composition.updateMany({
+                    where: { styleRequirementRowId: Number(rowId) },
+                    data: { additional: additional },
+                }),
+                prisma.composition.updateMany({
+                    where: {
+                        styleRequirementRowId: null,
+                        workOrder: { styleRequirementId: targetRow.styleRequirementId },
+                        composition: targetRow.composition,
+                        color: targetRow.color,
+                    },
+                    data: { additional: additional },
+                }),
+            ]);
 
             return res.status(200).send({ message: "Update Successful", type: "success" });
         }

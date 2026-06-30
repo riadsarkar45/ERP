@@ -17,10 +17,10 @@ interface UpdateJobsBody {
 
 export const updateJobs = async (req: Request, res: Response) => {
     try {
-        const { yarnId } = req.params as { yarnId: string };
+        const { yarnId, workOrderId } = req.query as { yarnId: string, workOrderId: string };
         const { toFactory, fromFactory, date, challanNo, deliveries } = req.body as UpdateJobsBody;
         console.log(req.body, "body");
-        console.log(req.params, "params");
+        console.log(workOrderId, "params");
         if (!toFactory || !fromFactory || !date || !challanNo || !deliveries?.length) {
             return res.status(400).json({ type: "error", message: "Missing required fields" });
         }
@@ -37,11 +37,18 @@ export const updateJobs = async (req: Request, res: Response) => {
         const delivers = req.body.deliveries.filter(
             (d: any) => d.deliveryType !== undefined && d.qty !== undefined
         );
+        const verifyChallan = await challanValidation(
+            challanNo,
+            workOrderId,
+            toFactory
+        );
 
-
-        // if (verifyChallan) {
-        //     return res.send({ deliveries: verifyChallan })
-        // }
+        if (!verifyChallan.success) {
+            console.log(verifyChallan, "verifying");
+            return res.status(409).json({
+                deliveries: verifyChallan,
+            });
+        }
 
         if (delivers.length > 0) {
             await prisma.$transaction(
@@ -77,10 +84,9 @@ export const updateJobs = async (req: Request, res: Response) => {
         }
 
 
-        const verifyChallan = await challanValidation(challanNo)
 
 
-        return res.status(200).json({ type: "success", deliveries: verifyChallan, message: "Delivery quantity updated successfully" });
+        return res.status(200).json({ type: "success", message: "Delivery quantity updated successfully" });
 
     } catch (error) {
         console.error(error);

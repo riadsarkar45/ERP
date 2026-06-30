@@ -22,6 +22,7 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
     yarnId: comp.id,
     composition: comp.composition || "—",
     workOrderQty: comp.workOrderQty || 0,
+    workOrderId: comp.workOrderId || 0,
     deliveries: comp.deliveries || [],
   }));
 
@@ -242,7 +243,7 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
                       </div>
 
                       <div className="flex gap-2 items-center pb-0.5">
-                        <div onClick={() => handleSubmit(row.yarnId)} className="cursor-pointer bg-green-500 bg-opacity-15 text-green-600 p-2 rounded-lg">
+                        <div onClick={() => handleSubmit(row.yarnId, row.workOrderId)} className="cursor-pointer bg-green-500 bg-opacity-15 text-green-600 p-2 rounded-lg">
                           {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : <Check className="w-4 h-4" />}
                         </div>
                         <span onClick={() => handleRemove(row.id)} className="cursor-pointer bg-red-500 bg-opacity-15 text-red-600 p-2 rounded-lg">

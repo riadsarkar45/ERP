@@ -7,7 +7,7 @@ import { updateWorkOrder } from "../controllers/orders/update/updateWorkOrder";
 
 const updateRouters = express.Router();
 
-updateRouters.patch("/update-order/:yarnId", updateJobs);
+updateRouters.patch("/update-order", updateJobs);
 
 updateRouters.patch("/update-audit/:auditId/:status", updateAuditStatus);
 

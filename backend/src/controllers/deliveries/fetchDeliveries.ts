@@ -15,7 +15,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
             composition: true,
             workOrderQty: true,
             orderQty: true,
-            
+            workOrderId: true,
             deliveries: {
                 select: {
                     deliveryType: true,

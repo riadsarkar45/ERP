@@ -28,9 +28,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
             poNo: true,
             id: true,
             rows: {
-                
                 select: {
-                    
                     id: true,
                     color: true,
                     composition: true,
@@ -40,13 +38,17 @@ export const styleRequirements = async (req: Request, res: Response) => {
                     additional: true,
                 }
             },
-            
+            sizes: {
+                select: {
+                    id: true,
+                    sizeName: true,
+                }
+            },
             workOrders: {
                 select: {
                     orderType: true,
                     compositions: {
                         select: {
-                            id: true,
                             color: true,
                             composition: true,
                             workOrderQty: true,
