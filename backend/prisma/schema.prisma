@@ -63,7 +63,7 @@ model yarnDyeingJobs {
 model Composition {
   id           Int          @id @default(autoincrement())
   composition  String
-  unitePrice   Float // ← was Decimal
+  unitePrice   Float
   color        String
   additional   String       @default("0")
   orderQty     Int
@@ -73,8 +73,12 @@ model Composition {
   workOrderId  Int
   orderType    String       @default("null")
 
+  styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
+  styleRequirementRowId Int?
+
   @@index([workOrderId])
   @@index([color])
+  @@index([styleRequirementRowId])
 }
 
 model StyleRequirement {
@@ -96,10 +100,11 @@ model StyleRequirementRow {
   styleRequirement   StyleRequirement @relation(fields: [styleRequirementId], references: [id])
   color              String
   composition        String
-  finishDia          String // ← NOW String
-  orderQty           Int // ← was String
-  finishRequiredQty  Float // ← was String
+  finishDia          String
+  orderQty           Int
+  finishRequiredQty  Float
   additional         String           @default("0")
+  compositions       Composition[]
 
   @@index([styleRequirementId])
 }

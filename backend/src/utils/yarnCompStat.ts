@@ -77,42 +77,37 @@ export const calculateYarnCompStat = (orders: any[]) => {
 export const calculateOrdersForStyleSummary = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
-        const rows = s.rows ?? [];
-        
-        // Create an array that maps 1-to-1 with your table rows
-        const compBreakdown = rows.map(() => ({}));
+
+        // Flatten every work-order composition into its own breakdown entry —
+        // no string matching, no dependency on `rows[]` alignment.
+        const compBreakdown: any[] = [];
 
         workOrders.forEach((w: any) => {
             const orderType = w.orderType || "Unknown";
 
             w.compositions?.forEach((c: any) => {
-                //  Find the EXACT row by matching BOTH color AND composition
-                const matchingRowIndex = rows.findIndex((row: any) => 
-                    row.color === c.color && 
-                    row.composition === c.composition
-                );
-                
-                if (matchingRowIndex === -1) return; // No match found
-                
-                const breakdown = compBreakdown[matchingRowIndex];
-                
-                // ─ Work Order Qty ──
+                const entry: any = {
+                    compositionId: c.id,
+                    color: c.color,
+                    composition: c.composition,
+                    orderType,
+                };
+
                 if (typeof c.workOrderQty === "number") {
-                    const key = `${orderType}_workOrderQty`;
-                    breakdown[key] = (breakdown[key] ?? 0) + c.workOrderQty;
+                    entry[`${orderType}_workOrderQty`] = c.workOrderQty;
                 }
 
-                // ── Deliveries ──
                 const deliveries = c.deliveries ?? [];
                 deliveries.forEach((d: any) => {
                     const safeDeliveryType = d.deliveryType.replace(/\s+/g, "_");
-                    const deliveryKey = `${orderType}_${safeDeliveryType}`;
-                    breakdown[deliveryKey] = (breakdown[deliveryKey] ?? 0) + (d.deliveryQty || 0);
+                    const key = `${orderType}_${safeDeliveryType}`;
+                    entry[key] = (entry[key] ?? 0) + (d.deliveryQty || 0);
                 });
+
+                compBreakdown.push(entry);
             });
         });
 
-        // Return the style with the new compBreakdown array
         return { ...s, compBreakdown };
     });
 };
