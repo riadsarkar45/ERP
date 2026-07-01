@@ -9,7 +9,7 @@ const formatKg = (num) => {
 };
 
 const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
-  const [yarnId, setYarnId] = useState()
+  const [openYarnIds, setOpenYarnIds] = useState(new Set());
   const [seeDetail, setSeeDetail] = useState(false)
   const [isDeleted, setIsDeleted] = useState({ isDeleted: false, deletedData: {}, isDeleting: false, isDeletingId: "" })
   const list = deliveries || [];
@@ -28,7 +28,14 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
 
   const [removedIds, setRemovedIds] = useState(new Set());
   const visibleRows = baseRows.filter(r => !removedIds.has(r.id));
-  const handleRemove = (id) => setRemovedIds(prev => new Set([...prev, id]));
+  const handleRemove = (id, yarnId) => {
+    setRemovedIds(prev => new Set([...prev, id]));
+    setOpenYarnIds(prev => {
+      const next = new Set(prev);
+      next.delete(yarnId);
+      return next;
+    });
+  };
 
   const deliveryTypes = [];
   if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Yarn Received");
@@ -47,7 +54,15 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
   };
 
   const handleShowDeliveryInputs = (yarnId) => {
-    setYarnId(yarnId)
+    setOpenYarnIds(prev => {
+      const next = new Set(prev);
+      if (next.has(yarnId)) {
+        next.delete(yarnId);
+      } else {
+        next.add(yarnId);
+      }
+      return next;
+    });
   }
 
   const handleSeeDetails = () => {
@@ -66,6 +81,14 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
 
     }
   }
+
+  // Submits every currently-open row in one go, regardless of how many are open.
+  const handleGlobalSubmit = async () => {
+    const rowsToSubmit = visibleRows.filter(r => openYarnIds.has(r.yarnId));
+    for (const row of rowsToSubmit) {
+      await handleSubmit(row.yarnId, row.workOrderId);
+    }
+  };
 
   return (
     <div className="flex flex-col border border-gray-200 rounded-xl bg-white text-sm">
@@ -177,13 +200,18 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
         ) : (
           visibleRows.map((row) => {
             const aggregated = aggregateDeliveries(row.deliveries);
+            const isOpen = openYarnIds.has(row.yarnId);
+            // 🔥 CHANGED: changedField is keyed by yarnId now — read THIS row's slice
+            const rowChangedField = changedField?.[row.yarnId] || {};
             return (
-              // "flex flex-col px-5 py-4 gap-3"
-              <div key={row.id} className={`${yarnId === row.yarnId && "bg-green-300 bg-opacity-30 p-2"} flex flex-col px-5 py-4 gap-3`}>
+              <div key={row.id} className={`${isOpen && "bg-green-300 bg-opacity-30 p-2"} flex flex-col px-5 py-4 gap-3`}>
 
                 {/* Composition label + work order qty */}
                 <div className="flex items-center gap-3">
-                  <span onClick={() => handleShowDeliveryInputs(row.yarnId)} className="inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-800">
+                  <span
+                    onClick={() => handleShowDeliveryInputs(row.yarnId)}
+                    className="inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-800 cursor-pointer"
+                  >
                     {row.composition}
                   </span>
                   <span className="text-[10px] text-gray-400">{formatKg(row.workOrderQty)} work order qty</span>
@@ -201,52 +229,93 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
                   </div>
                 )}
 
-                {/* Single input row per composition */}
+                {/* Single input row per composition (no per-row submit button, cancel stays) */}
                 {
-                  yarnId === row.yarnId && (
+                  isOpen && (
                     <div className="flex flex-wrap gap-2 items-end">
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">Qty</span>
-                        <input onChange={handleEditOnChange} name="deliveryQty" className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs" type="text" placeholder="Qty" />
+                        <input
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="deliveryQty"
+                          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                          type="text"
+                          placeholder="Qty"
+                        />
                       </div>
 
-                      {changedField?.deliveryType === "Grey Received" && (
+                      {rowChangedField.deliveryType === "Grey Received" && (
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
-                          <input onChange={handleEditOnChange} name="finishReceivedQty" className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs" type="text" placeholder="Finish Qty" />
+                          <input
+                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                            name="finishReceivedQty"
+                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                            type="text"
+                            placeholder="Finish Qty"
+                          />
                         </div>
                       )}
 
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">Challan</span>
-                        <input onChange={handleEditOnChange} name="challanNo" className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs" type="text" placeholder="Challan No" />
+                        <input
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="challanNo"
+                          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                          type="text"
+                          placeholder="Challan No"
+                        />
                       </div>
 
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">Date</span>
-                        <input onChange={handleEditOnChange} name="date" className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs" type="date" defaultValue={new Date().toISOString().split("T")[0]} />
+                        <input
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="date"
+                          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                          type="date"
+                          defaultValue={new Date().toISOString().split("T")[0]}
+                        />
                       </div>
 
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">To</span>
-                        <input onChange={handleEditOnChange} name="toFactory" className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs" type="text" placeholder="To Factory" />
+                        <input
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="toFactory"
+                          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                          type="text"
+                          placeholder="To Factory"
+                        />
                       </div>
 
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">From</span>
-                        <input onChange={handleEditOnChange} name="fromFactory" className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs" type="text" placeholder="From Factory" />
+                        <input
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="fromFactory"
+                          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                          type="text"
+                          placeholder="From Factory"
+                        />
                       </div>
 
                       <div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">Type</span>
-                        <Input className="w-full" onChange={handleEditOnChange} name="deliveryType" type="select" options={deliveryTypes} required />
+                        <Input
+                          className="w-full"
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="deliveryType"
+                          type="select"
+                          options={deliveryTypes}
+                          required
+                        />
                       </div>
 
+                      {/* Cancel button only — submit moved to the single global button below */}
                       <div className="flex gap-2 items-center pb-0.5">
-                        <div onClick={() => handleSubmit(row.yarnId, row.workOrderId)} className="cursor-pointer bg-green-500 bg-opacity-15 text-green-600 p-2 rounded-lg">
-                          {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : <Check className="w-4 h-4" />}
-                        </div>
-                        <span onClick={() => handleRemove(row.id)} className="cursor-pointer bg-red-500 bg-opacity-15 text-red-600 p-2 rounded-lg">
+                        <span onClick={() => handleRemove(row.id, row.yarnId)} className="cursor-pointer bg-red-500 bg-opacity-15 text-red-600 p-2 rounded-lg">
                           <X className="w-4 h-4" />
                         </span>
                       </div>
@@ -259,6 +328,27 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
           })
         )}
       </div>
+
+      {/* Single global submit button — submits ALL currently open rows at once */}
+      {openYarnIds.size > 0 && (
+        <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+          <span className="text-[11px] text-gray-400">
+            {openYarnIds.size} composition{openYarnIds.size > 1 ? "s" : ""} ready to submit
+          </span>
+          <button
+            onClick={handleGlobalSubmit}
+            disabled={isLoading}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              isLoading
+                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                : "bg-green-500 bg-opacity-15 text-green-600 hover:bg-opacity-25 cursor-pointer"
+            }`}
+          >
+            {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : <Check className="w-4 h-4" />}
+            Submit All
+          </button>
+        </div>
+      )}
     </div>
   );
 };

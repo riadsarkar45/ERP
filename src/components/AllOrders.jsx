@@ -84,6 +84,8 @@ const AllOrders = ({ orderType }) => {
     const [jobId, setJobId] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
+    // 🔥 CHANGED: changedField is now keyed by yarnId -> { [yarnId]: { deliveryQty, challanNo, deliveryType, ... } }
+    // This lets multiple open compositions hold their own independent values at the same time.
     const [changedField, setChangedField] = useState({});
     const [styleNo, setStyleNo] = useState("");
     const [deliveries, setDeliveries] = useState({});
@@ -288,6 +290,8 @@ const AllOrders = ({ orderType }) => {
     const handleEditRowData = async (workOrderIds) => {
         setLoadingDeliveries(true); setIsEditing(true);
         setJobId(workOrderIds)
+        setChangedField({});
+        setDuplicateChallan([]);
         const res = await axiosPublic.get(`/api/deliveries/${orderType}`, {
             params: { workOrderIds: workOrderIds.join(',') }
         });
@@ -296,42 +300,57 @@ const AllOrders = ({ orderType }) => {
         setDeliveries(res.data); setWorkOrderId(workOrderIds); setStyleNo(styleNo);
     };
 
-    const handleEditOnChange = (e) => {
+    const handleEditOnChange = (yarnId, e) => {
         const { name, value } = e.target;
         setIsEditing(true);
 
         setChangedField(prev => {
-            const updated = { ...prev, [name]: value };
+            const rowPrev = prev[yarnId] || {};
+            const updatedRow = { ...rowPrev, [name]: value };
 
             const deliveries = [
-                { deliveryType: updated.deliveryType, qty: updated.deliveryQty },  // ✅ Fixed!
-                ...(updated.finishReceivedQty ? [{ deliveryType: "Finish Received", qty: updated.finishReceivedQty }] : []),
+                { deliveryType: updatedRow.deliveryType, qty: updatedRow.deliveryQty },
+                ...(updatedRow.finishReceivedQty ? [{ deliveryType: "Finish Received", qty: updatedRow.finishReceivedQty }] : []),
             ];
 
-            return { ...updated, deliveries };
+            return { ...prev, [yarnId]: { ...updatedRow, deliveries } };
         });
     };
 
     const handleSubmit = async (yarnId, workOrderId) => {
         setIsLoading(true);
-        console.log(workOrderId);
+        const payload = changedField[yarnId] || {};
+        console.log(workOrderId, payload);
         try {
             const update = await axiosPublic.patch(
                 `/api/update-order`,
-                changedField,
-                { params: { yarnId, workOrderId } } // ✅ Correct way to pass query parameters
-            ); setDuplicateChallan(update.data.deliveries);
-            console.log(update.data.deliveries, "devs.................>>>>>>>>>>");
+                payload,
+                { params: { yarnId, workOrderId } }
+            );
             if (update.status === 200) {
                 const res = await axiosPublic.get(`/api/work-order/${orderType}`);
                 const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
                     params: { workOrderIds: jobId.join(',') }
                 });
-                setDeliveries(devs.data); setOrders(res.data); setIsLoading(false); setChangedField({});
+                setDeliveries(devs.data);
+                setOrders(res.data);
+                setChangedField(prev => {
+                    const next = { ...prev };
+                    delete next[yarnId];
+                    return next;
+                });
             }
         } catch (e) {
             console.log(e.message);
-            setIsLoading(false)
+            if (e.response?.status === 409) {
+                const dupInfo = e.response.data?.deliveries; // { success, message, duplicate }
+                console.log("Duplicate challan detected:", dupInfo);
+                if (dupInfo?.duplicate) {
+                    setDuplicateChallan(prev => [...prev, dupInfo.duplicate]);
+                }
+            }
+        } finally {
+            setIsLoading(false);
         }
     };
     return (

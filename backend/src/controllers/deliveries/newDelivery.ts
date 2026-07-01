@@ -13,14 +13,14 @@ interface UpdateJobsBody {
     date: string;
     challanNo: number;
     deliveries: DeliveryItem[];
+    deliveryQty?: number;
+    deliveryType?: string;
 }
 
 export const updateJobs = async (req: Request, res: Response) => {
     try {
         const { yarnId, workOrderId } = req.query as { yarnId: string, workOrderId: string };
         const { toFactory, fromFactory, date, challanNo, deliveries } = req.body as UpdateJobsBody;
-        console.log(req.body, "body");
-        console.log(workOrderId, "params");
         if (!toFactory || !fromFactory || !date || !challanNo || !deliveries?.length) {
             return res.status(400).json({ type: "error", message: "Missing required fields" });
         }
@@ -37,14 +37,17 @@ export const updateJobs = async (req: Request, res: Response) => {
         const delivers = req.body.deliveries.filter(
             (d: any) => d.deliveryType !== undefined && d.qty !== undefined
         );
+
+        // 🔥 CHANGED: now pass yarnId so the duplicate-challan check is scoped
+        // per composition instead of globally by challanNo + toFactory.
         const verifyChallan = await challanValidation(
             challanNo,
             workOrderId,
-            toFactory
+            toFactory,
+            checkYarnIfExist.id
         );
 
         if (!verifyChallan.success) {
-            console.log(verifyChallan, "verifying");
             return res.status(409).json({
                 deliveries: verifyChallan,
             });
@@ -52,7 +55,7 @@ export const updateJobs = async (req: Request, res: Response) => {
 
         if (delivers.length > 0) {
             await prisma.$transaction(
-                delivers.map((delivery: any) => // ✅ Changed to 'delivers'
+                delivers.map((delivery: any) =>
                     prisma.deliveries.create({
                         data: {
                             deliveryDate: new Date(date),
@@ -78,13 +81,9 @@ export const updateJobs = async (req: Request, res: Response) => {
                     fromFactory: req.body.fromFactory,
                     yarnId: Number(checkYarnIfExist.id),
                     yarnCompId: Number(checkYarnIfExist.id),
-
                 }
             });
         }
-
-
-
 
         return res.status(200).json({ type: "success", message: "Delivery quantity updated successfully" });
 

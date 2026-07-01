@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download } from "lucide-react";
+import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
 import { useNavigate } from "react-router-dom";
 import { useFetchData } from "../../../hooks/fetch";
 import * as XLSX from "xlsx";
+import GlanceModal from "../../../components/GlanceModal";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -270,6 +271,7 @@ export default function Summary() {
     const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
     const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
+    const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
     const { fetchData, error, loading } = useFetchData();
 
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
@@ -529,6 +531,15 @@ export default function Summary() {
         XLSX.writeFile(wb, `Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
+    const handleGlanceReport = () => {
+        setGlanceReport({ isGlanceLoading: true });
+        fetchData(`/api/glance-report`).then(data => {
+            console.log(data, "-------------->>>>>>>");
+            if (data) setGlanceReport({ showGlanceModal: true, isGlanceLoading: false, reportData: data.reportHandler });
+
+        });
+    }
+
     return (
         <DashboardLayout>
             {/* ── Action Bar ─────────────────────────────────────────────────── */}
@@ -561,10 +572,34 @@ export default function Summary() {
                     )
                 }
 
+                {
+                    glanceReport.showGlanceModal && (
+                        <GlanceModal
+                            glanceReport={glanceReport.reportData}
+                            setGlanceReport={setGlanceReport}
+                            handleGlanceReport={handleGlanceReport}
+                        />
+                    )
+                }
+
+
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
                 <div className="flex items-center gap-1">
-                    <button onClick={() => handleExportExcel()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export"><Download size={18} className="text-gray-600" /> Export</button>
+                    <button onClick={() => handleExportExcel()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export">
+                        <Download size={18} className="text-gray-600" />
+                        Export
+                    </button>
+                    {
+                        glanceReport.isGlanceLoading ?
+                            <button className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="See at a glance">
+                                <span className="animate-spin"><RefreshCcw size={18} className="text-gray-600" /></span>
+                            </button> :
+                            <button onClick={() => handleGlanceReport()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export">
+                                <ViewIcon size={18} className="text-gray-600" />
+                                At a glance
+                            </button>
+                    }
                 </div>
 
                 {hasActiveFilters && (
@@ -837,11 +872,16 @@ export default function Summary() {
                                     {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-gray-200">
-                                            {row.rows.map((cell, j) => (
-                                                <div key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {Number(cell.finishRequiredQty)}
-                                                </div>
-                                            ))}
+                                            {row.rows.map((cell, j) => {
+                                                const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
+                                                const netAdditional = Number(cell.additional) - lossQty;
+                                                const inCreaseFinishQty = (Number(cell.finishRequiredQty) + netAdditional).toFixed(2);
+                                                return (
+                                                    <div key={j} className="px-3 py-2 whitespace-nowrap">
+                                                        {inCreaseFinishQty}
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     </td>
 
