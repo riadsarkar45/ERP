@@ -14,11 +14,13 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
         "YARN DELIVERY",
         "YARN RETURN",
         "YARN RECEIVED",
+        "YARN RECEIVED PERCENTAGE",
         "YARN DELIVERY PERCENTAGE",
         "SHORT & EXCESS",
         "GREY DELIVERY FOR DYEING",
         "GREY RECEIVED FROM DYEING",
         "FINISH RECEIVED FROM DYEING",
+        "GREY RECEIVED PERCENTAGE",
         "PROCESS LOSS %",
         "SHORT & EXCESS",
 
@@ -217,6 +219,33 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                         <div className="px-4 py-3">-</div>
                                                     )}
                                                 </td>
+                                                {/* YARN RECEIVED PERCENTAGE */}
+                                                <td className="px-0 py-0 text-sm text-center text-gray-700 border border-gray-400 whitespace-nowrap">
+                                                    {compBreakDown?.length > 0 ? (
+                                                        compBreakDown.map((comp, i) => {
+                                                            const finishQty = Number(comp.finishRequiredQty) || 0;
+                                                            const processLoss = Number(job.processLoss) || 0;
+                                                            const yarnRequiredQty = finishQty * (1 + processLoss / 100);
+
+                                                            const yarnDelivery = Number(comp.knittingOrder_Yarn_Received) || 0;
+
+                                                            const percentage = yarnRequiredQty > 0
+                                                                ? ((yarnDelivery / yarnRequiredQty) * 100).toFixed(1)
+                                                                : "0.0";
+
+                                                            return (
+                                                                <div
+                                                                    key={i}
+                                                                    className={`px-4 py-3 ${i < compBreakDown.length - 1 ? 'border-b border-gray-700' : ''}`}
+                                                                >
+                                                                    {percentage}%
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="px-4 py-3">-</div>
+                                                    )}
+                                                </td>
                                                 {/* YARN DELIVERY PERCENTAGE */}
                                                 <td className="px-0 py-0 text-sm text-center text-gray-700 border border-gray-400 whitespace-nowrap">
                                                     {comps?.length > 0 ? (
@@ -312,6 +341,30 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                                 {comp?.dyeingOrder_Finish_Received ?? "-"}
                                                             </div>
                                                         ))
+                                                    ) : (
+                                                        <div className="px-4 py-3">-</div>
+                                                    )}
+                                                </td>
+                                                {/* FINISH RECEIVED PERCENTAGE */}
+                                                <td className="px-0 py-0 text-sm text-center text-gray-700 border border-gray-400 whitespace-nowrap">
+                                                    {compBreakDown?.length > 0 ? (
+                                                        compBreakDown.map((comp, i) => {
+                                                            const finishRequiredQty = Number(comp.dyeingOrder_Grey_Delivery) || 0;
+                                                            const finishReceived = Number(comp.dyeingOrder_Grey_Received) || 0;
+
+                                                            const percentage = finishRequiredQty > 0
+                                                                ? ((finishReceived / finishRequiredQty) * 100).toFixed(1)
+                                                                : "0.0";
+
+                                                            return (
+                                                                <div
+                                                                    key={i}
+                                                                    className={`px-4 py-3 ${i < compBreakDown.length - 1 ? 'border-b border-gray-700' : ''}`}
+                                                                >
+                                                                    {percentage}%
+                                                                </div>
+                                                            );
+                                                        })
                                                     ) : (
                                                         <div className="px-4 py-3">-</div>
                                                     )}
