@@ -14,7 +14,7 @@ const Modal = ({ setIsEditing, orderType, changedField, duplicateChallan, delive
     }
 
     if (orderType === "aopOrder") {
-        deliveryTypes.push("Sent for AOP", "Received from AOP", "Sent for Compacting", "Received From Compacting");
+        deliveryTypes.push("Sent for AOP", "Received from AOP", "Aop Grey Received", "Aop Finish Received");
     }
 
     if (orderType === "yarnDyeingOrder") {

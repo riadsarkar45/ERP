@@ -533,9 +533,9 @@ export default function Summary() {
 
     const handleGlanceReport = () => {
         setGlanceReport({ isGlanceLoading: true });
-        fetchData(`/api/glance-report`).then(data => {
+        fetchData(`/api/styles`).then(data => {
             console.log(data, "-------------->>>>>>>");
-            if (data) setGlanceReport({ showGlanceModal: true, isGlanceLoading: false, reportData: data.reportHandler });
+            if (data) setGlanceReport({ showGlanceModal: true, isGlanceLoading: false, reportData: data.data });
 
         });
     }
@@ -575,7 +575,7 @@ export default function Summary() {
                 {
                     glanceReport.showGlanceModal && (
                         <GlanceModal
-                            glanceReport={glanceReport.reportData}
+                            glanceReport={glanceReport}
                             setGlanceReport={setGlanceReport}
                             handleGlanceReport={handleGlanceReport}
                         />

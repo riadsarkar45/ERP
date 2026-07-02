@@ -308,9 +308,14 @@ const AllOrders = ({ orderType }) => {
             const rowPrev = prev[yarnId] || {};
             const updatedRow = { ...rowPrev, [name]: value };
 
+            const isAopGreyReceived = updatedRow.deliveryType === "Aop Grey Received";
+
             const deliveries = [
                 { deliveryType: updatedRow.deliveryType, qty: updatedRow.deliveryQty },
-                ...(updatedRow.finishReceivedQty ? [{ deliveryType: "Finish Received", qty: updatedRow.finishReceivedQty }] : []),
+                ...(updatedRow.finishReceivedQty ? [{
+                    deliveryType: isAopGreyReceived ? "Finish Received From Aop" : "Finish Received",
+                    qty: updatedRow.finishReceivedQty
+                }] : []),
             ];
 
             return { ...prev, [yarnId]: { ...updatedRow, deliveries } };

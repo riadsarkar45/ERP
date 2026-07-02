@@ -40,8 +40,8 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
   const deliveryTypes = [];
   if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Yarn Received");
   if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return Received", "Grey Received From Dyeing", "Finish Fabric Received", "Sent For Compacting", "Received From Compacting");
-  if (orderType === "aopOrder") deliveryTypes.push("Sent for AOP", "Received from AOP", "Sent for Compacting", "Received From Compacting");
-  if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Recived", "Finish Return");
+  if (orderType === "aopOrder") deliveryTypes.push("Sent for AOP", "Received from AOP", "Aop Grey Received");
+  if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
 
   // Aggregate deliveries by type for a composition
   const aggregateDeliveries = (deliveriesArr) => {
@@ -76,7 +76,7 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
     setSeeDetail(false)
     console.log(deleteDeliveryChallan.data.deletedRecord, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
     if (deleteDeliveryChallan.data.type === "success") {
-      setIsDeleted({ isDeleted: true, isDeleting:false, deletedData: deleteDeliveryChallan.data.deletedRecord })
+      setIsDeleted({ isDeleted: true, isDeleting: false, deletedData: deleteDeliveryChallan.data.deletedRecord })
       // setIsDeleted({ isDeleting: false })
 
     }
@@ -244,17 +244,16 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
                         />
                       </div>
 
-                      {rowChangedField.deliveryType === "Grey Received" && (
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
-                          <input
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="finishReceivedQty"
-                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                            type="text"
-                            placeholder="Finish Qty"
-                          />
-                        </div>
+                      {(rowChangedField.deliveryType === "Grey Received" || rowChangedField.deliveryType === "Aop Grey Received") && (<div className="flex flex-col gap-1">
+                        <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
+                        <input
+                          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                          name="finishReceivedQty"
+                          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                          type="text"
+                          placeholder="Finish Qty"
+                        />
+                      </div>
                       )}
 
                       <div className="flex flex-col gap-1">
@@ -338,11 +337,10 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
           <button
             onClick={handleGlobalSubmit}
             disabled={isLoading}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              isLoading
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${isLoading
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : "bg-green-500 bg-opacity-15 text-green-600 hover:bg-opacity-25 cursor-pointer"
-            }`}
+              }`}
           >
             {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : <Check className="w-4 h-4" />}
             Submit All
