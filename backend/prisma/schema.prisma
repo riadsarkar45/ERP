@@ -18,7 +18,6 @@ model Factory {
 model Yarns {
   id       Int    @id @unique @default(autoincrement())
   yarnType String @unique
-
 }
 
 model WorkOrder {
@@ -62,21 +61,18 @@ model yarnDyeingJobs {
 // }
 
 model Composition {
-  id                   Int                  @id @default(autoincrement())
-  composition          String
-  unitePrice           Float
-  color                String
-  additional           String               @default("0")
-  orderQty             Int
-  workOrderQty         Int
-  workOrder            WorkOrder            @relation(fields: [workOrderId], references: [id])
-  workOrderId          Int
-  deliveries           deliveries[]
-  orderType            String               @default("null")
+  id           Int          @id @default(autoincrement())
+  composition  String
+  unitePrice   Float
+  color        String
+  additional   String       @default("0")
+  orderQty     Int
+  workOrderQty Int
+  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
+  workOrderId  Int
+  deliveries   deliveries[]
+  orderType    String       @default("null")
 
-  // NEW: links this composition back to the StyleRequirementRow it originated from,
-  // so updates to a row can target exact Composition records by id instead of
-  // matching on composition+color strings.
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
 
@@ -110,7 +106,7 @@ model StyleRequirementRow {
   additional         String           @default("0")
 
   // NEW: back-relation so a row can see all Composition records derived from it
-  compositions       Composition[]
+  compositions Composition[]
 
   @@index([styleRequirementId])
 }
@@ -169,4 +165,27 @@ model jobs {
   jobNo      String      @unique
   createdAt  DateTime    @default(now())
   workOrders WorkOrder[]
+}
+
+model user {
+  id            Int            @id @default(autoincrement())
+  userName      String?         @default("NULL")
+  name          String
+  phoneNo       String         @unique
+  password      String
+  userRole      String
+  refreshTokens refreshToken[] // <-- ADD THIS LINE to your existing model
+}
+
+model refreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

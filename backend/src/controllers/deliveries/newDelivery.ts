@@ -38,52 +38,50 @@ export const updateJobs = async (req: Request, res: Response) => {
             (d: any) => d.deliveryType !== undefined && d.qty !== undefined
         );
 
-        // 🔥 CHANGED: now pass yarnId so the duplicate-challan check is scoped
-        // per composition instead of globally by challanNo + toFactory.
-        const verifyChallan = await challanValidation(
-            challanNo,
-            workOrderId,
-            toFactory,
-            checkYarnIfExist.id
+        if (delivers.length === 0) {
+            return res.status(400).json({ type: "error", message: "No valid delivery entries provided" });
+        }
+
+        const validations = await Promise.all(
+            delivers.map(async (delivery: any) => {
+                const result = await challanValidation(
+                    challanNo,
+                    workOrderId,
+                    toFactory,
+                    checkYarnIfExist.id,
+                    delivery.deliveryType
+                );
+                return { result, deliveryType: delivery.deliveryType };
+            })
         );
 
-        if (!verifyChallan.success) {
+        const failures = validations.filter((v) => !v.result.success);
+
+        if (failures.length > 0) {
             return res.status(409).json({
-                deliveries: verifyChallan,
+                deliveries: failures.map((f) => ({
+                    deliveryType: f.deliveryType,
+                    ...f.result,
+                })),
             });
         }
 
-        if (delivers.length > 0) {
-            await prisma.$transaction(
-                delivers.map((delivery: any) =>
-                    prisma.deliveries.create({
-                        data: {
-                            deliveryDate: new Date(date),
-                            challanNo: Number(challanNo),
-                            deliveryQty: Number(delivery.qty),
-                            deliveryType: delivery.deliveryType,
-                            yarnId: checkYarnIfExist.id,
-                            fromFactory,
-                            toFactory,
-                            yarnCompId: checkYarnIfExist.id,
-                        }
-                    })
-                )
-            );
-        } else {
-            await prisma.deliveries.create({
-                data: {
-                    deliveryDate: new Date(date),
-                    challanNo: Number(challanNo),
-                    deliveryQty: Number(req.body.deliveryQty),
-                    deliveryType: req.body.deliveryType,
-                    toFactory: req.body.toFactory,
-                    fromFactory: req.body.fromFactory,
-                    yarnId: Number(checkYarnIfExist.id),
-                    yarnCompId: Number(checkYarnIfExist.id),
-                }
-            });
-        }
+        await prisma.$transaction(
+            delivers.map((delivery: any) =>
+                prisma.deliveries.create({
+                    data: {
+                        deliveryDate: new Date(date),
+                        challanNo: Number(challanNo),
+                        deliveryQty: Number(delivery.qty),
+                        deliveryType: delivery.deliveryType,
+                        yarnId: checkYarnIfExist.id,
+                        fromFactory,
+                        toFactory,
+                        yarnCompId: checkYarnIfExist.id,
+                    }
+                })
+            )
+        );
 
         return res.status(200).json({ type: "success", message: "Delivery quantity updated successfully" });
 

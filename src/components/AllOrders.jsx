@@ -9,6 +9,7 @@ import DyeingOrder from "./DyeingOrder";
 import AopOrder from "./AopOrder";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 import FilterDropdown from "../helpers/filtering/FilterDropdown";
+import useAxiosPrivate from "../hooks/UseAxiosPrivate";
 
 export const FROZEN_COUNT = 7;
 
@@ -81,6 +82,7 @@ const applyDeepFilters = (data, activeFilters) => {
 
 const AllOrders = ({ orderType }) => {
     const axiosPublic = useAxiosPublic();
+    const axiosPrivate = useAxiosPrivate();
     const [jobId, setJobId] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
@@ -96,6 +98,7 @@ const AllOrders = ({ orderType }) => {
     const [duplicateChallan, setDuplicateChallan] = useState([])
     const { handleRefresh, isUpdated } = InlineEdit();
     const { fetchData, error, loading } = useFetchData();
+
 
     const COLUMNS = useMemo(() => {
         const cols = [];
@@ -292,12 +295,36 @@ const AllOrders = ({ orderType }) => {
         setJobId(workOrderIds)
         setChangedField({});
         setDuplicateChallan([]);
-        const res = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+        fetchData(`/api/deliveries/${orderType}`, {
+            // Fix the typo here too!
             params: { workOrderIds: workOrderIds.join(',') }
-        });
-        if (res.data) setLoadingDeliveries(false);
-        console.log(res.data);
-        setDeliveries(res.data); setWorkOrderId(workOrderIds); setStyleNo(styleNo);
+        })
+            .then(data => {
+                // 'data' is already the array, no need for data.data
+                if (data) {
+                    setDeliveries(data);
+                    setWorkOrderId(workOrderIds);
+                    setStyleNo(styleNo);
+                }
+            })
+            .catch(error => {
+                console.error("Fetch error:", error);
+            })
+            .finally(() => {
+                setLoadingDeliveries(false);
+            });
+        // const res = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+        //     params: { workOrderIds: workOrderIds.join(',') }
+        // });
+        // // fetchData(`/api/deliveries/${orderType}`, {
+        // //     params: { workOrderId: workOrderIds.join(',') }
+        // // }).then(data => { if (data) setDeliveries(data); setLoadingDeliveries(false) });
+
+        // if (res.data) setLoadingDeliveries(false);
+        // console.log(res.data);
+        // setDeliveries(res.data);
+        // setWorkOrderId(workOrderIds);
+        // setStyleNo(styleNo);
     };
 
     const handleEditOnChange = (yarnId, e) => {

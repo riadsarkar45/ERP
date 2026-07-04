@@ -76,42 +76,74 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
         const rows = s.rows ?? [];
-        
+
         // Create an array that maps 1-to-1 with your table rows
         const compBreakdown = rows.map(() => ({}));
 
+        // Build a lookup once per style instead of scanning `rows` with
+        // findIndex for every composition (O(rows + compositions) instead
+        // of O(rows * compositions)). Also removes the risk of a silent
+        // whitespace/case mismatch going unnoticed — see the .trim() below.
+        const rowIndexByKey = new Map<string, number>();
+        rows.forEach((row: any, index: number) => {
+            const key = `${String(row.color).trim()}|${String(row.composition).trim()}`;
+            rowIndexByKey.set(key, index);
+        });
+
         workOrders.forEach((w: any) => {
+            // NOTE: an empty/missing orderType here means a workOrder record
+            // was created without one set — that's a data issue upstream,
+            // not something to silently patch here. Flagging it loudly so
+            // it's easy to find and fix at the source instead of discovering
+            // it as a mystery "Unknown_workOrderQty" column in the report.
+            if (!w.orderType) {
+                console.warn(
+                    `[calculateOrdersForStyleSummary] styleReq id=${s.id} (${s.styleNo}) has a workOrder with no orderType set.`
+                );
+            }
             const orderType = w.orderType || "Unknown";
 
             w.compositions?.forEach((c: any) => {
-                //  Find the EXACT row by matching BOTH color AND composition
-                const matchingRowIndex = rows.findIndex((row: any) => 
-                    row.color === c.color && 
-                    row.composition === c.composition
-                );
-                
-                if (matchingRowIndex === -1) return; // No match found
-                
+                const key = `${String(c.color).trim()}|${String(c.composition).trim()}`;
+                const matchingRowIndex = rowIndexByKey.get(key);
+
+                if (matchingRowIndex === undefined) {
+                    // Previously this failed silently (`return` with no trace),
+                    // meaning a composition's quantity could vanish from the
+                    // report with zero indication anything went wrong.
+                    console.warn(
+                        `[calculateOrdersForStyleSummary] styleReq id=${s.id} (${s.styleNo}): ` +
+                        `no matching row for color="${c.color}" composition="${c.composition}" — this composition's quantities were dropped from the report.`
+                    );
+                    return;
+                }
+
                 const breakdown = compBreakdown[matchingRowIndex];
-                
-                // ─ Work Order Qty ──
+
+                // ── Work Order Qty ──
                 if (typeof c.workOrderQty === "number") {
-                    const key = `${orderType}_workOrderQty`;
-                    breakdown[key] = (breakdown[key] ?? 0) + c.workOrderQty;
+                    const wqKey = `${orderType}_workOrderQty`;
+                    breakdown[wqKey] = (breakdown[wqKey] ?? 0) + c.workOrderQty;
                 }
 
                 // ── Deliveries ──
                 const deliveries = c.deliveries ?? [];
                 deliveries.forEach((d: any) => {
-                    const safeDeliveryType = d.deliveryType.replace(/\s+/g, "_");
+                    const safeDeliveryType = String(d.deliveryType ?? "Unknown").replace(/\s+/g, "_");
                     const deliveryKey = `${orderType}_${safeDeliveryType}`;
                     breakdown[deliveryKey] = (breakdown[deliveryKey] ?? 0) + (d.deliveryQty || 0);
                 });
             });
         });
 
-        // Return the style with the new compBreakdown array
-        return { ...s, compBreakdown };
+        // Return the style WITHOUT the raw workOrders tree — compBreakdown
+        // is derived entirely from it, so shipping both duplicates the
+        // nested compositions/deliveries data over the wire for no benefit.
+        // If some other part of the frontend needs raw delivery-level detail
+        // (e.g. an edit panel), fetch that on-demand per row instead of
+        // eagerly including it here for every style on every page load.
+        const { workOrders: _workOrders, ...rest } = s;
+        return { ...rest, compBreakdown };
     });
 };
 

@@ -5,11 +5,14 @@ import App from './App.jsx'
 import { RouterProvider } from 'react-router-dom'
 import routers from './routes/Routes.jsx'
 import { SocketProvider } from './hooks/socket.io/socketContext.jsx'
+import { AuthProvider } from './dashboard/auth/AuthContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <SocketProvider>
-      <RouterProvider router={routers} />
-    </SocketProvider>
+    <AuthProvider>
+      <SocketProvider>
+        <RouterProvider router={routers} />
+      </SocketProvider>
+    </AuthProvider>
   </StrictMode>,
 )

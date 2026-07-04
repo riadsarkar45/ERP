@@ -17,6 +17,9 @@ import DailyFabricCutting from "../dashboard/pages/cutting/DailyFabricCutting";
 import ApiMonitoring from "../dashboard/pages/monitoring/ApiMonitoring";
 import DyeingOrders from "../dashboard/pages/DyeingOrders";
 import UploadFile from "../dashboard/pages/upload/UploadFile";
+import Login from "../dashboard/pages/users/login/Login";
+import AddNewUser from "../dashboard/pages/users/addNewUser/AddNewUser";
+import ProtectedRoute from "../dashboard/auth/ProtectedRoute";
 
 const routers = createBrowserRouter([
     {
@@ -24,12 +27,16 @@ const routers = createBrowserRouter([
         element: <Root />,
         children: [
             {
-                path: "/",
-                element: <h1>Login</h1>
+                path: "/login",
+                element: <Login />
             },
             {
                 path: "/dashboard",
-                element: <Sidebar />,
+                element: (
+                    <ProtectedRoute>
+                        <Sidebar />
+                    </ProtectedRoute>
+                ),
                 children: [
                     {
                         path: "home",
@@ -90,6 +97,15 @@ const routers = createBrowserRouter([
                     {
                         path: "upload",
                         element: <UploadFile />
+                    },
+                    {
+                        // ADJUST allowed roles if AUDITOR (or another role) should also manage users
+                        path: "new-user",
+                        element: (
+                            <ProtectedRoute allowedRoles={["SUPER ADMIN", "ADMIN"]}>
+                                <AddNewUser />
+                            </ProtectedRoute>
+                        )
                     }
                 ]
             }

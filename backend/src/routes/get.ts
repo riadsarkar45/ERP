@@ -10,12 +10,13 @@ import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
+import { authenticate } from "../middleware/Authenticate.middleware";
 
 const getRouters = express.Router();
 
 console.log("getRouters loaded");
 
-getRouters.get("/work-order/:orderType", apiLimiter, getAllOrders);
+getRouters.get("/work-order/:orderType", apiLimiter, authenticate, getAllOrders);
 
 getRouters.get("/dashboard-detail", apiLimiter, dashboardController);
 

@@ -10,7 +10,8 @@ export const challanValidation = async (
     challanNo: number,
     workOrderId: string,
     toFactory: string,
-    yarnId: number // 🔥 ADDED: needed to scope duplicate check per composition
+    yarnId: number,
+    deliveryType: string // 🔥 ADDED: same challan can legitimately cover multiple delivery types
 ): Promise<ChallanValidationResult> => {
     const workOrder = await prisma.workOrder.findFirst({
         where: {
@@ -35,23 +36,24 @@ export const challanValidation = async (
         };
     }
 
-    // 🔥 CHANGED: duplicate check is now scoped to challanNo + toFactory + yarnId.
-    // A single challan can legitimately cover multiple compositions in the same
-    // shipment (e.g. "Submit All" submits several open compositions with the same
-    // challan number). We only want to flag it as a duplicate if the SAME
-    // composition is being submitted twice against the same challan/factory.
+    // 🔥 CHANGED: duplicate check now scoped to challanNo + toFactory + yarnId + deliveryType.
+    // A single challan can legitimately cover multiple delivery types for the SAME
+    // composition (e.g. a "normal" delivery and a "return" both filed under the same
+    // challan/shipment). Only flag a duplicate if the exact same composition + delivery
+    // type is being submitted twice against the same challan/factory.
     const duplicate = await prisma.deliveries.findFirst({
         where: {
             challanNo: Number(challanNo),
             toFactory,
             yarnId: Number(yarnId),
+            deliveryType,
         },
     });
 
     if (duplicate) {
         return {
             success: false,
-            message: "This challan already exists for this composition and factory.",
+            message: `This challan already has a "${deliveryType}" delivery for this composition and factory.`,
             duplicate,
         };
     }

@@ -1,18 +1,21 @@
 import { useState, useCallback } from "react";
-import useAxiosPublic from "./Axios";
+import useAxiosPrivate from "./UseAxiosPrivate";
 
 export const useFetchData = () => {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
-    const axios = useAxiosPublic();
+    const axiosPrivate = useAxiosPrivate();
 
-    const fetchData = useCallback(async (apiRoute) => {
+    // ✅ Just add 'config' to the parameter list. 
+    // If you don't pass it, it becomes 'undefined', which Axios handles perfectly.
+    const fetchData = useCallback(async (apiRoute, config) => {
         if (!apiRoute) return;
         setError(null);
         setLoading(true);
 
         try {
-            const res = await axios.get(apiRoute);
+            // If config is undefined, Axios just ignores it.
+            const res = await axiosPrivate.get(apiRoute, config);
             return res.data;
         } catch (err) {
             if (err.response) {
@@ -26,7 +29,7 @@ export const useFetchData = () => {
         } finally {
             setLoading(false);
         }
-    }, [axios]);
+    }, [axiosPrivate]);
 
     return { fetchData, error, loading };
 };

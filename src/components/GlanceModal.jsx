@@ -23,7 +23,6 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
         "GREY RECEIVED PERCENTAGE",
         "PROCESS LOSS %",
         "SHORT & EXCESS",
-
         "SENT FOR AOP",
         "RECEIVED FROM AOP",
         "GREY WEIGHT RECEIVED FROM AOP",
@@ -173,7 +172,6 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                         <div className="px-4 py-3">-</div>
                                                     )}
                                                 </td>
-                                                {/* yarn delivery */}
                                                 {/* Yarn Delivery */}
                                                 <td className="px-0 py-0 text-sm text-center text-gray-700 border border-gray-400 whitespace-nowrap">
                                                     {compBreakDown?.length > 0 ? (

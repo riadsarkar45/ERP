@@ -7,7 +7,10 @@ import getRouters from "./routes/get";
 import updateRouters from "./routes/update";
 import { initSocket } from "./middleware/socket.io/socket";
 import { trackRequests } from "./middleware/rateLimiter/trackRequest";
+import authRouter from "./routes/auth/auth.Routes";
+import cookieParser from "cookie-parser";
 const app = express();
+app.use(cookieParser())
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app"];
 app.set('trust proxy', 1); // Trust the first proxy (if behind a reverse proxy)
 app.use(cors(
@@ -43,6 +46,8 @@ const start = async () => {
   app.use("/api", router)
   app.use("/api", getRouters)
   app.use("/api", updateRouters)
+  app.use("/api", authRouter)
+  
   const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });

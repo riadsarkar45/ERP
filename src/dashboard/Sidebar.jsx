@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import {
     LayoutDashboard,
     Package,
@@ -12,16 +12,18 @@ import {
     Scissors,
     ChevronDown,
     ChevronRight,
+    UserRoundPlus,
 } from "lucide-react";
+import { AuthContext, AuthProvider } from "./auth/AuthContext";
 
 const Sidebar = () => {
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isOrdersOpen, setIsOrdersOpen] = useState(false);
-
     const isActive = (path) => location.pathname === path;
-
+    const { user } = useContext(AuthContext)
+    console.log(user);
     const orderSubItems = [
         { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
         { path: "/dashboard/dyeing-order", label: "Dyeing Orders", icon: Package },
@@ -33,6 +35,7 @@ const Sidebar = () => {
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
         { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
+        { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
     ];
 
     // Auto-open dropdown if current route is an order sub-route
@@ -50,6 +53,7 @@ const Sidebar = () => {
         if (path.includes('style-requirement')) return { title: 'Style And Requirement' };
         if (path.includes('audits')) return { title: 'All Audits' };
         if (path.includes('cutting')) return { title: 'Daily Fabric Cutting Report' };
+        if (path.includes('new-user')) return { title: 'Add New User' };
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
@@ -118,9 +122,8 @@ const Sidebar = () => {
                             <Link
                                 to="/dashboard/home"
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${
-                                    isActive('/dashboard/home') ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                } ${isCollapsed ? 'justify-center' : ''}`}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive('/dashboard/home') ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : ''}`}
                             >
                                 <LayoutDashboard size={20} className="shrink-0" />
                                 {!isCollapsed && <span className="font-medium text-sm">Dashboard</span>}
@@ -131,9 +134,8 @@ const Sidebar = () => {
                         <li>
                             <button
                                 onClick={() => !isCollapsed && setIsOrdersOpen(!isOrdersOpen)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${
-                                    isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
                                 title={isCollapsed ? 'Orders' : ''}
                             >
                                 <div className="flex items-center gap-3">
@@ -155,11 +157,10 @@ const Sidebar = () => {
                                             <Link
                                                 to={item.path}
                                                 onClick={() => setIsMobileMenuOpen(false)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${
-                                                    isActive(item.path)
-                                                        ? 'bg-primary-400 text-white font-medium'
-                                                        : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                }`}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
                                             >
                                                 <item.icon size={16} className="shrink-0" />
                                                 {item.label}
@@ -178,9 +179,8 @@ const Sidebar = () => {
                                     <Link
                                         to={item.path}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${
-                                            isActive(item.path) ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                        } ${isCollapsed ? 'justify-center' : ''}`}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive(item.path) ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                            } ${isCollapsed ? 'justify-center' : ''}`}
                                         title={isCollapsed ? item.label : ''}
                                     >
                                         <Icon size={20} className="shrink-0" />
@@ -211,10 +211,29 @@ const Sidebar = () => {
                             <p className="text-sm text-gray-500">{pageInfo.subtitle}</p>
                         </div>
                     </div>
-                    <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition-colors relative">
-                        <Bell size={20} />
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                    </button>
+                    {/* import {Bell, ChevronDown, User} from "lucide-react"; */}
+
+                    <div className="flex items-center gap-3">
+                        {/* Notification */}
+                        <button className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <Bell size={20} />
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+
+                        {/* User Profile */}
+                        <button className="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors">
+                            <div className="w-10 uppercase h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold">
+                                {/* User initials */}
+                                {
+                                    user && (
+                                        <h2>{user?.name?.[0] || "UNK"}</h2>
+                                    )
+                                }
+                                {/* Or use image */}
+                                {/* <img src={user?.photoURL} className="w-full h-full rounded-full object-cover" /> */}
+                            </div>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-auto">
