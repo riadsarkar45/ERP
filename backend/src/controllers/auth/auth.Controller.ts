@@ -9,7 +9,7 @@ console.log(isProd, "isProd");
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: isProd, // requires HTTPS in prod (Render gives you this)
-    sameSite: "lax" as const, // use "none" if frontend (Vercel) and backend (Render) are on different domains and you need cross-site cookies
+    sameSite: isProd ? ("none" as const) : ("lax" as const), // use "none" if frontend (Vercel) and backend (Render) are on different domains and you need cross-site cookies
     path: "/api/auth", // scope cookie to auth routes only
     maxAge: REFRESH_TOKEN_MAX_AGE_MS,
 };
@@ -32,7 +32,7 @@ export async function register(req: Request, res: Response) {
         data: {
             password: hashed,
             name,
-            userRole: role ?? "staff", // ADJUST default role to match your app
+            userRole: role ?? "AUDITOR", // ADJUST default role to match your app
             userName: "username",
             phoneNo: phoneNo,
         },
@@ -152,28 +152,28 @@ export async function logout(req: Request, res: Response) {
 }
 
 export async function getMe(req: Request, res: Response) {
-  // req.user is set by the `authenticate` middleware — this route must be
-  // mounted with `authenticate` in front of it (see auth.routes.ts).
-  const userId = req.user?.userId;
+    // req.user is set by the `authenticate` middleware — this route must be
+    // mounted with `authenticate` in front of it (see auth.routes.ts).
+    const userId = req.user?.userId;
     console.log(req.user, "nonoooooo");
-  if (!userId) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
- 
-  const foundUser = await prisma.user.findUnique({ where: { id: Number(userId) } });
- 
-  if (!foundUser) {
-    return res.status(404).json({ message: "User not found" });
-  }
+    if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+    }
 
-  console.log(foundUser, "found user");
- 
-  return res.json({
-    id: foundUser.id,
-    userName: foundUser.userName,
-    name: foundUser.name,
-    phoneNo: foundUser.phoneNo,
-    userRole: foundUser.userRole,
-    // workStation: foundUser.workStation, // uncomment once that column exists on `user`
-  });
+    const foundUser = await prisma.user.findUnique({ where: { id: Number(userId) } });
+
+    if (!foundUser) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log(foundUser, "found user");
+
+    return res.json({
+        id: foundUser.id,
+        userName: foundUser.userName,
+        name: foundUser.name,
+        phoneNo: foundUser.phoneNo,
+        userRole: foundUser.userRole,
+        // workStation: foundUser.workStation, // uncomment once that column exists on `user`
+    });
 }
