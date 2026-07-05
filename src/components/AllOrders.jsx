@@ -219,8 +219,11 @@ const AllOrders = ({ orderType }) => {
     }, []);
 
     useEffect(() => {
-        fetchData(`/api/work-order/${orderType}`).then(data => { if (data) setOrders(data); });
-        if (isUpdated === "success") { fetchData(`/api/work-order/${orderType}`).then(data => { if (data) setOrders(data); }); }
+        fetchData(`/api/work-order/${orderType}`)
+            .then(data => {
+                if (data) setOrders(data);
+            }
+        )
     }, [orderType, isUpdated]);
 
     // 🔥 2. Use the extracted function to get the final visible rows

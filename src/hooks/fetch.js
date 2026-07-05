@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
-import useAxiosPrivate from "./UseAxiosPrivate";
+// import useAxiosPrivate from "./UseAxiosPrivate";
+
+import useAxiosPrivate from './UseAxiosPrivate';
 
 export const useFetchData = () => {
     const [error, setError] = useState(null);

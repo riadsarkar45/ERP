@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import Input from '../../../../components/Input';
 import useAxiosPublic from '../../../../hooks/Axios';
-
+import useAxiosPrivate from '../../../../hooks/useAxiosPrivate';
 const roleOptions = ["SUPER ADMIN", "ADMIN", "AUDITOR"];
-const workingStations = ["APPAREL TODAY LTD", "MANGO TEX LTD", "ADVANCED COMPOSITE LTD"];
+const workingStations = ["SM SOURCING","APPAREL TODAY LTD", "MANGO TEX LTD", "ADVANCED COMPOSITE LTD"];
 
 const initialForm = {
     name: "",
@@ -19,6 +19,7 @@ const AddNewUser = () => {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const AXIOS = useAxiosPublic();
+    const axiosPrivate = useAxiosPrivate();
     const handleChange = (field) => (e) => {
         setForm((prev) => ({ ...prev, [field]: e.target.value }));
     };
@@ -36,7 +37,7 @@ const AddNewUser = () => {
         try {
             // ADJUST: if you already have a configured axios instance (baseURL/interceptors
             // set up elsewhere in the project), import and use that instead of raw axios here.
-            const res = await AXIOS.post(`/api/auth/register`, {
+            const res = await axiosPrivate.post(`/api/auth/register`, {
                 userName: form.phoneNo, // ADJUST: decide what userName should be if it differs from phoneNo
                 name: form.name,
                 phoneNo: form.phoneNo,

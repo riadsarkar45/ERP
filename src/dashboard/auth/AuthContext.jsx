@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
             try {
                 const { data } = await axiosPublic.post('/api/auth/refresh');
                 setAccessToken(data.accessToken);
-
+                console.log(data.accessToken);
                 const meRes = await axiosPublic.get('/api/auth/me', {
                     headers: { Authorization: `Bearer ${data.accessToken}` },
                 });
