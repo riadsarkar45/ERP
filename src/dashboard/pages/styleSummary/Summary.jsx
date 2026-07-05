@@ -278,8 +278,8 @@ export default function Summary() {
     const filterBtnRefs = useRef({});
 
     useEffect(() => {
-        fetchData("/api/styles").then((res) => {
-            setRawData(res.data.data);
+        fetchData(`/api/styles`).then(data => {
+            setRawData(data.data);
         }).catch(e => console.error(e));
     }, [fetchData]);
 

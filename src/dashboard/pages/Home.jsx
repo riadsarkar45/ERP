@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
-import useAxiosPublic from "../../hooks/Axios";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -11,6 +10,7 @@ import {
     Legend,
 } from "chart.js";
 import { Bar, Pie } from "react-chartjs-2";
+import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -23,21 +23,21 @@ const TYPE_COLORS = [
 ];
 
 const Home = () => {
-    const axiosPublic = useAxiosPublic();
+    const axiosPrivate  = useAxiosPrivate();
     const [data, setData] = useState({});
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await axiosPublic.get("api/dashboard-detail");
+                const res = await axiosPrivate.get("api/dashboard-detail");
                 setData(res.data);
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, [axiosPublic]);
+    }, [axiosPrivate]);
 
     // ── Bar chart (jobsType) ──────────────────────────────────────────
     const types = Object.keys(data.jobsType || {});
