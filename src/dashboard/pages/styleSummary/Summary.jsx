@@ -278,10 +278,10 @@ export default function Summary() {
     const filterBtnRefs = useRef({});
 
     useEffect(() => {
-        axiosPublic.get("/api/styles").then((res) => {
+        fetchData("/api/styles").then((res) => {
             setRawData(res.data.data);
         }).catch(e => console.error(e));
-    }, [axiosPublic]);
+    }, [fetchData]);
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
