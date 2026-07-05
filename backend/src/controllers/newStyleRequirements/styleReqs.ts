@@ -5,19 +5,12 @@ import { calculateOrdersForStyleSummary } from "../../utils/yarnCompStat";
 export const styleRequirements = async (req: Request, res: Response) => {
     const { jobNo } = req.params as { jobNo: string | undefined };
 
-    // Pagination params from query string
-    // e.g. GET /api/styles?limit=20&cursor=abc123
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100); // max 100
-    const cursorRaw = req.query.cursor as string | undefined;
-    const cursor = cursorRaw ? parseInt(cursorRaw) : undefined;
-
     const whereClause: any = jobNo ? { jobNo } : {};
 
-    // Fetch limit+1 to know if there's a next page
+    // We fetch ALL styles here so the frontend can filter the ENTIRE dataset perfectly.
+    // The frontend will handle the pagination to prevent rendering lag.
     const styles = await prisma.styleRequirement.findMany({
         where: whereClause,
-        take: limit + 1,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         orderBy: { id: "asc" },
         select: {
             salesContact: true,
@@ -70,21 +63,10 @@ export const styleRequirements = async (req: Request, res: Response) => {
         return res.status(404).send({ message: "No style requirements found", type: "error" });
     }
 
-    // Check if there's a next page
-    const hasNextPage = styles.length > limit;
-    const pageData = hasNextPage ? styles.slice(0, limit) : styles;
-    const lastItem = pageData[pageData.length - 1];
-    const nextCursor = hasNextPage && lastItem ? String(lastItem.id) : null;
-
-    const summaryData = calculateOrdersForStyleSummary(pageData);
+    const summaryData = calculateOrdersForStyleSummary(styles);
 
     res.status(200).send({
         data: summaryData,
-        pagination: {
-            nextCursor,        // pass this as ?cursor= in the next request
-            hasNextPage,
-            limit,
-        },
         type: "success"
     });
 };

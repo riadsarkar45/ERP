@@ -47,16 +47,6 @@ interface PreviewRow {
     finishFabricRequired: number;
 }
 
-interface ParseResponse {
-    success: boolean;
-    fileName: string;
-    sheetName: string;
-    headerRowIndex: number;
-    totalRows: number;
-    columns: string[];
-    data: PreviewRow[];
-}
-
 interface ErrorResponse {
     error: string;
     details?: string;
@@ -95,7 +85,6 @@ const findPartialCol = (headers: unknown[], keyword: string): number => {
     );
 };
 
-/** Keywords used to detect which row is the real field-level header row */
 const KEYWORDS_FOR_SCORING = [
     "sales contract",
     "buyer",
@@ -114,11 +103,6 @@ const scoreHeaderRow = (row: unknown[]): number => {
     ).length;
 };
 
-/**
- * Scan the first N rows and find the row most likely to be the
- * field-level header row (e.g. "SALES CONTRACT NO.", "BUYER", ...),
- * by counting how many expected keywords it contains.
- */
 const findHeaderRowIndex = (
     rows: unknown[][],
     scanLimit = 10,
@@ -139,15 +123,6 @@ const findHeaderRowIndex = (
     return bestScore >= minScore ? bestRow : -1;
 };
 
-/**
- * This sheet has a two-tier header: a "section" row (e.g. 'ORDER QTY',
- * 'REQUIRNENT'S') sitting one row above the real field-level header
- * row. Some field columns (like the raw order quantity column) have
- * NO label of their own in the field row — they only inherit meaning
- * from the section row above them. This merges the two: use the
- * field-level label where present, otherwise fall back to the section
- * label directly above it.
- */
 const buildMergedHeaders = (
     rawData: unknown[][],
     headerRowIndex: number
@@ -177,7 +152,7 @@ const buildColIndex = (headers: unknown[]): ColumnIndices => ({
 // ── Main Controller ──────────────────────────────────────────────
 export const fileUpload = async (
     req: MulterRequest,
-    res: Response<ParseResponse | ErrorResponse>
+    res: Response
 ): Promise<void> => {
     console.log("📥 File upload hit");
 
@@ -187,13 +162,8 @@ export const fileUpload = async (
             return;
         }
 
-        // 1. Read Excel file
         const workbook = XLSX.readFile(req.file.path);
 
-        // 2. Get the target sheet. NOTE: the source file has a typo —
-        // the actual sheet name is "Styling Requirement" (missing the
-        // "e"), not "Styling Requirement". We check both spellings so
-        // a future corrected file still works.
         const possibleNames = ["Styling Requirement", "Styling Requirement"];
         const firstSheetName =
             workbook.SheetNames && workbook.SheetNames.length > 0
@@ -214,7 +184,6 @@ export const fileUpload = async (
 
         const actualSheetName = matchedSheetName ?? firstSheetName ?? "";
 
-        // 3. Convert to array of arrays
         const rawData: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
             header: 1,
             defval: null,
@@ -225,8 +194,6 @@ export const fileUpload = async (
             return;
         }
 
-        // 4. Find the field-level header row dynamically (it's row 4 in
-        // this file, but we don't hardcode it in case other files shift).
         const headerRowIndex = findHeaderRowIndex(rawData);
 
         if (headerRowIndex === -1) {
@@ -237,15 +204,11 @@ export const fileUpload = async (
             return;
         }
 
-        // 5. Merge the section row (row above) with the field row so
-        // columns like raw order qty (which only has a section label,
-        // e.g. 'ORDER QTY', and no field-level label) still resolve.
         const headers = buildMergedHeaders(rawData, headerRowIndex);
-        console.log(`📋 Headers found at row ${headerRowIndex}:`, headers);
+        // console.log(`📋 Headers found at row ${headerRowIndex}:`, headers);
 
-        // 6. Map columns
         const colIndex: ColumnIndices = buildColIndex(headers);
-        console.log("🔢 Column Indices:", colIndex);
+        // console.log("🔢 Column Indices:", colIndex);
 
         const missingCols: string[] = (Object.entries(colIndex) as [string, number][])
             .filter(([, idx]: [string, number]) => idx === -1)
@@ -255,10 +218,8 @@ export const fileUpload = async (
             console.warn("⚠️ Missing columns:", missingCols);
         }
 
-        // 7. Data rows start right after the detected header row
         const dataRows: unknown[][] = rawData.slice(headerRowIndex + 1);
 
-        // 8. Map to required fields only
         const previewData: PreviewRow[] = dataRows
             .filter(
                 (row: unknown[]) =>
@@ -284,9 +245,9 @@ export const fileUpload = async (
                     getCellValue(row, colIndex.finishFabricRequired)
                 ),
             }));
+
         const data = await uploadDataFromFile(previewData);
 
-        // 9. Send response
         res.send({
             success: true,
             fileName: req.file.originalname || req.file.filename,

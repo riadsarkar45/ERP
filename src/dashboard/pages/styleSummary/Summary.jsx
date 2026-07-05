@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useFetchData } from "../../../hooks/fetch";
 import * as XLSX from "xlsx";
 import GlanceModal from "../../../components/GlanceModal";
+import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -273,6 +274,10 @@ export default function Summary() {
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
     const { fetchData, error, loading } = useFetchData();
+    const axiosPrivate = useAxiosPrivate();
+    // ── Client-Side Pagination State ──────────────────────────────────────────
+    const ITEMS_PER_PAGE = 20;
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
@@ -282,6 +287,11 @@ export default function Summary() {
             setRawData(data.data);
         }).catch(e => console.error(e));
     }, [fetchData]);
+
+    // Reset to page 1 whenever filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeFilters]);
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
@@ -314,6 +324,32 @@ export default function Summary() {
     const filteredData = useMemo(() => {
         return applyDeepFiltersSummary(rawData, activeFilters);
     }, [rawData, activeFilters]);
+
+    // ── Paginate the filtered data ────────────────────────────────────────────
+    const paginatedData = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredData.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredData, currentPage]);
+
+    const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length);
+
+    const getPageNumbers = () => {
+        const pages = [];
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(i);
+        }
+        return pages;
+    };
 
     const openFilterDropdown = (colIndex, e) => {
         e.stopPropagation();
@@ -411,7 +447,7 @@ export default function Summary() {
     }
 
     const handleSubmit = async () => {
-        setIsLoading({ loadAfterUpdate: true })
+        setIsLoading(prev => ({ ...prev, loadAfterUpdate: true }));
         console.log(isEditing, "isEditing");
         console.log(changedField, "changedField");
         const updatedData = {
@@ -420,22 +456,23 @@ export default function Summary() {
             rowId: isEditing.rowId
         }
         console.log(isEditing.rowId, "row id");
-        const sendDataToUpdate = await axiosPublic.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
+        const sendDataToUpdate = await axiosPrivate.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
         console.log(sendDataToUpdate.data.type);
         if (sendDataToUpdate.data.type === "success") {
-            const getUpdatedStyles = await axiosPublic.get("/api/styles")
+            const getUpdatedStyles = await axiosPrivate.get("/api/styles")
             setRawData(getUpdatedStyles.data.data);
-            setIsLoading({ loadAfterUpdate: false })
-            setIsEditing({ isEdit: false })
+            setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
+            setIsEditing({ isEdit: false, rowId: 0, editingField: "", changedRow: "" });
+        } else {
+            setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
         }
     }
 
     const handleRefresh = () => {
-        setIsLoading({ refreshLoading: true })
+        setIsLoading(prev => ({ ...prev, refreshLoading: true }));
         fetchData(`/api/styles`).then(data => {
             if (data) setRawData(data.data);
-            setIsLoading({ refreshLoading: false })
-
+            setIsLoading(prev => ({ ...prev, refreshLoading: false }));
         });
     }
 
@@ -657,10 +694,11 @@ export default function Summary() {
                 }
             `}</style>
 
+            {/* ── Scrollable Table Container ─────────────────────────────────── */}
             <div
                 ref={scrollContainerRef}
-                className="relative overflow-auto shadow-xs rounded-base border border-default"
-                style={{ maxHeight: 'calc(100vh - 200px)' }}
+                className="relative overflow-auto shadow-xs rounded-t-base border border-default"
+                style={{ maxHeight: 'calc(100vh - 250px)' }}
             >
                 <table
                     className="w-full text-sm text-left rtl:text-right text-body"
@@ -714,11 +752,11 @@ export default function Summary() {
                     </thead>
 
                     <tbody>
-                        {filteredData.map((row, i) => {
+                        {paginatedData.map((row, i) => {
                             const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
 
                             return (
-                                <tr key={i} className="group">
+                                <tr key={row.id || i} className="group">
 
                                     {/* 1. SALES CONTACT */}
                                     <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>
@@ -1125,7 +1163,7 @@ export default function Summary() {
                             );
                         })}
 
-                        {filteredData.length === 0 && (
+                        {paginatedData.length === 0 && (
                             <tr>
                                 <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-400 text-sm">
                                     No rows match the active filters.
@@ -1135,6 +1173,73 @@ export default function Summary() {
                     </tbody>
                 </table>
             </div>
+
+            {/* ── Button-Based Pagination Controls ─────────────────────────────── */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 border-gray-200 rounded-b-base shadow-xs">
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm text-gray-700">
+                                Showing <span className="font-medium">{startIndex + 1}</span> to <span className="font-medium">{endIndex}</span> of <span className="font-medium">{filteredData.length}</span> results
+                            </p>
+                        </div>
+                        <div>
+                            <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="relative inline-flex items-center px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronLeft size={16} className="mr-1" /> Prev
+                                </button>
+                                
+                                {getPageNumbers().map(page => (
+                                    <button
+                                        key={page}
+                                        onClick={() => setCurrentPage(page)}
+                                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium ${
+                                            currentPage === page
+                                                ? 'bg-blue-600 text-white z-10'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {page}
+                                    </button>
+                                ))}
+
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="relative inline-flex items-center px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Next <ChevronRight size={16} className="ml-1" />
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                    
+                    {/* Mobile Pagination */}
+                    <div className="flex justify-between sm:hidden w-full">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-sm text-gray-700 self-center">
+                            Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
         </DashboardLayout>
     );
 }

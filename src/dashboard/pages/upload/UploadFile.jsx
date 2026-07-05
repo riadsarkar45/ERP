@@ -3,13 +3,12 @@ import useAxiosPublic from '../../../hooks/Axios';
 
 const UploadFile = () => {
     const [file, setFile] = useState(null);
-    const [previewData, setPreviewData] = useState([]);
-    const [columns, setColumns] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [dragActive, setDragActive] = useState(false);
-    const [uploadStats, setUploadStats] = useState(null);
+    const [summary, setSummary] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState(0); // NEW: Track upload progress
     const fileInputRef = useRef(null);
     const axiosPublic = useAxiosPublic();
 
@@ -17,7 +16,6 @@ const UploadFile = () => {
     const handleFileChange = (selectedFile) => {
         if (!selectedFile) return;
 
-        // Validate file type
         const validTypes = [
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.ms-excel',
@@ -27,7 +25,6 @@ const UploadFile = () => {
             return;
         }
 
-        // Validate file size (20MB max)
         if (selectedFile.size > 20 * 1024 * 1024) {
             setError('File size must be less than 20MB');
             return;
@@ -36,11 +33,9 @@ const UploadFile = () => {
         setFile(selectedFile);
         setError('');
         setSuccess('');
-        setPreviewData([]);
-        setUploadStats(null);
+        setSummary(null);
     };
 
-    // Handle drag events
     const handleDrag = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -51,7 +46,6 @@ const UploadFile = () => {
         }
     };
 
-    // Handle drop
     const handleDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -61,7 +55,6 @@ const UploadFile = () => {
         }
     };
 
-    // Handle file input change
     const onInputChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             handleFileChange(e.target.files[0]);
@@ -75,37 +68,39 @@ const UploadFile = () => {
             return;
         }
         setLoading(true);
+        setUploadProgress(0); // Reset progress to 0
         setError('');
         setSuccess('');
+        setSummary(null);
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const axiosPub = await axiosPublic.post("/api/upload", formData, {
+            const res = await axiosPublic.post("/api/upload", formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
+                // NEW: Track upload progress
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = progressEvent.total 
+                        ? Math.round((progressEvent.loaded * 100) / progressEvent.total) 
+                        : 0;
+                    setUploadProgress(percentCompleted);
+                },
             });
-            const result = axiosPub.data; // already parsed, no .json() needed
-            console.log(result);
+            const result = res.data;
             if (result.success) {
-                setPreviewData(result.data);
-                setColumns(result.columns);
-                setUploadStats({
-                    fileName: result.fileName,
-                    sheetName: result.sheetName,
-                    totalRows: result.totalRows,
-                });
-                setSuccess(`✅ Successfully parsed ${result.totalRows} rows!`);
+                setSummary(result.summary);
+                setSuccess(
+                    `✅ Imported ${result.totalRows} rows from "${result.fileName}"`
+                );
                 setFile(null);
                 if (fileInputRef.current) {
                     fileInputRef.current.value = '';
                 }
             } else {
-                // success: false but not a thrown error — still show backend's reason
-                setError(result.error || result.details || 'Failed to parse file');
+                setError(result.error || result.details || 'Failed to upload file');
             }
         } catch (err) {
-            // Backend sends errors as { error: "...", details: "..." } — NOT { message: "..." }
             const backendError = err.response?.data?.error;
             const backendDetails = err.response?.data?.details;
             const friendlyMessage = backendDetails
@@ -119,20 +114,17 @@ const UploadFile = () => {
         }
     };
 
-    // Clear all data
     const handleClear = () => {
         setFile(null);
-        setPreviewData([]);
-        setColumns([]);
         setError('');
         setSuccess('');
-        setUploadStats(null);
+        setSummary(null);
+        setUploadProgress(0); // Reset progress to 0
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
     };
 
-    // Format file size
     const formatFileSize = (bytes) => {
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
@@ -141,14 +133,14 @@ const UploadFile = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8">
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-2xl mx-auto">
                 {/* Header */}
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
-                        📊 Excel File Parser
+                        📊 Style Requirement Import
                     </h1>
                     <p className="text-gray-600">
-                        Upload your Excel file to preview the data
+                        Upload your Excel file to import it directly
                     </p>
                 </div>
 
@@ -296,7 +288,7 @@ const UploadFile = () => {
                                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                         ></path>
                                     </svg>
-                                    Processing...
+                                    Uploading {uploadProgress > 0 ? `${uploadProgress}%` : '...'}
                                 </>
                             ) : (
                                 <>
@@ -313,21 +305,33 @@ const UploadFile = () => {
                                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
                                         />
                                     </svg>
-                                    Upload & Parse
+                                    Upload
                                 </>
                             )}
                         </button>
 
-                        {(previewData.length > 0 || file) && (
+                        {(file || summary) && (
                             <button
                                 onClick={handleClear}
                                 disabled={loading}
                                 className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
                             >
-                                Clear All
+                                Clear
                             </button>
                         )}
                     </div>
+
+                    {/* NEW: Upload Progress Bar */}
+                    {loading && (
+                        <div className="mt-4">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                <div 
+                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-150 ease-out" 
+                                    style={{ width: `${uploadProgress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Error Message */}
                     {error && (
@@ -368,138 +372,45 @@ const UploadFile = () => {
                             <p className="text-sm text-green-700">{success}</p>
                         </div>
                     )}
-                </div>
 
-                {/* Preview Table */}
-                {previewData.length > 0 && uploadStats && (
-                    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                        {/* Stats Header */}
-                        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                            <div className="flex flex-wrap items-center justify-between gap-4">
-                                <div>
-                                    <h2 className="text-xl font-bold text-gray-800">
-                                        📋 Data Preview
-                                    </h2>
-                                    <p className="text-sm text-gray-600 mt-1">
-                                        Showing parsed data from your Excel file
-                                    </p>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                                        📄 {uploadStats.fileName}
-                                    </span>
-                                    <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                                        📑 {uploadStats.sheetName}
-                                    </span>
-                                    <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-                                        📊 {uploadStats.totalRows} rows
-                                    </span>
-                                </div>
+                    {/* Summary */}
+                    {summary && (
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="p-3 bg-blue-50 rounded-lg text-center">
+                                <p className="text-2xl font-bold text-blue-700">{summary.stylesCreated}</p>
+                                <p className="text-xs text-gray-600">Styles created</p>
+                            </div>
+                            <div className="p-3 bg-indigo-50 rounded-lg text-center">
+                                <p className="text-2xl font-bold text-indigo-700">{summary.stylesUpdated}</p>
+                                <p className="text-xs text-gray-600">Styles updated</p>
+                            </div>
+                            <div className="p-3 bg-green-50 rounded-lg text-center">
+                                <p className="text-2xl font-bold text-green-700">{summary.rowsInserted}</p>
+                                <p className="text-xs text-gray-600">Rows inserted</p>
+                            </div>
+                            <div className="p-3 bg-yellow-50 rounded-lg text-center">
+                                <p className="text-2xl font-bold text-yellow-700">{summary.rowsSkipped}</p>
+                                <p className="text-xs text-gray-600">Rows skipped</p>
                             </div>
                         </div>
+                    )}
 
-                        {/* Table */}
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-800 text-white sticky top-0">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left font-semibold">#</th>
-                                        {columns.map((col, idx) => (
-                                            <th
-                                                key={idx}
-                                                className="px-4 py-3 text-left font-semibold whitespace-nowrap"
-                                            >
-                                                {col}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {previewData.map((row, index) => (
-                                        <tr
-                                            key={row.id || index}
-                                            className={`hover:bg-blue-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                                }`}
-                                        >
-                                            <td className="px-4 py-3 font-medium text-gray-500">
-                                                {row.id}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700 font-medium">
-                                                {row.salesContractNo}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700">
-                                                {row.buyer}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700 font-mono text-xs">
-                                                {row.jobNo}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700">
-                                                {row.poNo}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700">
-                                                {row.style}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700">
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                                                    {row.color}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700 text-xs">
-                                                {row.composition}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700">
-                                                {row.finishDia}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded font-semibold text-xs">
-                                                    {(row.orderQty ?? 0).toLocaleString()}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded font-semibold text-xs">
-                                                    {(row.finishFabricRequired ?? 0).toLocaleString()}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                    {/* Per-style errors, if any */}
+                    {summary && summary.errors.length > 0 && (
+                        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm font-semibold text-red-700 mb-2">
+                                {summary.errors.length} style(s) failed to import:
+                            </p>
+                            <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
+                                {summary.errors.map((e, i) => (
+                                    <li key={i}>
+                                        <span className="font-mono">{e.style}</span>: {e.message}
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-
-                        {/* Footer */}
-                        <div className="p-4 bg-gray-50 border-t border-gray-200 text-center text-sm text-gray-600">
-                            Showing {previewData.length} of {previewData.length} entries
-                        </div>
-                    </div>
-                )}
-
-                {/* Empty State */}
-                {!file && previewData.length === 0 && !loading && (
-                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
-                            <svg
-                                className="w-10 h-10 text-gray-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                />
-                            </svg>
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                            No file uploaded yet
-                        </h3>
-                        <p className="text-gray-500">
-                            Upload an Excel file to see the preview here
-                        </p>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );
