@@ -10,6 +10,7 @@ import {
     Legend,
 } from "chart.js";
 import { Bar, Pie } from "react-chartjs-2";
+
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import useAxiosPublic from './Axios';
-import axiosPrivate from './AxiosPrivate';
 import { useAuth } from '../dashboard/auth/AuthContext';
+import useAxiosSecureBase from './AxiosPrivate';
 
 // Use this for any call that needs the logged-in user's identity
 // (protected backend routes). Use useAxiosPublic for login/register/refresh,
@@ -9,7 +9,7 @@ import { useAuth } from '../dashboard/auth/AuthContext';
 const useAxiosPrivate = () => {
     const { accessToken, setAccessToken } = useAuth();
     const axiosPublic = useAxiosPublic();
-    const axiosPrivateInstance = axiosPrivate();
+    const axiosPrivateInstance = useAxiosSecureBase();
     useEffect(() => {
         const requestIntercept = axiosPrivateInstance.interceptors.request.use(
             (config) => {

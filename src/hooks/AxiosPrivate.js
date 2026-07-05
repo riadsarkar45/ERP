@@ -6,8 +6,8 @@ const axiosPrivate = axios.create({
     withCredentials: true,
 });
 
-const useAxiosPrivate = () => {
+const useAxiosSecureBase = () => {
     return axiosPrivate;
 };
 
-export default useAxiosPrivate;
+export default useAxiosSecureBase;
