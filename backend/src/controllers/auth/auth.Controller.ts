@@ -154,7 +154,6 @@ export async function getMe(req: Request, res: Response) {
     // req.user is set by the `authenticate` middleware — this route must be
     // mounted with `authenticate` in front of it (see auth.routes.ts).
     const userId = req.user?.userId;
-    console.log(req.user, "nonoooooo");
     if (!userId) {
         return res.status(401).json({ message: "Not authenticated" });
     }
@@ -165,13 +164,12 @@ export async function getMe(req: Request, res: Response) {
         return res.status(404).json({ message: "User not found" });
     }
 
-    console.log(foundUser, "found user");
 
     return res.json({
         id: foundUser.id,
         userName: foundUser.userName,
         name: foundUser.name,
-        phoneNo: foundUser.phoneNo,
+        // phoneNo: foundUser.phoneNo,
         userRole: foundUser.userRole,
         // workStation: foundUser.workStation, // uncomment once that column exists on `user`
     });
