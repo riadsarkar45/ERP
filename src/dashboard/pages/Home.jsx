@@ -10,8 +10,9 @@ import {
     Legend,
 } from "chart.js";
 import { Bar, Pie } from "react-chartjs-2";
+import useAxiosPublic from "../../hooks/Axios";
 
-import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+// import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -24,21 +25,22 @@ const TYPE_COLORS = [
 ];
 
 const Home = () => {
-    const axiosPrivate  = useAxiosPrivate();
+    // const axiosPrivate  = useAxiosPrivate();
+    const axiosPublic = useAxiosPublic();
     const [data, setData] = useState({});
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await axiosPrivate.get("api/dashboard-detail");
+                const res = await axiosPublic.get("api/dashboard-detail");
                 setData(res.data);
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, [axiosPrivate]);
+    }, [axiosPublic]);
 
     // ── Bar chart (jobsType) ──────────────────────────────────────────
     const types = Object.keys(data.jobsType || {});

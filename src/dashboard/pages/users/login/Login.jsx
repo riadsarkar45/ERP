@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom'; // ADJUST/remove if you're not using react-router
-import logo from "../../../../../public/Slide1.png"
+import logo from "../../../../assets/Slide1.png"
 import { useAuth } from '../../../auth/AuthContext';
 const COLORS = {
     bg: "#F2EFE6",
