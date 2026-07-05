@@ -16,11 +16,11 @@ const REFRESH_COOKIE_OPTIONS = {
 
 
 export async function register(req: Request, res: Response) {
-    const { phoneNo, name, password, role } = req.body;
+    const { phoneNo, name, password, userRole, workStation } = req.body;
     if (!phoneNo || !password) {
         return res.status(400).json({ message: "Email and password are required" });
     }
-
+    // console.log(req.body);
     const existing = await prisma.user.findUnique({ where: { phoneNo } });
     if (existing) {
         return res.status(409).json({ message: "Email is already registered" });
@@ -32,9 +32,10 @@ export async function register(req: Request, res: Response) {
         data: {
             password: hashed,
             name,
-            userRole: role ?? "AUDITOR", // ADJUST default role to match your app
+            userRole: userRole ?? "AUDITOR", // ADJUST default role to match your app
             userName: "username",
             phoneNo: phoneNo,
+            workingStation: workStation
         },
     });
 
@@ -46,7 +47,6 @@ export async function register(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
     const { phoneNo, password } = req.body;
-    console.log(req.body, "body");
     if (!phoneNo || !password) {
         return res.status(400).json({ message: "Phone number and password are required" });
     }
@@ -61,7 +61,6 @@ export async function login(req: Request, res: Response) {
             name: true,
         }
     });
-    console.log(user, "ussssser");
     if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
     }
