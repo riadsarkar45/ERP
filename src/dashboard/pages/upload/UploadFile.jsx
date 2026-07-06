@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import useAxiosPublic from '../../../hooks/Axios';
+import { useSocket } from '../../../hooks/socket.io/socketContext';
 
 const UploadFile = () => {
     const [file, setFile] = useState(null);
@@ -8,9 +9,54 @@ const UploadFile = () => {
     const [success, setSuccess] = useState('');
     const [dragActive, setDragActive] = useState(false);
     const [summary, setSummary] = useState(null);
-    const [uploadProgress, setUploadProgress] = useState(0); // NEW: Track upload progress
+
+    // Live progress state, driven by socket events
+    const [jobId, setJobId] = useState(null);
+    const [progress, setProgress] = useState(null); // { phase, current, total, styleNo, rowsInGroup }
+
     const fileInputRef = useRef(null);
     const axiosPublic = useAxiosPublic();
+    const socket = useSocket();
+
+    // ── Listen for progress on the existing socket connection ─────────────
+    useEffect(() => {
+        if (!socket) {
+            console.warn('⚠️ useSocket() returned null — no socket connection available');
+            return;
+        }
+        console.log('🔌 Socket in UploadFile:', socket.id, socket.connected);
+
+        const handleProgress = (data) => {
+            console.log('📩 Received upload-progress:', data, 'current jobId state:', jobId);
+            if (data.jobId !== jobId) return; // ignore other users' uploads
+            setProgress(data);
+        };
+
+        const handleComplete = (data) => {
+            if (data.jobId !== jobId) return;
+            setSummary(data.summary);
+            setSuccess(`✅ Import finished`);
+            setLoading(false);
+            setJobId(null);
+        };
+
+        const handleError = (data) => {
+            if (data.jobId !== jobId) return;
+            setError(data.message || 'Import failed on the server');
+            setLoading(false);
+            setJobId(null);
+        };
+
+        socket.on('upload-progress', handleProgress);
+        socket.on('upload-complete', handleComplete);
+        socket.on('upload-error', handleError);
+
+        return () => {
+            socket.off('upload-progress', handleProgress);
+            socket.off('upload-complete', handleComplete);
+            socket.off('upload-error', handleError);
+        };
+    }, [socket, jobId]);
 
     // Handle file selection
     const handleFileChange = (selectedFile) => {
@@ -34,6 +80,7 @@ const UploadFile = () => {
         setError('');
         setSuccess('');
         setSummary(null);
+        setProgress(null);
     };
 
     const handleDrag = (e) => {
@@ -68,10 +115,11 @@ const UploadFile = () => {
             return;
         }
         setLoading(true);
-        setUploadProgress(0); // Reset progress to 0
         setError('');
         setSuccess('');
         setSummary(null);
+        setProgress(null);
+
         const formData = new FormData();
         formData.append('file', file);
         try {
@@ -79,26 +127,22 @@ const UploadFile = () => {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
-                // NEW: Track upload progress
-                onUploadProgress: (progressEvent) => {
-                    const percentCompleted = progressEvent.total 
-                        ? Math.round((progressEvent.loaded * 100) / progressEvent.total) 
-                        : 0;
-                    setUploadProgress(percentCompleted);
-                },
             });
             const result = res.data;
+            console.log('🎯 Upload response:', result);
             if (result.success) {
-                setSummary(result.summary);
-                setSuccess(
-                    `✅ Imported ${result.totalRows} rows from "${result.fileName}"`
-                );
+                // Server has only parsed the file so far — DB writes happen
+                // in the background. Register the jobId so incoming socket
+                // events are matched to this upload.
+                setJobId(result.jobId);
                 setFile(null);
                 if (fileInputRef.current) {
                     fileInputRef.current.value = '';
                 }
+                // Loading stays true until 'upload-complete' arrives
             } else {
                 setError(result.error || result.details || 'Failed to upload file');
+                setLoading(false);
             }
         } catch (err) {
             const backendError = err.response?.data?.error;
@@ -109,7 +153,6 @@ const UploadFile = () => {
 
             setError(friendlyMessage || err.message || 'Failed to upload file');
             console.error('Upload error:', err.response?.data || err);
-        } finally {
             setLoading(false);
         }
     };
@@ -119,7 +162,8 @@ const UploadFile = () => {
         setError('');
         setSuccess('');
         setSummary(null);
-        setUploadProgress(0); // Reset progress to 0
+        setProgress(null);
+        setJobId(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -129,6 +173,22 @@ const UploadFile = () => {
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    };
+
+    const percent = progress && progress.total > 0
+        ? Math.round((progress.current / progress.total) * 100)
+        : 0;
+
+    const phaseLabel = () => {
+        if (!progress) return 'Uploading & parsing…';
+        if (progress.phase === 'starting') return 'Starting import…';
+        if (progress.phase === 'inserting') {
+            return `Inserting style ${progress.current}/${progress.total} — ${progress.styleNo}`;
+        }
+        if (progress.phase === 'error') {
+            return `Skipped style ${progress.styleNo} (error) — ${progress.current}/${progress.total}`;
+        }
+        return 'Processing…';
     };
 
     return (
@@ -288,7 +348,7 @@ const UploadFile = () => {
                                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                         ></path>
                                     </svg>
-                                    Uploading {uploadProgress > 0 ? `${uploadProgress}%` : '...'}
+                                    Processing...
                                 </>
                             ) : (
                                 <>
@@ -310,26 +370,34 @@ const UploadFile = () => {
                             )}
                         </button>
 
-                        {(file || summary) && (
+                        {(file || summary) && !loading && (
                             <button
                                 onClick={handleClear}
-                                disabled={loading}
-                                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
                             >
                                 Clear
                             </button>
                         )}
                     </div>
 
-                    {/* NEW: Upload Progress Bar */}
+                    {/* Live progress bar */}
                     {loading && (
                         <div className="mt-4">
-                            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                                <div 
-                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-150 ease-out" 
-                                    style={{ width: `${uploadProgress}%` }}
-                                ></div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-medium text-gray-600">{phaseLabel()}</span>
+                                <span className="text-xs font-semibold text-blue-700">{percent}%</span>
                             </div>
+                            <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-300 ease-out"
+                                    style={{ width: `${percent}%` }}
+                                />
+                            </div>
+                            {progress?.rowsInGroup !== undefined && (
+                                <p className="text-xs text-gray-400 mt-1">
+                                    {progress.rowsInGroup} row(s) in this style
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -354,7 +422,7 @@ const UploadFile = () => {
                     )}
 
                     {/* Success Message */}
-                    {success && (
+                    {success && !loading && (
                         <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
                             <svg
                                 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
@@ -374,7 +442,7 @@ const UploadFile = () => {
                     )}
 
                     {/* Summary */}
-                    {summary && (
+                    {summary && !loading && (
                         <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div className="p-3 bg-blue-50 rounded-lg text-center">
                                 <p className="text-2xl font-bold text-blue-700">{summary.stylesCreated}</p>
@@ -396,7 +464,7 @@ const UploadFile = () => {
                     )}
 
                     {/* Per-style errors, if any */}
-                    {summary && summary.errors.length > 0 && (
+                    {summary && summary.errors.length > 0 && !loading && (
                         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                             <p className="text-sm font-semibold text-red-700 mb-2">
                                 {summary.errors.length} style(s) failed to import:
@@ -412,7 +480,6 @@ const UploadFile = () => {
                     )}
                 </div>
             </div>
-            
         </div>
     );
 };

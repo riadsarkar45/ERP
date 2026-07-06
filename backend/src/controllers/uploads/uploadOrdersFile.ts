@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { randomUUID } from "crypto";
 import XLSX from "xlsx";
 import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileData";
 
@@ -33,8 +34,7 @@ interface ColumnIndices {
     finishFabricRequired: number;
 }
 
-interface PreviewRow {
-    id: number;
+interface ParsedRow {
     salesContractNo: string;
     buyer: string;
     jobNo: string;
@@ -45,11 +45,6 @@ interface PreviewRow {
     finishDia: string;
     orderQty: number;
     finishFabricRequired: number;
-}
-
-interface ErrorResponse {
-    error: string;
-    details?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -205,22 +200,11 @@ export const fileUpload = async (
         }
 
         const headers = buildMergedHeaders(rawData, headerRowIndex);
-        // console.log(`📋 Headers found at row ${headerRowIndex}:`, headers);
-
         const colIndex: ColumnIndices = buildColIndex(headers);
-        // console.log("🔢 Column Indices:", colIndex);
-
-        const missingCols: string[] = (Object.entries(colIndex) as [string, number][])
-            .filter(([, idx]: [string, number]) => idx === -1)
-            .map(([key]: [string, number]) => key);
-
-        if (missingCols.length > 0) {
-            console.warn("⚠️ Missing columns:", missingCols);
-        }
 
         const dataRows: unknown[][] = rawData.slice(headerRowIndex + 1);
 
-        const previewData: PreviewRow[] = dataRows
+        const parsedRows: ParsedRow[] = dataRows
             .filter(
                 (row: unknown[]) =>
                     Array.isArray(row) &&
@@ -229,8 +213,7 @@ export const fileUpload = async (
                             cell !== "" && cell !== undefined && cell !== null
                     )
             )
-            .map((row: unknown[], index: number): PreviewRow => ({
-                id: index + 1,
+            .map((row: unknown[]): ParsedRow => ({
                 salesContractNo:
                     asString(getCellValue(row, colIndex.salesContractNo)) || "N/A",
                 buyer: asString(getCellValue(row, colIndex.buyer)),
@@ -246,16 +229,24 @@ export const fileUpload = async (
                 ),
             }));
 
-        const data = await uploadDataFromFile(previewData);
+        // ── Respond immediately with a jobId — don't make the client wait
+        // for the DB writes. Processing continues in the background and
+        // reports progress over the existing Socket.IO connection.
+        const jobId = randomUUID();
 
         res.send({
             success: true,
+            jobId,
             fileName: req.file.originalname || req.file.filename,
             sheetName: actualSheetName,
-            headerRowIndex,
-            totalRows: previewData.length,
-            columns: headers.map((header) => asString(header)),
-            data,
+            totalRows: parsedRows.length,
+        });
+
+        // Fire-and-forget: don't await, and never let a rejection here
+        // crash the process — uploadDataFromFile emits its own
+        // 'upload-progress' / 'upload-complete' / 'upload-error' events.
+        uploadDataFromFile(parsedRows, jobId).catch((err) => {
+            console.error("Background upload processing failed:", err);
         });
     } catch (error) {
         console.error(" Error parsing Excel:", error);
