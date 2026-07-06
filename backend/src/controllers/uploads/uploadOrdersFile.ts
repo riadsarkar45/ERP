@@ -1,6 +1,6 @@
+import ExcelJS from "exceljs";
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
-import XLSX from "xlsx";
 import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileData";
 
 // ── Type Definitions ──────────────────────────────────────────────
@@ -54,15 +54,31 @@ const getCellValue = (row: unknown[], index: number): unknown => {
     return row[index];
 };
 
+// Enhanced to handle exceljs specific objects (Rich Text, Formulas, Dates)
 const asString = (val: unknown): string => {
     if (val === null || val === undefined) return "";
     if (typeof val === "string") return val.trim();
+    if (val instanceof Date) return val.toISOString().split('T')[0] ?? "";
+    if (typeof val === "object" && val !== null) {
+        const obj = val as any;
+        if (obj.richText && Array.isArray(obj.richText)) {
+            return obj.richText.map((rt: any) => rt.text || "").join("").trim();
+        }
+        if (obj.text !== undefined) return String(obj.text).trim();
+        if (obj.result !== undefined) return String(obj.result).trim(); // Formula results
+    }
     return String(val).trim();
 };
 
 const toNumber = (val: unknown): number => {
     if (val === null || val === undefined || val === "") return 0;
     if (typeof val === "number") return val;
+    if (val instanceof Date) return 0;
+    if (typeof val === "object" && val !== null) {
+        const obj = val as any;
+        if (obj.result !== undefined) return toNumber(obj.result);
+        if (obj.text !== undefined) return toNumber(obj.text);
+    }
     const cleaned = String(val).replace(/,/g, "").trim();
     const num = Number(cleaned);
     return isNaN(num) ? 0 : num;
@@ -144,6 +160,78 @@ const buildColIndex = (headers: unknown[]): ColumnIndices => ({
     finishFabricRequired: findPartialCol(headers, "finish fabric required"),
 });
 
+const parseRow = (row: unknown[], colIndex: ColumnIndices): ParsedRow => ({
+    salesContractNo: asString(getCellValue(row, colIndex.salesContractNo)) || "N/A",
+    buyer: asString(getCellValue(row, colIndex.buyer)),
+    jobNo: asString(getCellValue(row, colIndex.jobNo)),
+    poNo: asString(getCellValue(row, colIndex.poNo)),
+    style: asString(getCellValue(row, colIndex.style)),
+    color: asString(getCellValue(row, colIndex.color)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    finishDia: asString(getCellValue(row, colIndex.finishDia)),
+    orderQty: toNumber(getCellValue(row, colIndex.orderQty)),
+    finishFabricRequired: toNumber(getCellValue(row, colIndex.finishFabricRequired)),
+});
+
+// ── Streaming Sheet Processor ─────────────────────────────────────
+async function processSheet(worksheetReader: any) {
+    let headerRowIndex = -1;
+    let headers: unknown[] = [];
+    let colIndex: ColumnIndices | null = null;
+    let parsedRows: ParsedRow[] = [];
+    
+    const rowBuffer: unknown[][] = [];
+    const SCAN_LIMIT = 10;
+    const MIN_SCORE = 3;
+
+    // Stream row by row
+    for await (const row of worksheetReader) {
+        // row.values is a sparse array where index 0 is undefined in exceljs
+        const denseRow: unknown[] = [];
+        if (Array.isArray(row.values)) {
+            for (let i = 1; i < row.values.length; i++) {
+                denseRow.push(row.values[i]);
+            }
+        }
+        
+        if (headerRowIndex === -1) {
+            rowBuffer.push(denseRow);
+            if (rowBuffer.length >= SCAN_LIMIT) {
+                const foundIdx = findHeaderRowIndex(rowBuffer, SCAN_LIMIT, MIN_SCORE);
+                if (foundIdx !== -1) {
+                    headerRowIndex = foundIdx;
+                    headers = buildMergedHeaders(rowBuffer, headerRowIndex);
+                    colIndex = buildColIndex(headers);
+                    
+                    // Process any data rows that were already buffered after the header
+                    for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
+                        const bufferedRow = rowBuffer[i] ?? [];
+                        parsedRows.push(parseRow(bufferedRow, colIndex));
+                    }
+                }
+            }
+        } else {
+            // Header found, just parse and push immediately (Low RAM!)
+            parsedRows.push(parseRow(denseRow, colIndex!));
+        }
+    }
+    
+    // Fallback if header wasn't found in the first 10 rows but exists later
+    if (headerRowIndex === -1 && rowBuffer.length > 0) {
+        const foundIdx = findHeaderRowIndex(rowBuffer, rowBuffer.length, MIN_SCORE);
+        if (foundIdx !== -1) {
+            headerRowIndex = foundIdx;
+            headers = buildMergedHeaders(rowBuffer, headerRowIndex);
+            colIndex = buildColIndex(headers);
+            for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
+                parsedRows.push(parseRow(rowBuffer[i] ?? [], colIndex!));
+            }
+        }
+    }
+    
+    return { parsedRows, headerFound: headerRowIndex !== -1 };
+}
+
 // ── Main Controller ──────────────────────────────────────────────
 export const fileUpload = async (
     req: MulterRequest,
@@ -157,81 +245,49 @@ export const fileUpload = async (
             return;
         }
 
-        const workbook = XLSX.readFile(req.file.path);
-
-        const possibleNames = ["Styling Requirement", "Styling Requirement"];
-        const firstSheetName =
-            workbook.SheetNames && workbook.SheetNames.length > 0
-                ? workbook.SheetNames[0]
-                : undefined;
-
-        const matchedSheetName = possibleNames.find(
-            (name) => workbook.Sheets[name]
-        );
-        const worksheet =
-            (matchedSheetName ? workbook.Sheets[matchedSheetName] : undefined) ??
-            (firstSheetName ? workbook.Sheets[firstSheetName] : undefined);
-
-        if (!worksheet) {
-            res.status(400).json({ error: "No valid sheet found in Excel file" });
-            return;
-        }
-
-        const actualSheetName = matchedSheetName ?? firstSheetName ?? "";
-
-        const rawData: unknown[][] = XLSX.utils.sheet_to_json(worksheet, {
-            header: 1,
-            defval: null,
+        // Initialize Streaming Reader (Low Memory Footprint)
+        const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(req.file.path, {
+            sharedStrings: "cache", // Caches shared strings without loading the whole workbook
         });
 
-        if (rawData.length < 3) {
-            res.status(400).json({ error: "Excel file has insufficient data" });
-            return;
+        const possibleNames = ["Styling Requirement", "Styling Requirement"];
+        let actualSheetName = "";
+        let isFirstSheet = true;
+        
+        let parsedRows: ParsedRow[] = [];
+        let headerFound = false;
+
+        // Stream through sheets one by one
+        for await (const worksheetReader of workbookReader) {
+            const sheetName = (worksheetReader as any).name || "";
+            const isTarget = possibleNames.includes(sheetName);
+            
+            if (isTarget) {
+                actualSheetName = sheetName;
+                const result = await processSheet(worksheetReader);
+                parsedRows = result.parsedRows;
+                headerFound = result.headerFound;
+                break; // Found the target sheet, stop reading further sheets
+            } else if (isFirstSheet) {
+                // Tentatively process the first sheet as a fallback
+                actualSheetName = sheetName;
+                const result = await processSheet(worksheetReader);
+                parsedRows = result.parsedRows;
+                headerFound = result.headerFound;
+                isFirstSheet = false;
+            } else {
+                continue; // Skip other sheets if we already have a fallback
+            }
         }
 
-        const headerRowIndex = findHeaderRowIndex(rawData);
-
-        if (headerRowIndex === -1) {
+        if (!headerFound) {
             res.status(400).json({
-                error:
-                    "Could not locate a valid header row in the Excel file. Please check the file format.",
+                error: "Could not locate a valid header row in the Excel file. Please check the file format.",
             });
             return;
         }
 
-        const headers = buildMergedHeaders(rawData, headerRowIndex);
-        const colIndex: ColumnIndices = buildColIndex(headers);
-
-        const dataRows: unknown[][] = rawData.slice(headerRowIndex + 1);
-
-        const parsedRows: ParsedRow[] = dataRows
-            .filter(
-                (row: unknown[]) =>
-                    Array.isArray(row) &&
-                    row.some(
-                        (cell: unknown) =>
-                            cell !== "" && cell !== undefined && cell !== null
-                    )
-            )
-            .map((row: unknown[]): ParsedRow => ({
-                salesContractNo:
-                    asString(getCellValue(row, colIndex.salesContractNo)) || "N/A",
-                buyer: asString(getCellValue(row, colIndex.buyer)),
-                jobNo: asString(getCellValue(row, colIndex.jobNo)),
-                poNo: asString(getCellValue(row, colIndex.poNo)),
-                style: asString(getCellValue(row, colIndex.style)),
-                color: asString(getCellValue(row, colIndex.color)),
-                composition: asString(getCellValue(row, colIndex.composition)),
-                finishDia: asString(getCellValue(row, colIndex.finishDia)),
-                orderQty: toNumber(getCellValue(row, colIndex.orderQty)),
-                finishFabricRequired: toNumber(
-                    getCellValue(row, colIndex.finishFabricRequired)
-                ),
-            }));
-
         // ── Respond immediately with a jobId — don't make the client wait
-        // for the DB writes. Processing continues in the background and
-        // reports progress over the existing Socket.IO connection.
         const jobId = randomUUID();
 
         res.send({
@@ -242,9 +298,7 @@ export const fileUpload = async (
             totalRows: parsedRows.length,
         });
 
-        // Fire-and-forget: don't await, and never let a rejection here
-        // crash the process — uploadDataFromFile emits its own
-        // 'upload-progress' / 'upload-complete' / 'upload-error' events.
+        // Fire-and-forget background processing
         uploadDataFromFile(parsedRows, jobId).catch((err) => {
             console.error("Background upload processing failed:", err);
         });
