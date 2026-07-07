@@ -85,7 +85,7 @@ model StyleRequirement {
   id           Int                   @id @default(autoincrement())
   salesContact String
   buyerName    String
-  jobNo        String
+  jobNo        String                @unique
   poNo         String
   styleNo      String                @unique
   processLoss  String
@@ -168,14 +168,14 @@ model jobs {
 }
 
 model user {
-  id            Int            @id @default(autoincrement())
-  userName      String?         @default("NULL")
-  name          String
-  phoneNo       String         @unique
-  password      String
-  userRole      String
-  workingStation String? @default("NULL")
-  refreshTokens refreshToken[] // <-- ADD THIS LINE to your existing model
+  id             Int            @id @default(autoincrement())
+  userName       String?        @default("NULL")
+  name           String
+  phoneNo        String         @unique
+  password       String
+  userRole       String
+  workingStation String?        @default("NULL")
+  refreshTokens  refreshToken[] // <-- ADD THIS LINE to your existing model
 }
 
 model refreshToken {

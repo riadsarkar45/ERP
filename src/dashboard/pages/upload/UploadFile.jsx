@@ -12,7 +12,7 @@ const UploadFile = () => {
 
     // Live progress state, driven by socket events
     const [jobId, setJobId] = useState(null);
-    const [progress, setProgress] = useState(null); // { phase, current, total, styleNo, rowsInGroup }
+    const [progress, setProgress] = useState(null); // { phase, current, total, jobNo, rowsInGroup }
 
     const fileInputRef = useRef(null);
     const axiosPublic = useAxiosPublic();
@@ -183,10 +183,10 @@ const UploadFile = () => {
         if (!progress) return 'Uploading & parsing…';
         if (progress.phase === 'starting') return 'Starting import…';
         if (progress.phase === 'inserting') {
-            return `Inserting style ${progress.current}/${progress.total} — ${progress.styleNo}`;
+            return `Inserting job ${progress.current}/${progress.total} — ${progress.jobNo}`;
         }
         if (progress.phase === 'error') {
-            return `Skipped style ${progress.styleNo} (error) — ${progress.current}/${progress.total}`;
+            return `Skipped job ${progress.jobNo} (error) — ${progress.current}/${progress.total}`;
         }
         return 'Processing…';
     };
@@ -395,7 +395,7 @@ const UploadFile = () => {
                             </div>
                             {progress?.rowsInGroup !== undefined && (
                                 <p className="text-xs text-gray-400 mt-1">
-                                    {progress.rowsInGroup} row(s) in this style
+                                    {progress.rowsInGroup} row(s) in this job
                                 </p>
                             )}
                         </div>
@@ -446,11 +446,11 @@ const UploadFile = () => {
                         <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div className="p-3 bg-blue-50 rounded-lg text-center">
                                 <p className="text-2xl font-bold text-blue-700">{summary.stylesCreated}</p>
-                                <p className="text-xs text-gray-600">Styles created</p>
+                                <p className="text-xs text-gray-600">Jobs created</p>
                             </div>
                             <div className="p-3 bg-indigo-50 rounded-lg text-center">
                                 <p className="text-2xl font-bold text-indigo-700">{summary.stylesUpdated}</p>
-                                <p className="text-xs text-gray-600">Styles updated</p>
+                                <p className="text-xs text-gray-600">Jobs updated</p>
                             </div>
                             <div className="p-3 bg-green-50 rounded-lg text-center">
                                 <p className="text-2xl font-bold text-green-700">{summary.rowsInserted}</p>
@@ -463,16 +463,16 @@ const UploadFile = () => {
                         </div>
                     )}
 
-                    {/* Per-style errors, if any */}
+                    {/* Per-job errors, if any */}
                     {summary && summary.errors.length > 0 && !loading && (
                         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                             <p className="text-sm font-semibold text-red-700 mb-2">
-                                {summary.errors.length} style(s) failed to import:
+                                {summary.errors.length} job(s) failed to import:
                             </p>
                             <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
                                 {summary.errors.map((e, i) => (
                                     <li key={i}>
-                                        <span className="font-mono">{e.style}</span>: {e.message}
+                                        <span className="font-mono">{e.jobNo}</span>: {e.message}
                                     </li>
                                 ))}
                             </ul>

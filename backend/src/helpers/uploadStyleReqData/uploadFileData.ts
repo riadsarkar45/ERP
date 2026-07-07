@@ -20,7 +20,7 @@ interface UploadSummary {
     stylesUpdated: number;
     rowsInserted: number;
     rowsSkipped: number;
-    errors: { style: string; message: string }[];
+    errors: { jobNo: string; message: string }[];
 }
 
 // Small helper so every emit site doesn't need its own null-check
@@ -30,23 +30,23 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
         console.warn(`⚠️ getIO() returned null/undefined — cannot emit '${event}'`, payload);
         return;
     }
-    console.log(`📡 Emitting `);
+    console.log(`📡 Emitting '${event}'`, payload);
     io.emit(event, payload);
 };
 
 // ── Main ──────────────────────────────────────────────────────────
 /**
  * Writes parsed Excel rows into Neon:
- *  - One StyleRequirement per unique `style` (upserted on styleNo)
+ *  - One StyleRequirement per unique `jobNo` (upserted on jobNo)
  *  - One StyleRequirementRow per source row, linked to that StyleRequirement
  *
  * Emits live progress over Socket.IO so the frontend can render a real
  * progress bar instead of a blind spinner:
- *   'upload-progress' — { jobId, current, total, styleNo, rowsInGroup }
+ *   'upload-progress' — { jobId, current, total, jobNo, rowsInGroup }
  *   'upload-complete' — { jobId, summary }
  *   'upload-error'    — { jobId, message }  (only for total failure)
  *
- * Rows with no `style` value are skipped since StyleRequirementRow
+ * Rows with no `jobNo` value are skipped since StyleRequirementRow
  * requires a parent StyleRequirement to attach to.
  */
 export const uploadDataFromFile = async (
@@ -62,63 +62,63 @@ export const uploadDataFromFile = async (
     };
 
     try {
-        // Group rows by styleNo so each style only triggers one upsert,
+        // Group rows by jobNo so each job only triggers one upsert,
         // not one per row.
-        const groupedByStyle = new Map<string, ParsedRow[]>();
+        const groupedByJob = new Map<string, ParsedRow[]>();
         for (const row of rows) {
-            if (!row.style) {
+            if (!row.jobNo) {
                 summary.rowsSkipped++;
                 continue;
             }
-            const bucket = groupedByStyle.get(row.style) ?? [];
+            const bucket = groupedByJob.get(row.jobNo) ?? [];
             bucket.push(row);
-            groupedByStyle.set(row.style, bucket);
+            groupedByJob.set(row.jobNo, bucket);
         }
 
-        const styleEntries = Array.from(groupedByStyle.entries());
-        const totalStyles = styleEntries.length;
+        const jobEntries = Array.from(groupedByJob.entries());
+        const totalJobs = jobEntries.length;
 
         emitProgress("upload-progress", {
             jobId,
             phase: "starting",
             current: 0,
-            total: totalStyles,
+            total: totalJobs,
         });
 
-        for (let i = 0; i < styleEntries.length; i++) {
-            const entry = styleEntries[i];
+        for (let i = 0; i < jobEntries.length; i++) {
+            const entry = jobEntries[i];
             if (!entry) continue; // guard for potential undefined from indexed access
-            const [styleNo, styleRows] = entry;
-            const first = styleRows[0];
+            const [jobNo, jobRows] = entry;
+            const first = jobRows[0];
             if (!first) continue;
 
             try {
                 const existing = await prisma.styleRequirement.findUnique({
-                    where: { styleNo },
+                    where: { jobNo },
                     select: { id: true },
                 });
 
                 await prisma.$transaction(async (tx) => {
                     const parent = await tx.styleRequirement.upsert({
-                        where: { styleNo },
+                        where: { jobNo },
                         update: {
                             salesContact: first.salesContractNo,
                             buyerName: first.buyer,
-                            jobNo: first.jobNo,
+                            styleNo: first.style,
                             poNo: first.poNo,
                         },
                         create: {
-                            styleNo,
+                            jobNo,
                             salesContact: first.salesContractNo,
                             buyerName: first.buyer,
-                            jobNo: first.jobNo,
+                            styleNo: first.style,
                             poNo: first.poNo,
                             processLoss: "0",
                         },
                     });
 
                     await tx.styleRequirementRow.createMany({
-                        data: styleRows.map((row) => ({
+                        data: jobRows.map((row) => ({
                             styleRequirementId: parent.id,
                             color: row.color,
                             composition: row.composition,
@@ -134,26 +134,31 @@ export const uploadDataFromFile = async (
                 } else {
                     summary.stylesCreated++;
                 }
-                summary.rowsInserted += styleRows.length;
+                summary.rowsInserted += jobRows.length;
 
                 emitProgress("upload-progress", {
                     jobId,
                     phase: "inserting",
                     current: i + 1,
-                    total: totalStyles,
-                    styleNo,
-                    rowsInGroup: styleRows.length,
+                    total: totalJobs,
+                    jobNo,
+                    rowsInGroup: jobRows.length,
                 });
             } catch (err) {
                 const message = err instanceof Error ? err.message : "Unknown error";
-                summary.errors.push({ style: styleNo, message });
+                summary.errors.push({ jobNo, message });
+
+                // Log per-row failures to the console too, not just the socket
+                // emit, so they're visible in Render logs even if no client
+                // is connected to receive them.
+                console.error(`❌ Failed to upsert job "${jobNo}":`, message);
 
                 emitProgress("upload-progress", {
                     jobId,
                     phase: "error",
                     current: i + 1,
-                    total: totalStyles,
-                    styleNo,
+                    total: totalJobs,
+                    jobNo,
                     message,
                 });
             }
