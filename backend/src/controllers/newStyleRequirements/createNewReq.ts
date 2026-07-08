@@ -20,7 +20,7 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
         await prisma.$transaction(async (tx) => {
 
             let styleId = null;
-            const findStyleName = await tx.styleRequirement.findUnique(
+            const findStyleName = await tx.styleRequirement.findFirst(
                 {
                     where: { styleNo: orderInfo.styleNo }
                 },

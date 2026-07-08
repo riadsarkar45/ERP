@@ -87,7 +87,7 @@ model StyleRequirement {
   buyerName    String
   jobNo        String                @unique
   poNo         String
-  styleNo      String                @unique
+  styleNo      String                
   processLoss  String
   rows         StyleRequirementRow[]
   sizes        sizes[]
