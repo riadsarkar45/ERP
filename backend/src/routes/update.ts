@@ -8,7 +8,7 @@ import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 
 const updateRouters = express.Router();
 
-updateRouters.patch("/update-order", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateJobs);
+updateRouters.patch("/update-order",  updateJobs);
 
 updateRouters.patch("/update-audit/:auditId/:status", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateAuditStatus);
 

@@ -36,6 +36,7 @@ const Sidebar = () => {
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
         { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
+        { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
     ];
 
     // Auto-open dropdown if current route is an order sub-route
@@ -54,6 +55,7 @@ const Sidebar = () => {
         if (path.includes('audits')) return { title: 'All Audits' };
         if (path.includes('cutting')) return { title: 'Daily Fabric Cutting Report' };
         if (path.includes('new-user')) return { title: 'Add New User' };
+        if (path.includes('party-wise-view')) return { title: 'Manage Party Wise View' };
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },

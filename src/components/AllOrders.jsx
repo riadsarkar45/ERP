@@ -223,7 +223,7 @@ const AllOrders = ({ orderType }) => {
             .then(data => {
                 if (data) setOrders(data);
             }
-        )
+            )
     }, [orderType, isUpdated]);
 
     // 🔥 2. Use the extracted function to get the final visible rows
@@ -363,12 +363,23 @@ const AllOrders = ({ orderType }) => {
                 { params: { yarnId, workOrderId } }
             );
             if (update.status === 200) {
-                const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-                const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+                // const res = await axiosPublic.get(`/api/work-order/${orderType}`);
+                // const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
+                //     params: { workOrderIds: jobId.join(',') }
+                // });
+                fetchData(`/api/work-order/${orderType}`)
+                    .then((data) => {
+                        setOrders(data.data)
+                    })
+
+                fetchData(`/api/deliveries/${orderType}`, {
                     params: { workOrderIds: jobId.join(',') }
-                });
-                setDeliveries(devs.data);
-                setOrders(res.data);
+                })
+                    .then((dev) => {
+                        setOrders(dev.data)
+                    })
+                // setDeliveries(devs.data);
+                // setOrders(res.data);
                 setChangedField(prev => {
                     const next = { ...prev };
                     delete next[yarnId];

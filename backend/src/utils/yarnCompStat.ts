@@ -6,70 +6,71 @@ export const calculateYarnCompStat = (orders: any[]) => {
             .filter((d: any) => d.deliveryType === type)
             .reduce((sum: number, d: any) => sum + Number(d.deliveryQty || 0), 0);
 
-    return orders.map(order => ({
-        ...order,
+    return orders
+        .filter(order => Array.isArray(order.workOrders) && order.workOrders.length > 0)
+        .map(order => ({
+            ...order,
 
-        workOrders: (order.workOrders || []).map((work: any) => ({
-            ...work,
+            workOrders: (order.workOrders || []).map((work: any) => ({
+                ...work,
 
-            compositions: (work.compositions || []).map((c: any) => {
+                compositions: (work.compositions || []).map((c: any) => {
 
-                // 1. FIND THE BOOKING COLOR: Match the composition and color from yarnDyeingJobs
-                const bookingColor = work.yarnDyeingJobs?.find(
-                    (ydj: any) => ydj.composition === c.composition && ydj.color === c.color
-                )?.color || c.color;
+                    // 1. FIND THE BOOKING COLOR: Match the composition and color from yarnDyeingJobs
+                    const bookingColor = work.yarnDyeingJobs?.find(
+                        (ydj: any) => ydj.composition === c.composition && ydj.color === c.color
+                    )?.color || c.color;
 
-                const deliveries = c.deliveries || [];
+                    const deliveries = c.deliveries || [];
 
-                const totalYarnDelivery = sumByType(deliveries, "Yarn Delivery");
-                const greyReceived = sumByType(deliveries, "Grey Received");
-                const totalGreyDelivery = sumByType(deliveries, "Grey Delivery");
-                const totalGreyReturnReceived = sumByType(deliveries, "Grey Return Received");
-                const totalGreyReceivedFromDyeing = sumByType(deliveries, "Grey Received From Dyeing");
-                const totalYarnReturn = sumByType(deliveries, "Yarn Return");
-                const totalFinishFabricReceived = sumByType(deliveries, "Finish Received");
-                const totalSentForCompacting = sumByType(deliveries, "Sent For Compacting");
-                const totalReceivedFromCompacting = sumByType(deliveries, "Received From Compacting");
-                const totalSentForAop = sumByType(deliveries, "Sent for AOP");
-                const totalReceivedForAop = sumByType(deliveries, "Received from AOP");
-                const totalYarnDeliveryYarnDye = sumByType(deliveries, "Yarn Delivery For Yarn Dye");
-                // 2. INJECT COLOR INTO DELIVERIES: Map over deliveries to add the booking color
-                const deliveriesWithColor2 = deliveries.map((d: any) => ({
-                    ...d,
-                    deliveryType: d.deliveryType,
-                    color: bookingColor
-                }));
+                    const totalYarnDelivery = sumByType(deliveries, "Yarn Delivery");
+                    const greyReceived = sumByType(deliveries, "Grey Received");
+                    const totalGreyDelivery = sumByType(deliveries, "Grey Delivery");
+                    const totalGreyReturnReceived = sumByType(deliveries, "Grey Return Received");
+                    const totalGreyReceivedFromDyeing = sumByType(deliveries, "Grey Received From Dyeing");
+                    const totalYarnReturn = sumByType(deliveries, "Yarn Return");
+                    const totalFinishFabricReceived = sumByType(deliveries, "Finish Received");
+                    const totalSentForCompacting = sumByType(deliveries, "Sent For Compacting");
+                    const totalReceivedFromCompacting = sumByType(deliveries, "Received From Compacting");
+                    const totalSentForAop = sumByType(deliveries, "Sent for AOP");
+                    const totalReceivedForAop = sumByType(deliveries, "Received from AOP");
+                    const totalYarnDeliveryYarnDye = sumByType(deliveries, "Yarn Delivery For Yarn Dye");
 
-                const YarnDeliveryWithColorDeliveryType: Record<string, number> = {};
-                deliveriesWithColor2.forEach((ele: any) => {
-                    if (ele.color === bookingColor) {
-                        const key = ele.deliveryType.replace(/\s+/g, "")
-                        YarnDeliveryWithColorDeliveryType[key] =
-                            (YarnDeliveryWithColorDeliveryType[key] || 0) + ele.deliveryQty;
-                    }
-                });
+                    // 2. INJECT COLOR INTO DELIVERIES: Map over deliveries to add the booking color
+                    const deliveriesWithColor2 = deliveries.map((d: any) => ({
+                        ...d,
+                        deliveryType: d.deliveryType,
+                        color: bookingColor
+                    }));
 
-                // console.log(YarnDeliveryWithColorDeliveryType, "test purpose");
+                    const YarnDeliveryWithColorDeliveryType: Record<string, number> = {};
+                    deliveriesWithColor2.forEach((ele: any) => {
+                        if (ele.color === bookingColor) {
+                            const key = ele.deliveryType.replace(/\s+/g, "")
+                            YarnDeliveryWithColorDeliveryType[key] =
+                                (YarnDeliveryWithColorDeliveryType[key] || 0) + ele.deliveryQty;
+                        }
+                    });
 
-                return {
-                    ...c,
-                    yarnDeliveriesWithColor: YarnDeliveryWithColorDeliveryType, // <-- Return the updated deliveries array
-                    totalYarnDelivery,
-                    totalYarnReturn,
-                    greyReceived,
-                    totalGreyDelivery,
-                    totalGreyReceivedFromDyeing,
-                    totalGreyReturnReceived,
-                    totalFinishFabricReceived,
-                    totalSentForCompacting,
-                    totalReceivedFromCompacting,
-                    totalSentForAop,
-                    totalReceivedForAop,
-                    totalYarnDeliveryYarnDye
-                };
-            })
-        }))
-    }));
+                    return {
+                        ...c,
+                        yarnDeliveriesWithColor: YarnDeliveryWithColorDeliveryType,
+                        totalYarnDelivery,
+                        totalYarnReturn,
+                        greyReceived,
+                        totalGreyDelivery,
+                        totalGreyReceivedFromDyeing,
+                        totalGreyReturnReceived,
+                        totalFinishFabricReceived,
+                        totalSentForCompacting,
+                        totalReceivedFromCompacting,
+                        totalSentForAop,
+                        totalReceivedForAop,
+                        totalYarnDeliveryYarnDye
+                    };
+                })
+            }))
+        }));
 };
 
 export const calculateOrdersForStyleSummary = (styles: any[]) => {
@@ -158,3 +159,60 @@ export const findDeliveryDetail = async (id: number) => {
 
     return detail;
 }
+
+
+
+/**
+ * Returns a breakdown of total delivered qty per deliveryType, per style,
+ * per row. deliveryType is treated as fully dynamic — whatever strings
+ * exist in the data become the keys, nothing is hardcoded.
+ *
+ * Output shape per style:
+ *   {
+ *     id, styleNo, ... (other style fields),
+ *     deliveryBreakdown: [
+ *       { rowId, color, composition, byDeliveryType: { "Yarn Delivery": 450, "Dyeing Delivery": 120 } },
+ *       ...
+ *     ]
+ *   }
+ */
+/**
+ * Sums deliveryQty grouped by deliveryType, across ALL workOrders and
+ * compositions for a style — no row/color matching involved at all.
+ *
+ * Output per style:
+ *   { id, styleNo, ... other style fields, deliveryTotals: { "Yarn Delivery": 450, "Dyeing Delivery": 120 } }
+ */
+export const getDeliveryBreakdownByType = (styles: any[]) => {
+    return styles.map((s: any) => {
+        const workOrders = s.workOrders ?? [];
+        const deliveryTotals: Record<string, number> = {};
+
+        workOrders.forEach((w: any) => {
+            w.compositions?.forEach((c: any) => {
+                (c.deliveries ?? []).forEach((d: any) => {
+                    const type = d.deliveryType?.trim().replace(/\s+/g, "") || "Unknown";
+                    deliveryTotals[type] = (deliveryTotals[type] ?? 0) + (d.deliveryQty || 0);
+                });
+            });
+        });
+
+        return { ...s, deliveryTotals };
+    });
+};
+
+/**
+ * Collects every distinct factoryName across all workOrders in all styles.
+ */
+export const getUniqueFactoryNames = (styles: any[]): string[] => {
+    const names = new Set<string>();
+
+    styles.forEach((s: any) => {
+        (s.workOrders ?? []).forEach((w: any) => {
+            const name = w.factoryName?.trim() || "Unknown";
+            names.add(name);
+        });
+    });
+
+    return Array.from(names);
+};

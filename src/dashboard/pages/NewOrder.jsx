@@ -5,6 +5,7 @@ import Input from "../../components/Input";
 import Toast from "../../components/Toast";
 import useAxiosPublic from "../../hooks/Axios";
 import { useParams } from "react-router-dom";
+import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 
 const defaultRow = () => ({
     id: Date.now() + Math.random(),
@@ -36,13 +37,13 @@ const NewOrder = () => {
         lotNo: "",
         unitPrice: ""
     });
-
+    const axiosPrivate = useAxiosPrivate();
     const axios = useAxiosPublic();
 
     useEffect(() => {
         const styleReq = async () => {
             if (!jobNumber) return;
-            const req = await axios.get(`/api/styles/${jobNumber}`);
+            const req = await axiosPrivate.get(`/api/styles/${jobNumber}`);
             setStyleData(req.data.data);
             setRows(req.data.data[0]?.rows.map(row => ({
                 ...row,

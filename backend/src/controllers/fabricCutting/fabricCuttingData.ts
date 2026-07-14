@@ -7,7 +7,7 @@ export const cuttingDataUpdate = async (req: Request, res: Response) => {
 
     try {
         await prisma.$transaction(async (tx) => {
-            const findStyleId = await tx.styleRequirement.findUnique(
+            const findStyleId = await tx.styleRequirement.findMany(
                 {
                     where: { styleNo: styleInfos.styleNo as string }
                 }
@@ -17,19 +17,19 @@ export const cuttingDataUpdate = async (req: Request, res: Response) => {
                 throw new Error("Style not found");
             }
 
-            await tx.sizes.createMany(
-                {
-                    data: rows.map((row: any) => ({
-                        sizeName: row.size,
-                        styleId: Number(findStyleId.id),
-                        cuttingStyleId: Number(findStyleId.id),
-                        styleRequirementId: Number(findStyleId.id),
-                        createdAt: new Date(),
-                    }), {
-                        timeout: 15000
-                    })
-                }
-            )
+            // await tx.sizes.createMany(
+            //     {
+            //         data: rows.map((row: any) => ({
+            //             sizeName: row.size,
+            //             styleId: Number(findStyleId.id),
+            //             cuttingStyleId: Number(findStyleId.id),
+            //             styleRequirementId: Number(findStyleId.id),
+            //             createdAt: new Date(),
+            //         }), {
+            //             timeout: 15000
+            //         })
+            //     }
+            // )
 
 
         }, {

@@ -30,13 +30,17 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
         console.warn(`⚠️ getIO() returned null/undefined — cannot emit '${event}'`, payload);
         return;
     }
-    console.log(`📡 Emitting '${event}'`, payload);
     io.emit(event, payload);
 };
+
+// Normalizes jobNo formatting so variants like "SM26-3619/JAN" and
+// "SM26-3619-JAN" always resolve to the same StyleRequirement / jobs row.
+const normalizeJobNo = (jobNo: string): string => jobNo.trim().replace(/\//g, "-");
 
 // ── Main ──────────────────────────────────────────────────────────
 /**
  * Writes parsed Excel rows into Neon:
+ *  - One `jobs` row per unique `jobNo` (upserted on jobNo)
  *  - One StyleRequirement per unique `jobNo` (upserted on jobNo)
  *  - One StyleRequirementRow per source row, linked to that StyleRequirement
  *
@@ -70,9 +74,10 @@ export const uploadDataFromFile = async (
                 summary.rowsSkipped++;
                 continue;
             }
-            const bucket = groupedByJob.get(row.jobNo) ?? [];
+            const jobNo = normalizeJobNo(row.jobNo);
+            const bucket = groupedByJob.get(jobNo) ?? [];
             bucket.push(row);
-            groupedByJob.set(row.jobNo, bucket);
+            groupedByJob.set(jobNo, bucket);
         }
 
         const jobEntries = Array.from(groupedByJob.entries());
@@ -99,6 +104,15 @@ export const uploadDataFromFile = async (
                 });
 
                 await prisma.$transaction(async (tx) => {
+                    // Ensure a `jobs` row exists for this jobNo. This model has
+                    // no extra fields to sync, so create-if-missing is enough —
+                    // no `update` needed on conflict.
+                    await tx.jobs.upsert({
+                        where: { jobNo },
+                        update: {},
+                        create: { jobNo },
+                    });
+
                     const parent = await tx.styleRequirement.upsert({
                         where: { jobNo },
                         update: {

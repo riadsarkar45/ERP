@@ -20,6 +20,7 @@ import UploadFile from "../dashboard/pages/upload/UploadFile";
 import Login from "../dashboard/pages/users/login/Login";
 import AddNewUser from "../dashboard/pages/users/addNewUser/AddNewUser";
 import ProtectedRoute from "../dashboard/auth/ProtectedRoute";
+import PartyWiseView from "../dashboard/pages/partyWiseView/PartyWiseView";
 
 const routers = createBrowserRouter([
     {
@@ -104,6 +105,15 @@ const routers = createBrowserRouter([
                         element: (
                             <ProtectedRoute allowedRoles={["SUPER ADMIN", "ADMIN"]}>
                                 <AddNewUser />
+                            </ProtectedRoute>
+                        )
+                    },
+                    {
+                        // ADJUST allowed roles if AUDITOR (or another role) should also manage users
+                        path: "party-wise-view",
+                        element: (
+                            <ProtectedRoute allowedRoles={["SUPER ADMIN", "ADMIN"]}>
+                                <PartyWiseView/>
                             </ProtectedRoute>
                         )
                     }

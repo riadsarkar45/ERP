@@ -21,7 +21,7 @@ export const createNewJob = async (req: Request, res: Response) => {
 
     console.log(req.body);
 
-    const findStyleNo = await prisma.styleRequirement.findUnique({
+    const findStyleNo = await prisma.styleRequirement.findMany({
         where: { styleNo: req.body.styleNo }
     });
 
@@ -48,7 +48,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                 factoryName: req.body.factoryName,
                 orderType,
                 jobId,
-                styleRequirementId: findStyleNo.id,
+                // styleRequirementId: findStyleNo.id,
                 compositions: {
                     createMany: {
                         data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({

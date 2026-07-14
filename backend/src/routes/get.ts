@@ -11,6 +11,7 @@ import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
+import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 
 const getRouters = express.Router();
 
@@ -34,6 +35,10 @@ getRouters.get("/deliveries/:orderType", apiLimiter, authenticate, authorize("SU
 
 getRouters.delete("/delete-delivery/:deliveryId", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deleteChallanFromDelivery)
 
-getRouters.get("/glance-report",  authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"),GlanceReport);
+getRouters.get("/glance-report", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), GlanceReport);
+
+getRouters.get("/party-view-report/:factoryName", partyViewData);
+
+getRouters.get("/detail-party-report/:factoryName/:orderType", partyData);
 
 export default getRouters;
