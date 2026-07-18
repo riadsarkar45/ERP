@@ -12,14 +12,14 @@ import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
     "SALES CONTACT NO", "BUYER", "JOB NO", "STYLE", "PO NO", "COLOR", "COMPOSITION",
-    "FINISH DIA", "ORDER QTY", "1st BOOKING", "FINISH REQUIRED QTY", "ADDITIONAL BOOKING",
+    "FINISH DIA", "ORDER QTY", "1st BOOKING", "PROCESS LOSS %", "FINISH REQUIRED QTY", "ADDITIONAL BOOKING",
     "REQUIRED YARN QTY", "KNITTING WORK ORDER QTY",
     "SHORT & EXCESS", "YARN DELIVERY", "SHORT & EXCESS (+/-)",
     "RAW YARN DELIVERY FOR DYED", "YARN RECEIVED AFTER DYED",
     "PARTY STOCK (SHORT & EXCESS)", "TOTAL KNITTING (GREY)", "RETURN YARN RECEIVED",
     "BALANCE (+/-)", "GREY DELIVERY FOR DYEING", "GREY RETURN FROM DYEING",
     "GREY RECEIVED FROM DYEING",
-    "FINISH RECEIVED FROM DYEING", "GREY BALANCE (+/-)", "PROCESS LOSS %",
+    "FINISH RECEIVED FROM DYEING", "GREY BALANCE (+/-)",
     "FINISH DELIVERY FROM AOP", "FINISH RECEIVED FROM AOP", "AOP FAB. BALANCE (+/-)",
     "AOP PROCESS LOSS (%)", "SENT FOR RE-PROCESS", "RETURN RCVD",
     "RECEIVED AFTER RE-PROCESS (GREY)", "RECEIVED AFTER RE-PROCESS (FINISH)",
@@ -907,6 +907,13 @@ export default function Summary() {
                                         </div>
                                     </td>
 
+                                     {/* 28. PROCESS LOSS % */}
+                                    <td className="p-0 align-top" style={getCellStyle(27)}>
+                                        <div className="divide-y divide-gray-200">
+                                            {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{row.processLoss || 0}%</div>)}
+                                        </div>
+                                    </td>
+
                                     {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-gray-200">
@@ -1070,12 +1077,6 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 28. PROCESS LOSS % */}
-                                    <td className="p-0 align-top" style={getCellStyle(27)}>
-                                        <div className="divide-y divide-gray-200">
-                                            {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{row.processLoss || 0}%</div>)}
-                                        </div>
-                                    </td>
 
                                     {/* 29. FINISH DELIVERY FROM AOP */}
                                     {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_for_AOP', 28)}

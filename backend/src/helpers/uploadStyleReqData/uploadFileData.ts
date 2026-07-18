@@ -13,6 +13,8 @@ interface ParsedRow {
     finishDia: string;
     orderQty: number;
     finishFabricRequired: number;
+    processLoss: number;
+    additional: number;
 }
 
 interface UploadSummary {
@@ -120,6 +122,7 @@ export const uploadDataFromFile = async (
                             buyerName: first.buyer,
                             styleNo: first.style,
                             poNo: first.poNo,
+                            processLoss:Number(first.processLoss) || 0,
                         },
                         create: {
                             jobNo,
@@ -127,7 +130,7 @@ export const uploadDataFromFile = async (
                             buyerName: first.buyer,
                             styleNo: first.style,
                             poNo: first.poNo,
-                            processLoss: "0",
+                            processLoss:Number(first.processLoss) || 0,
                         },
                     });
 
@@ -139,6 +142,7 @@ export const uploadDataFromFile = async (
                             finishDia: row.finishDia,
                             orderQty: row.orderQty,
                             finishRequiredQty: row.finishFabricRequired,
+                            additional: Number(row.additional)
                         })),
                     });
                 });

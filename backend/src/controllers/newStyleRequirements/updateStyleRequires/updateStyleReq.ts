@@ -94,11 +94,11 @@ export const updateStyleReq = async (req: Request, res: Response) => {
             await prisma.$transaction([
                 prisma.styleRequirementRow.update({
                     where: { id: Number(rowId) },
-                    data: { additional: additional },
+                    data: { additional: Number(additional) },
                 }),
                 prisma.composition.updateMany({
                     where: { styleRequirementRowId: Number(rowId) },
-                    data: { additional: additional },
+                    data: { additional: Number(additional)  },
                 }),
                 prisma.composition.updateMany({
                     where: {
@@ -107,7 +107,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                         composition: targetRow.composition,
                         color: targetRow.color,
                     },
-                    data: { additional: additional },
+                    data: { additional: Number(additional) },
                 }),
             ]);
 

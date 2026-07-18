@@ -65,7 +65,7 @@ model Composition {
   composition  String
   unitePrice   Float
   color        String
-  additional   String       @default("0")
+  additional   Int       @default(0)
   orderQty     Int
   workOrderQty Int
   workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
@@ -88,7 +88,7 @@ model StyleRequirement {
   jobNo        String                @unique
   poNo         String
   styleNo      String                
-  processLoss  String
+  processLoss  Float
   rows         StyleRequirementRow[]
   sizes        sizes[]
   workOrders   WorkOrder[]
@@ -103,7 +103,7 @@ model StyleRequirementRow {
   finishDia          String
   orderQty           Int
   finishRequiredQty  Float
-  additional         String           @default("0")
+  additional         Int           @default(0)
 
   // NEW: back-relation so a row can see all Composition records derived from it
   compositions Composition[]

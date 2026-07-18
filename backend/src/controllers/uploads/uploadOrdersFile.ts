@@ -32,6 +32,8 @@ interface ColumnIndices {
     finishDia: number;
     orderQty: number;
     finishFabricRequired: number;
+    processLoss: number;
+    additional: number;
 }
 
 interface ParsedRow {
@@ -45,6 +47,8 @@ interface ParsedRow {
     finishDia: string;
     orderQty: number;
     finishFabricRequired: number;
+    processLoss: number;
+    additional: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -105,6 +109,8 @@ const KEYWORDS_FOR_SCORING = [
     "color",
     "composition",
     "finish dia",
+    "process loss",
+    "additional"
 ];
 
 const scoreHeaderRow = (row: unknown[]): number => {
@@ -158,6 +164,8 @@ const buildColIndex = (headers: unknown[]): ColumnIndices => ({
     finishDia: findPartialCol(headers, "finish dia"),
     orderQty: findPartialCol(headers, "order qty"),
     finishFabricRequired: findPartialCol(headers, "finish fabric required"),
+    processLoss: findExactCol(headers, "process loss"),
+    additional: findPartialCol(headers, "additional")
 });
 
 const parseRow = (row: unknown[], colIndex: ColumnIndices): ParsedRow => ({
@@ -171,6 +179,8 @@ const parseRow = (row: unknown[], colIndex: ColumnIndices): ParsedRow => ({
     finishDia: asString(getCellValue(row, colIndex.finishDia)),
     orderQty: toNumber(getCellValue(row, colIndex.orderQty)),
     finishFabricRequired: toNumber(getCellValue(row, colIndex.finishFabricRequired)),
+    additional: toNumber(getCellValue(row, colIndex.additional)),
+    processLoss: Math.round(toNumber(getCellValue(row, colIndex.processLoss)) * 100 * 100) / 100
 });
 
 // ── Streaming Sheet Processor ─────────────────────────────────────
@@ -179,7 +189,7 @@ async function processSheet(worksheetReader: any) {
     let headers: unknown[] = [];
     let colIndex: ColumnIndices | null = null;
     let parsedRows: ParsedRow[] = [];
-    
+
     const rowBuffer: unknown[][] = [];
     const SCAN_LIMIT = 10;
     const MIN_SCORE = 3;
@@ -193,7 +203,7 @@ async function processSheet(worksheetReader: any) {
                 denseRow.push(row.values[i]);
             }
         }
-        
+
         if (headerRowIndex === -1) {
             rowBuffer.push(denseRow);
             if (rowBuffer.length >= SCAN_LIMIT) {
@@ -202,7 +212,7 @@ async function processSheet(worksheetReader: any) {
                     headerRowIndex = foundIdx;
                     headers = buildMergedHeaders(rowBuffer, headerRowIndex);
                     colIndex = buildColIndex(headers);
-                    
+
                     // Process any data rows that were already buffered after the header
                     for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
                         const bufferedRow = rowBuffer[i] ?? [];
@@ -215,7 +225,7 @@ async function processSheet(worksheetReader: any) {
             parsedRows.push(parseRow(denseRow, colIndex!));
         }
     }
-    
+
     // Fallback if header wasn't found in the first 10 rows but exists later
     if (headerRowIndex === -1 && rowBuffer.length > 0) {
         const foundIdx = findHeaderRowIndex(rowBuffer, rowBuffer.length, MIN_SCORE);
@@ -228,7 +238,7 @@ async function processSheet(worksheetReader: any) {
             }
         }
     }
-    
+
     return { parsedRows, headerFound: headerRowIndex !== -1 };
 }
 
@@ -253,7 +263,7 @@ export const fileUpload = async (
         const possibleNames = ["Styling Requirement", "Styling Requirement"];
         let actualSheetName = "";
         let isFirstSheet = true;
-        
+
         let parsedRows: ParsedRow[] = [];
         let headerFound = false;
 
@@ -261,7 +271,7 @@ export const fileUpload = async (
         for await (const worksheetReader of workbookReader) {
             const sheetName = (worksheetReader as any).name || "";
             const isTarget = possibleNames.includes(sheetName);
-            
+
             if (isTarget) {
                 actualSheetName = sheetName;
                 const result = await processSheet(worksheetReader);
