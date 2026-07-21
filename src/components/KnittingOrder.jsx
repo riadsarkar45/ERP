@@ -184,7 +184,7 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
                                         {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
                                         ) : unt.unitePrice || "-"} 
-                                        ${"id->"}
+                                        
                                     </div>
                                 )))}
                             </td>

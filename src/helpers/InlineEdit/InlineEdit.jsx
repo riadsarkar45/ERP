@@ -40,7 +40,7 @@ const InlineEdit = () => {
             const res = await axiosSecure.patch(`/api/update-work-order/${isEdit.rowId}`, dataToUpdate);
             if (res.data === 'success') {
                 setIsUpdated("success")
-                // console.log("success");
+                console.log("success");
             }
         } catch (err) {
             console.error(err);
