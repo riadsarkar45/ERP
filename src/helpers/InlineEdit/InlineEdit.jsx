@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import useAxiosPublic from '../../hooks/Axios';
+// import useAxiosPublic from '../../hooks/Axios';
+import useAxiosPrivate from '../../hooks/UseAxiosPrivate';
 
 const InlineEdit = () => {
     const [isEdit, setIsEdit] = useState({ isEditing: false, currentValue: "", rowId: "", updatedFieldName: "", compId: "" })
     const [changedField, setChangedField] = useState({ currentValue: "", name: "" })
     const [isUpdated, setIsUpdated] = useState("")
-    const axiosPublic = useAxiosPublic();
+    // const axiosPublic = useAxiosPublic();
+    const axiosSecure = useAxiosPrivate();
     const handleInlineEdit = (rowId, currentValue, updateTable, updatedFieldName, compId) => {
         console.log(rowId, currentValue, updateTable, updatedFieldName, compId, "compId");
         setIsEdit({ rowId: rowId, currentValue: currentValue, updatedFieldName: updatedFieldName, compId: compId })
@@ -34,7 +36,8 @@ const InlineEdit = () => {
                 updatedFieldName: isEdit.updatedFieldName,
                 compId: isEdit.compId
             };
-            const res = await axiosPublic.patch(`/api/update-work-order/${isEdit.rowId}`, dataToUpdate);
+            console.log(dataToUpdate);
+            const res = await axiosSecure.patch(`/api/update-work-order/${isEdit.rowId}`, dataToUpdate);
             if (res.data === 'success') {
                 setIsUpdated("success")
                 // console.log("success");

@@ -180,10 +180,11 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
                             {/* COL 9 — UNIT PRICE */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === wo.id ? (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
-                                        ) : unt.unitePrice || "-"}
+                                        ) : unt.unitePrice || "-"} 
+                                        ${"id->"}
                                     </div>
                                 )))}
                             </td>
