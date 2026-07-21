@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileData";
+import { uploadKWODataFromFile } from "../../helpers/uploadStyleReqData/uploadWorkOrder";
 
 // ── Type Definitions ──────────────────────────────────────────────
 interface MulterFile {
@@ -17,24 +18,7 @@ interface MulterFile {
     stream?: NodeJS.ReadableStream;
 }
 
-type MulterRequest = Request & {
-    file?: MulterFile;
-};
-
-interface ColumnIndices {
-    salesContractNo: number;
-    buyer: number;
-    jobNo: number;
-    poNo: number;
-    style: number;
-    color: number;
-    composition: number;
-    finishDia: number;
-    orderQty: number;
-    finishFabricRequired: number;
-    processLoss: number;
-    additional: number;
-}
+type MulterRequest = Request & { file?: MulterFile };
 
 interface ParsedRow {
     salesContractNo: string;
@@ -51,25 +35,70 @@ interface ParsedRow {
     additional: number;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
+interface StyleReqColumnIndices {
+    salesContractNo: number;
+    buyer: number;
+    jobNo: number;
+    poNo: number;
+    style: number;
+    color: number;
+    composition: number;
+    finishDia: number;
+    orderQty: number;
+    finishFabricRequired: number;
+    processLoss: number;
+    additional: number;
+}
 
+interface KWOParsedRow {
+    workOrderDate: string;
+    workOrderNo: string;
+    month: string;
+    salesContractNo: string;
+    buyer: string;
+    jobNo: string;
+    poNo: string;
+    style: string;
+    color: string;
+    composition: string;
+    knittingFactoryName: string;
+    knittingWorkOrderQty: number;
+    knittingPricePerKg: number;
+}
+
+interface KWOColumnIndices {
+    workOrderDate: number;
+    workOrderNo: number;
+    month: number;
+    salesContractNo: number;
+    buyer: number;
+    jobNo: number;
+    poNo: number;
+    style: number;
+    color: number;
+    composition: number;
+    knittingFactoryName: number;
+    knittingWorkOrderQty: number;
+    knittingPricePerKg: number;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
 const getCellValue = (row: unknown[], index: number): unknown => {
     if (!Array.isArray(row) || index < 0 || index >= row.length) return null;
     return row[index];
 };
 
-// Enhanced to handle exceljs specific objects (Rich Text, Formulas, Dates)
 const asString = (val: unknown): string => {
     if (val === null || val === undefined) return "";
     if (typeof val === "string") return val.trim();
     if (val instanceof Date) return val.toISOString().split('T')[0] ?? "";
     if (typeof val === "object" && val !== null) {
-        const obj = val as any;
+        const obj = val as Record<string, any>;
         if (obj.richText && Array.isArray(obj.richText)) {
             return obj.richText.map((rt: any) => rt.text || "").join("").trim();
         }
         if (obj.text !== undefined) return String(obj.text).trim();
-        if (obj.result !== undefined) return String(obj.result).trim(); // Formula results
+        if (obj.result !== undefined) return String(obj.result).trim();
     }
     return String(val).trim();
 };
@@ -79,7 +108,7 @@ const toNumber = (val: unknown): number => {
     if (typeof val === "number") return val;
     if (val instanceof Date) return 0;
     if (typeof val === "object" && val !== null) {
-        const obj = val as any;
+        const obj = val as Record<string, any>;
         if (obj.result !== undefined) return toNumber(obj.result);
         if (obj.text !== undefined) return toNumber(obj.text);
     }
@@ -88,88 +117,77 @@ const toNumber = (val: unknown): number => {
     return isNaN(num) ? 0 : num;
 };
 
-const findExactCol = (headers: unknown[], name: string): number => {
-    return headers.findIndex(
-        (h: unknown) => asString(h).toLowerCase() === name.toLowerCase()
-    );
-};
-
 const findPartialCol = (headers: unknown[], keyword: string): number => {
-    return headers.findIndex((h: unknown) =>
-        asString(h).toLowerCase().includes(keyword.toLowerCase())
-    );
+    return headers.findIndex((h: unknown) => asString(h).toLowerCase().includes(keyword.toLowerCase()));
 };
 
-const KEYWORDS_FOR_SCORING = [
-    "sales contract",
-    "buyer",
-    "job no",
-    "po no",
-    "style",
-    "color",
-    "composition",
-    "finish dia",
-    "process loss",
-    "additional"
-];
-
-const scoreHeaderRow = (row: unknown[]): number => {
-    if (!Array.isArray(row)) return 0;
-    return KEYWORDS_FOR_SCORING.filter((kw) =>
-        row.some((cell) => asString(cell).toLowerCase().includes(kw))
-    ).length;
+const buildMergedHeaders = (rawData: unknown[][], headerRowIndex: number): unknown[] => {
+    const fieldHeaders: unknown[] = rawData[headerRowIndex] ?? [];
+    const sectionHeaders: unknown[] = headerRowIndex > 0 ? rawData[headerRowIndex - 1] ?? [] : [];
+    return fieldHeaders.map((cell, idx) => (asString(cell) ? cell : sectionHeaders[idx]));
 };
 
-const findHeaderRowIndex = (
-    rows: unknown[][],
-    scanLimit = 10,
-    minScore = 3
-): number => {
-    let bestRow = -1;
-    let bestScore = 0;
+async function scanForHeaderRow(
+    worksheetReader: any,
+    keywords: string[],
+    minScore: number,
+    scanLimit: number
+): Promise<{ rowBuffer: unknown[][]; headerRowIndex: number }> {
+    const rowBuffer: unknown[][] = [];
+    let headerRowIndex = -1;
 
-    const limit = Math.min(scanLimit, rows.length);
-    for (let i = 0; i < limit; i++) {
-        const score = scoreHeaderRow(rows[i] ?? []);
-        if (score > bestScore) {
-            bestScore = score;
-            bestRow = i;
+    const scoreRow = (row: unknown[]): number => {
+        if (!Array.isArray(row)) return 0;
+        return keywords.filter((kw) => row.some((cell) => asString(cell).toLowerCase().includes(kw))).length;
+    };
+
+    for await (const row of worksheetReader) {
+        const denseRow: unknown[] = [];
+        if (Array.isArray(row.values)) {
+            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
+        }
+        rowBuffer.push(denseRow);
+
+        if (headerRowIndex === -1 && rowBuffer.length >= scanLimit) {
+            let bestRow = -1, bestScore = 0;
+            for (let i = 0; i < rowBuffer.length; i++) {
+                const score = scoreRow(rowBuffer[i] ?? []);
+                if (score > bestScore) { bestScore = score; bestRow = i; }
+            }
+            if (bestScore >= minScore) headerRowIndex = bestRow;
         }
     }
 
-    return bestScore >= minScore ? bestRow : -1;
-};
+    if (headerRowIndex === -1 && rowBuffer.length > 0) {
+        let bestRow = -1, bestScore = 0;
+        for (let i = 0; i < rowBuffer.length; i++) {
+            const score = scoreRow(rowBuffer[i] ?? []);
+            if (score > bestScore) { bestScore = score; bestRow = i; }
+        }
+        if (bestScore >= minScore) headerRowIndex = bestRow;
+    }
 
-const buildMergedHeaders = (
-    rawData: unknown[][],
-    headerRowIndex: number
-): unknown[] => {
-    const fieldHeaders: unknown[] = rawData[headerRowIndex] ?? [];
-    const sectionHeaders: unknown[] =
-        headerRowIndex > 0 ? rawData[headerRowIndex - 1] ?? [] : [];
+    return { rowBuffer, headerRowIndex };
+}
 
-    return fieldHeaders.map((cell, idx) =>
-        asString(cell) ? cell : sectionHeaders[idx]
-    );
-};
-
-const buildColIndex = (headers: unknown[]): ColumnIndices => ({
+// ── Style Requirement Sheet Parsing ───────────────────────────────
+const buildStyleReqColIndex = (headers: unknown[]): StyleReqColumnIndices => ({
     salesContractNo: findPartialCol(headers, "sales contract"),
-    buyer: findExactCol(headers, "buyer"),
+    buyer: findPartialCol(headers, "buyer"),
     jobNo: findPartialCol(headers, "job no"),
     poNo: findPartialCol(headers, "po no"),
-    style: findExactCol(headers, "style"),
-    color: findExactCol(headers, "color"),
-    composition: findExactCol(headers, "composition"),
+    style: findPartialCol(headers, "style"),
+    color: findPartialCol(headers, "color"),
+    composition: findPartialCol(headers, "composition"),
     finishDia: findPartialCol(headers, "finish dia"),
     orderQty: findPartialCol(headers, "order qty"),
-    finishFabricRequired: findPartialCol(headers, "finish fabric required"),
-    processLoss: findExactCol(headers, "process loss"),
-    additional: findPartialCol(headers, "additional")
+    finishFabricRequired: findPartialCol(headers, "finish fabric"),
+    processLoss: findPartialCol(headers, "process loss"),
+    additional: findPartialCol(headers, "additional"),
 });
 
-const parseRow = (row: unknown[], colIndex: ColumnIndices): ParsedRow => ({
-    salesContractNo: asString(getCellValue(row, colIndex.salesContractNo)) || "N/A",
+const parseStyleReqRow = (row: unknown[], colIndex: StyleReqColumnIndices): ParsedRow => ({
+    salesContractNo: asString(getCellValue(row, colIndex.salesContractNo)),
     buyer: asString(getCellValue(row, colIndex.buyer)),
     jobNo: asString(getCellValue(row, colIndex.jobNo)),
     poNo: asString(getCellValue(row, colIndex.poNo)),
@@ -179,74 +197,89 @@ const parseRow = (row: unknown[], colIndex: ColumnIndices): ParsedRow => ({
     finishDia: asString(getCellValue(row, colIndex.finishDia)),
     orderQty: toNumber(getCellValue(row, colIndex.orderQty)),
     finishFabricRequired: toNumber(getCellValue(row, colIndex.finishFabricRequired)),
+    processLoss: toNumber(getCellValue(row, colIndex.processLoss)),
     additional: toNumber(getCellValue(row, colIndex.additional)),
-    processLoss: Math.round(toNumber(getCellValue(row, colIndex.processLoss)) * 100 * 100) / 100
 });
 
-// ── Streaming Sheet Processor ─────────────────────────────────────
-async function processSheet(worksheetReader: any) {
-    let headerRowIndex = -1;
-    let headers: unknown[] = [];
-    let colIndex: ColumnIndices | null = null;
-    let parsedRows: ParsedRow[] = [];
+async function processStyleReqSheet(worksheetReader: any) {
+    const STYLE_REQ_KEYWORDS = ["sales contract", "buyer", "job no", "po no", "style", "color", "composition"];
+    const MIN_SCORE = 4;
+    const SCAN_LIMIT = 15;
 
-    const rowBuffer: unknown[][] = [];
-    const SCAN_LIMIT = 10;
-    const MIN_SCORE = 3;
+    const { rowBuffer, headerRowIndex } = await scanForHeaderRow(worksheetReader, STYLE_REQ_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
 
-    // Stream row by row
-    for await (const row of worksheetReader) {
-        // row.values is a sparse array where index 0 is undefined in exceljs
-        const denseRow: unknown[] = [];
-        if (Array.isArray(row.values)) {
-            for (let i = 1; i < row.values.length; i++) {
-                denseRow.push(row.values[i]);
-            }
-        }
-
-        if (headerRowIndex === -1) {
-            rowBuffer.push(denseRow);
-            if (rowBuffer.length >= SCAN_LIMIT) {
-                const foundIdx = findHeaderRowIndex(rowBuffer, SCAN_LIMIT, MIN_SCORE);
-                if (foundIdx !== -1) {
-                    headerRowIndex = foundIdx;
-                    headers = buildMergedHeaders(rowBuffer, headerRowIndex);
-                    colIndex = buildColIndex(headers);
-
-                    // Process any data rows that were already buffered after the header
-                    for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
-                        const bufferedRow = rowBuffer[i] ?? [];
-                        parsedRows.push(parseRow(bufferedRow, colIndex));
-                    }
-                }
-            }
-        } else {
-            // Header found, just parse and push immediately (Low RAM!)
-            parsedRows.push(parseRow(denseRow, colIndex!));
-        }
+    if (headerRowIndex === -1) {
+        return { parsedRows: [] as ParsedRow[], headerFound: false };
     }
 
-    // Fallback if header wasn't found in the first 10 rows but exists later
-    if (headerRowIndex === -1 && rowBuffer.length > 0) {
-        const foundIdx = findHeaderRowIndex(rowBuffer, rowBuffer.length, MIN_SCORE);
-        if (foundIdx !== -1) {
-            headerRowIndex = foundIdx;
-            headers = buildMergedHeaders(rowBuffer, headerRowIndex);
-            colIndex = buildColIndex(headers);
-            for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
-                parsedRows.push(parseRow(rowBuffer[i] ?? [], colIndex!));
-            }
-        }
+    const headers = buildMergedHeaders(rowBuffer, headerRowIndex);
+    const colIndex = buildStyleReqColIndex(headers);
+
+    const parsedRows: ParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
+        parsedRows.push(parseStyleReqRow(rowBuffer[i] ?? [], colIndex));
     }
 
-    return { parsedRows, headerFound: headerRowIndex !== -1 };
+    return { parsedRows, headerFound: true };
+}
+
+// ── K.W.O Specific Parsing ────────────────────────────────────────
+const buildKWOCOlIndex = (headers: unknown[]): KWOColumnIndices => ({
+    workOrderDate: findPartialCol(headers, "work order date"),
+    workOrderNo: findPartialCol(headers, "work order no"),
+    month: findPartialCol(headers, "month"),
+    salesContractNo: findPartialCol(headers, "sales contract"),
+    buyer: findPartialCol(headers, "buyer"),
+    jobNo: findPartialCol(headers, "job no"),
+    poNo: findPartialCol(headers, "po no"),
+    style: findPartialCol(headers, "style"),
+    color: findPartialCol(headers, "color"),
+    composition: findPartialCol(headers, "composition"),
+    knittingFactoryName: findPartialCol(headers, "knitting factory name"),
+    knittingWorkOrderQty: findPartialCol(headers, "knitting work order"),
+    knittingPricePerKg: findPartialCol(headers, "knitting price per kg"),
+});
+
+const parseKWORow = (row: unknown[], colIndex: KWOColumnIndices): KWOParsedRow => ({
+    workOrderDate: asString(getCellValue(row, colIndex.workOrderDate)),
+    workOrderNo: asString(getCellValue(row, colIndex.workOrderNo)),
+    month: asString(getCellValue(row, colIndex.month)),
+    salesContractNo: asString(getCellValue(row, colIndex.salesContractNo)),
+    buyer: asString(getCellValue(row, colIndex.buyer)),
+    jobNo: asString(getCellValue(row, colIndex.jobNo)),
+    poNo: asString(getCellValue(row, colIndex.poNo)),
+    style: asString(getCellValue(row, colIndex.style)),
+    color: asString(getCellValue(row, colIndex.color)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    knittingFactoryName: asString(getCellValue(row, colIndex.knittingFactoryName)),
+    knittingWorkOrderQty: toNumber(getCellValue(row, colIndex.knittingWorkOrderQty)),
+    knittingPricePerKg: toNumber(getCellValue(row, colIndex.knittingPricePerKg)),
+});
+
+async function processKWOSheet(worksheetReader: any) {
+    const KWO_KEYWORDS = ["work order no", "month", "job no", "style", "color", "composition", "knitting factory name"];
+    const MIN_SCORE = 4;
+    const SCAN_LIMIT = 15;
+
+    const { rowBuffer, headerRowIndex } = await scanForHeaderRow(worksheetReader, KWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+
+    if (headerRowIndex === -1) {
+        return { parsedRows: [] as KWOParsedRow[], headerFound: false };
+    }
+
+    const headers = buildMergedHeaders(rowBuffer, headerRowIndex);
+    const colIndex = buildKWOCOlIndex(headers);
+
+    const parsedRows: KWOParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
+        parsedRows.push(parseKWORow(rowBuffer[i] ?? [], colIndex));
+    }
+
+    return { parsedRows, headerFound: true };
 }
 
 // ── Main Controller ──────────────────────────────────────────────
-export const fileUpload = async (
-    req: MulterRequest,
-    res: Response
-): Promise<void> => {
+export const fileUpload = async (req: MulterRequest, res: Response): Promise<void> => {
     console.log("📥 File upload hit");
 
     try {
@@ -255,69 +288,77 @@ export const fileUpload = async (
             return;
         }
 
-        // Initialize Streaming Reader (Low Memory Footprint)
-        const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(req.file.path, {
-            sharedStrings: "cache", // Caches shared strings without loading the whole workbook
-        });
-
-        const possibleNames = ["Styling Requirement", "Styling Requirement"];
-        let actualSheetName = "";
-        let isFirstSheet = true;
+        const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(req.file.path, { sharedStrings: "cache" });
 
         let parsedRows: ParsedRow[] = [];
-        let headerFound = false;
+        let styleReqHeaderFound = false;
+        let styleReqSheetName = "";
 
-        // Stream through sheets one by one
+        let parsedRowsKWO: KWOParsedRow[] = [];
+        let kwoHeaderFound = false;
+        let kwoSheetName = "";
+
         for await (const worksheetReader of workbookReader) {
             const sheetName = (worksheetReader as any).name || "";
-            const isTarget = possibleNames.includes(sheetName);
 
-            if (isTarget) {
-                actualSheetName = sheetName;
-                const result = await processSheet(worksheetReader);
+            if (sheetName === "STYLE REQUIRMENT") {
+                const result = await processStyleReqSheet(worksheetReader);
                 parsedRows = result.parsedRows;
-                headerFound = result.headerFound;
-                break; // Found the target sheet, stop reading further sheets
-            } else if (isFirstSheet) {
-                // Tentatively process the first sheet as a fallback
-                actualSheetName = sheetName;
-                const result = await processSheet(worksheetReader);
-                parsedRows = result.parsedRows;
-                headerFound = result.headerFound;
-                isFirstSheet = false;
+                styleReqHeaderFound = result.headerFound;
+                styleReqSheetName = sheetName;
+            } else if (sheetName === "K.W.O") {
+                const result = await processKWOSheet(worksheetReader);
+                parsedRowsKWO = result.parsedRows;
+                kwoHeaderFound = result.headerFound;
+                kwoSheetName = sheetName;
             } else {
-                continue; // Skip other sheets if we already have a fallback
+                for await (const _row of worksheetReader) { /* drain */ }
             }
         }
 
-        if (!headerFound) {
-            res.status(400).json({
-                error: "Could not locate a valid header row in the Excel file. Please check the file format.",
-            });
+        if (!styleReqHeaderFound && !kwoHeaderFound) {
+            res.status(400).json({ error: "Could not locate a valid header row in the Excel file." });
             return;
         }
 
-        // ── Respond immediately with a jobId — don't make the client wait
         const jobId = randomUUID();
-
         res.send({
             success: true,
             jobId,
             fileName: req.file.originalname || req.file.filename,
-            sheetName: actualSheetName,
-            totalRows: parsedRows.length,
+            styleRequirement: {
+                sheetName: styleReqSheetName,
+                found: styleReqHeaderFound,
+                totalRows: parsedRows.length,
+            },
+            kwo: {
+                sheetName: kwoSheetName,
+                found: kwoHeaderFound,
+                totalRows: parsedRowsKWO.length,
+            },
         });
 
-        // Fire-and-forget background processing
-        uploadDataFromFile(parsedRows, jobId).catch((err) => {
-            console.error("Background upload processing failed:", err);
-        });
+        // ── Background: Style Req FIRST, then KWO ──
+        (async () => {
+            try {
+                if (styleReqHeaderFound && parsedRows.length > 0) {
+                    console.log(`🔄 [${jobId}] Inserting Style Requirement (${parsedRows.length} rows)...`);
+                    await uploadDataFromFile(parsedRows, jobId);
+                    console.log(`✅ [${jobId}] Style Requirement done.`);
+                }
+                if (kwoHeaderFound && parsedRowsKWO.length > 0) {
+                    console.log(`🔄 [${jobId}] Inserting K.W.O (${parsedRowsKWO.length} rows)...`);
+                    await uploadKWODataFromFile(parsedRowsKWO, jobId);
+                    console.log(`✅ [${jobId}] K.W.O done.`);
+                }
+            } catch (err: unknown) {
+                console.error("❌ Background upload processing failed:", err);
+            }
+        })();
+
     } catch (error) {
-        console.error(" Error parsing Excel:", error);
+        console.error("Error parsing Excel:", error);
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        res.status(500).json({
-            error: "Failed to parse Excel file",
-            details: errorMessage,
-        });
+        res.status(500).json({ error: "Failed to parse Excel file", details: errorMessage });
     }
 };

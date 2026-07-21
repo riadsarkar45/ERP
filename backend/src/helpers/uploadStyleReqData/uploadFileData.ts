@@ -1,7 +1,6 @@
 import prisma from "../../database/prismaClient/prisma";
 import { getIO } from "../../middleware/socket.io/socket";
 
-// ── Types ─────────────────────────────────────────────────────────
 interface ParsedRow {
     salesContractNo: string;
     buyer: string;
@@ -25,7 +24,6 @@ interface UploadSummary {
     errors: { jobNo: string; message: string }[];
 }
 
-// Small helper so every emit site doesn't need its own null-check
 const emitProgress = (event: string, payload: Record<string, unknown>) => {
     const io = getIO();
     if (!io) {
@@ -35,26 +33,8 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
-// Normalizes jobNo formatting so variants like "SM26-3619/JAN" and
-// "SM26-3619-JAN" always resolve to the same StyleRequirement / jobs row.
 const normalizeJobNo = (jobNo: string): string => jobNo.trim().replace(/\//g, "-");
 
-// ── Main ──────────────────────────────────────────────────────────
-/**
- * Writes parsed Excel rows into Neon:
- *  - One `jobs` row per unique `jobNo` (upserted on jobNo)
- *  - One StyleRequirement per unique `jobNo` (upserted on jobNo)
- *  - One StyleRequirementRow per source row, linked to that StyleRequirement
- *
- * Emits live progress over Socket.IO so the frontend can render a real
- * progress bar instead of a blind spinner:
- *   'upload-progress' — { jobId, current, total, jobNo, rowsInGroup }
- *   'upload-complete' — { jobId, summary }
- *   'upload-error'    — { jobId, message }  (only for total failure)
- *
- * Rows with no `jobNo` value are skipped since StyleRequirementRow
- * requires a parent StyleRequirement to attach to.
- */
 export const uploadDataFromFile = async (
     rows: ParsedRow[],
     jobId: string
@@ -68,8 +48,6 @@ export const uploadDataFromFile = async (
     };
 
     try {
-        // Group rows by jobNo so each job only triggers one upsert,
-        // not one per row.
         const groupedByJob = new Map<string, ParsedRow[]>();
         for (const row of rows) {
             if (!row.jobNo) {
@@ -85,7 +63,7 @@ export const uploadDataFromFile = async (
         const jobEntries = Array.from(groupedByJob.entries());
         const totalJobs = jobEntries.length;
 
-        emitProgress("upload-progress", {
+        emitProgress("style-req-progress", {
             jobId,
             phase: "starting",
             current: 0,
@@ -94,7 +72,7 @@ export const uploadDataFromFile = async (
 
         for (let i = 0; i < jobEntries.length; i++) {
             const entry = jobEntries[i];
-            if (!entry) continue; // guard for potential undefined from indexed access
+            if (!entry) continue;
             const [jobNo, jobRows] = entry;
             const first = jobRows[0];
             if (!first) continue;
@@ -106,9 +84,6 @@ export const uploadDataFromFile = async (
                 });
 
                 await prisma.$transaction(async (tx) => {
-                    // Ensure a `jobs` row exists for this jobNo. This model has
-                    // no extra fields to sync, so create-if-missing is enough —
-                    // no `update` needed on conflict.
                     await tx.jobs.upsert({
                         where: { jobNo },
                         update: {},
@@ -122,7 +97,7 @@ export const uploadDataFromFile = async (
                             buyerName: first.buyer,
                             styleNo: first.style,
                             poNo: first.poNo,
-                            processLoss:Number(first.processLoss) || 0,
+                            processLoss: Number(first.processLoss) || 0,
                         },
                         create: {
                             jobNo,
@@ -130,7 +105,7 @@ export const uploadDataFromFile = async (
                             buyerName: first.buyer,
                             styleNo: first.style,
                             poNo: first.poNo,
-                            processLoss:Number(first.processLoss) || 0,
+                            processLoss: Number(first.processLoss) || 0,
                         },
                     });
 
@@ -154,7 +129,7 @@ export const uploadDataFromFile = async (
                 }
                 summary.rowsInserted += jobRows.length;
 
-                emitProgress("upload-progress", {
+                emitProgress("style-req-progress", {
                     jobId,
                     phase: "inserting",
                     current: i + 1,
@@ -165,13 +140,9 @@ export const uploadDataFromFile = async (
             } catch (err) {
                 const message = err instanceof Error ? err.message : "Unknown error";
                 summary.errors.push({ jobNo, message });
-
-                // Log per-row failures to the console too, not just the socket
-                // emit, so they're visible in Render logs even if no client
-                // is connected to receive them.
                 console.error(`❌ Failed to upsert job "${jobNo}":`, message);
 
-                emitProgress("upload-progress", {
+                emitProgress("style-req-progress", {
                     jobId,
                     phase: "error",
                     current: i + 1,
@@ -182,11 +153,11 @@ export const uploadDataFromFile = async (
             }
         }
 
-        emitProgress("upload-complete", { jobId, summary });
+        emitProgress("style-req-complete", { jobId, summary });
         return summary;
     } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
-        emitProgress("upload-error", { jobId, message });
+        emitProgress("style-req-error", { jobId, message });
         throw err;
     }
 };

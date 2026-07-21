@@ -8,60 +8,92 @@ const UploadFile = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [dragActive, setDragActive] = useState(false);
-    const [summary, setSummary] = useState(null);
 
-    // Live progress state, driven by socket events
+    // ── Two separate progress states ──
+    const [styleReqProgress, setStyleReqProgress] = useState(null);
+    const [kwoProgress, setKwoProgress] = useState(null);
+    const [styleReqSummary, setStyleReqSummary] = useState(null);
+    const [kwoSummary, setKwoSummary] = useState(null);
+
     const [jobId, setJobId] = useState(null);
-    const [progress, setProgress] = useState(null); // { phase, current, total, jobNo, rowsInGroup }
+    const [activePhase, setActivePhase] = useState(null); // 'style-req' | 'kwo' | null
 
     const fileInputRef = useRef(null);
     const axiosPublic = useAxiosPublic();
     const socket = useSocket();
 
-    // ── Listen for progress on the existing socket connection ─────────────
+    // ── Socket listeners for BOTH phases ─────────────────────────────
     useEffect(() => {
         if (!socket) {
-            console.warn('⚠️ useSocket() returned null — no socket connection available');
+            console.warn('⚠️ useSocket() returned null — no socket connection');
             return;
         }
-        console.log('🔌 Socket in UploadFile:', socket.id, socket.connected);
 
-        const handleProgress = (data) => {
-            console.log('📩 Received upload-progress:', data, 'current jobId state:', jobId);
-            if (data.jobId !== jobId) return; // ignore other users' uploads
-            setProgress(data);
-        };
-
-        const handleComplete = (data) => {
+        // ── Style Requirement listeners ──
+        const handleStyleReqProgress = (data) => {
             if (data.jobId !== jobId) return;
-            setSummary(data.summary);
-            setSuccess(`✅ Import finished`);
-            setLoading(false);
-            setJobId(null);
+            setStyleReqProgress(data);
+            setActivePhase('style-req');
         };
 
-        const handleError = (data) => {
+        const handleStyleReqComplete = (data) => {
             if (data.jobId !== jobId) return;
-            setError(data.message || 'Import failed on the server');
-            setLoading(false);
-            setJobId(null);
+            setStyleReqSummary(data.summary);
+            setStyleReqProgress(prev => ({ ...prev, phase: 'complete' }));
+            // KWO will start next, keep loading true
         };
 
-        socket.on('upload-progress', handleProgress);
-        socket.on('upload-complete', handleComplete);
-        socket.on('upload-error', handleError);
+        const handleStyleReqError = (data) => {
+            if (data.jobId !== jobId) return;
+            setError(`Style Requirement failed: ${data.message}`);
+            setLoading(false);
+            setActivePhase(null);
+        };
+
+        // ── KWO listeners ──
+        const handleKwoProgress = (data) => {
+            if (data.jobId !== jobId) return;
+            setKwoProgress(data);
+            setActivePhase('kwo');
+        };
+
+        const handleKwoComplete = (data) => {
+            if (data.jobId !== jobId) return;
+            setKwoSummary(data.summary);
+            setKwoProgress(prev => ({ ...prev, phase: 'complete' }));
+            setSuccess('✅ All imports finished (Style Requirement + K.W.O)');
+            setLoading(false);
+            setActivePhase(null);
+        };
+
+        const handleKwoError = (data) => {
+            if (data.jobId !== jobId) return;
+            setError(`K.W.O failed: ${data.message}`);
+            setLoading(false);
+            setActivePhase(null);
+        };
+
+        // Register listeners
+        socket.on('style-req-progress', handleStyleReqProgress);
+        socket.on('style-req-complete', handleStyleReqComplete);
+        socket.on('style-req-error', handleStyleReqError);
+        socket.on('kwo-progress', handleKwoProgress);
+        socket.on('kwo-complete', handleKwoComplete);
+        socket.on('kwo-error', handleKwoError);
 
         return () => {
-            socket.off('upload-progress', handleProgress);
-            socket.off('upload-complete', handleComplete);
-            socket.off('upload-error', handleError);
+            socket.off('style-req-progress', handleStyleReqProgress);
+            socket.off('style-req-complete', handleStyleReqComplete);
+            socket.off('style-req-error', handleStyleReqError);
+            socket.off('kwo-progress', handleKwoProgress);
+            socket.off('kwo-complete', handleKwoComplete);
+            socket.off('kwo-error', handleKwoError);
         };
     }, [socket, jobId]);
 
-    // Handle file selection
+    // ── File handling (unchanged) ────────────────────────────────────
     const handleFileChange = (selectedFile) => {
         if (!selectedFile) return;
-
         const validTypes = [
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.ms-excel',
@@ -70,17 +102,22 @@ const UploadFile = () => {
             setError('Please upload a valid Excel file (.xlsx or .xls)');
             return;
         }
-
         if (selectedFile.size > 20 * 1024 * 1024) {
             setError('File size must be less than 20MB');
             return;
         }
-
         setFile(selectedFile);
         setError('');
         setSuccess('');
-        setSummary(null);
-        setProgress(null);
+        resetProgress();
+    };
+
+    const resetProgress = () => {
+        setStyleReqProgress(null);
+        setKwoProgress(null);
+        setStyleReqSummary(null);
+        setKwoSummary(null);
+        setActivePhase(null);
     };
 
     const handleDrag = (e) => {
@@ -108,7 +145,7 @@ const UploadFile = () => {
         }
     };
 
-    // Upload file to backend
+    // ── Upload ─────────────────────────────────────────────────────────
     const handleUpload = async () => {
         if (!file) {
             setError('Please select a file first');
@@ -117,29 +154,21 @@ const UploadFile = () => {
         setLoading(true);
         setError('');
         setSuccess('');
-        setSummary(null);
-        setProgress(null);
+        resetProgress();
 
         const formData = new FormData();
         formData.append('file', file);
         try {
             const res = await axiosPublic.post("/api/upload", formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
+                headers: { 'Content-Type': 'multipart/form-data' },
             });
             const result = res.data;
             console.log('🎯 Upload response:', result);
             if (result.success) {
-                // Server has only parsed the file so far — DB writes happen
-                // in the background. Register the jobId so incoming socket
-                // events are matched to this upload.
                 setJobId(result.jobId);
                 setFile(null);
-                if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                }
-                // Loading stays true until 'upload-complete' arrives
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                // Loading stays true until 'kwo-complete' arrives
             } else {
                 setError(result.error || result.details || 'Failed to upload file');
                 setLoading(false);
@@ -150,7 +179,6 @@ const UploadFile = () => {
             const friendlyMessage = backendDetails
                 ? `${backendError}: ${backendDetails}`
                 : backendError;
-
             setError(friendlyMessage || err.message || 'Failed to upload file');
             console.error('Upload error:', err.response?.data || err);
             setLoading(false);
@@ -161,12 +189,9 @@ const UploadFile = () => {
         setFile(null);
         setError('');
         setSuccess('');
-        setSummary(null);
-        setProgress(null);
+        resetProgress();
         setJobId(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const formatFileSize = (bytes) => {
@@ -175,20 +200,29 @@ const UploadFile = () => {
         return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
     };
 
-    const percent = progress && progress.total > 0
-        ? Math.round((progress.current / progress.total) * 100)
-        : 0;
+    // ── Progress bar helpers ─────────────────────────────────────────
+    const getPercent = (progress) => {
+        if (!progress || !progress.total || progress.total === 0) return 0;
+        return Math.round((progress.current / progress.total) * 100);
+    };
 
-    const phaseLabel = () => {
-        if (!progress) return 'Uploading & parsing…';
-        if (progress.phase === 'starting') return 'Starting import…';
+    const getPhaseLabel = (progress, type) => {
+        if (!progress) return type === 'style-req' ? 'Waiting for Style Requirement…' : 'Waiting for K.W.O…';
+        if (progress.phase === 'starting') return `${type === 'style-req' ? 'Style Requirement' : 'K.W.O'}: Starting…`;
         if (progress.phase === 'inserting') {
-            return `Inserting job ${progress.current}/${progress.total} — ${progress.jobNo}`;
+            return `${type === 'style-req' ? 'Style Req' : 'K.W.O'}: ${progress.current}/${progress.total} — ${progress.jobNo || progress.workOrderNo}`;
         }
         if (progress.phase === 'error') {
-            return `Skipped job ${progress.jobNo} (error) — ${progress.current}/${progress.total}`;
+            return `${type === 'style-req' ? 'Style Req' : 'K.W.O'}: Skipped (error) — ${progress.current}/${progress.total}`;
         }
+        if (progress.phase === 'complete') return `${type === 'style-req' ? 'Style Req' : 'K.W.O'}: ✅ Complete`;
         return 'Processing…';
+    };
+
+    const getBarColor = (type, phase) => {
+        if (phase === 'complete') return 'bg-green-500';
+        if (phase === 'error') return 'bg-red-500';
+        return type === 'style-req' ? 'bg-blue-500' : 'bg-purple-500';
     };
 
     return (
@@ -197,10 +231,10 @@ const UploadFile = () => {
                 {/* Header */}
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
-                        📊 Style Requirement Import
+                        📊 Excel Import
                     </h1>
                     <p className="text-gray-600">
-                        Upload your Excel file to import it directly
+                        Upload Style Requirement + K.W.O sheets
                     </p>
                 </div>
 
@@ -225,39 +259,18 @@ const UploadFile = () => {
                             onChange={onInputChange}
                             className="hidden"
                         />
-
                         <div className="flex flex-col items-center gap-4">
-                            <div
-                                className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${dragActive ? 'bg-blue-500' : 'bg-blue-100'
-                                    }`}
-                            >
-                                <svg
-                                    className={`w-8 h-8 ${dragActive ? 'text-white' : 'text-blue-600'
-                                        }`}
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                                    />
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${dragActive ? 'bg-blue-500' : 'bg-blue-100'}`}>
+                                <svg className={`w-8 h-8 ${dragActive ? 'text-white' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
                             </div>
-
                             <div>
                                 <p className="text-lg font-semibold text-gray-700">
-                                    {dragActive
-                                        ? 'Drop your file here'
-                                        : 'Drag & drop your Excel file here'}
+                                    {dragActive ? 'Drop your file here' : 'Drag & drop your Excel file here'}
                                 </p>
                                 <p className="text-sm text-gray-500 mt-1">
-                                    or{' '}
-                                    <span className="text-blue-600 font-medium hover:underline">
-                                        click to browse
-                                    </span>
+                                    or <span className="text-blue-600 font-medium hover:underline">click to browse</span>
                                 </p>
                                 <p className="text-xs text-gray-400 mt-2">
                                     Supports .xlsx, .xls • Max 20MB
@@ -271,49 +284,18 @@ const UploadFile = () => {
                         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                    <svg
-                                        className="w-5 h-5 text-green-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                        />
+                                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="font-medium text-gray-800 truncate max-w-xs md:max-w-md">
-                                        {file.name}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        {formatFileSize(file.size)}
-                                    </p>
+                                    <p className="font-medium text-gray-800 truncate max-w-xs md:max-w-md">{file.name}</p>
+                                    <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleClear();
-                                }}
-                                className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Remove file"
-                            >
-                                <svg
-                                    className="w-5 h-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
+                            <button onClick={(e) => { e.stopPropagation(); handleClear(); }} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Remove file">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
@@ -328,94 +310,91 @@ const UploadFile = () => {
                         >
                             {loading ? (
                                 <>
-                                    <svg
-                                        className="animate-spin h-5 w-5 text-white"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <circle
-                                            className="opacity-25"
-                                            cx="12"
-                                            cy="12"
-                                            r="10"
-                                            stroke="currentColor"
-                                            strokeWidth="4"
-                                        ></circle>
-                                        <path
-                                            className="opacity-75"
-                                            fill="currentColor"
-                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                        ></path>
+                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
                                     Processing...
                                 </>
                             ) : (
                                 <>
-                                    <svg
-                                        className="w-5 h-5"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                                        />
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                     </svg>
                                     Upload
                                 </>
                             )}
                         </button>
-
-                        {(file || summary) && !loading && (
-                            <button
-                                onClick={handleClear}
-                                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
-                            >
+                        {(file || styleReqSummary || kwoSummary) && !loading && (
+                            <button onClick={handleClear} className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors">
                                 Clear
                             </button>
                         )}
                     </div>
 
-                    {/* Live progress bar */}
+                    {/* ═══════════════════════════════════════════════════
+                        DUAL PROGRESS BARS — Style Req + KWO
+                        ═══════════════════════════════════════════════════ */}
                     {loading && (
-                        <div className="mt-4">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-medium text-gray-600">{phaseLabel()}</span>
-                                <span className="text-xs font-semibold text-blue-700">{percent}%</span>
+                        <div className="mt-6 space-y-4">
+                            {/* ── Style Requirement Progress ── */}
+                            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                        <span className="text-sm font-semibold text-gray-700">Style Requirement</span>
+                                        {styleReqProgress?.phase === 'complete' && (
+                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Done</span>
+                                        )}
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-700">{getPercent(styleReqProgress)}%</span>
+                                </div>
+                                <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-300 ease-out ${getBarColor('style-req', styleReqProgress?.phase)}`}
+                                        style={{ width: `${getPercent(styleReqProgress)}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1.5">{getPhaseLabel(styleReqProgress, 'style-req')}</p>
+                                {styleReqProgress?.rowsInGroup && (
+                                    <p className="text-xs text-gray-400">{styleReqProgress.rowsInGroup} row(s) in this job</p>
+                                )}
                             </div>
-                            <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-300 ease-out"
-                                    style={{ width: `${percent}%` }}
-                                />
+
+                            {/* ── K.W.O Progress ── */}
+                            <div className={`p-4 rounded-xl border transition-all ${activePhase === 'kwo' || kwoProgress ? 'bg-purple-50/50 border-purple-100' : 'bg-gray-50 border-gray-100'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${activePhase === 'kwo' ? 'bg-purple-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                                        <span className="text-sm font-semibold text-gray-700">K.W.O (Work Order)</span>
+                                        {kwoProgress?.phase === 'complete' && (
+                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Done</span>
+                                        )}
+                                        {!kwoProgress && styleReqProgress?.phase !== 'complete' && (
+                                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Waiting…</span>
+                                        )}
+                                    </div>
+                                    <span className="text-xs font-bold text-purple-700">{getPercent(kwoProgress)}%</span>
+                                </div>
+                                <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-300 ease-out ${getBarColor('kwo', kwoProgress?.phase)}`}
+                                        style={{ width: `${getPercent(kwoProgress)}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1.5">{getPhaseLabel(kwoProgress, 'kwo')}</p>
+                                {kwoProgress?.rowsInGroup && (
+                                    <p className="text-xs text-gray-400">{kwoProgress.rowsInGroup} row(s) in this group</p>
+                                )}
                             </div>
-                            {progress?.rowsInGroup !== undefined && (
-                                <p className="text-xs text-gray-400 mt-1">
-                                    {progress.rowsInGroup} row(s) in this job
-                                </p>
-                            )}
                         </div>
                     )}
 
                     {/* Error Message */}
                     {error && (
                         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                            <svg
-                                className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
+                            <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <p className="text-sm text-red-700">{error}</p>
                         </div>
@@ -424,58 +403,87 @@ const UploadFile = () => {
                     {/* Success Message */}
                     {success && !loading && (
                         <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-                            <svg
-                                className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
+                            <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <p className="text-sm text-green-700">{success}</p>
                         </div>
                     )}
 
-                    {/* Summary */}
-                    {summary && !loading && (
-                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="p-3 bg-blue-50 rounded-lg text-center">
-                                <p className="text-2xl font-bold text-blue-700">{summary.stylesCreated}</p>
-                                <p className="text-xs text-gray-600">Jobs created</p>
-                            </div>
-                            <div className="p-3 bg-indigo-50 rounded-lg text-center">
-                                <p className="text-2xl font-bold text-indigo-700">{summary.stylesUpdated}</p>
-                                <p className="text-xs text-gray-600">Jobs updated</p>
-                            </div>
-                            <div className="p-3 bg-green-50 rounded-lg text-center">
-                                <p className="text-2xl font-bold text-green-700">{summary.rowsInserted}</p>
-                                <p className="text-xs text-gray-600">Rows inserted</p>
-                            </div>
-                            <div className="p-3 bg-yellow-50 rounded-lg text-center">
-                                <p className="text-2xl font-bold text-yellow-700">{summary.rowsSkipped}</p>
-                                <p className="text-xs text-gray-600">Rows skipped</p>
-                            </div>
-                        </div>
-                    )}
+                    {/* ═══════════════════════════════════════════════════
+                        DUAL SUMMARY CARDS
+                        ═══════════════════════════════════════════════════ */}
+                    {(styleReqSummary || kwoSummary) && !loading && (
+                        <div className="mt-6 space-y-4">
+                            {/* Style Req Summary */}
+                            {styleReqSummary && (
+                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                                    <h3 className="text-sm font-bold text-blue-800 mb-3">📋 Style Requirement Summary</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-blue-700">{styleReqSummary.stylesCreated}</p>
+                                            <p className="text-xs text-gray-600">Jobs created</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-indigo-700">{styleReqSummary.stylesUpdated}</p>
+                                            <p className="text-xs text-gray-600">Jobs updated</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-green-700">{styleReqSummary.rowsInserted}</p>
+                                            <p className="text-xs text-gray-600">Rows inserted</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-yellow-700">{styleReqSummary.rowsSkipped}</p>
+                                            <p className="text-xs text-gray-600">Rows skipped</p>
+                                        </div>
+                                    </div>
+                                    {styleReqSummary.errors?.length > 0 && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                                            <p className="text-xs font-semibold text-red-700 mb-1">{styleReqSummary.errors.length} error(s):</p>
+                                            <ul className="text-xs text-red-600 space-y-0.5 list-disc list-inside">
+                                                {styleReqSummary.errors.map((e, i) => (
+                                                    <li key={i}><span className="font-mono">{e.jobNo}</span>: {e.message}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
-                    {/* Per-job errors, if any */}
-                    {summary && summary.errors.length > 0 && !loading && (
-                        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                            <p className="text-sm font-semibold text-red-700 mb-2">
-                                {summary.errors.length} job(s) failed to import:
-                            </p>
-                            <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
-                                {summary.errors.map((e, i) => (
-                                    <li key={i}>
-                                        <span className="font-mono">{e.jobNo}</span>: {e.message}
-                                    </li>
-                                ))}
-                            </ul>
+                            {/* KWO Summary */}
+                            {kwoSummary && (
+                                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                                    <h3 className="text-sm font-bold text-purple-800 mb-3">🧵 K.W.O Summary</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-purple-700">{kwoSummary.workOrdersCreated}</p>
+                                            <p className="text-xs text-gray-600">WO created</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-indigo-700">{kwoSummary.workOrdersUpdated}</p>
+                                            <p className="text-xs text-gray-600">WO updated</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-green-700">{kwoSummary.compositionsInserted}</p>
+                                            <p className="text-xs text-gray-600">Compositions</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-yellow-700">{kwoSummary.rowsSkipped}</p>
+                                            <p className="text-xs text-gray-600">Rows skipped</p>
+                                        </div>
+                                    </div>
+                                    {kwoSummary.errors?.length > 0 && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                                            <p className="text-xs font-semibold text-red-700 mb-1">{kwoSummary.errors.length} error(s):</p>
+                                            <ul className="text-xs text-red-600 space-y-0.5 list-disc list-inside">
+                                                {kwoSummary.errors.map((e, i) => (
+                                                    <li key={i}><span className="font-mono">{e.workOrderNo}</span>: {e.message}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
