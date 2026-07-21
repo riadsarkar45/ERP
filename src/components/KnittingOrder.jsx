@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
@@ -8,8 +8,6 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
 
     const innerItem = "border-b border-gray-300 px-3 py-2 last:border-b-0";
 
-    // 2. REMOVED: The old FROZEN_LEFTS_LOCAL calculation is gone!
-
     const baseTd = {
         borderRight: "1px solid #d1d5db",
         borderBottom: "1px solid #d1d5db",
@@ -18,14 +16,19 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
         verticalAlign: "middle",
     };
 
+    const formatNumber = (value) => {
+        const num = Number(value) || 0;
+        return num.toLocaleString("en-US");
+    };
+
     // 3. Use the dynamic props passed from the parent
     const stickyTd = (colIndex, isHovered) => ({
         ...baseTd,
         position: "sticky",
-        left: `${currentFrozenLefts[colIndex]}px`, 
+        left: `${currentFrozenLefts[colIndex]}px`,
         zIndex: 3,
         backgroundColor: isHovered ? "#bbf7d0" : "#ffffff",
-        width: `${currentFrozenWidths[colIndex]}px`, 
+        width: `${currentFrozenWidths[colIndex]}px`,
         minWidth: `${currentFrozenWidths[colIndex]}px`,
         boxShadow: colIndex === FROZEN_COUNT - 1 ? "2px 0 5px -1px rgba(0,0,0,0.18)" : "none",
     });
@@ -35,162 +38,294 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
         backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
     });
 
+    // ── Footer sticky/plain cell styles (no hover state, static bg) ──
+    const footerStickyTd = (colIndex) => ({
+        ...baseTd,
+        position: "sticky",
+        left: `${currentFrozenLefts[colIndex]}px`,
+        bottom: 0,
+        zIndex: 4,
+        backgroundColor: "#f3f4f6",
+        width: `${currentFrozenWidths[colIndex]}px`,
+        minWidth: `${currentFrozenWidths[colIndex]}px`,
+        boxShadow: colIndex === FROZEN_COUNT - 1 ? "2px 0 5px -1px rgba(0,0,0,0.18)" : "none",
+        fontWeight: 700,
+    });
+
+    const footerPlainTd = {
+        ...baseTd,
+        position: "sticky",
+        bottom: 0,
+        zIndex: 2,
+        backgroundColor: "#f3f4f6",
+        fontWeight: 700,
+    };
+
+
+
+    // ── Flatten every composition row (across all jobs/work orders) so
+    // totals can be computed once instead of re-walking the tree per column ──
+    const totals = useMemo(() => {
+        const acc = {
+            orderQty: 0,
+            workOrderQty: 0,
+            totalYarnDelivery: 0,
+            delShortExcess: 0,
+            yarnReturn: 0,
+            yarnReceived: 0,
+            rcvdShortExcess: 0,
+            payableAmount: 0,
+        };
+
+        (orders || []).forEach((job) => {
+            (job.workOrders || []).forEach((wo) => {
+                (wo.compositions || []).forEach((comp) => {
+                    const orderQty = Number(comp.orderQty) || 0;
+                    const workOrderQty = Number(comp.workOrderQty) || 0;
+                    const delivered = Number(comp.yarnDeliveriesWithColor?.YarnDelivery) || 0;
+                    const returned = Number(comp.yarnDeliveriesWithColor?.YarnReturn) || 0;
+                    const received = Number(comp.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                    const price = Number(comp.unitePrice) || 0;
+
+                    acc.orderQty += orderQty;
+                    acc.workOrderQty += workOrderQty;
+                    acc.totalYarnDelivery += delivered;
+                    acc.delShortExcess += workOrderQty - delivered;
+                    acc.yarnReturn += returned;
+                    acc.yarnReceived += received;
+                    acc.rcvdShortExcess += received + returned - delivered;
+                    acc.payableAmount += received * price;
+                });
+            });
+        });
+
+        return acc;
+    }, [orders]);
+
+    const renderSigned = (value) => {
+        const exceeded = value > 0;
+        return (
+            <span style={{ color: exceeded ? "green" : value < 0 ? "red" : "inherit" }}>
+                {exceeded ? `(${Math.abs(value)})` : Math.abs(value)}
+            </span>
+        );
+    };
+
     return (
-        <tbody>
-            {orders?.map((job, jobIndex) => {
-                const workOrders = job.workOrders || [];
-                const isHovered  = hoveredIndex === jobIndex;
+        <>
+            <tbody>
+                {orders?.map((job, jobIndex) => {
+                    const workOrders = job.workOrders || [];
+                    const isHovered = hoveredIndex === jobIndex;
 
-                return (
-                    <tr key={jobIndex} onClick={() => setHoveredIndex(jobIndex)}>
-                        {/* COL 0 — FACTORY NAME */}
-                        <td style={stickyTd(0, isHovered)}>
-                            {workOrders?.map((wo, i) => (
-                                wo.factoryName === "NULL" ? (
-                                    <div key={i} className={`${innerItem} text-gray-500`}>-</div>
-                                ) : (
-                                    <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
-                                            <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
-                                        ) : wo.factoryName}
+                    return (
+                        <tr key={jobIndex} onClick={() => setHoveredIndex(jobIndex)}>
+                            {/* COL 0 — FACTORY NAME */}
+                            <td style={stickyTd(0, isHovered)}>
+                                {workOrders?.map((wo, i) => (
+                                    wo.factoryName === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-gray-500`}>-</div>
+                                    ) : (
+                                        <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+                                            ) : wo.factoryName}
+                                        </div>
+                                    )
+                                ))}
+                            </td>
+
+                            {/* COL 1 — JOB NO */}
+                            <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
+                                <div className={`${innerItem} cursor-pointer hover:text-blue-600`}>{job.jobNo || "NO JOB FOUND"}</div>
+                            </td>
+
+                            {/* COL 2 — WORK ORDER NO */}
+                            <td style={stickyTd(2, isHovered)}>
+                                {workOrders?.map((wo, i) => (<div key={i} className={innerItem}>{wo.workOrderNo || "NO WORK ORDER FOUND"}</div>))}
+                            </td>
+
+                            {/* COL 3 — BUYER NAME */}
+                            <td style={stickyTd(3, isHovered)}>
+                                {workOrders.map((wo, i) => (<div key={i} className={innerItem}>{wo.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}</div>))}
+                            </td>
+
+                            {/* COL 4 — STYLE NO */}
+                            <td style={stickyTd(4, isHovered)}>
+                                {workOrders.map((wo, i) => (<div key={i} className={innerItem}>{wo.styleRequirement?.styleNo || "NO STYLE NO FOUND"}</div>))}
+                            </td>
+
+                            {/* COL 5 — MONTH */}
+                            <td style={stickyTd(5, isHovered)}>
+                                {workOrders?.map((mon, i) => (<div key={i} className={innerItem}>{mon.month || "NO MONTH NAME FOUND"}</div>))}
+                            </td>
+
+                            {/* COL 6 — COMPOSITION (last frozen) */}
+                            <td style={stickyTd(6, isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((comp, j) => (<div key={`${i}-${j}`} className={`${innerItem}`}>{comp.composition || "-"}</div>)))}
+                            </td>
+
+                            {/* COL 7 — COLOR */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
+                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>{col.color || "-"}</div>
+                                )))}
+                            </td>
+
+                            {/* COL 8 — ORDER QTY */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((ord, j) => (<div key={`${i}-${j}`} className={innerItem}>{ord.orderQty || "-"}</div>)))}
+                            </td>
+
+                            {/* COL 9 — UNIT PRICE */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === wo.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+                                        ) : unt.unitePrice || "-"}
                                     </div>
-                                )
-                            ))}
-                        </td>
+                                )))}
+                            </td>
 
-                        {/* COL 1 — JOB NO */}
-                        <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
-                            <div className={`${innerItem} cursor-pointer hover:text-blue-600`}>{job.jobNo || "NO JOB FOUND"}</div>
-                        </td>
-
-                        {/* COL 2 — WORK ORDER NO */}
-                        <td style={stickyTd(2, isHovered)}>
-                            {workOrders?.map((wo, i) => (<div key={i} className={innerItem}>{wo.workOrderNo || "NO WORK ORDER FOUND"}</div>))}
-                        </td>
-
-                        {/* COL 3 — BUYER NAME */}
-                        <td style={stickyTd(3, isHovered)}>
-                            {workOrders.map((wo, i) => (<div key={i} className={innerItem}>{wo.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}</div>))}
-                        </td>
-
-                        {/* COL 4 — STYLE NO */}
-                        <td style={stickyTd(4, isHovered)}>
-                            {workOrders.map((wo, i) => (<div key={i} className={innerItem}>{wo.styleRequirement?.styleNo || "NO STYLE NO FOUND"}</div>))}
-                        </td>
-
-                        {/* COL 5 — MONTH */}
-                        <td style={stickyTd(5, isHovered)}>
-                            {workOrders?.map((mon, i) => (<div key={i} className={innerItem}>{mon.month || "NO MONTH NAME FOUND"}</div>))}
-                        </td>
-
-                        {/* COL 6 — COMPOSITION (last frozen) */}
-                        <td style={stickyTd(6, isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((comp, j) => (<div key={`${i}-${j}`} className={`${innerItem}`}>{comp.composition || "-"}</div>)))}
-                        </td>
-
-                        {/* COL 7 — COLOR */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
-                                <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>{col.color || "-"}</div>
-                            )))}
-                        </td>
-
-                        {/* COL 8 — ORDER QTY */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((ord, j) => (<div key={`${i}-${j}`} className={innerItem}>{ord.orderQty || "-"}</div>)))}
-                        </td>
-
-                        {/* COL 9 — UNIT PRICE */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
-                                    {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === wo.id ? (
-                                        <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
-                                    ) : unt.unitePrice || "-"}
-                                </div>
-                            )))}
-                        </td>
-
-                        {/* COL 10 — WORK ORDER QTY */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
-                                <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
-                                    {isEdit.updatedFieldName === "workOrderQty" && isEdit.rowId === wo.id ? (
-                                        <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
-                                    ) : wrk.workOrderQty || "-"}
-                                </div>
-                            )))}
-                        </td>
-
-                        {/* COL 11 — TOTAL YARN DELIVERY */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnDelivery || "-"}</div>)))}
-                        </td>
-
-                        {/* COL 12 — DEL SHORT & EXCESS */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                const workOrderQty = Number(wrk.workOrderQty) || 0;
-                                const totalYarnDelivery = Number(wrk.totalYarnDelivery) || 0;
-                                const diff = workOrderQty - totalYarnDelivery;
-                                const exceeded = diff > 0;
-                                return (
-                                    <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
-                                        {exceeded ? `(${Math.abs(diff)})` : Math.abs(diff)}
+                            {/* COL 10 — WORK ORDER QTY */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.rowId === wo.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+                                        ) : wrk.workOrderQty || "-"}
                                     </div>
-                                );
-                            }))}
-                        </td>
+                                )))}
+                            </td>
 
-                        {/* COL 13 — YARN RETURN */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{wrk.yarnDeliveriesWithColor?.YarnReturn || "-"}</div>)))}
-                        </td>
+                            {/* COL 11 — TOTAL YARN DELIVERY */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnDelivery || "-"}</div>)))}
+                            </td>
 
-                        {/* COL 14 — YARN RECEIVED */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnReceived || "-"}</div>)))}
-                        </td>
+                            {/* COL 12 — DEL SHORT & EXCESS */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
+                                    const workOrderQty = Number(wrk.workOrderQty) || 0;
+                                    const totalYarnDelivery = Number(wrk.totalYarnDelivery) || 0;
+                                    const diff = workOrderQty - totalYarnDelivery;
+                                    const exceeded = diff > 0;
+                                    return (
+                                        <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
+                                            {exceeded ? `(${Math.abs(diff)})` : Math.abs(diff)}
+                                        </div>
+                                    );
+                                }))}
+                            </td>
 
-                        {/* COL 15 — RCVD SHORT & EXCESS */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                const grey = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
-                                const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
-                                const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
-                                const diff2 = grey + ret - del;
-                                const exceed = diff2 < 0;
-                                return (
-                                    <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceed ? "red" : "green" }}>
-                                        {exceed ? `(${Math.abs(diff2)})` : diff2}
-                                    </div>
-                                );
-                            }))}
-                        </td>
+                            {/* COL 13 — YARN RETURN */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{wrk.yarnDeliveriesWithColor?.YarnReturn || "-"}</div>)))}
+                            </td>
 
-                        {/* COL 16 — PAYABLE AMOUNT */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                const received = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
-                                const price = Number(wrk.unitePrice) || 0;
-                                const total = received * price;
-                                return (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{total > 0 ? total.toFixed(2) : "-"}</div>);
-                            }))}
-                        </td>
+                            {/* COL 14 — YARN RECEIVED */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnReceived || "-"}</div>)))}
+                            </td>
 
-                        {/* COL 17 — PAID BILLING AMOUNT */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>PAID BILLING AMOUNT</div>)))}
-                        </td>
+                            {/* COL 15 — RCVD SHORT & EXCESS */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
+                                    const grey = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                                    const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
+                                    const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
+                                    const diff2 = grey + ret - del;
+                                    const exceed = diff2 < 0;
+                                    return (
+                                        <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceed ? "red" : "green" }}>
+                                            {exceed ? `(${Math.abs(diff2)})` : diff2}
+                                        </div>
+                                    );
+                                }))}
+                            </td>
 
-                        {/* COL 18 — PENDING BILLING AMOUNT */}
-                        <td style={plainTd(isHovered)}>
-                            {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>-</div>)))}
-                        </td>
-                    </tr>
-                );
-            })}
-        </tbody>
+                            {/* COL 16 — PAYABLE AMOUNT */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
+                                    const received = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                                    const price = Number(wrk.unitePrice) || 0;
+                                    const total = received * price;
+                                    return (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{total > 0 ? total.toFixed(2) : "-"}</div>);
+                                }))}
+                            </td>
+
+                            {/* COL 17 — PAID BILLING AMOUNT */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>PAID BILLING AMOUNT</div>)))}
+                            </td>
+
+                            {/* COL 18 — PENDING BILLING AMOUNT */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>-</div>)))}
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+
+            <tfoot>
+                <tr>
+                    {/* COL 0 — TOTAL label */}
+                    <td style={footerStickyTd(0)}>
+                        <div className={innerItem}>TOTAL</div>
+                    </td>
+                    {/* COL 1 — JOB NO (blank) */}
+                    <td style={footerStickyTd(1)}><div className={innerItem}></div></td>
+                    {/* COL 2 — WORK ORDER NO (blank) */}
+                    <td style={footerStickyTd(2)}><div className={innerItem}></div></td>
+                    {/* COL 3 — BUYER NAME (blank) */}
+                    <td style={footerStickyTd(3)}><div className={innerItem}></div></td>
+                    {/* COL 4 — STYLE NO (blank) */}
+                    <td style={footerStickyTd(4)}><div className={innerItem}></div></td>
+                    {/* COL 5 — MONTH (blank) */}
+                    <td style={footerStickyTd(5)}><div className={innerItem}></div></td>
+                    {/* COL 6 — COMPOSITION (blank) */}
+                    <td style={footerStickyTd(6)}><div className={innerItem}></div></td>
+
+                    {/* COL 7 — COLOR (not numeric, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}></div></td>
+
+                    {/* COL 8 — ORDER QTY total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.orderQty)}</div></td>
+
+                    {/* COL 9 — UNIT PRICE (not summable, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}></div></td>
+
+                    {/* COL 10 — WORK ORDER QTY total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.workOrderQty)}</div></td>
+
+                    {/* COL 11 — TOTAL YARN DELIVERY total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.totalYarnDelivery)}</div></td>
+
+                    {/* COL 12 — DEL SHORT & EXCESS total */}
+                    {/* COL 12 — DEL SHORT & EXCESS total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(totals.delShortExcess)}</div></td>
+                    {/* COL 13 — YARN RETURN total */}
+                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.yarnReturn)}</div></td>
+
+                    {/* COL 14 — YARN RECEIVED total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.yarnReceived)}</div></td>
+
+                    {/* COL 15 — RCVD SHORT & EXCESS total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(-totals.rcvdShortExcess) /* exceed=red when negative, so flip sign for green/red parity with per-row logic */}</div></td>
+
+                    {/* COL 16 — PAYABLE AMOUNT total */}
+                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.payableAmount) > 0 ? formatNumber(totals.payableAmount.toFixed(2)) : "-"}</div></td>
+
+                    {/* COL 17 — PAID BILLING AMOUNT (placeholder, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}>-</div></td>
+
+                    {/* COL 18 — PENDING BILLING AMOUNT (placeholder, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}>-</div></td>
+                </tr>
+            </tfoot>
+        </>
     );
 };
 
