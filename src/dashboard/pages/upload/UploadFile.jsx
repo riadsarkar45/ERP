@@ -9,20 +9,23 @@ const UploadFile = () => {
     const [success, setSuccess] = useState('');
     const [dragActive, setDragActive] = useState(false);
 
-    // ── Two separate progress states ──
+    // ── Three separate progress states ──
     const [styleReqProgress, setStyleReqProgress] = useState(null);
     const [kwoProgress, setKwoProgress] = useState(null);
+    const [awoProgress, setAwoProgress] = useState(null);
+
     const [styleReqSummary, setStyleReqSummary] = useState(null);
     const [kwoSummary, setKwoSummary] = useState(null);
+    const [awoSummary, setAwoSummary] = useState(null);
 
     const [jobId, setJobId] = useState(null);
-    const [activePhase, setActivePhase] = useState(null); // 'style-req' | 'kwo' | null
+    const [activePhase, setActivePhase] = useState(null); // 'style-req' | 'kwo' | 'awo' | null
 
     const fileInputRef = useRef(null);
     const axiosPublic = useAxiosPublic();
     const socket = useSocket();
 
-    // ── Socket listeners for BOTH phases ─────────────────────────────
+    // ── Socket listeners for ALL THREE phases ────────────────────────
     useEffect(() => {
         if (!socket) {
             console.warn('⚠️ useSocket() returned null — no socket connection');
@@ -40,7 +43,6 @@ const UploadFile = () => {
             if (data.jobId !== jobId) return;
             setStyleReqSummary(data.summary);
             setStyleReqProgress(prev => ({ ...prev, phase: 'complete' }));
-            // KWO will start next, keep loading true
         };
 
         const handleStyleReqError = (data) => {
@@ -50,26 +52,17 @@ const UploadFile = () => {
             setActivePhase(null);
         };
 
-        // ── KWO listeners ──
+        // ── K.W.O listeners ──
         const handleKwoProgress = (data) => {
             if (data.jobId !== jobId) return;
             setKwoProgress(data);
             setActivePhase('kwo');
-        };
-        const handleAwoProgress = (data) => {
-            // if (data.jobId !== jobId) return;
-            // setKwoProgress(data);
-            // setActivePhase('kwo');
-            console.log(data);
         };
 
         const handleKwoComplete = (data) => {
             if (data.jobId !== jobId) return;
             setKwoSummary(data.summary);
             setKwoProgress(prev => ({ ...prev, phase: 'complete' }));
-            setSuccess('✅ All imports finished (Style Requirement + K.W.O)');
-            setLoading(false);
-            setActivePhase(null);
         };
 
         const handleKwoError = (data) => {
@@ -79,23 +72,50 @@ const UploadFile = () => {
             setActivePhase(null);
         };
 
+        // ── A.W.O listeners ──
+        const handleAwoProgress = (data) => {
+            if (data.jobId !== jobId) return;
+            setAwoProgress(data);
+            setActivePhase('awo');
+        };
+
+        const handleAwoComplete = (data) => {
+            if (data.jobId !== jobId) return;
+            setAwoSummary(data.summary);
+            setAwoProgress(prev => ({ ...prev, phase: 'complete' }));
+            setSuccess('✅ All imports finished (Style Requirement + K.W.O + A.W.O)');
+            setLoading(false);
+            setActivePhase(null);
+        };
+
+        const handleAwoError = (data) => {
+            if (data.jobId !== jobId) return;
+            setError(`A.W.O failed: ${data.message}`);
+            setLoading(false);
+            setActivePhase(null);
+        };
+
         // Register listeners
         socket.on('style-req-progress', handleStyleReqProgress);
         socket.on('style-req-complete', handleStyleReqComplete);
         socket.on('style-req-error', handleStyleReqError);
         socket.on('kwo-progress', handleKwoProgress);
-        socket.on('awo-progress', handleAwoProgress);
         socket.on('kwo-complete', handleKwoComplete);
         socket.on('kwo-error', handleKwoError);
+        socket.on('awo-progress', handleAwoProgress);
+        socket.on('awo-complete', handleAwoComplete);
+        socket.on('awo-error', handleAwoError);
 
         return () => {
             socket.off('style-req-progress', handleStyleReqProgress);
             socket.off('style-req-complete', handleStyleReqComplete);
             socket.off('style-req-error', handleStyleReqError);
             socket.off('kwo-progress', handleKwoProgress);
-            socket.off('awo-progress', handleKwoProgress);
             socket.off('kwo-complete', handleKwoComplete);
             socket.off('kwo-error', handleKwoError);
+            socket.off('awo-progress', handleAwoProgress);
+            socket.off('awo-complete', handleAwoComplete);
+            socket.off('awo-error', handleAwoError);
         };
     }, [socket, jobId]);
 
@@ -123,8 +143,10 @@ const UploadFile = () => {
     const resetProgress = () => {
         setStyleReqProgress(null);
         setKwoProgress(null);
+        setAwoProgress(null);
         setStyleReqSummary(null);
         setKwoSummary(null);
+        setAwoSummary(null);
         setActivePhase(null);
     };
 
@@ -176,7 +198,6 @@ const UploadFile = () => {
                 setJobId(result.jobId);
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
-                // Loading stays true until 'kwo-complete' arrives
             } else {
                 setError(result.error || result.details || 'Failed to upload file');
                 setLoading(false);
@@ -215,22 +236,43 @@ const UploadFile = () => {
     };
 
     const getPhaseLabel = (progress, type) => {
-        if (!progress) return type === 'style-req' ? 'Waiting for Style Requirement…' : 'Waiting for K.W.O…';
-        if (progress.phase === 'starting') return `${type === 'style-req' ? 'Style Requirement' : 'K.W.O'}: Starting…`;
+        if (!progress) {
+            if (type === 'style-req') return 'Waiting for Style Requirement…';
+            if (type === 'kwo') return 'Waiting for K.W.O…';
+            return 'Waiting for A.W.O…';
+        }
+        if (progress.phase === 'starting') {
+            const name = type === 'style-req' ? 'Style Requirement' : type === 'kwo' ? 'K.W.O' : 'A.W.O';
+            return `${name}: Starting…`;
+        }
         if (progress.phase === 'inserting') {
-            return `${type === 'style-req' ? 'Style Req' : 'K.W.O'}: ${progress.current}/${progress.total} — ${progress.jobNo || progress.workOrderNo}`;
+            const name = type === 'style-req' ? 'Style Req' : type === 'kwo' ? 'K.W.O' : 'A.W.O';
+            return `${name}: ${progress.current}/${progress.total} — ${progress.jobNo || progress.workOrderNo}`;
         }
         if (progress.phase === 'error') {
-            return `${type === 'style-req' ? 'Style Req' : 'K.W.O'}: Skipped (error) — ${progress.current}/${progress.total}`;
+            const name = type === 'style-req' ? 'Style Req' : type === 'kwo' ? 'K.W.O' : 'A.W.O';
+            return `${name}: Skipped (error) — ${progress.current}/${progress.total}`;
         }
-        if (progress.phase === 'complete') return `${type === 'style-req' ? 'Style Req' : 'K.W.O'}: ✅ Complete`;
+        if (progress.phase === 'complete') {
+            const name = type === 'style-req' ? 'Style Req' : type === 'kwo' ? 'K.W.O' : 'A.W.O';
+            return `${name}: ✅ Complete`;
+        }
         return 'Processing…';
     };
 
     const getBarColor = (type, phase) => {
         if (phase === 'complete') return 'bg-green-500';
         if (phase === 'error') return 'bg-red-500';
-        return type === 'style-req' ? 'bg-blue-500' : 'bg-purple-500';
+        if (type === 'style-req') return 'bg-blue-500';
+        if (type === 'kwo') return 'bg-purple-500';
+        return 'bg-orange-500'; // awo
+    };
+
+    const getPhaseDotColor = (type, isActive) => {
+        if (!isActive) return 'bg-gray-300';
+        if (type === 'style-req') return 'bg-blue-500 animate-pulse';
+        if (type === 'kwo') return 'bg-purple-500 animate-pulse';
+        return 'bg-orange-500 animate-pulse'; // awo
     };
 
     return (
@@ -242,7 +284,7 @@ const UploadFile = () => {
                         📊 Excel Import
                     </h1>
                     <p className="text-gray-600">
-                        Upload Style Requirement + K.W.O sheets
+                        Upload Style Requirement + K.W.O + A.W.O sheets
                     </p>
                 </div>
 
@@ -333,7 +375,7 @@ const UploadFile = () => {
                                 </>
                             )}
                         </button>
-                        {(file || styleReqSummary || kwoSummary) && !loading && (
+                        {(file || styleReqSummary || kwoSummary || awoSummary) && !loading && (
                             <button onClick={handleClear} className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors">
                                 Clear
                             </button>
@@ -341,7 +383,7 @@ const UploadFile = () => {
                     </div>
 
                     {/* ═══════════════════════════════════════════════════
-                        DUAL PROGRESS BARS — Style Req + KWO
+                        TRIPLE PROGRESS BARS — Style Req + KWO + AWO
                         ═══════════════════════════════════════════════════ */}
                     {loading && (
                         <div className="mt-6 space-y-4">
@@ -349,7 +391,7 @@ const UploadFile = () => {
                             <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                        <span className={`w-2 h-2 rounded-full ${getPhaseDotColor('style-req', activePhase === 'style-req')}`}></span>
                                         <span className="text-sm font-semibold text-gray-700">Style Requirement</span>
                                         {styleReqProgress?.phase === 'complete' && (
                                             <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Done</span>
@@ -373,8 +415,8 @@ const UploadFile = () => {
                             <div className={`p-4 rounded-xl border transition-all ${activePhase === 'kwo' || kwoProgress ? 'bg-purple-50/50 border-purple-100' : 'bg-gray-50 border-gray-100'}`}>
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full ${activePhase === 'kwo' ? 'bg-purple-500 animate-pulse' : 'bg-gray-300'}`}></span>
-                                        <span className="text-sm font-semibold text-gray-700">K.W.O (Work Order)</span>
+                                        <span className={`w-2 h-2 rounded-full ${getPhaseDotColor('kwo', activePhase === 'kwo')}`}></span>
+                                        <span className="text-sm font-semibold text-gray-700">K.W.O (Knitting Work Order)</span>
                                         {kwoProgress?.phase === 'complete' && (
                                             <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Done</span>
                                         )}
@@ -393,6 +435,33 @@ const UploadFile = () => {
                                 <p className="text-xs text-gray-500 mt-1.5">{getPhaseLabel(kwoProgress, 'kwo')}</p>
                                 {kwoProgress?.rowsInGroup && (
                                     <p className="text-xs text-gray-400">{kwoProgress.rowsInGroup} row(s) in this group</p>
+                                )}
+                            </div>
+
+                            {/* ── A.W.O Progress ── */}
+                            <div className={`p-4 rounded-xl border transition-all ${activePhase === 'awo' || awoProgress ? 'bg-orange-50/50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full ${getPhaseDotColor('awo', activePhase === 'awo')}`}></span>
+                                        <span className="text-sm font-semibold text-gray-700">A.W.O (AOP Work Order)</span>
+                                        {awoProgress?.phase === 'complete' && (
+                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Done</span>
+                                        )}
+                                        {!awoProgress && kwoProgress?.phase !== 'complete' && (
+                                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Waiting…</span>
+                                        )}
+                                    </div>
+                                    <span className="text-xs font-bold text-orange-700">{getPercent(awoProgress)}%</span>
+                                </div>
+                                <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-300 ease-out ${getBarColor('awo', awoProgress?.phase)}`}
+                                        style={{ width: `${getPercent(awoProgress)}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1.5">{getPhaseLabel(awoProgress, 'awo')}</p>
+                                {awoProgress?.rowsInGroup && (
+                                    <p className="text-xs text-gray-400">{awoProgress.rowsInGroup} row(s) in this group</p>
                                 )}
                             </div>
                         </div>
@@ -419,9 +488,9 @@ const UploadFile = () => {
                     )}
 
                     {/* ═══════════════════════════════════════════════════
-                        DUAL SUMMARY CARDS
+                        TRIPLE SUMMARY CARDS
                         ═══════════════════════════════════════════════════ */}
-                    {(styleReqSummary || kwoSummary) && !loading && (
+                    {(styleReqSummary || kwoSummary || awoSummary) && !loading && (
                         <div className="mt-6 space-y-4">
                             {/* Style Req Summary */}
                             {styleReqSummary && (
@@ -485,6 +554,41 @@ const UploadFile = () => {
                                             <p className="text-xs font-semibold text-red-700 mb-1">{kwoSummary.errors.length} error(s):</p>
                                             <ul className="text-xs text-red-600 space-y-0.5 list-disc list-inside">
                                                 {kwoSummary.errors.map((e, i) => (
+                                                    <li key={i}><span className="font-mono">{e.workOrderNo}</span>: {e.message}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* AWO Summary */}
+                            {awoSummary && (
+                                <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                                    <h3 className="text-sm font-bold text-orange-800 mb-3">🎨 A.W.O Summary</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-orange-700">{awoSummary.workOrdersCreated}</p>
+                                            <p className="text-xs text-gray-600">WO created</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-indigo-700">{awoSummary.workOrdersUpdated}</p>
+                                            <p className="text-xs text-gray-600">WO updated</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-green-700">{awoSummary.compositionsInserted}</p>
+                                            <p className="text-xs text-gray-600">Compositions</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-yellow-700">{awoSummary.rowsSkipped}</p>
+                                            <p className="text-xs text-gray-600">Rows skipped</p>
+                                        </div>
+                                    </div>
+                                    {awoSummary.errors?.length > 0 && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                                            <p className="text-xs font-semibold text-red-700 mb-1">{awoSummary.errors.length} error(s):</p>
+                                            <ul className="text-xs text-red-600 space-y-0.5 list-disc list-inside">
+                                                {awoSummary.errors.map((e, i) => (
                                                     <li key={i}><span className="font-mono">{e.workOrderNo}</span>: {e.message}</li>
                                                 ))}
                                             </ul>

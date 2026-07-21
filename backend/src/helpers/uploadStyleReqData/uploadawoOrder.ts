@@ -1,7 +1,7 @@
 import prisma from "../../database/prismaClient/prisma";
 import { getIO } from "../../middleware/socket.io/socket";
 
-interface KWOParsedRow {
+interface AWOParsedRow {
     workOrderDate: string;
     workOrderNo: string;
     month: string;
@@ -17,7 +17,7 @@ interface KWOParsedRow {
     awoPricePerKg: number;
 }
 
-interface KWOUploadSummary {
+interface AWOUploadSummary {
     workOrdersCreated: number;
     workOrdersUpdated: number;
     compositionsInserted: number;
@@ -46,11 +46,11 @@ const normalizeWONo = (woNo: string): string => {
     return woNo.trim().replace(/\s+/g, " ");
 };
 
-export const uploadKWODataFromFile = async (
-    rows: KWOParsedRow[],
+export const uploadAOWDataFromFile = async (
+    rows: AWOParsedRow[],
     jobId: string
-): Promise<KWOUploadSummary> => {
-    const summary: KWOUploadSummary = {
+): Promise<AWOUploadSummary> => {
+    const summary: AWOUploadSummary = {
         workOrdersCreated: 0,
         workOrdersUpdated: 0,
         compositionsInserted: 0,
@@ -61,7 +61,7 @@ export const uploadKWODataFromFile = async (
     // 🔧 FIX: Pre-validate and log
     console.log(`📊 KWO: Received ${rows.length} raw rows`);
 
-    const validRows: KWOParsedRow[] = [];
+    const validRows: AWOParsedRow[] = [];
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (!row) {
@@ -91,10 +91,10 @@ export const uploadKWODataFromFile = async (
     }
 
     console.log(`✅ KWO: ${validRows.length} valid rows after filtering`);
-    const buildWOKey = (row: KWOParsedRow): string =>
+    const buildWOKey = (row: AWOParsedRow): string =>
         `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
     try {
-        const groupedByWO = new Map<string, KWOParsedRow[]>();
+        const groupedByWO = new Map<string, AWOParsedRow[]>();
         for (const row of validRows) {
             const key = buildWOKey(row);
             const bucket = groupedByWO.get(key) ?? [];
