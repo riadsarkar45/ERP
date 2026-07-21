@@ -60,7 +60,7 @@ export const uploadKWODataFromFile = async (
 
     // 🔧 FIX: Pre-validate and log
     console.log(`📊 KWO: Received ${rows.length} raw rows`);
-    
+
     const validRows: KWOParsedRow[] = [];
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -69,13 +69,13 @@ export const uploadKWODataFromFile = async (
             console.log(`⏭️ Row ${i} skipped: missing row data`);
             continue;
         }
-        
+
         // 🔧 FIX: Check BOTH workOrderNo AND jobNo
         const rawWONo = row.workOrderNo;
         const rawJobNo = row.jobNo;
         const trimmedWONo = typeof rawWONo === 'string' ? rawWONo.trim() : '';
         const trimmedJobNo = typeof rawJobNo === 'string' ? rawJobNo.trim() : '';
-        
+
         if (!trimmedWONo) {
             summary.rowsSkipped++;
             console.log(`⏭️ Row ${i} skipped: empty workOrderNo`);
@@ -86,25 +86,25 @@ export const uploadKWODataFromFile = async (
             console.log(`⏭️ Row ${i} skipped: invalid jobNo "${rawJobNo}" (WO: "${trimmedWONo}")`);
             continue;
         }
-        
+
         validRows.push(row);
     }
-    
-    console.log(`✅ KWO: ${validRows.length} valid rows after filtering`);
 
+    console.log(`✅ KWO: ${validRows.length} valid rows after filtering`);
+    const buildWOKey = (row: KWOParsedRow): string =>
+        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
     try {
         const groupedByWO = new Map<string, KWOParsedRow[]>();
-        
         for (const row of validRows) {
-            const woNo = normalizeWONo(row.workOrderNo);
-            const bucket = groupedByWO.get(woNo) ?? [];
+            const key = buildWOKey(row);
+            const bucket = groupedByWO.get(key) ?? [];
             bucket.push(row);
-            groupedByWO.set(woNo, bucket);
+            groupedByWO.set(key, bucket);
         }
 
         const woEntries = Array.from(groupedByWO.entries());
         const totalWOs = woEntries.length;
-        
+
         console.log(`📊 KWO: Grouped into ${totalWOs} unique work orders`);
         woEntries.slice(0, 5).forEach(([woNo, rows]) => {
             console.log(`   WO "${woNo}": ${rows.length} rows, jobNo: "${normalizeJobNo(rows[0]?.jobNo || '')}"`);
@@ -120,7 +120,7 @@ export const uploadKWODataFromFile = async (
             if (!first) continue;
 
             const normalizedJobNo = normalizeJobNo(first.jobNo);
-            
+
             // 🔧 FIX: Log what we're looking up
             console.log(`🔍 Looking up StyleRequirement for jobNo: "${normalizedJobNo}" (from raw: "${first.jobNo}")`);
 
@@ -141,14 +141,14 @@ export const uploadKWODataFromFile = async (
                         },
                         select: { id: true, jobNo: true }
                     });
-                    
+
                     if (fallbackSearch) {
                         console.log(`⚠️ Fallback match found: DB has "${fallbackSearch.jobNo}" for input "${first.jobNo}"`);
                     }
-                    
+
                     const msg = `StyleRequirement not found for jobNo "${normalizedJobNo}" (raw: "${first.jobNo}"). ` +
-                               `Upload Style Requirement sheet first. ` +
-                               `Available in DB: ${fallbackSearch ? `found "${fallbackSearch.jobNo}"` : 'no match'}`;
+                        `Upload Style Requirement sheet first. ` +
+                        `Available in DB: ${fallbackSearch ? `found "${fallbackSearch.jobNo}"` : 'no match'}`;
                     summary.errors.push({ workOrderNo, message: msg });
                     console.error(`❌ ${msg}`);
                     emitProgress("kwo-progress", {
@@ -218,7 +218,7 @@ export const uploadKWODataFromFile = async (
 
                     // 🔧 FIX: Delete old compositions before inserting (prevents duplicates on re-upload)
                     await tx.composition.deleteMany({
-                        where: { 
+                        where: {
                             workOrderId: workOrderId,
                             orderType: "knittingOrder"
                         }
@@ -247,7 +247,7 @@ export const uploadKWODataFromFile = async (
                 const message = err instanceof Error ? err.message : "Unknown error";
                 summary.errors.push({ workOrderNo, message });
                 console.error(`❌ Failed to upsert KWO "${workOrderNo}":`, message);
-                
+
                 emitProgress("kwo-progress", {
                     jobId, phase: "error", current: i + 1, total: totalWOs, workOrderNo, message
                 });
