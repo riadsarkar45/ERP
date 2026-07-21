@@ -56,6 +56,12 @@ const UploadFile = () => {
             setKwoProgress(data);
             setActivePhase('kwo');
         };
+        const handleAwoProgress = (data) => {
+            // if (data.jobId !== jobId) return;
+            // setKwoProgress(data);
+            // setActivePhase('kwo');
+            console.log(data);
+        };
 
         const handleKwoComplete = (data) => {
             if (data.jobId !== jobId) return;
@@ -78,6 +84,7 @@ const UploadFile = () => {
         socket.on('style-req-complete', handleStyleReqComplete);
         socket.on('style-req-error', handleStyleReqError);
         socket.on('kwo-progress', handleKwoProgress);
+        socket.on('awo-progress', handleAwoProgress);
         socket.on('kwo-complete', handleKwoComplete);
         socket.on('kwo-error', handleKwoError);
 
@@ -86,6 +93,7 @@ const UploadFile = () => {
             socket.off('style-req-complete', handleStyleReqComplete);
             socket.off('style-req-error', handleStyleReqError);
             socket.off('kwo-progress', handleKwoProgress);
+            socket.off('awo-progress', handleKwoProgress);
             socket.off('kwo-complete', handleKwoComplete);
             socket.off('kwo-error', handleKwoError);
         };

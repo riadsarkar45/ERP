@@ -65,6 +65,36 @@ interface KWOParsedRow {
     knittingWorkOrderQty: number;
     knittingPricePerKg: number;
 }
+interface AWOParsedRow {
+    workOrderDate: string;
+    workOrderNo: string;
+    month: string;
+    salesContractNo: string;
+    buyer: string;
+    jobNo: string;
+    poNo: string;
+    style: string;
+    color: string;
+    composition: string;
+    aopFactoryName: string;
+    aopWorkOrderQty: number;
+    aopPricePerKg: number;
+}
+interface AWOColumnIndices {
+    workOrderDate: number;
+    workOrderNo: number;
+    month: number;
+    salesContractNo: number;
+    buyer: number;
+    jobNo: number;
+    poNo: number;
+    style: number;
+    color: number;
+    composition: number;
+    aopFactoryName: number;
+    aopWorkOrderQty: number;
+    aopPricePerKg: number;
+}
 
 interface KWOColumnIndices {
     workOrderDate: number;
@@ -240,6 +270,39 @@ const buildKWOCOlIndex = (headers: unknown[]): KWOColumnIndices => ({
     knittingPricePerKg: findPartialCol(headers, "knitting price per kg"),
 });
 
+// ── A.W.O Specific Parsing ────────────────────────────────────────
+const buildAWOCOlIndex = (headers: unknown[]): AWOColumnIndices => ({
+    workOrderDate: findPartialCol(headers, "work order place date"),
+    workOrderNo: findPartialCol(headers, "work order no"),
+    month: findPartialCol(headers, "month"),
+    salesContractNo: findPartialCol(headers, "sales contract"),
+    buyer: findPartialCol(headers, "buyer"),
+    jobNo: findPartialCol(headers, "job no"),
+    poNo: findPartialCol(headers, "po no"),
+    style: findPartialCol(headers, "style"),
+    color: findPartialCol(headers, "color"),
+    composition: findPartialCol(headers, "composition"),
+    aopFactoryName: findPartialCol(headers, "aop factory name"),
+    aopWorkOrderQty: findPartialCol(headers, "aop work order"),
+    aopPricePerKg: findPartialCol(headers, "aop price per kg"),
+});
+
+const parseAWORow = (row: unknown[], colIndex: AWOColumnIndices): AWOParsedRow => ({
+    workOrderDate: asString(getCellValue(row, colIndex.workOrderDate)),
+    workOrderNo: asString(getCellValue(row, colIndex.workOrderNo)),
+    month: asString(getCellValue(row, colIndex.month)),
+    salesContractNo: asString(getCellValue(row, colIndex.salesContractNo)),
+    buyer: asString(getCellValue(row, colIndex.buyer)),
+    jobNo: asString(getCellValue(row, colIndex.jobNo)),
+    poNo: asString(getCellValue(row, colIndex.poNo)),
+    style: asString(getCellValue(row, colIndex.style)),
+    color: asString(getCellValue(row, colIndex.color)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    aopFactoryName: asString(getCellValue(row, colIndex.aopFactoryName)),
+    aopWorkOrderQty: toNumber(getCellValue(row, colIndex.aopWorkOrderQty)),
+    aopPricePerKg: toNumber(getCellValue(row, colIndex.aopPricePerKg)),
+});
+
 const parseKWORow = (row: unknown[], colIndex: KWOColumnIndices): KWOParsedRow => ({
     workOrderDate: asString(getCellValue(row, colIndex.workOrderDate)),
     workOrderNo: asString(getCellValue(row, colIndex.workOrderNo)),
@@ -277,6 +340,27 @@ async function processKWOSheet(worksheetReader: any) {
 
     return { parsedRows, headerFound: true };
 }
+async function processAWOSheet(worksheetReader: any) {
+    const AWO_KEYWORDS = ["work order no", "month", "job no", "style", "color", "composition", "aop factory name"];
+    const MIN_SCORE = 4;
+    const SCAN_LIMIT = 15;
+
+    const { rowBuffer, headerRowIndex } = await scanForHeaderRow(worksheetReader, AWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+
+    if (headerRowIndex === -1) {
+        return { parsedRows: [] as AWOParsedRow[], headerFound: false };
+    }
+
+    const headers = buildMergedHeaders(rowBuffer, headerRowIndex);
+    const colIndex = buildAWOCOlIndex(headers);
+
+    const parsedRows: AWOParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < rowBuffer.length; i++) {
+        parsedRows.push(parseAWORow(rowBuffer[i] ?? [], colIndex));
+    }
+
+    return { parsedRows, headerFound: true };
+}
 
 // ── Main Controller ──────────────────────────────────────────────
 export const fileUpload = async (req: MulterRequest, res: Response): Promise<void> => {
@@ -298,6 +382,9 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         let kwoHeaderFound = false;
         let kwoSheetName = "";
 
+        let parsedRowsAWO: AWOParsedRow[] = [];
+        let awoHeaderFound = false;
+        let awoSheetName = "";
         for await (const worksheetReader of workbookReader) {
             const sheetName = (worksheetReader as any).name || "";
 
@@ -311,6 +398,12 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 parsedRowsKWO = result.parsedRows;
                 kwoHeaderFound = result.headerFound;
                 kwoSheetName = sheetName;
+            } else if (sheetName === "A.W.O") {
+                // const result = await processKWOSheet(worksheetReader);
+                const result = await processAWOSheet(worksheetReader)
+                parsedRowsAWO = result.parsedRows;
+                awoHeaderFound = result.headerFound;
+                awoSheetName = sheetName;
             } else {
                 for await (const _row of worksheetReader) { /* drain */ }
             }
@@ -335,6 +428,11 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 sheetName: kwoSheetName,
                 found: kwoHeaderFound,
                 totalRows: parsedRowsKWO.length,
+            },
+            awo: {
+                sheetName: awoSheetName,
+                found: awoHeaderFound,
+                totalRows: parsedRowsAWO.length,
             },
         });
 
