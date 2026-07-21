@@ -17,6 +17,14 @@ interface KWOParsedRow {
     knittingPricePerKg: number;
 }
 
+interface KWOUploadSummary {
+    workOrdersCreated: number;
+    workOrdersUpdated: number;
+    compositionsInserted: number;
+    rowsSkipped: number;
+    errors: { workOrderNo: string; message: string }[];
+}
+
 const emitProgress = (event: string, payload: Record<string, unknown>) => {
     const io = getIO();
     if (!io) {
@@ -26,28 +34,69 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
-const normalizeJobNo = (jobNo: string): string => jobNo.trim().replace(/\//g, "-");
+// 🔧 FIX: More robust normalization
+const normalizeJobNo = (jobNo: string): string => {
+    if (!jobNo || typeof jobNo !== 'string') return '';
+    return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+};
+
+// 🔧 FIX: Normalize work order numbers too (they might have spaces/issues)
+const normalizeWONo = (woNo: string): string => {
+    if (!woNo || typeof woNo !== 'string') return '';
+    return woNo.trim().replace(/\s+/g, " ");
+};
 
 export const uploadKWODataFromFile = async (
     rows: KWOParsedRow[],
     jobId: string
-) => {
-    const summary = {
+): Promise<KWOUploadSummary> => {
+    const summary: KWOUploadSummary = {
         workOrdersCreated: 0,
         workOrdersUpdated: 0,
         compositionsInserted: 0,
         rowsSkipped: 0,
-        errors: [] as { workOrderNo: string; message: string }[],
+        errors: [],
     };
+
+    // 🔧 FIX: Pre-validate and log
+    console.log(`📊 KWO: Received ${rows.length} raw rows`);
+    
+    const validRows: KWOParsedRow[] = [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) {
+            summary.rowsSkipped++;
+            console.log(`⏭️ Row ${i} skipped: missing row data`);
+            continue;
+        }
+        
+        // 🔧 FIX: Check BOTH workOrderNo AND jobNo
+        const rawWONo = row.workOrderNo;
+        const rawJobNo = row.jobNo;
+        const trimmedWONo = typeof rawWONo === 'string' ? rawWONo.trim() : '';
+        const trimmedJobNo = typeof rawJobNo === 'string' ? rawJobNo.trim() : '';
+        
+        if (!trimmedWONo) {
+            summary.rowsSkipped++;
+            console.log(`⏭️ Row ${i} skipped: empty workOrderNo`);
+            continue;
+        }
+        if (!trimmedJobNo || trimmedJobNo.toLowerCase() === 'n/a') {
+            summary.rowsSkipped++;
+            console.log(`⏭️ Row ${i} skipped: invalid jobNo "${rawJobNo}" (WO: "${trimmedWONo}")`);
+            continue;
+        }
+        
+        validRows.push(row);
+    }
+    
+    console.log(`✅ KWO: ${validRows.length} valid rows after filtering`);
 
     try {
         const groupedByWO = new Map<string, KWOParsedRow[]>();
-        for (const row of rows) {
-            if (!row.workOrderNo) {
-                summary.rowsSkipped++;
-                continue;
-            }
-            const woNo = row.workOrderNo.trim();
+        
+        for (const row of validRows) {
+            const woNo = normalizeWONo(row.workOrderNo);
             const bucket = groupedByWO.get(woNo) ?? [];
             bucket.push(row);
             groupedByWO.set(woNo, bucket);
@@ -55,6 +104,11 @@ export const uploadKWODataFromFile = async (
 
         const woEntries = Array.from(groupedByWO.entries());
         const totalWOs = woEntries.length;
+        
+        console.log(`📊 KWO: Grouped into ${totalWOs} unique work orders`);
+        woEntries.slice(0, 5).forEach(([woNo, rows]) => {
+            console.log(`   WO "${woNo}": ${rows.length} rows, jobNo: "${normalizeJobNo(rows[0]?.jobNo || '')}"`);
+        });
 
         emitProgress("kwo-progress", { jobId, phase: "starting", current: 0, total: totalWOs });
 
@@ -66,6 +120,9 @@ export const uploadKWODataFromFile = async (
             if (!first) continue;
 
             const normalizedJobNo = normalizeJobNo(first.jobNo);
+            
+            // 🔧 FIX: Log what we're looking up
+            console.log(`🔍 Looking up StyleRequirement for jobNo: "${normalizedJobNo}" (from raw: "${first.jobNo}")`);
 
             try {
                 const styleReq = await prisma.styleRequirement.findUnique({
@@ -74,7 +131,24 @@ export const uploadKWODataFromFile = async (
                 });
 
                 if (!styleReq) {
-                    const msg = `StyleRequirement not found for jobNo "${normalizedJobNo}". Upload Style Requirement sheet first.`;
+                    // 🔧 FIX: Try fallback - search for partial match
+                    const fallbackSearch = await prisma.styleRequirement.findFirst({
+                        where: {
+                            jobNo: {
+                                contains: first.jobNo.replace(/[\\/]/g, ''),
+                                mode: 'insensitive'
+                            }
+                        },
+                        select: { id: true, jobNo: true }
+                    });
+                    
+                    if (fallbackSearch) {
+                        console.log(`⚠️ Fallback match found: DB has "${fallbackSearch.jobNo}" for input "${first.jobNo}"`);
+                    }
+                    
+                    const msg = `StyleRequirement not found for jobNo "${normalizedJobNo}" (raw: "${first.jobNo}"). ` +
+                               `Upload Style Requirement sheet first. ` +
+                               `Available in DB: ${fallbackSearch ? `found "${fallbackSearch.jobNo}"` : 'no match'}`;
                     summary.errors.push({ workOrderNo, message: msg });
                     console.error(`❌ ${msg}`);
                     emitProgress("kwo-progress", {
@@ -115,7 +189,7 @@ export const uploadKWODataFromFile = async (
                                 styleNo: first.style || existingWO.styleNo,
                                 lotNo: first.poNo || existingWO.lotNo,
                                 jobNo: first.jobNo || existingWO.jobNo,
-                                orderType: "KWO",
+                                orderType: "knittingOrder",
                                 factoryName: first.knittingFactoryName || existingWO.factoryName,
                                 styleRequirementId: styleReq.id,
                                 jobId: jobRecord.id,
@@ -132,7 +206,7 @@ export const uploadKWODataFromFile = async (
                                 styleNo: first.style,
                                 lotNo: first.poNo,
                                 jobNo: first.jobNo,
-                                orderType: "KWO",
+                                orderType: "knittingOrder",
                                 factoryName: first.knittingFactoryName,
                                 styleRequirementId: styleReq.id,
                                 jobId: jobRecord.id,
@@ -142,15 +216,23 @@ export const uploadKWODataFromFile = async (
                         summary.workOrdersCreated++;
                     }
 
+                    // 🔧 FIX: Delete old compositions before inserting (prevents duplicates on re-upload)
+                    await tx.composition.deleteMany({
+                        where: { 
+                            workOrderId: workOrderId,
+                            orderType: "knittingOrder"
+                        }
+                    });
+
                     const compositionsData = woRows.map(row => ({
                         composition: row.composition || "N/A",
-                        unitePrice: row.knittingPricePerKg || 0,
+                        unitePrice: Number(row.knittingPricePerKg) || 0,
                         color: row.color || "N/A",
                         additional: 0,
-                        orderQty: row.knittingWorkOrderQty || 0,
-                        workOrderQty: row.knittingWorkOrderQty || 0,
+                        orderQty: Number(row.knittingWorkOrderQty) || 0,
+                        workOrderQty: Number(row.knittingWorkOrderQty) || 0,
                         workOrderId: workOrderId,
-                        orderType: "KWO"
+                        orderType: "knittingOrder"
                     }));
 
                     await tx.composition.createMany({ data: compositionsData });

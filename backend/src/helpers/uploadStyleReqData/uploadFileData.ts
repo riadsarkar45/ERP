@@ -33,7 +33,11 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
-const normalizeJobNo = (jobNo: string): string => jobNo.trim().replace(/\//g, "-");
+// 🔧 FIX: More robust normalization - also handle backslashes and multiple slashes
+const normalizeJobNo = (jobNo: string): string => {
+    if (!jobNo || typeof jobNo !== 'string') return '';
+    return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+};
 
 export const uploadDataFromFile = async (
     rows: ParsedRow[],
@@ -47,13 +51,34 @@ export const uploadDataFromFile = async (
         errors: [],
     };
 
+    // 🔧 FIX: Pre-validate and log all rows before grouping
+    console.log(`📊 Style Requirement: Received ${rows.length} raw rows`);
+    
+    const validRows: ParsedRow[] = [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) {
+            summary.rowsSkipped++;
+            console.log(`⏭️ Row ${i} skipped: undefined row`);
+            continue;
+        }
+        // 🔧 FIX: Check for falsy jobNo OR empty string after trim
+        const rawJobNo = row.jobNo;
+        const trimmedJobNo = typeof rawJobNo === 'string' ? rawJobNo.trim() : '';
+        
+        if (!trimmedJobNo || trimmedJobNo === '' || trimmedJobNo.toLowerCase() === 'n/a') {
+            summary.rowsSkipped++;
+            console.log(`⏭️ Row ${i} skipped: invalid jobNo "${rawJobNo}"`);
+            continue;
+        }
+        validRows.push(row);
+    }
+    
+    console.log(`✅ Style Requirement: ${validRows.length} valid rows after filtering`);
+
     try {
         const groupedByJob = new Map<string, ParsedRow[]>();
-        for (const row of rows) {
-            if (!row.jobNo) {
-                summary.rowsSkipped++;
-                continue;
-            }
+        for (const row of validRows) {
             const jobNo = normalizeJobNo(row.jobNo);
             const bucket = groupedByJob.get(jobNo) ?? [];
             bucket.push(row);
@@ -62,6 +87,12 @@ export const uploadDataFromFile = async (
 
         const jobEntries = Array.from(groupedByJob.entries());
         const totalJobs = jobEntries.length;
+        
+        console.log(`📊 Style Requirement: Grouped into ${totalJobs} unique jobs`);
+        // 🔧 FIX: Log first few job numbers for debugging
+        jobEntries.slice(0, 5).forEach(([jobNo, rows]) => {
+            console.log(`   Job "${jobNo}": ${rows.length} rows`);
+        });
 
         emitProgress("style-req-progress", {
             jobId,
@@ -109,15 +140,20 @@ export const uploadDataFromFile = async (
                         },
                     });
 
+                    // 🔧 FIX: Delete old rows before inserting new ones (prevents duplicates on re-upload)
+                    await tx.styleRequirementRow.deleteMany({
+                        where: { styleRequirementId: parent.id }
+                    });
+
                     await tx.styleRequirementRow.createMany({
                         data: jobRows.map((row) => ({
                             styleRequirementId: parent.id,
-                            color: row.color,
-                            composition: row.composition,
-                            finishDia: row.finishDia,
-                            orderQty: row.orderQty,
-                            finishRequiredQty: row.finishFabricRequired,
-                            additional: Number(row.additional)
+                            color: row.color || "N/A",
+                            composition: row.composition || "N/A",
+                            finishDia: row.finishDia || "N/A",
+                            orderQty: Number(row.orderQty) || 0,
+                            finishRequiredQty: Number(row.finishFabricRequired) || 0,
+                            additional: Number(row.additional) || 0,
                         })),
                     });
                 });
