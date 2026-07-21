@@ -11,7 +11,7 @@ import { io } from 'socket.io-client';
 // very first render cycle in dev, even though it looked like nothing
 // was wrong. Keeping the instance at module scope means it survives
 // StrictMode's mount/unmount/remount simulation untouched.
-const socket = io(import.meta.env.VITE_BACKEND_URL || 'https://erp-7-44h5.onrender.com', {
+const socket = io(import.meta.env.VITE_BACKEND_URL || 'https://erp-8-xs1c.onrender.com', {
     withCredentials: true,
 });
 
