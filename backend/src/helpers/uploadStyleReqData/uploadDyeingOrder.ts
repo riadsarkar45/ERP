@@ -90,9 +90,8 @@ export const uploadDYEINGDataFromFile = async (
         validRows.push(row);
     }
 
-    console.log(`✅ DWO: ${validRows.length} valid rows after filtering`);
     const buildWOKey = (row: AWOParsedRow): string =>
-        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+        `${normalizeWONo(row.workOrderNo)}`;
     try {
         const groupedByWO = new Map<string, AWOParsedRow[]>();
         for (const row of validRows) {

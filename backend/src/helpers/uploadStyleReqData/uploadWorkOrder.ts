@@ -90,9 +90,8 @@ export const uploadKWODataFromFile = async (
         validRows.push(row);
     }
 
-    console.log(`✅ KWO: ${validRows.length} valid rows after filtering`);
     const buildWOKey = (row: KWOParsedRow): string =>
-        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+        `${normalizeWONo(row.workOrderNo)}`;
     try {
         const groupedByWO = new Map<string, KWOParsedRow[]>();
         for (const row of validRows) {

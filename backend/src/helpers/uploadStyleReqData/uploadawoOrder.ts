@@ -59,7 +59,6 @@ export const uploadAOWDataFromFile = async (
     };
 
     // 🔧 FIX: Pre-validate and log
-    console.log(`📊 KWO: Received ${rows.length} raw rows`);
 
     const validRows: AWOParsedRow[] = [];
     for (let i = 0; i < rows.length; i++) {
@@ -90,9 +89,8 @@ export const uploadAOWDataFromFile = async (
         validRows.push(row);
     }
 
-    console.log(`✅ KWO: ${validRows.length} valid rows after filtering`);
     const buildWOKey = (row: AWOParsedRow): string =>
-        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+        `${normalizeWONo(row.workOrderNo)}`;
     try {
         const groupedByWO = new Map<string, AWOParsedRow[]>();
         for (const row of validRows) {
@@ -189,7 +187,7 @@ export const uploadAOWDataFromFile = async (
                                 styleNo: first.style || existingWO.styleNo,
                                 lotNo: first.poNo || existingWO.lotNo,
                                 jobNo: first.jobNo || existingWO.jobNo,
-                                orderType: "aopOrder",
+                                orderType: "dyeingOrder",
                                 factoryName: first.awoFactoryName || existingWO.factoryName,
                                 styleRequirementId: styleReq.id,
                                 jobId: jobRecord.id,
@@ -206,7 +204,7 @@ export const uploadAOWDataFromFile = async (
                                 styleNo: first.style,
                                 lotNo: first.poNo,
                                 jobNo: first.jobNo,
-                                orderType: "aopOrder",
+                                orderType: "dyeingOrder",
                                 factoryName: first.awoFactoryName,
                                 styleRequirementId: styleReq.id,
                                 jobId: jobRecord.id,
@@ -220,7 +218,7 @@ export const uploadAOWDataFromFile = async (
                     await tx.composition.deleteMany({
                         where: {
                             workOrderId: workOrderId,
-                            orderType: "aopOrder"
+                            orderType: "dyeingOrder"
                         }
                     });
 
@@ -232,7 +230,7 @@ export const uploadAOWDataFromFile = async (
                         orderQty: Number(row.awoWorkOrderQty) || 0,
                         workOrderQty: Number(row.awoWorkOrderQty) || 0,
                         workOrderId: workOrderId,
-                        orderType: "aopOrder"
+                        orderType: "dyeingOrder"
                     }));
 
                     await tx.composition.createMany({ data: compositionsData });
