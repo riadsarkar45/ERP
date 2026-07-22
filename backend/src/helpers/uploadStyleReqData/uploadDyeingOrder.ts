@@ -188,7 +188,7 @@ export const uploadDYEINGDataFromFile = async (
                                 styleNo: first.style || existingWO.styleNo,
                                 lotNo: first.poNo || existingWO.lotNo,
                                 jobNo: first.jobNo || existingWO.jobNo,
-                                orderType: "aopOrder",
+                                orderType: "dyeingOrder",
                                 factoryName: first.dwoFactoryName || existingWO.factoryName,
                                 styleRequirementId: styleReq.id,
                                 jobId: jobRecord.id,
@@ -205,7 +205,7 @@ export const uploadDYEINGDataFromFile = async (
                                 styleNo: first.style,
                                 lotNo: first.poNo,
                                 jobNo: first.jobNo,
-                                orderType: "aopOrder",
+                                orderType: "dyeingOrder",
                                 factoryName: first.dwoFactoryName,
                                 styleRequirementId: styleReq.id,
                                 jobId: jobRecord.id,
@@ -219,7 +219,7 @@ export const uploadDYEINGDataFromFile = async (
                     await tx.composition.deleteMany({
                         where: {
                             workOrderId: workOrderId,
-                            orderType: "aopOrder"
+                            orderType: "dyeingOrder"
                         }
                     });
 
@@ -231,7 +231,7 @@ export const uploadDYEINGDataFromFile = async (
                         orderQty: Number(row.dwoWorkOrderQty) || 0,
                         workOrderQty: Number(row.dwoWorkOrderQty) || 0,
                         workOrderId: workOrderId,
-                        orderType: "aopOrder"
+                        orderType: "dyeingOrder"
                     }));
 
                     await tx.composition.createMany({ data: compositionsData });
