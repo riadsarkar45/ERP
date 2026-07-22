@@ -37,79 +37,25 @@ const UploadFile = () => {
             return;
         }
 
-        // ── Style Requirement listeners ──
+        // Use functional updates to avoid stale closure issues
         const handleStyleReqProgress = (data) => { if (data.jobId !== jobId) return; setStyleReqProgress(data); setActivePhase('style-req'); };
-        const handleStyleReqComplete = (data) => {
-            if (data.jobId !== jobId) return;
-            const nextProgress = { ...(styleReqProgress || {}), phase: 'complete' };
-            setStyleReqSummary(data.summary);
-            setStyleReqProgress(nextProgress);
-            if (checkAllComplete({ styleReqProgress: nextProgress })) {
-                setSuccess('✅ All imports finished successfully!');
-                setLoading(false);
-                setActivePhase(null);
-            }
-        };
+        const handleStyleReqComplete = (data) => { if (data.jobId !== jobId) return; setStyleReqSummary(data.summary); setStyleReqProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleStyleReqError = (data) => { if (data.jobId !== jobId) return; setError(`Style Requirement failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
-        // ── K.W.O listeners ──
         const handleKwoProgress = (data) => { if (data.jobId !== jobId) return; setKwoProgress(data); setActivePhase('kwo'); };
-        const handleKwoComplete = (data) => {
-            if (data.jobId !== jobId) return;
-            const nextProgress = { ...(kwoProgress || {}), phase: 'complete' };
-            setKwoSummary(data.summary);
-            setKwoProgress(nextProgress);
-            if (checkAllComplete({ kwoProgress: nextProgress })) {
-                setSuccess('✅ All imports finished successfully!');
-                setLoading(false);
-                setActivePhase(null);
-            }
-        };
+        const handleKwoComplete = (data) => { if (data.jobId !== jobId) return; setKwoSummary(data.summary); setKwoProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleKwoError = (data) => { if (data.jobId !== jobId) return; setError(`K.W.O failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
-        // ── A.W.O listeners ──
         const handleAwoProgress = (data) => { if (data.jobId !== jobId) return; setAwoProgress(data); setActivePhase('awo'); };
-        const handleAwoComplete = (data) => {
-            if (data.jobId !== jobId) return;
-            const nextProgress = { ...(awoProgress || {}), phase: 'complete' };
-            setAwoSummary(data.summary);
-            setAwoProgress(nextProgress);
-            if (checkAllComplete({ awoProgress: nextProgress })) {
-                setSuccess('✅ All imports finished successfully!');
-                setLoading(false);
-                setActivePhase(null);
-            }
-        };
+        const handleAwoComplete = (data) => { if (data.jobId !== jobId) return; setAwoSummary(data.summary); setAwoProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleAwoError = (data) => { if (data.jobId !== jobId) return; setError(`A.W.O failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
-        // ── D.W.O (Dyeing) listeners ──
         const handleDwoProgress = (data) => { if (data.jobId !== jobId) return; setDwoProgress(data); setActivePhase('dwo'); };
-        const handleDwoComplete = (data) => {
-            if (data.jobId !== jobId) return;
-            const nextProgress = { ...(dwoProgress || {}), phase: 'complete' };
-            setDwoSummary(data.summary);
-            setDwoProgress(nextProgress);
-            if (checkAllComplete({ dwoProgress: nextProgress })) {
-                setSuccess('✅ All imports finished successfully!');
-                setLoading(false);
-                setActivePhase(null);
-            }
-        };
+        const handleDwoComplete = (data) => { if (data.jobId !== jobId) return; setDwoSummary(data.summary); setDwoProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleDwoError = (data) => { if (data.jobId !== jobId) return; setError(`D.W.O failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
-        // ── AOP DEL. & RCVD listeners ──
         const handleAopDelProgress = (data) => { if (data.jobId !== jobId) return; setAopDelProgress(data); setActivePhase('aop-del'); };
-        const handleAopDelComplete = (data) => {
-            if (data.jobId !== jobId) return;
-            const nextProgress = { ...(aopDelProgress || {}), phase: 'complete' };
-            setAopDelSummary(data.summary);
-            setAopDelProgress(nextProgress);
-            if (checkAllComplete({ aopDelProgress: nextProgress })) {
-                setSuccess('✅ All imports finished successfully!');
-                setLoading(false);
-                setActivePhase(null);
-            }
-        };
+        const handleAopDelComplete = (data) => { if (data.jobId !== jobId) return; setAopDelSummary(data.summary); setAopDelProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
 
         // Register listeners
         socket.on('style-req-progress', handleStyleReqProgress);
@@ -145,24 +91,27 @@ const UploadFile = () => {
         };
     }, [socket, jobId]);
 
-    function checkAllComplete(overrides = {}) {
-        if (expectedPhases.length === 0) return false;
+    // ── Dedicated Completion Checker ────────────────────────────────
+    // This runs independently whenever any progress state updates, 
+    // guaranteeing we always evaluate the absolute latest state.
+    useEffect(() => {
+        if (expectedPhases.length === 0) return;
 
-        const style = overrides.styleReqProgress ?? styleReqProgress;
-        const kwo = overrides.kwoProgress ?? kwoProgress;
-        const awo = overrides.awoProgress ?? awoProgress;
-        const dwo = overrides.dwoProgress ?? dwoProgress;
-        const aopDel = overrides.aopDelProgress ?? aopDelProgress;
-
-        return expectedPhases.every(phase => {
-            if (phase === 'style-req') return style?.phase === 'complete';
-            if (phase === 'kwo') return kwo?.phase === 'complete';
-            if (phase === 'awo') return awo?.phase === 'complete';
-            if (phase === 'dwo') return dwo?.phase === 'complete';
-            if (phase === 'aop-del') return aopDel?.phase === 'complete';
+        const isComplete = expectedPhases.every(phase => {
+            if (phase === 'style-req') return styleReqProgress?.phase === 'complete';
+            if (phase === 'kwo') return kwoProgress?.phase === 'complete';
+            if (phase === 'awo') return awoProgress?.phase === 'complete';
+            if (phase === 'dwo') return dwoProgress?.phase === 'complete';
+            if (phase === 'aop-del') return aopDelProgress?.phase === 'complete';
             return true;
         });
-    }
+
+        if (isComplete) {
+            setSuccess('✅ All imports finished successfully!');
+            setLoading(false);
+            setActivePhase(null);
+        }
+    }, [expectedPhases, styleReqProgress, kwoProgress, awoProgress, dwoProgress, aopDelProgress]);
 
     // ── File handling ───────────────────────────────────────────────
     const handleFileChange = (selectedFile) => {
@@ -572,7 +521,7 @@ const UploadFile = () => {
                             {aopDelSummary && (
                                 <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
                                     <h3 className="text-sm font-bold text-indigo-800 mb-3">🚚 AOP DEL. & RCVD Summary</h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
                                         <div className="p-3 bg-white rounded-lg text-center shadow-sm">
                                             <p className="text-2xl font-bold text-indigo-700">{aopDelSummary.deliveriesCreated}</p>
                                             <p className="text-xs text-gray-600">Deliveries created</p>
