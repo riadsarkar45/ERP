@@ -195,10 +195,9 @@ const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices 
     composition: findPartialCol(headers, "composition"),
     deliveryForAop: findPartialCol(headers, "delivery for aop"),
     afterAopFabricRcvd: findPartialCol(headers, "after aop fabric rcvd"),
+    aopFinishFabricRcvd: findPartialCol(headers, "aop finish fabric rcvd"), // 👈 ADD THIS
     aopReceivedFromFactoryName: findPartialCol(headers, "aop received from factory"),
     aopFabricDeliveryFactoryNameSM: findPartialCol(headers, "aop fabric delivery factory"),
-    finishReceivedFromAop: findPartialCol(headers, "aop finish fabric received"),
-
 });
 
 const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices): AOPDeliveryParsedRow => ({
@@ -214,8 +213,8 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     composition: asString(getCellValue(row, colIndex.composition)),
     deliveryForAop: toNumber(getCellValue(row, colIndex.deliveryForAop)),
     afterAopFabricRcvd: toNumber(getCellValue(row, colIndex.afterAopFabricRcvd)),
+    aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)), // 👈 ADD THIS
     aopReceivedFromFactoryName: asString(getCellValue(row, colIndex.aopReceivedFromFactoryName)),
-    finishReceivedFromAop: toNumber(getCellValue(row, colIndex.finishReceivedFromAop)),
     aopFabricDeliveryFactoryNameSM: asString(getCellValue(row, colIndex.aopFabricDeliveryFactoryNameSM)),
 });
 
