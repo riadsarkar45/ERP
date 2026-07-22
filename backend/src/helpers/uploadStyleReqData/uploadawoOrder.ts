@@ -34,13 +34,11 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
-// 🔧 FIX: More robust normalization
 const normalizeJobNo = (jobNo: string): string => {
     if (!jobNo || typeof jobNo !== 'string') return '';
     return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 };
 
-// 🔧 FIX: Normalize work order numbers too (they might have spaces/issues)
 const normalizeWONo = (woNo: string): string => {
     if (!woNo || typeof woNo !== 'string') return '';
     return woNo.trim().replace(/\s+/g, " ");
@@ -58,7 +56,7 @@ export const uploadAOWDataFromFile = async (
         errors: [],
     };
 
-    // 🔧 FIX: Pre-validate and log
+    console.log(`📊 AWO: Received ${rows.length} raw rows`);
 
     const validRows: AWOParsedRow[] = [];
     for (let i = 0; i < rows.length; i++) {
@@ -69,7 +67,6 @@ export const uploadAOWDataFromFile = async (
             continue;
         }
 
-        // 🔧 FIX: Check BOTH workOrderNo AND jobNo
         const rawWONo = row.workOrderNo;
         const rawJobNo = row.jobNo;
         const trimmedWONo = typeof rawWONo === 'string' ? rawWONo.trim() : '';
@@ -89,8 +86,14 @@ export const uploadAOWDataFromFile = async (
         validRows.push(row);
     }
 
+    // IMPORTANT: this key is ONLY for grouping rows into the correct work
+    // order internally. It must never be written to the database or used
+    // in DB where-clauses directly — jobNo/month scoping here is what
+    // stops two different jobs that happen to share a plain workOrderNo
+    // (e.g. both have "3") from being merged into one work order.
     const buildWOKey = (row: AWOParsedRow): string =>
-        `${normalizeWONo(row.workOrderNo)}`;
+        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+
     try {
         const groupedByWO = new Map<string, AWOParsedRow[]>();
         for (const row of validRows) {
@@ -103,23 +106,26 @@ export const uploadAOWDataFromFile = async (
         const woEntries = Array.from(groupedByWO.entries());
         const totalWOs = woEntries.length;
 
-        console.log(`📊 KWO: Grouped into ${totalWOs} unique work orders`);
-        woEntries.slice(0, 5).forEach(([woNo, rows]) => {
-            console.log(`   WO "${woNo}": ${rows.length} rows, jobNo: "${normalizeJobNo(rows[0]?.jobNo || '')}"`);
+        console.log(`📊 AWO: Grouped into ${totalWOs} unique work orders`);
+        woEntries.slice(0, 5).forEach(([key, rows]) => {
+            console.log(`   Group "${key}": ${rows.length} row(s), jobNo: "${normalizeJobNo(rows[0]?.jobNo || '')}"`);
         });
 
-        emitProgress("kwo-progress", { jobId, phase: "starting", current: 0, total: totalWOs });
+        emitProgress("awo-progress", { jobId, phase: "starting", current: 0, total: totalWOs });
 
         for (let i = 0; i < woEntries.length; i++) {
             const entry = woEntries[i];
             if (!entry) continue;
-            const [workOrderNo, woRows] = entry;
+
+            // Don't destructure the composite grouping key as workOrderNo —
+            // the real, plain value (e.g. "3") always comes from the row data.
+            const [, woRows] = entry;
             const first = woRows[0];
             if (!first) continue;
 
+            const workOrderNo = first.workOrderNo;
             const normalizedJobNo = normalizeJobNo(first.jobNo);
 
-            // 🔧 FIX: Log what we're looking up
             console.log(`🔍 Looking up StyleRequirement for jobNo: "${normalizedJobNo}" (from raw: "${first.jobNo}")`);
 
             try {
@@ -129,7 +135,6 @@ export const uploadAOWDataFromFile = async (
                 });
 
                 if (!styleReq) {
-                    // 🔧 FIX: Try fallback - search for partial match
                     const fallbackSearch = await prisma.styleRequirement.findFirst({
                         where: {
                             jobNo: {
@@ -149,7 +154,7 @@ export const uploadAOWDataFromFile = async (
                         `Available in DB: ${fallbackSearch ? `found "${fallbackSearch.jobNo}"` : 'no match'}`;
                     summary.errors.push({ workOrderNo, message: msg });
                     console.error(`❌ ${msg}`);
-                    emitProgress("kwo-progress", {
+                    emitProgress("awo-progress", {
                         jobId, phase: "error", current: i + 1, total: totalWOs, workOrderNo, message: msg
                     });
                     continue;
@@ -164,14 +169,20 @@ export const uploadAOWDataFromFile = async (
                     const msg = `jobs record not found for jobNo "${normalizedJobNo}". Upload Style Requirement sheet first.`;
                     summary.errors.push({ workOrderNo, message: msg });
                     console.error(`❌ ${msg}`);
-                    emitProgress("kwo-progress", {
+                    emitProgress("awo-progress", {
                         jobId, phase: "error", current: i + 1, total: totalWOs, workOrderNo, message: msg
                     });
                     continue;
                 }
 
+                // Scoped by workOrderNo + jobNo + month, matching buildWOKey,
+                // so a plain value like "3" only matches THIS job's work order.
                 const existingWO = await prisma.workOrder.findFirst({
-                    where: { workOrderNo },
+                    where: {
+                        workOrderNo,
+                        jobNo: first.jobNo,
+                        month: first.month,
+                    },
                     orderBy: { id: 'desc' }
                 });
 
@@ -214,7 +225,7 @@ export const uploadAOWDataFromFile = async (
                         summary.workOrdersCreated++;
                     }
 
-                    // 🔧 FIX: Delete old compositions before inserting (prevents duplicates on re-upload)
+                    // Delete old compositions before inserting (prevents duplicates on re-upload)
                     await tx.composition.deleteMany({
                         where: {
                             workOrderId: workOrderId,
@@ -244,7 +255,7 @@ export const uploadAOWDataFromFile = async (
             } catch (err) {
                 const message = err instanceof Error ? err.message : "Unknown error";
                 summary.errors.push({ workOrderNo, message });
-                console.error(`❌ Failed to upsert KWO "${workOrderNo}":`, message);
+                console.error(`❌ Failed to upsert AWO "${workOrderNo}":`, message);
 
                 emitProgress("awo-progress", {
                     jobId, phase: "error", current: i + 1, total: totalWOs, workOrderNo, message
@@ -256,7 +267,7 @@ export const uploadAOWDataFromFile = async (
         return summary;
     } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
-        emitProgress("kwo-error", { jobId, message });
+        emitProgress("awo-error", { jobId, message });
         throw err;
     }
 };
