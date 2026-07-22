@@ -92,6 +92,19 @@ export const uploadAopDeliveryDataFromFile = async (
                 fromFactory: row.aopReceivedFromFactoryName,
             });
         }
+        if (row.finishReceivedFromAop> 0) {
+            events.push({
+                challanDate: row.challanDate,
+                challanNo: row.challanNo,
+                deliveryQty: row.afterAopFabricRcvd,
+                deliveryType: "Finish Received From Aop",
+                jobNo: row.jobNo,
+                color: row.color,
+                composition: row.composition,
+                toFactory: row.aopFabricDeliveryFactoryNameSM,
+                fromFactory: row.aopReceivedFromFactoryName,
+            });
+        }
     }
 
     console.log(`📊 AOP Delivery: ${events.length} delivery events from ${rows.length} valid rows`);
@@ -137,7 +150,7 @@ export const uploadAopDeliveryDataFromFile = async (
                     yarnCompId: composition.id,
                     fromFactory: event.fromFactory,
                     toFactory: event.toFactory,
-                    
+
                 },
             });
             summary.deliveriesCreated++;
