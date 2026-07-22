@@ -213,68 +213,51 @@ type WorksheetReader = AsyncIterable<WorksheetRow> & {
     name?: string;
 };
 
-// ── OPTIMIZED: Streaming Header Scanner ──────────────────────────
-// FIXED: No longer buffers all rows. Returns header index + early rows only.
-async function scanForHeaderRow(
+// ── Header Scanner ────────────────────────────────────────────────
+// IMPORTANT: Node's streaming worksheetReader is a Readable-backed async
+// iterator. Breaking out of a `for await...of` over it calls the
+// iterator's `.return()`, which DESTROYS the underlying stream. You
+// cannot break mid-read and then resume iterating the same reader later
+// (that's what was causing `AbortError: The operation was aborted`).
+// So this function fully drains the worksheet in ONE uninterrupted pass,
+// buffering every row, then locates the header row afterward. Files are
+// capped at 20MB, so buffering one sheet's rows in memory is fine.
+async function readAllRowsAndFindHeader(
     worksheetReader: WorksheetReader,
     keywords: string[],
     minScore: number,
     scanLimit: number
-): Promise<{ earlyRows: unknown[][]; headerRowIndex: number }> {
-    const earlyRows: unknown[][] = [];
-    let headerRowIndex = -1;
+): Promise<{ allRows: unknown[][]; headerRowIndex: number }> {
+    const allRows: unknown[][] = [];
 
     const scoreRow = (row: unknown[]): number => {
         if (!Array.isArray(row)) return 0;
         return keywords.filter((kw) => row.some((cell) => asString(cell).toLowerCase().includes(kw))).length;
     };
 
-    // FIXED: Only read up to scanLimit rows to find header, then STOP reading
+    // Single unbroken pass — never exit early, always drain the full stream.
     for await (const row of worksheetReader) {
         const denseRow: unknown[] = [];
         if (Array.isArray(row.values)) {
             for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
         }
-        earlyRows.push(denseRow);
-
-        // Check if we found the header within scan limit
-        if (earlyRows.length <= scanLimit) {
-            const currentIdx = earlyRows.length - 1;
-            const score = scoreRow(denseRow);
-            if (score >= minScore && score > 0) {
-                // Find best header in scanned range
-                let bestRow = currentIdx;
-                let bestScore = score;
-                for (let i = 0; i < earlyRows.length; i++) {
-                    const s = scoreRow(earlyRows[i] ?? []);
-                    if (s > bestScore) {
-                        bestScore = s;
-                        bestRow = i;
-                    }
-                }
-                if (bestScore >= minScore) {
-                    headerRowIndex = bestRow;
-                    // FIXED: Stop reading the worksheet once header is found!
-                    // The remaining rows will be processed by the caller
-                    break;
-                }
-            }
-        } else {
-            // Past scan limit, check all scanned rows one final time
-            let bestRow = -1, bestScore = 0;
-            for (let i = 0; i < earlyRows.length; i++) {
-                const score = scoreRow(earlyRows[i] ?? []);
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestRow = i;
-                }
-            }
-            if (bestScore >= minScore) headerRowIndex = bestRow;
-            break; // FIXED: Stop reading, don't buffer everything
-        }
+        allRows.push(denseRow);
     }
 
-    return { earlyRows, headerRowIndex };
+    // Now find the best-scoring header row, only searching within scanLimit rows.
+    let headerRowIndex = -1;
+    let bestScore = 0;
+    const searchLimit = Math.min(scanLimit, allRows.length);
+    for (let i = 0; i < searchLimit; i++) {
+        const score = scoreRow(allRows[i] ?? []);
+        if (score > bestScore) {
+            bestScore = score;
+            headerRowIndex = i;
+        }
+    }
+    if (bestScore < minScore) headerRowIndex = -1;
+
+    return { allRows, headerRowIndex };
 }
 
 // ── Style Requirement Sheet Parsing ───────────────────────────────
@@ -308,7 +291,6 @@ const parseStyleReqRow = (row: unknown[], colIndex: StyleReqColumnIndices): Pars
     additional: toNumber(getCellValue(row, colIndex.additional)),
 });
 
-// FIXED: Validate row is not completely empty
 const isValidStyleReqRow = (row: ParsedRow): boolean => {
     return !!(row.salesContractNo || row.jobNo || row.style || row.poNo);
 };
@@ -320,30 +302,18 @@ async function processStyleReqSheet(
     const MIN_SCORE = 4;
     const SCAN_LIMIT = 15;
 
-    const { earlyRows, headerRowIndex } = await scanForHeaderRow(worksheetReader, STYLE_REQ_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, STYLE_REQ_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
 
     if (headerRowIndex === -1) {
         return { parsedRows: [] as ParsedRow[], headerFound: false };
     }
 
-    const headers = buildMergedHeaders(earlyRows, headerRowIndex);
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildStyleReqColIndex(headers);
 
     const parsedRows: ParsedRow[] = [];
-
-    // Process early rows after header
-    for (let i = headerRowIndex + 1; i < earlyRows.length; i++) {
-        const parsed = parseStyleReqRow(earlyRows[i] ?? [], colIndex);
-        if (isValidStyleReqRow(parsed)) parsedRows.push(parsed);
-    }
-
-    // FIXED: Continue streaming remaining rows directly without buffering
-    for await (const row of worksheetReader) {
-        const denseRow: unknown[] = [];
-        if (Array.isArray(row.values)) {
-            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
-        }
-        const parsed = parseStyleReqRow(denseRow, colIndex);
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseStyleReqRow(allRows[i] ?? [], colIndex);
         if (isValidStyleReqRow(parsed)) parsedRows.push(parsed);
     }
 
@@ -461,28 +431,18 @@ async function processKWOSheet(
     const MIN_SCORE = 4;
     const SCAN_LIMIT = 15;
 
-    const { earlyRows, headerRowIndex } = await scanForHeaderRow(worksheetReader, KWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, KWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
 
     if (headerRowIndex === -1) {
         return { parsedRows: [] as KWOParsedRow[], headerFound: false };
     }
 
-    const headers = buildMergedHeaders(earlyRows, headerRowIndex);
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildKWOColIndex(headers);
 
     const parsedRows: KWOParsedRow[] = [];
-
-    for (let i = headerRowIndex + 1; i < earlyRows.length; i++) {
-        const parsed = parseKWORow(earlyRows[i] ?? [], colIndex);
-        if (isValidKWORow(parsed)) parsedRows.push(parsed);
-    }
-
-    for await (const row of worksheetReader) {
-        const denseRow: unknown[] = [];
-        if (Array.isArray(row.values)) {
-            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
-        }
-        const parsed = parseKWORow(denseRow, colIndex);
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseKWORow(allRows[i] ?? [], colIndex);
         if (isValidKWORow(parsed)) parsedRows.push(parsed);
     }
 
@@ -496,28 +456,18 @@ async function processAWOSheet(
     const MIN_SCORE = 4;
     const SCAN_LIMIT = 15;
 
-    const { earlyRows, headerRowIndex } = await scanForHeaderRow(worksheetReader, AWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, AWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
 
     if (headerRowIndex === -1) {
         return { parsedRows: [] as AWOParsedRow[], headerFound: false };
     }
 
-    const headers = buildMergedHeaders(earlyRows, headerRowIndex);
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildAWOColIndex(headers);
 
     const parsedRows: AWOParsedRow[] = [];
-
-    for (let i = headerRowIndex + 1; i < earlyRows.length; i++) {
-        const parsed = parseAWORow(earlyRows[i] ?? [], colIndex);
-        if (isValidAWORow(parsed)) parsedRows.push(parsed);
-    }
-
-    for await (const row of worksheetReader) {
-        const denseRow: unknown[] = [];
-        if (Array.isArray(row.values)) {
-            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
-        }
-        const parsed = parseAWORow(denseRow, colIndex);
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseAWORow(allRows[i] ?? [], colIndex);
         if (isValidAWORow(parsed)) parsedRows.push(parsed);
     }
 
@@ -531,28 +481,18 @@ async function processDWOSheet(
     const MIN_SCORE = 4;
     const SCAN_LIMIT = 15;
 
-    const { earlyRows, headerRowIndex } = await scanForHeaderRow(worksheetReader, DWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, DWO_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
 
     if (headerRowIndex === -1) {
         return { parsedRows: [] as DWOParsedRow[], headerFound: false };
     }
 
-    const headers = buildMergedHeaders(earlyRows, headerRowIndex);
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildDWOColIndex(headers);
 
     const parsedRows: DWOParsedRow[] = [];
-
-    for (let i = headerRowIndex + 1; i < earlyRows.length; i++) {
-        const parsed = parseDWORow(earlyRows[i] ?? [], colIndex);
-        if (isValidDWORow(parsed)) parsedRows.push(parsed);
-    }
-
-    for await (const row of worksheetReader) {
-        const denseRow: unknown[] = [];
-        if (Array.isArray(row.values)) {
-            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
-        }
-        const parsed = parseDWORow(denseRow, colIndex);
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseDWORow(allRows[i] ?? [], colIndex);
         if (isValidDWORow(parsed)) parsedRows.push(parsed);
     }
 
@@ -612,14 +552,13 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 dwoHeaderFound = result.headerFound;
                 dwoSheetName = sheetName;
             } else {
-                // FIXED: Drain unknown sheets properly
+                // Drain unknown sheets fully — same reasoning: never break mid-stream.
                 for await (const _row of worksheetReader) {
                     /* drain */
                 }
             }
         }
 
-        // FIXED: Include dwoHeaderFound in the validation check
         if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound) {
             res.status(400).json({ error: "Could not locate a valid header row in the Excel file." });
             return;
@@ -661,36 +600,34 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 const uploadPromises: Promise<void>[] = [];
 
                 if (styleReqHeaderFound && parsedRows.length > 0) {
-                    console.log(`🔄 [${jobId}] Inserting Style Requirement (${parsedRows.length} rows)...`);
+                    // console.log(`🔄 [${jobId}] Inserting Style Requirement (${parsedRows.length} rows)...`);
                     uploadPromises.push(
                         uploadDataFromFile(parsedRows, jobId)
                             .then(() => console.log(`✅ [${jobId}] Style Requirement done.`))
                     );
                 }
                 if (kwoHeaderFound && parsedRowsKWO.length > 0) {
-                    console.log(`🔄 [${jobId}] Inserting K.W.O (${parsedRowsKWO.length} rows)...`);
+                    // console.log(`🔄 [${jobId}] Inserting K.W.O (${parsedRowsKWO.length} rows)...`);
                     uploadPromises.push(
                         uploadKWODataFromFile(parsedRowsKWO, jobId)
                             .then(() => console.log(`✅ [${jobId}] K.W.O done.`))
                     );
                 }
                 if (awoHeaderFound && parsedRowsAWO.length > 0) {
-                    console.log(`🔄 [${jobId}] Inserting A.W.O (${parsedRowsAWO.length} rows)...`);
+                    // console.log(`🔄 [${jobId}] Inserting A.W.O (${parsedRowsAWO.length} rows)...`);
                     uploadPromises.push(
                         uploadAOWDataFromFile(parsedRowsAWO, jobId)
                             .then(() => console.log(`✅ [${jobId}] A.W.O done.`))
                     );
                 }
                 if (dwoHeaderFound && parsedRowsDWO.length > 0) {
-                    // FIXED: Use parsedRowsDWO.length and correct label
-                    console.log(`🔄 [${jobId}] Inserting D.W.O (${parsedRowsDWO.length} rows)...`);
+                    // console.log(`🔄 [${jobId}] Inserting D.W.O (${parsedRowsDWO.length} rows)...`);
                     uploadPromises.push(
                         uploadDYEINGDataFromFile(parsedRowsDWO, jobId)
                             .then(() => console.log(`✅ [${jobId}] D.W.O done.`))
                     );
                 }
 
-                // FIXED: Run all uploads in parallel instead of sequential
                 await Promise.all(uploadPromises);
                 console.log(`🎉 [${jobId}] All background uploads completed.`);
             } catch (err: unknown) {
