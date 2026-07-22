@@ -287,7 +287,7 @@ const parseStyleReqRow = (row: unknown[], colIndex: StyleReqColumnIndices): Pars
     finishDia: asString(getCellValue(row, colIndex.finishDia)),
     orderQty: toNumber(getCellValue(row, colIndex.orderQty)),
     finishFabricRequired: toNumber(getCellValue(row, colIndex.finishFabricRequired)),
-    processLoss: toNumber(getCellValue(row, colIndex.processLoss)),
+    processLoss: Math.round(toNumber(getCellValue(row, colIndex.processLoss)) * 100 * 100) / 100,
     additional: toNumber(getCellValue(row, colIndex.additional)),
 });
 
