@@ -141,7 +141,7 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {wrk.yarnDeliveriesWithColor?.SentforAOP || "-"}
+                                            {wrk.yarnDeliveriesWithColor?.SentForAop || "-"}
                                         </div>
                                     ))
                                 )}
@@ -149,7 +149,7 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                             <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
-                                        const diff = (wrk.yarnDeliveriesWithColor?.SentforAOP || 0) - (wrk.workOrderQty || 0);
+                                        const diff = (wrk.yarnDeliveriesWithColor?.SentForAop || 0) - (wrk.workOrderQty || 0);
                                         const exceeded = diff > 0;
                                         return (
                                             <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
@@ -165,7 +165,7 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {wrk.yarnDeliveriesWithColor?.ReceivedfromAOP || "-"}
+                                            {wrk.yarnDeliveriesWithColor?.ReceivedFromAop || "-"}
                                         </div>
                                     ))
                                 )}
@@ -175,7 +175,7 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {(wrk.yarnDeliveriesWithColor?.ReceivedfromAOP || 0) * (wrk.unitePrice || 0) || "-"}
+                                            {(wrk.yarnDeliveriesWithColor?.ReceivedFromAop || 0) * (wrk.unitePrice || 0) || "-"}
                                         </div>
                                     ))
                                 )}

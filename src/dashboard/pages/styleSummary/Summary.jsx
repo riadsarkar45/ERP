@@ -285,6 +285,7 @@ export default function Summary() {
     useEffect(() => {
         fetchData(`/api/styles`).then(data => {
             setRawData(data.data);
+            console.log(data.data, "style requirements");
         }).catch(e => console.error(e));
     }, [fetchData]);
 
@@ -1079,10 +1080,10 @@ export default function Summary() {
 
 
                                     {/* 29. FINISH DELIVERY FROM AOP */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_for_AOP', 28)}
+                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_For_Aop', 28)}
 
                                     {/* 30. FINISH RECEIVED FROM AOP */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Received_from_AOP', 29)}
+                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Received_from_Aop', 29)}
 
                                     {/* 31. AOP FAB. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(30)}>

@@ -14,6 +14,7 @@ export interface AOPDeliveryParsedRow {
     composition: string;
     deliveryForAop: number;
     afterAopFabricRcvd: number;
+    finishReceivedFromAop: number;
     aopReceivedFromFactoryName: string;
     aopFabricDeliveryFactoryNameSM: string;
 }
@@ -136,6 +137,7 @@ export const uploadAopDeliveryDataFromFile = async (
                     yarnCompId: composition.id,
                     fromFactory: event.fromFactory,
                     toFactory: event.toFactory,
+                    
                 },
             });
             summary.deliveriesCreated++;

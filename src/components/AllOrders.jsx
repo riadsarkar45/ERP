@@ -222,6 +222,7 @@ const AllOrders = ({ orderType }) => {
         fetchData(`/api/work-order/${orderType}`)
             .then(data => {
                 if (data) setOrders(data);
+                console.log(data);
             }
             )
     }, [orderType, isUpdated]);

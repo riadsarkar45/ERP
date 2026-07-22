@@ -5,7 +5,7 @@ import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileD
 import { uploadKWODataFromFile } from "../../helpers/uploadStyleReqData/uploadWorkOrder";
 import { uploadAOWDataFromFile } from "../../helpers/uploadStyleReqData/uploadawoOrder";
 import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploadDyeingOrder";
-import { uploadAopDeliveryDataFromFile,type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
+import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
 // ⚠️ Adjust this path to match where you saved the helper file provided earlier
 // import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
 
@@ -165,6 +165,7 @@ interface AOPDeliveryColumnIndices {
     composition: number;
     deliveryForAop: number;
     afterAopFabricRcvd: number;
+    finishReceivedFromAop: number;
     aopReceivedFromFactoryName: number;
     aopFabricDeliveryFactoryNameSM: number;
 }
@@ -196,6 +197,8 @@ const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices 
     afterAopFabricRcvd: findPartialCol(headers, "after aop fabric rcvd"),
     aopReceivedFromFactoryName: findPartialCol(headers, "aop received from factory"),
     aopFabricDeliveryFactoryNameSM: findPartialCol(headers, "aop fabric delivery factory"),
+    finishReceivedFromAop: findPartialCol(headers, "aop finish fabric received"),
+
 });
 
 const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices): AOPDeliveryParsedRow => ({
@@ -212,6 +215,7 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     deliveryForAop: toNumber(getCellValue(row, colIndex.deliveryForAop)),
     afterAopFabricRcvd: toNumber(getCellValue(row, colIndex.afterAopFabricRcvd)),
     aopReceivedFromFactoryName: asString(getCellValue(row, colIndex.aopReceivedFromFactoryName)),
+    finishReceivedFromAop: toNumber(getCellValue(row, colIndex.finishReceivedFromAop)),
     aopFabricDeliveryFactoryNameSM: asString(getCellValue(row, colIndex.aopFabricDeliveryFactoryNameSM)),
 });
 
@@ -223,8 +227,8 @@ async function processAOPDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
     // Clean keywords: the scanner will automatically strip spaces and match them perfectly
-    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd"];
-    const MIN_SCORE = 2; 
+    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd", ];
+    const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
 
     const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, AOP_DEL_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
