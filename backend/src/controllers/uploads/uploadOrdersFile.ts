@@ -165,9 +165,10 @@ interface AOPDeliveryColumnIndices {
     composition: number;
     deliveryForAop: number;
     afterAopFabricRcvd: number;
-    finishReceivedFromAop: number;
+    aopFinishFabricRcvp: number;
     aopReceivedFromFactoryName: number;
     aopFabricDeliveryFactoryNameSM: number;
+    aopFinishFabricRcvd: number
 }
 
 const parseDateValue = (val: unknown): Date | null => {
@@ -198,6 +199,9 @@ const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices 
     aopFinishFabricRcvd: findPartialCol(headers, "aop finish fabric rcvd"), // 👈 ADD THIS
     aopReceivedFromFactoryName: findPartialCol(headers, "aop received from factory"),
     aopFabricDeliveryFactoryNameSM: findPartialCol(headers, "aop fabric delivery factory"),
+    // aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
+    aopFinishFabricRcvp: findPartialCol(headers, "aop finish fabric rcvd")
+
 });
 
 const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices): AOPDeliveryParsedRow => ({
@@ -213,8 +217,8 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     composition: asString(getCellValue(row, colIndex.composition)),
     deliveryForAop: toNumber(getCellValue(row, colIndex.deliveryForAop)),
     afterAopFabricRcvd: toNumber(getCellValue(row, colIndex.afterAopFabricRcvd)),
-    aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)), // 👈 ADD THIS
     aopReceivedFromFactoryName: asString(getCellValue(row, colIndex.aopReceivedFromFactoryName)),
+    aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
     aopFabricDeliveryFactoryNameSM: asString(getCellValue(row, colIndex.aopFabricDeliveryFactoryNameSM)),
 });
 
@@ -226,7 +230,7 @@ async function processAOPDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
     // Clean keywords: the scanner will automatically strip spaces and match them perfectly
-    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd", ];
+    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd",];
     const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
 
