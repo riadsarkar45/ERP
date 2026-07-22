@@ -5,8 +5,9 @@ import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileD
 import { uploadKWODataFromFile } from "../../helpers/uploadStyleReqData/uploadWorkOrder";
 import { uploadAOWDataFromFile } from "../../helpers/uploadStyleReqData/uploadawoOrder";
 import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploadDyeingOrder";
-import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
-// import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; // ⚠️ Adjust this path to match your helper file
+import { uploadAopDeliveryDataFromFile,type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
+// ⚠️ Adjust this path to match where you saved the helper file provided earlier
+// import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
 
 // ── Type Definitions ──────────────────────────────────────────────
 interface MulterFile {
@@ -221,8 +222,8 @@ const isValidAOPDeliveryRow = (row: AOPDeliveryParsedRow): boolean => {
 async function processAOPDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
-    // Normalized keywords to match Excel headers despite weird spacing
-    const AOP_DEL_KEYWORDS = ["challanno", "jobno", "deliveryforaop", "afteraopfabricrcvd"];
+    // Clean keywords: the scanner will automatically strip spaces and match them perfectly
+    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd"];
     const MIN_SCORE = 2; 
     const SCAN_LIMIT = 15;
 
@@ -323,9 +324,18 @@ async function readAllRowsAndFindHeader(
 ): Promise<{ allRows: unknown[][]; headerRowIndex: number }> {
     const allRows: unknown[][] = [];
 
+    // Normalize keywords by removing all spaces to handle erratic Excel spacing
+    const normalizedKeywords = keywords.map((kw) => kw.toLowerCase().replace(/\s+/g, ""));
+
     const scoreRow = (row: unknown[]): number => {
         if (!Array.isArray(row)) return 0;
-        return keywords.filter((kw) => row.some((cell) => asString(cell).toLowerCase().includes(kw))).length;
+        return normalizedKeywords.filter((kw) =>
+            row.some((cell) => {
+                // Normalize the cell content by removing all spaces before checking
+                const normalizedCell = asString(cell).toLowerCase().replace(/\s+/g, "");
+                return normalizedCell.includes(kw);
+            })
+        ).length;
     };
 
     for await (const row of worksheetReader) {
@@ -352,7 +362,6 @@ async function readAllRowsAndFindHeader(
 }
 
 // ── Sheet Parsing Functions (STYLE, KWO, AWO, DWO) ────────────────
-// (Keeping your existing parsing logic intact for brevity, ensure these remain in your file)
 const buildStyleReqColIndex = (headers: unknown[]): StyleReqColumnIndices => ({
     salesContractNo: findPartialCol(headers, "sales contract"),
     buyer: findPartialCol(headers, "buyer"),
