@@ -8,7 +8,7 @@ export interface YarnGreyRcvdParsedRow {
     jobNo: string;
     color: string;
     composition: string;
-    yarnDeliveryForKnitting: number; // 1. YARN DELIVERY FOR KNITTING
+    yarnDeliveryForKnitting: number; // 1. Yarn Delivery
     greyReceivedQty: number;         // 2. GREY RECEIVED (QTY)
     yarnReturn: number;              // 3. YARN RETURN
     nameOfKnittingFactory: string;   // 4. NAME OF KNITTING FACTORY
@@ -65,13 +65,13 @@ export const uploadYarnGreyRcvdDataFromFile = async (
             continue;
         }
 
-        // 1. YARN DELIVERY FOR KNITTING
+        // 1. Yarn Delivery
         if (row.yarnDeliveryForKnitting > 0) {
             events.push({
                 challanDate: row.challanDate,
                 challanNo: row.challanNo,
                 deliveryQty: row.yarnDeliveryForKnitting,
-                deliveryType: "Yarn Delivery for Knitting",
+                deliveryType: "Yarn Delivery",
                 jobNo: row.jobNo,
                 color: row.color,
                 composition: row.composition,
