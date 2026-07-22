@@ -1,25 +1,20 @@
-import prisma from "../../database/prismaClient/prisma"; // ⚠️ Adjust path to your Prisma client
-import { getIO } from "../../middleware/socket.io/socket"; // ⚠️ Adjust path to your Socket.IO helper
+import prisma from "../../database/prismaClient/prisma";
+import { getIO } from "../../middleware/socket.io/socket";
 
-export interface AOPDeliveryParsedRow {
+// ✅ ONLY the columns you requested + essential metadata
+export interface YarnGreyRcvdParsedRow {
     challanDate: Date | null;
     challanNo: number;
-    month: string;
-    salesContractNo: string;
-    buyer: string;
     jobNo: string;
-    poNo: string;
-    style: string;
     color: string;
     composition: string;
-    deliveryForAop: number;
-    afterAopFabricRcvd: number;
-    aopFinishFabricRcvd: number;
-    aopReceivedFromFactoryName: string;
-    aopFabricDeliveryFactoryNameSM: string;
+    yarnDeliveryForKnitting: number; // 1. YARN DELIVERY FOR KNITTING
+    greyReceivedQty: number;         // 2. GREY RECEIVED (QTY)
+    yarnReturn: number;              // 3. YARN RETURN
+    nameOfKnittingFactory: string;   // 4. NAME OF KNITTING FACTORY
 }
 
-interface AOPDeliveryUploadSummary {
+interface YarnGreyRcvdUploadSummary {
     challansCreated: number;
     challansUpdated: number;
     deliveriesCreated: number;
@@ -48,11 +43,11 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
-export const uploadAopDeliveryDataFromFile = async (
-    rows: AOPDeliveryParsedRow[],
+export const uploadYarnGreyRcvdDataFromFile = async (
+    rows: YarnGreyRcvdParsedRow[],
     jobId: string
-): Promise<AOPDeliveryUploadSummary> => {
-    const summary: AOPDeliveryUploadSummary = {
+): Promise<YarnGreyRcvdUploadSummary> => {
+    const summary: YarnGreyRcvdUploadSummary = {
         challansCreated: 0,
         challansUpdated: 0,
         deliveriesCreated: 0,
@@ -60,7 +55,7 @@ export const uploadAopDeliveryDataFromFile = async (
         errors: [],
     };
 
-    console.log(`📊 AOP Delivery: Received ${rows.length} raw rows`);
+    console.log(`📊 Yarn & Grey Rcvd: Received ${rows.length} raw rows`);
 
     const events: DeliveryEvent[] = [];
     for (let i = 0; i < rows.length; i++) {
@@ -70,87 +65,81 @@ export const uploadAopDeliveryDataFromFile = async (
             continue;
         }
 
-        // 1. Sent For Aop
-        if (row.deliveryForAop > 0) {
+        // 1. YARN DELIVERY FOR KNITTING
+        if (row.yarnDeliveryForKnitting > 0) {
             events.push({
                 challanDate: row.challanDate,
                 challanNo: row.challanNo,
-                deliveryQty: row.deliveryForAop,
-                deliveryType: "Sent For Aop",
+                deliveryQty: row.yarnDeliveryForKnitting,
+                deliveryType: "Yarn Delivery for Knitting",
                 jobNo: row.jobNo,
                 color: row.color,
                 composition: row.composition,
-                toFactory: row.aopReceivedFromFactoryName,
+                toFactory: row.nameOfKnittingFactory,
                 fromFactory: "",
             });
         }
 
-        // 2. Received From Aop
-        if (row.afterAopFabricRcvd > 0) {
+        // 2. GREY RECEIVED (QTY)
+        if (row.greyReceivedQty > 0) {
             events.push({
                 challanDate: row.challanDate,
                 challanNo: row.challanNo,
-                deliveryQty: row.afterAopFabricRcvd,
-                deliveryType: "Received From Aop",
+                deliveryQty: row.greyReceivedQty,
+                deliveryType: "Grey Fabric Received",
                 jobNo: row.jobNo,
                 color: row.color,
                 composition: row.composition,
-                toFactory: row.aopFabricDeliveryFactoryNameSM,
-                fromFactory: row.aopReceivedFromFactoryName,
+                toFactory: "", // Received AT our store/factory
+                fromFactory: row.nameOfKnittingFactory, // FROM the knitting factory
             });
         }
 
-        // 3. AOP Finish Fabric Rcvd
-        if (row.aopFinishFabricRcvd > 0) {
+        // 3. YARN RETURN
+        if (row.yarnReturn > 0) {
             events.push({
                 challanDate: row.challanDate,
                 challanNo: row.challanNo,
-                deliveryQty: row.aopFinishFabricRcvd,
-                deliveryType: "AOP Finish Fabric Rcvd",
+                deliveryQty: row.yarnReturn,
+                deliveryType: "Yarn Return",
                 jobNo: row.jobNo,
                 color: row.color,
                 composition: row.composition,
-                toFactory: row.aopFabricDeliveryFactoryNameSM,
-                fromFactory: row.aopReceivedFromFactoryName,
+                toFactory: "", // Returned TO yarn store
+                fromFactory: row.nameOfKnittingFactory, // FROM the knitting factory
             });
         }
     }
 
-    console.log(`📊 AOP Delivery: ${events.length} delivery events from ${rows.length} valid rows`);
-
-    emitProgress("aop-delivery-progress", { jobId, phase: "starting", current: 0, total: events.length });
+    console.log(`📊 Yarn & Grey Rcvd: ${events.length} delivery events from ${rows.length} valid rows`);
+    emitProgress("yarn-grey-rcvd-progress", { jobId, phase: "starting", current: 0, total: events.length });
 
     for (let i = 0; i < events.length; i++) {
         const event = events[i];
         if (!event) continue;
 
         try {
-            // ── 1. Resolve Composition ──
+            // Resolve Composition
             const composition = await prisma.composition.findFirst({
                 where: {
                     color: event.color,
                     composition: event.composition,
-                    orderType: "aopOrder",
-                    workOrder: {
-                        jobNo: event.jobNo,
-                        orderType: "aopOrder",
-                    },
+                    workOrder: { jobNo: event.jobNo },
                 },
-                select: { id: true, workOrderId: true },
+                select: { id: true },
             });
 
             if (!composition) {
-                const msg = `No matching A.W.O Composition found for jobNo "${event.jobNo}", color "${event.color}", composition "${event.composition}". Upload the A.W.O sheet first.`;
+                const msg = `No matching Composition found for jobNo "${event.jobNo}", color "${event.color}", composition "${event.composition}".`;
                 summary.errors.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, message: msg });
-                console.error(`❌ ${msg}`);
-                emitProgress("aop-delivery-progress", {
+                emitProgress("yarn-grey-rcvd-progress", {
                     jobId, phase: "error", current: i + 1, total: events.length,
                     challanNo: event.challanNo, message: msg,
                 });
                 continue;
             }
 
-            // ── 2. Universal Challan Upsert ──
+            // Universal Challan Upsert
             const challan = await prisma.challan.upsert({
                 where: {
                     challanNo_toFactory_fromFactory: {
@@ -172,15 +161,11 @@ export const uploadAopDeliveryDataFromFile = async (
                 },
             });
 
-            // Simple tracking to see if it was newly created vs updated
-            const createdRecently = (new Date().getTime() - challan.createdAt.getTime()) < 2000; 
-            if (createdRecently) {
-                summary.challansCreated++;
-            } else {
-                summary.challansUpdated++;
-            }
+            const createdRecently = (new Date().getTime() - challan.createdAt.getTime()) < 2000;
+            if (createdRecently) summary.challansCreated++;
+            else summary.challansUpdated++;
 
-            // ── 3. Create Delivery Record (Linked to Challan) ──
+            // Create Delivery Record
             await prisma.deliveries.create({
                 data: {
                     deliveryDate: event.challanDate ?? new Date(),
@@ -191,29 +176,26 @@ export const uploadAopDeliveryDataFromFile = async (
                     yarnCompId: composition.id,
                     fromFactory: event.fromFactory,
                     toFactory: event.toFactory,
-                    challanId: challan.id, // 👈 Links to the Universal Challan table
+                    challanId: challan.id,
                 },
             });
             summary.deliveriesCreated++;
 
-            // Batch progress emits
             if ((i + 1) % 25 === 0 || i === events.length - 1) {
-                emitProgress("aop-delivery-progress", {
+                emitProgress("yarn-grey-rcvd-progress", {
                     jobId, phase: "inserting", current: i + 1, total: events.length,
                 });
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : "Unknown error";
             summary.errors.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, message });
-            console.error(`❌ Failed to insert delivery (challan ${event.challanNo}, ${event.deliveryType}):`, message);
-
-            emitProgress("aop-delivery-progress", {
+            emitProgress("yarn-grey-rcvd-progress", {
                 jobId, phase: "error", current: i + 1, total: events.length,
                 challanNo: event.challanNo, message,
             });
         }
     }
 
-    emitProgress("aop-delivery-complete", { jobId, summary });
+    emitProgress("yarn-grey-rcvd-complete", { jobId, summary });
     return summary;
 };

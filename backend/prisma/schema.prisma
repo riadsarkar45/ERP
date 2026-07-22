@@ -65,7 +65,7 @@ model Composition {
   composition  String
   unitePrice   Float
   color        String
-  additional   Int       @default(0)
+  additional   Int          @default(0)
   orderQty     Int
   workOrderQty Int
   workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
@@ -75,6 +75,7 @@ model Composition {
 
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
+  challans              Challan[]
 
   @@index([workOrderId])
   @@index([color])
@@ -87,7 +88,7 @@ model StyleRequirement {
   buyerName    String
   jobNo        String                @unique
   poNo         String
-  styleNo      String                
+  styleNo      String
   processLoss  Float
   rows         StyleRequirementRow[]
   sizes        sizes[]
@@ -103,7 +104,7 @@ model StyleRequirementRow {
   finishDia          String
   orderQty           Int
   finishRequiredQty  Float
-  additional         Int           @default(0)
+  additional         Int              @default(0)
 
   // NEW: back-relation so a row can see all Composition records derived from it
   compositions Composition[]
@@ -133,22 +134,55 @@ model sizes {
   @@index([styleRequirementId])
 }
 
+// ── Universal Challan Model (works for ALL delivery types) ──
+model Challan {
+  id          Int      @id @default(autoincrement())
+  challanNo   Int
+  challanDate DateTime
+  toFactory   String
+  fromFactory String
+
+  // Optional composition link (for AOP/KWO/DWO deliveries)
+  yarnCompId  Int?
+  composition Composition? @relation(fields: [yarnCompId], references: [id])
+
+  // One challan can have multiple deliveries (different types)
+  deliveries deliveries[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Prevent duplicate challans for the same number + factories
+  @@unique([challanNo, toFactory, fromFactory])
+  @@index([challanNo])
+  @@index([challanDate])
+  @@index([toFactory])
+  @@index([fromFactory])
+}
+
+// ── Updated deliveries model ──
 model deliveries {
-  id           Int          @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   challanNo    Int
   deliveryDate DateTime
   deliveryQty  Int
-  deliveryType String
+  deliveryType String // "Yarn Delivery", "Knitting Delivery", "Dyeing Delivery", "Sent For Aop", "Received From Aop", etc.
   yarnId       Int
   toFactory    String
   fromFactory  String
-  composition  Composition? @relation(fields: [yarnCompId], references: [id])
-  yarnCompId   Int?
+
+  composition Composition? @relation(fields: [yarnCompId], references: [id])
+  yarnCompId  Int?
+
+  // ── Link to universal Challan ──
+  challan   Challan? @relation(fields: [challanId], references: [id])
+  challanId Int? // NULL for legacy/manual entries
 
   @@index([yarnCompId])
   @@index([deliveryDate])
   @@index([challanNo])
   @@index([yarnId])
+  @@index([challanId])
 }
 
 model audit {

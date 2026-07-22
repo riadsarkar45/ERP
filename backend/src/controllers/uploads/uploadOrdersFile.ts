@@ -6,6 +6,7 @@ import { uploadKWODataFromFile } from "../../helpers/uploadStyleReqData/uploadWo
 import { uploadAOWDataFromFile } from "../../helpers/uploadStyleReqData/uploadawoOrder";
 import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploadDyeingOrder";
 import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
+import { uploadYarnGreyRcvdDataFromFile, type YarnGreyRcvdParsedRow } from "../../helpers/uploadStyleReqData/uploadYarnDevData";
 // ⚠️ Adjust this path to match where you saved the helper file provided earlier
 // import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
 
@@ -221,6 +222,72 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
     aopFabricDeliveryFactoryNameSM: asString(getCellValue(row, colIndex.aopFabricDeliveryFactoryNameSM)),
 });
+
+// ── YARN & GREY RCVD Specific Parsing ──────────────────────────────
+interface YarnGreyRcvdColumnIndices {
+    challanDate: number;
+    challanNo: number;
+    jobNo: number;
+    color: number;
+    composition: number;
+    yarnDeliveryForKnitting: number;
+    greyReceivedQty: number;
+    yarnReturn: number;
+    nameOfKnittingFactory: number;
+}
+
+const buildYarnGreyRcvdColIndex = (headers: unknown[]): YarnGreyRcvdColumnIndices => ({
+    challanDate: findPartialCol(headers, "date of challan"),
+    challanNo: findPartialCol(headers, "challan no"),
+    jobNo: findPartialCol(headers, "job no"),
+    color: findPartialCol(headers, "color"),
+    composition: findPartialCol(headers, "composition"),
+    yarnDeliveryForKnitting: findPartialCol(headers, "yarn delivery for knitting"),
+    greyReceivedQty: findPartialCol(headers, "grey received"),
+    yarnReturn: findPartialCol(headers, "yarn return"),
+    nameOfKnittingFactory: findPartialCol(headers, "name of knitting factory"),
+});
+
+const parseYarnGreyRcvdRow = (row: unknown[], colIndex: YarnGreyRcvdColumnIndices): YarnGreyRcvdParsedRow => ({
+    challanDate: parseDateValue(getCellValue(row, colIndex.challanDate)),
+    challanNo: toNumber(getCellValue(row, colIndex.challanNo)),
+    jobNo: asString(getCellValue(row, colIndex.jobNo)),
+    color: asString(getCellValue(row, colIndex.color)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    yarnDeliveryForKnitting: toNumber(getCellValue(row, colIndex.yarnDeliveryForKnitting)),
+    greyReceivedQty: toNumber(getCellValue(row, colIndex.greyReceivedQty)),
+    yarnReturn: toNumber(getCellValue(row, colIndex.yarnReturn)),
+    nameOfKnittingFactory: asString(getCellValue(row, colIndex.nameOfKnittingFactory)),
+});
+
+const isValidYarnGreyRcvdRow = (row: YarnGreyRcvdParsedRow): boolean => {
+    return !!(row.jobNo && (row.yarnDeliveryForKnitting > 0 || row.greyReceivedQty > 0 || row.yarnReturn > 0));
+};
+
+async function processYarnGreyRcvdSheet(
+    worksheetReader: WorksheetReader
+): Promise<{ parsedRows: YarnGreyRcvdParsedRow[]; headerFound: boolean }> {
+    const YARN_GREY_RCVD_KEYWORDS = ["challan no", "job no", "yarn delivery for knitting", "grey received"];
+    const MIN_SCORE = 2;
+    const SCAN_LIMIT = 15;
+
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, YARN_GREY_RCVD_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+
+    if (headerRowIndex === -1) {
+        return { parsedRows: [] as YarnGreyRcvdParsedRow[], headerFound: false };
+    }
+
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
+    const colIndex = buildYarnGreyRcvdColIndex(headers);
+
+    const parsedRows: YarnGreyRcvdParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseYarnGreyRcvdRow(allRows[i] ?? [], colIndex);
+        if (isValidYarnGreyRcvdRow(parsed)) parsedRows.push(parsed);
+    }
+
+    return { parsedRows, headerFound: true };
+}
 
 const isValidAOPDeliveryRow = (row: AOPDeliveryParsedRow): boolean => {
     return !!(row.jobNo && (row.deliveryForAop > 0 || row.afterAopFabricRcvd > 0));
@@ -604,6 +671,10 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         let aopDelHeaderFound = false;
         let aopDelSheetName = "";
 
+        let parsedRowsYarnGreyRcvd: YarnGreyRcvdParsedRow[] = [];
+        let yarnGreyRcvdHeaderFound = false;
+        let yarnGreyRcvdSheetName = "";
+
         for await (const worksheetReader of workbookReader) {
             const sheetName = (worksheetReader as WorksheetReader).name || "";
 
@@ -633,13 +704,18 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 parsedRowsAOPDel = result.parsedRows;
                 aopDelHeaderFound = result.headerFound;
                 aopDelSheetName = sheetName;
+            } else if (sheetName === "YARN & GREY RCVD" || sheetName === "YARN GREY RCVD") {
+                const result = await processYarnGreyRcvdSheet(worksheetReader as WorksheetReader);
+                parsedRowsYarnGreyRcvd = result.parsedRows;
+                yarnGreyRcvdHeaderFound = result.headerFound;
+                yarnGreyRcvdSheetName = sheetName;
             } else {
                 for await (const _row of worksheetReader) { /* drain */ }
             }
         }
 
         // ✅ UPDATED: Include aopDelHeaderFound in validation
-        if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && !aopDelHeaderFound) {
+        if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && !aopDelHeaderFound && !yarnGreyRcvdHeaderFound) {
             res.status(400).json({ error: "Could not locate a valid header row in the Excel file." });
             return;
         }
@@ -658,6 +734,7 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
             dwo: { sheetName: dwoSheetName, found: dwoHeaderFound, totalRows: parsedRowsDWO.length },
             // ✅ NEW: Return AOP Delivery parsing summary
             aopDel: { sheetName: aopDelSheetName, found: aopDelHeaderFound, totalRows: parsedRowsAOPDel.length },
+            yarnGreyRcvd: { sheetName: yarnGreyRcvdSheetName, found: yarnGreyRcvdHeaderFound, totalRows: parsedRowsYarnGreyRcvd.length },
         });
 
         // ── Background: Parallel upload processing ─────────────────
@@ -681,6 +758,14 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 if (aopDelHeaderFound && parsedRowsAOPDel.length > 0) {
                     uploadPromises.push(
                         uploadAopDeliveryDataFromFile(parsedRowsAOPDel, jobId).then(() => console.log(`✅ [${jobId}] AOP DEL. & RCVD done.`))
+                    );
+
+                    // uploadYarnGreyRcvdDataFromFile
+                }
+
+                if (yarnGreyRcvdHeaderFound && parsedRowsYarnGreyRcvd.length > 0) {
+                    uploadPromises.push(
+                        uploadYarnGreyRcvdDataFromFile(parsedRowsYarnGreyRcvd, jobId).then(() => console.log(`✅ [${jobId}] YARN & GREY RCVD done.`))
                     );
                 }
 
