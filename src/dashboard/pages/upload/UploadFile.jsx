@@ -9,13 +9,14 @@ const UploadFile = () => {
     const [success, setSuccess] = useState('');
     const [dragActive, setDragActive] = useState(false);
 
-    // ── Six separate progress states ──
+    // ── Seven separate progress states ──
     const [styleReqProgress, setStyleReqProgress] = useState(null);
     const [kwoProgress, setKwoProgress] = useState(null);
     const [awoProgress, setAwoProgress] = useState(null);
     const [dwoProgress, setDwoProgress] = useState(null);
     const [aopDelProgress, setAopDelProgress] = useState(null);
     const [yarnGreyRcvdProgress, setYarnGreyRcvdProgress] = useState(null);
+    const [dyeingGreyProgress, setDyeingGreyProgress] = useState(null);
 
     const [styleReqSummary, setStyleReqSummary] = useState(null);
     const [kwoSummary, setKwoSummary] = useState(null);
@@ -23,45 +24,54 @@ const UploadFile = () => {
     const [dwoSummary, setDwoSummary] = useState(null);
     const [aopDelSummary, setAopDelSummary] = useState(null);
     const [yarnGreyRcvdSummary, setYarnGreyRcvdSummary] = useState(null);
+    const [dyeingGreySummary, setDyeingGreySummary] = useState(null);
 
     const [jobId, setJobId] = useState(null);
-    const [expectedPhases, setExpectedPhases] = useState([]); // Dynamically tracks which sheets were found
-    const [activePhase, setActivePhase] = useState(null); 
+    const [expectedPhases, setExpectedPhases] = useState([]);
+    const [activePhase, setActivePhase] = useState(null);
 
     const fileInputRef = useRef(null);
     const axiosPublic = useAxiosPublic();
     const socket = useSocket();
 
-    // ── Socket listeners for ALL SIX phases ────────────────────────
+    // ── Socket listeners for ALL SEVEN phases ────────────────────────
     useEffect(() => {
         if (!socket) {
             console.warn('⚠️ useSocket() returned null — no socket connection');
             return;
         }
 
+        // Style Requirement
         const handleStyleReqProgress = (data) => { if (data.jobId !== jobId) return; setStyleReqProgress(data); setActivePhase('style-req'); };
         const handleStyleReqComplete = (data) => { if (data.jobId !== jobId) return; setStyleReqSummary(data.summary); setStyleReqProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleStyleReqError = (data) => { if (data.jobId !== jobId) return; setError(`Style Requirement failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
+        // K.W.O
         const handleKwoProgress = (data) => { if (data.jobId !== jobId) return; setKwoProgress(data); setActivePhase('kwo'); };
         const handleKwoComplete = (data) => { if (data.jobId !== jobId) return; setKwoSummary(data.summary); setKwoProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleKwoError = (data) => { if (data.jobId !== jobId) return; setError(`K.W.O failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
+        // A.W.O
         const handleAwoProgress = (data) => { if (data.jobId !== jobId) return; setAwoProgress(data); setActivePhase('awo'); };
         const handleAwoComplete = (data) => { if (data.jobId !== jobId) return; setAwoSummary(data.summary); setAwoProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleAwoError = (data) => { if (data.jobId !== jobId) return; setError(`A.W.O failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
+        // D.W.O
         const handleDwoProgress = (data) => { if (data.jobId !== jobId) return; setDwoProgress(data); setActivePhase('dwo'); };
         const handleDwoComplete = (data) => { if (data.jobId !== jobId) return; setDwoSummary(data.summary); setDwoProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
         const handleDwoError = (data) => { if (data.jobId !== jobId) return; setError(`D.W.O failed: ${data.message}`); setLoading(false); setActivePhase(null); };
 
+        // AOP DEL. & RCVD
         const handleAopDelProgress = (data) => { if (data.jobId !== jobId) return; setAopDelProgress(data); setActivePhase('aop-del'); };
         const handleAopDelComplete = (data) => { if (data.jobId !== jobId) return; setAopDelSummary(data.summary); setAopDelProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
 
-        // ✅ NEW: Yarn & Grey Rcvd listeners
+        // Yarn & Grey Rcvd
         const handleYarnGreyRcvdProgress = (data) => { if (data.jobId !== jobId) return; setYarnGreyRcvdProgress(data); setActivePhase('yarn-grey-rcvd'); };
         const handleYarnGreyRcvdComplete = (data) => { if (data.jobId !== jobId) return; setYarnGreyRcvdSummary(data.summary); setYarnGreyRcvdProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
-        const handleYarnGreyRcvdError = (data) => { if (data.jobId !== jobId) return; setError(`Yarn & Grey Rcvd failed: ${data.message}`); setLoading(false); setActivePhase(null); };
+
+        // Dyeing Grey Del. & RCVD
+        const handleDyeingGreyProgress = (data) => { if (data.jobId !== jobId) return; setDyeingGreyProgress(data); setActivePhase('dyeing-grey'); };
+        const handleDyeingGreyComplete = (data) => { if (data.jobId !== jobId) return; setDyeingGreySummary(data.summary); setDyeingGreyProgress(prev => ({ ...(prev || {}), phase: 'complete' })); };
 
         // Register listeners
         socket.on('style-req-progress', handleStyleReqProgress);
@@ -80,7 +90,8 @@ const UploadFile = () => {
         socket.on('aop-delivery-complete', handleAopDelComplete);
         socket.on('yarn-grey-rcvd-progress', handleYarnGreyRcvdProgress);
         socket.on('yarn-grey-rcvd-complete', handleYarnGreyRcvdComplete);
-        socket.on('yarn-grey-rcvd-error', handleYarnGreyRcvdError);
+        socket.on('dyeing-grey-delivery-progress', handleDyeingGreyProgress);
+        socket.on('dyeing-grey-delivery-complete', handleDyeingGreyComplete);
 
         return () => {
             socket.off('style-req-progress', handleStyleReqProgress);
@@ -99,7 +110,8 @@ const UploadFile = () => {
             socket.off('aop-delivery-complete', handleAopDelComplete);
             socket.off('yarn-grey-rcvd-progress', handleYarnGreyRcvdProgress);
             socket.off('yarn-grey-rcvd-complete', handleYarnGreyRcvdComplete);
-            socket.off('yarn-grey-rcvd-error', handleYarnGreyRcvdError);
+            socket.off('dyeing-grey-delivery-progress', handleDyeingGreyProgress);
+            socket.off('dyeing-grey-delivery-complete', handleDyeingGreyComplete);
         };
     }, [socket, jobId]);
 
@@ -113,7 +125,8 @@ const UploadFile = () => {
             if (phase === 'awo') return awoProgress?.phase === 'complete';
             if (phase === 'dwo') return dwoProgress?.phase === 'complete';
             if (phase === 'aop-del') return aopDelProgress?.phase === 'complete';
-            if (phase === 'yarn-grey-rcvd') return yarnGreyRcvdProgress?.phase === 'complete'; // ✅ NEW
+            if (phase === 'yarn-grey-rcvd') return yarnGreyRcvdProgress?.phase === 'complete';
+            if (phase === 'dyeing-grey') return dyeingGreyProgress?.phase === 'complete';
             return true;
         });
 
@@ -122,7 +135,7 @@ const UploadFile = () => {
             setLoading(false);
             setActivePhase(null);
         }
-    }, [expectedPhases, styleReqProgress, kwoProgress, awoProgress, dwoProgress, aopDelProgress, yarnGreyRcvdProgress]);
+    }, [expectedPhases, styleReqProgress, kwoProgress, awoProgress, dwoProgress, aopDelProgress, yarnGreyRcvdProgress, dyeingGreyProgress]);
 
     // ── File handling ───────────────────────────────────────────────
     const handleFileChange = (selectedFile) => {
@@ -143,8 +156,8 @@ const UploadFile = () => {
     };
 
     const resetProgress = () => {
-        setStyleReqProgress(null); setKwoProgress(null); setAwoProgress(null); setDwoProgress(null); setAopDelProgress(null); setYarnGreyRcvdProgress(null);
-        setStyleReqSummary(null); setKwoSummary(null); setAwoSummary(null); setDwoSummary(null); setAopDelSummary(null); setYarnGreyRcvdSummary(null);
+        setStyleReqProgress(null); setKwoProgress(null); setAwoProgress(null); setDwoProgress(null); setAopDelProgress(null); setYarnGreyRcvdProgress(null); setDyeingGreyProgress(null);
+        setStyleReqSummary(null); setKwoSummary(null); setAwoSummary(null); setDwoSummary(null); setAopDelSummary(null); setYarnGreyRcvdSummary(null); setDyeingGreySummary(null);
         setActivePhase(null);
         setExpectedPhases([]);
     };
@@ -176,18 +189,20 @@ const UploadFile = () => {
             const res = await axiosPublic.post("/api/upload", formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             const result = res.data;
             console.log('🎯 Upload response:', result);
-            
+
             if (result.success) {
                 setJobId(result.jobId);
-                
+
                 const phases = [];
                 if (result.styleRequirement?.found) phases.push('style-req');
                 if (result.kwo?.found) phases.push('kwo');
                 if (result.awo?.found) phases.push('awo');
                 if (result.dwo?.found) phases.push('dwo');
                 if (result.aopDel?.found) phases.push('aop-del');
-                if (result.yarnGreyRcvd?.found) phases.push('yarn-grey-rcvd'); // ✅ NEW
-                
+                if (result.yarnGreyRcvd?.found) phases.push('yarn-grey-rcvd');
+                // ✅ FIXED: Changed from result.dyeingGrey to result.dyeingGreyDelivery to match backend
+                if (result.dyeingGreyDelivery?.found) phases.push('dyeing-grey'); 
+
                 setExpectedPhases(phases);
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
@@ -227,7 +242,8 @@ const UploadFile = () => {
         awo: { short: 'A.W.O', full: 'A.W.O' },
         dwo: { short: 'D.W.O', full: 'D.W.O' },
         'aop-del': { short: 'AOP Del', full: 'AOP DEL. & RCVD' },
-        'yarn-grey-rcvd': { short: 'Yarn & Grey', full: 'Yarn & Grey Rcvd' }, // ✅ NEW
+        'yarn-grey-rcvd': { short: 'Yarn & Grey', full: 'Yarn & Grey Rcvd' },
+        'dyeing-grey': { short: 'Dyeing Grey', full: 'Dyeing Grey Del. & Rcvd' },
     };
 
     const getPhaseLabel = (progress, type) => {
@@ -250,7 +266,8 @@ const UploadFile = () => {
         if (type === 'awo') return 'bg-orange-500';
         if (type === 'dwo') return 'bg-teal-500';
         if (type === 'aop-del') return 'bg-indigo-500';
-        return 'bg-pink-500'; // ✅ NEW: yarn-grey-rcvd
+        if (type === 'yarn-grey-rcvd') return 'bg-pink-500';
+        return 'bg-amber-500';
     };
 
     const getPhaseDotColor = (type, isActive) => {
@@ -260,7 +277,8 @@ const UploadFile = () => {
         if (type === 'awo') return 'bg-orange-500 animate-pulse';
         if (type === 'dwo') return 'bg-teal-500 animate-pulse';
         if (type === 'aop-del') return 'bg-indigo-500 animate-pulse';
-        return 'bg-pink-500 animate-pulse'; // ✅ NEW: yarn-grey-rcvd
+        if (type === 'yarn-grey-rcvd') return 'bg-pink-500 animate-pulse';
+        return 'bg-amber-500 animate-pulse';
     };
 
     return (
@@ -269,7 +287,7 @@ const UploadFile = () => {
                 {/* Header */}
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">📊 Excel Import</h1>
-                    <p className="text-gray-600">Upload Style Requirement + K.W.O + A.W.O + D.W.O + AOP DEL. + YARN & GREY RCVD sheets</p>
+                    <p className="text-gray-600">Upload Style Requirement + K.W.O + A.W.O + D.W.O + AOP DEL. + Yarn & Grey + Dyeing Grey sheets</p>
                 </div>
 
                 {/* Upload Card */}
@@ -324,13 +342,13 @@ const UploadFile = () => {
                                 <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> Upload</>
                             )}
                         </button>
-                        {(file || styleReqSummary || kwoSummary || awoSummary || dwoSummary || aopDelSummary || yarnGreyRcvdSummary) && !loading && (
+                        {(file || styleReqSummary || kwoSummary || awoSummary || dwoSummary || aopDelSummary || yarnGreyRcvdSummary || dyeingGreySummary) && !loading && (
                             <button onClick={handleClear} className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors">Clear</button>
                         )}
                     </div>
 
                     {/* ═══════════════════════════════════════════════════
-                        DYNAMIC PROGRESS BARS (Only shows phases found in file)
+                        DYNAMIC PROGRESS BARS
                         ═══════════════════════════════════════════════════ */}
                     {loading && expectedPhases.length > 0 && (
                         <div className="mt-6 space-y-4">
@@ -424,7 +442,7 @@ const UploadFile = () => {
                                 </div>
                             )}
 
-                            {/* ✅ NEW: Yarn & Grey Rcvd */}
+                            {/* Yarn & Grey Rcvd */}
                             {expectedPhases.includes('yarn-grey-rcvd') && (
                                 <div className={`p-4 rounded-xl border transition-all ${activePhase === 'yarn-grey-rcvd' || yarnGreyRcvdProgress ? 'bg-pink-50/50 border-pink-100' : 'bg-gray-50 border-gray-100'}`}>
                                     <div className="flex items-center justify-between mb-2">
@@ -439,6 +457,24 @@ const UploadFile = () => {
                                         <div className={`h-full rounded-full transition-all duration-300 ease-out ${getBarColor('yarn-grey-rcvd', yarnGreyRcvdProgress?.phase)}`} style={{ width: `${getPercent(yarnGreyRcvdProgress)}%` }} />
                                     </div>
                                     <p className="text-xs text-gray-500 mt-1.5">{getPhaseLabel(yarnGreyRcvdProgress, 'yarn-grey-rcvd')}</p>
+                                </div>
+                            )}
+
+                            {/* Dyeing Grey Del. & Rcvd */}
+                            {expectedPhases.includes('dyeing-grey') && (
+                                <div className={`p-4 rounded-xl border transition-all ${activePhase === 'dyeing-grey' || dyeingGreyProgress ? 'bg-amber-50/50 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`w-2 h-2 rounded-full ${getPhaseDotColor('dyeing-grey', activePhase === 'dyeing-grey')}`}></span>
+                                            <span className="text-sm font-semibold text-gray-700">Dyeing Grey Del. & Rcvd</span>
+                                            {dyeingGreyProgress?.phase === 'complete' && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Done</span>}
+                                        </div>
+                                        <span className="text-xs font-bold text-amber-700">{getPercent(dyeingGreyProgress)}%</span>
+                                    </div>
+                                    <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-300 ease-out ${getBarColor('dyeing-grey', dyeingGreyProgress?.phase)}`} style={{ width: `${getPercent(dyeingGreyProgress)}%` }} />
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1.5">{getPhaseLabel(dyeingGreyProgress, 'dyeing-grey')}</p>
                                 </div>
                             )}
                         </div>
@@ -463,7 +499,7 @@ const UploadFile = () => {
                     {/* ═══════════════════════════════════════════════════
                         DYNAMIC SUMMARY CARDS
                         ═══════════════════════════════════════════════════ */}
-                    {(styleReqSummary || kwoSummary || awoSummary || dwoSummary || aopDelSummary || yarnGreyRcvdSummary) && !loading && (
+                    {(styleReqSummary || kwoSummary || awoSummary || dwoSummary || aopDelSummary || yarnGreyRcvdSummary || dyeingGreySummary) && !loading && (
                         <div className="mt-6 space-y-4">
                             {/* Style Req Summary */}
                             {styleReqSummary && (
@@ -578,7 +614,7 @@ const UploadFile = () => {
                                 </div>
                             )}
 
-                            {/* ✅ NEW: Yarn & Grey Rcvd Summary */}
+                            {/* Yarn & Grey Rcvd Summary */}
                             {yarnGreyRcvdSummary && (
                                 <div className="p-4 bg-pink-50 border border-pink-200 rounded-xl">
                                     <h3 className="text-sm font-bold text-pink-800 mb-3">🧶 Yarn & Grey Rcvd Summary</h3>
@@ -601,6 +637,39 @@ const UploadFile = () => {
                                             <p className="text-xs font-semibold text-red-700 mb-1">{yarnGreyRcvdSummary.errors.length} error(s):</p>
                                             <ul className="text-xs text-red-600 space-y-0.5 list-disc list-inside max-h-32 overflow-y-auto">
                                                 {yarnGreyRcvdSummary.errors.map((e, i) => (
+                                                    <li key={i}>
+                                                        <span className="font-mono">Challan {e.challanNo} ({e.deliveryType})</span>: {e.message}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Dyeing Grey Del. & Rcvd Summary */}
+                            {dyeingGreySummary && (
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <h3 className="text-sm font-bold text-amber-800 mb-3">🧪 Dyeing Grey Del. & Rcvd Summary</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-amber-700">{dyeingGreySummary.challansCreated}</p>
+                                            <p className="text-xs text-gray-600">Challans created</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-green-700">{dyeingGreySummary.deliveriesCreated}</p>
+                                            <p className="text-xs text-gray-600">Deliveries created</p>
+                                        </div>
+                                        <div className="p-3 bg-white rounded-lg text-center shadow-sm">
+                                            <p className="text-2xl font-bold text-yellow-700">{dyeingGreySummary.rowsSkipped}</p>
+                                            <p className="text-xs text-gray-600">Rows skipped</p>
+                                        </div>
+                                    </div>
+                                    {dyeingGreySummary.errors?.length > 0 && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                                            <p className="text-xs font-semibold text-red-700 mb-1">{dyeingGreySummary.errors.length} error(s):</p>
+                                            <ul className="text-xs text-red-600 space-y-0.5 list-disc list-inside max-h-32 overflow-y-auto">
+                                                {dyeingGreySummary.errors.map((e, i) => (
                                                     <li key={i}>
                                                         <span className="font-mono">Challan {e.challanNo} ({e.deliveryType})</span>: {e.message}
                                                     </li>

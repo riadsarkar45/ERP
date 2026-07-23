@@ -7,6 +7,7 @@ import { uploadAOWDataFromFile } from "../../helpers/uploadStyleReqData/uploadaw
 import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploadDyeingOrder";
 import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
 import { uploadYarnGreyRcvdDataFromFile, type YarnGreyRcvdParsedRow } from "../../helpers/uploadStyleReqData/uploadYarnDevData";
+import { uploadDyeingGreyDeliveryDataFromFile, type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
 // ⚠️ Adjust this path to match where you saved the helper file provided earlier
 // import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
 
@@ -435,6 +436,83 @@ async function readAllRowsAndFindHeader(
     return { allRows, headerRowIndex };
 }
 
+// ── DYEING GREY DEL. & RCVD Specific Parsing ──────────────────────────────
+interface DyeingGreyDeliveryColumnIndices {
+    challanDate: number;
+    challanNo: number;
+    jobNo: number;
+    color: number;
+    composition: number;
+    greyDeliveryQty: number;
+    greyReceivedQty: number;
+    finishReceivedQty: number; // ✅ ADDED
+    dyeingFactoryName: number;
+    toFactory: number;
+    fromFactory: number;
+}
+
+const buildDyeingGreyDeliveryColIndex = (headers: unknown[]): DyeingGreyDeliveryColumnIndices => ({
+    challanDate: findPartialCol(headers, "date of challan"),
+    challanNo: findPartialCol(headers, "challan no"),
+    jobNo: findPartialCol(headers, "job no"),
+    color: findPartialCol(headers, "color"),
+    composition: findPartialCol(headers, "composition"),
+    
+    // ✅ UPDATED: Keywords now perfectly match the actual Excel headers (spaces are ignored)
+    greyDeliveryQty: findPartialCol(headers, "grey fabric del"),       // Matches "GREY FABRIC DEL. FOR DYEING"
+    greyReceivedQty: findPartialCol(headers, "grey fabric rcvd"),      // Matches "GREY FABRIC RCVD FROM DYEING"
+    finishReceivedQty: findPartialCol(headers, "finish fabric rcvd"),  // Matches "FINISH FABRIC RCVD FROM DYEING"
+    
+    dyeingFactoryName: findPartialCol(headers, "dyeing factory name"), // Matches "GREY DEL & RECVED FROM DYEING FACTORY NAME"
+    toFactory: findPartialCol(headers, "finished fabric delivery"),    // Matches "FINISHED FABRIC DELIVERY FACTORY NAME"
+    fromFactory: findPartialCol(headers, "remarks"),                   // Remarks often contains "FROM [Factory Name]"
+});
+
+const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDeliveryColumnIndices): DyeingGreyDeliveryParsedRow => ({
+    challanDate: parseDateValue(getCellValue(row, colIndex.challanDate)),
+    challanNo: toNumber(getCellValue(row, colIndex.challanNo)),
+    jobNo: asString(getCellValue(row, colIndex.jobNo)),
+    color: asString(getCellValue(row, colIndex.color)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    greyDeliveryQty: toNumber(getCellValue(row, colIndex.greyDeliveryQty)),
+    greyReceivedQty: toNumber(getCellValue(row, colIndex.greyReceivedQty)),
+    finishReceivedQty: toNumber(getCellValue(row, colIndex.finishReceivedQty)), // ✅ ADDED
+    dyeingFactoryName: asString(getCellValue(row, colIndex.dyeingFactoryName)),
+    toFactory: asString(getCellValue(row, colIndex.toFactory)),
+    fromFactory: asString(getCellValue(row, colIndex.fromFactory)),
+});
+
+const isValidDyeingGreyDeliveryRow = (row: DyeingGreyDeliveryParsedRow): boolean => {
+    // ✅ UPDATED: Now checks for finishReceivedQty as well
+    return !!(row.jobNo && (row.greyDeliveryQty > 0 || row.greyReceivedQty > 0 || row.finishReceivedQty > 0));
+};
+
+
+async function processDyeingGreyDeliverySheet(
+    worksheetReader: WorksheetReader
+): Promise<{ parsedRows: DyeingGreyDeliveryParsedRow[]; headerFound: boolean }> {
+    const DYEING_GREY_DELIVERY_KEYWORDS = ["challan no", "job no", "dyeing delivery", "dyeing received"];
+    const MIN_SCORE = 2;
+    const SCAN_LIMIT = 15;
+
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, DYEING_GREY_DELIVERY_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
+
+    if (headerRowIndex === -1) {
+        return { parsedRows: [] as DyeingGreyDeliveryParsedRow[], headerFound: false };
+    }
+
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
+    const colIndex = buildDyeingGreyDeliveryColIndex(headers);
+
+    const parsedRows: DyeingGreyDeliveryParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseDyeingGreyDeliveryRow(allRows[i] ?? [], colIndex);
+        if (isValidDyeingGreyDeliveryRow(parsed)) parsedRows.push(parsed);
+    }
+
+    return { parsedRows, headerFound: true };
+}
+
 // ── Sheet Parsing Functions (STYLE, KWO, AWO, DWO) ────────────────
 const buildStyleReqColIndex = (headers: unknown[]): StyleReqColumnIndices => ({
     salesContractNo: findPartialCol(headers, "sales contract"),
@@ -675,6 +753,10 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         let yarnGreyRcvdHeaderFound = false;
         let yarnGreyRcvdSheetName = "";
 
+        let parsedRowsDyeingGreyDelivery: DyeingGreyDeliveryParsedRow[] = [];
+        let dyeingGreyDeliveryHeaderFound = false;
+        let dyeingGreyDeliverySheetName = "";
+
         for await (const worksheetReader of workbookReader) {
             const sheetName = (worksheetReader as WorksheetReader).name || "";
 
@@ -709,13 +791,18 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 parsedRowsYarnGreyRcvd = result.parsedRows;
                 yarnGreyRcvdHeaderFound = result.headerFound;
                 yarnGreyRcvdSheetName = sheetName;
+            } else if (sheetName === "DYEING GREY DEL. & RCVD" || sheetName === "DYEING GREY DELIVERY") {
+                const result = await processDyeingGreyDeliverySheet(worksheetReader as WorksheetReader);
+                parsedRowsDyeingGreyDelivery = result.parsedRows;
+                dyeingGreyDeliveryHeaderFound = result.headerFound;
+                dyeingGreyDeliverySheetName = sheetName;
             } else {
                 for await (const _row of worksheetReader) { /* drain */ }
             }
         }
 
         // ✅ UPDATED: Include aopDelHeaderFound in validation
-        if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && !aopDelHeaderFound && !yarnGreyRcvdHeaderFound) {
+        if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && !aopDelHeaderFound && !yarnGreyRcvdHeaderFound && !dyeingGreyDeliveryHeaderFound) {
             res.status(400).json({ error: "Could not locate a valid header row in the Excel file." });
             return;
         }
@@ -735,6 +822,7 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
             // ✅ NEW: Return AOP Delivery parsing summary
             aopDel: { sheetName: aopDelSheetName, found: aopDelHeaderFound, totalRows: parsedRowsAOPDel.length },
             yarnGreyRcvd: { sheetName: yarnGreyRcvdSheetName, found: yarnGreyRcvdHeaderFound, totalRows: parsedRowsYarnGreyRcvd.length },
+            dyeingGreyDelivery: { sheetName: dyeingGreyDeliverySheetName, found: dyeingGreyDeliveryHeaderFound, totalRows: parsedRowsDyeingGreyDelivery.length },
         });
 
         // ── Background: Parallel upload processing ─────────────────
@@ -766,6 +854,12 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 if (yarnGreyRcvdHeaderFound && parsedRowsYarnGreyRcvd.length > 0) {
                     uploadPromises.push(
                         uploadYarnGreyRcvdDataFromFile(parsedRowsYarnGreyRcvd, jobId).then(() => console.log(`✅ [${jobId}] YARN & GREY RCVD done.`))
+                    );
+                }
+
+                if (dyeingGreyDeliveryHeaderFound && parsedRowsDyeingGreyDelivery.length > 0) {
+                    uploadPromises.push(
+                        uploadDyeingGreyDeliveryDataFromFile(parsedRowsDyeingGreyDelivery, jobId).then(() => console.log(`✅ [${jobId}] DYEING GREY DEL. & RCVD done.`))
                     );
                 }
 
