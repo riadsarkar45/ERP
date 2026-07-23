@@ -72,7 +72,6 @@ model Composition {
   workOrderId  Int
   deliveries   deliveries[]
   orderType    String       @default("null")
-
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
   challans              Challan[]

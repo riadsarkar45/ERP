@@ -21,14 +21,19 @@ const Sidebar = () => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isOrdersOpen, setIsOrdersOpen] = useState(false);
+    const [isMovementOpen, setIsMovementOpen] = useState(false);
     const isActive = (path) => location.pathname === path;
     const { user } = useContext(AuthContext)
-    console.log(user);
     const orderSubItems = [
         { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
         { path: "/dashboard/dyeing-order", label: "Dyeing Orders", icon: Package },
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Package },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: Package },
+    ];
+    const movementSubItems = [
+        { path: "/dashboard/challan/aop", label: "Aop", icon: Package },
+        { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package },
+        { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package },
     ];
 
     const navItems = [
@@ -41,10 +46,10 @@ const Sidebar = () => {
 
     // Auto-open dropdown if current route is an order sub-route
     const isOrdersActive = orderSubItems.some(item => isActive(item.path));
+    const isMovementActive = orderSubItems.some(item => isActive(item.path));
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
-
     const getPageInfo = () => {
         const path = location.pathname;
         if (path.includes('/factory-wise-report/')) {
@@ -65,7 +70,19 @@ const Sidebar = () => {
             '/dashboard/new-order': { title: 'Add New Order', subtitle: 'Create new order' },
             '/dashboard/audits': { title: 'AUDITS', subtitle: 'Audits' },
         };
-        return routeMap[path] || { title: 'Dashboard', subtitle: 'Welcome back, System Admin' };
+
+        const movementRouteMap = {
+            '/dashboard/challan/aop': { title: 'AOP Movement', subtitle: 'Manage AOP challans' },
+            '/dashboard/challan/dyeing': { title: 'Dyeing Movement', subtitle: 'Manage dyeing challans' },
+            '/dashboard/challan/knitting': { title: 'Knitting Movement', subtitle: 'Manage knitting challans' },
+        };
+
+        // Look up by the actual path, in either map
+        return (
+            routeMap[path] ||
+            movementRouteMap[path] ||
+            { title: 'Dashboard', subtitle: 'Welcome back, System Admin' }
+        );
     };
 
     const pageInfo = getPageInfo();
@@ -191,6 +208,47 @@ const Sidebar = () => {
                                 </li>
                             );
                         })}
+
+                        {/* Movement Dropdown */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsMovementOpen(!isMovementOpen)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'Movement' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Package size={20} className="shrink-0" />
+                                    {!isCollapsed && <span className="font-medium text-sm">Movement</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    (isMovementOpen || isMovementActive)
+                                        ? <ChevronDown size={16} />
+                                        : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {/* Sub Items */}
+                            {(movementSubItems || isMovementOpen) && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {movementSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
                     </ul>
                 </nav>
             </aside>

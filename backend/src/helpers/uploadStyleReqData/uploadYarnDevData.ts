@@ -16,7 +16,7 @@ export interface YarnGreyRcvdParsedRow {
 
 interface YarnGreyRcvdUploadSummary {
     challansCreated: number;
-    challansUpdated: number;
+    existingChallansFound: number; // Renamed from challansUpdated for clarity
     deliveriesCreated: number;
     rowsSkipped: number;
     errors: { challanNo: number; deliveryType: string; message: string }[];
@@ -49,7 +49,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
 ): Promise<YarnGreyRcvdUploadSummary> => {
     const summary: YarnGreyRcvdUploadSummary = {
         challansCreated: 0,
-        challansUpdated: 0,
+        existingChallansFound: 0,
         deliveriesCreated: 0,
         rowsSkipped: 0,
         errors: [],
@@ -119,7 +119,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
         if (!event) continue;
 
         try {
-            // Resolve Composition
+            // ── 1. Resolve Composition ──
             const composition = await prisma.composition.findFirst({
                 where: {
                     color: event.color,
@@ -139,8 +139,9 @@ export const uploadYarnGreyRcvdDataFromFile = async (
                 continue;
             }
 
-            // Universal Challan Upsert
-            const challan = await prisma.challan.upsert({
+            // ── 2. Find or Create Challan (NO UPSERT) ──
+            // This prevents accidental overwrites of existing challan data.
+            let challan = await prisma.challan.findUnique({
                 where: {
                     challanNo_toFactory_fromFactory: {
                         challanNo: event.challanNo,
@@ -148,24 +149,24 @@ export const uploadYarnGreyRcvdDataFromFile = async (
                         fromFactory: event.fromFactory,
                     },
                 },
-                update: {
-                    challanDate: event.challanDate ?? new Date(),
-                    yarnCompId: composition.id,
-                },
-                create: {
-                    challanNo: event.challanNo,
-                    challanDate: event.challanDate ?? new Date(),
-                    toFactory: event.toFactory,
-                    fromFactory: event.fromFactory,
-                    yarnCompId: composition.id,
-                },
             });
 
-            const createdRecently = (new Date().getTime() - challan.createdAt.getTime()) < 2000;
-            if (createdRecently) summary.challansCreated++;
-            else summary.challansUpdated++;
+            if (!challan) {
+                challan = await prisma.challan.create({
+                    data: {
+                        challanNo: event.challanNo,
+                        challanDate: event.challanDate ?? new Date(),
+                        toFactory: event.toFactory,
+                        fromFactory: event.fromFactory,
+                        yarnCompId: composition.id,
+                    },
+                });
+                summary.challansCreated++;
+            } else {
+                summary.existingChallansFound++;
+            }
 
-            // Create Delivery Record
+            // ── 3. Create Delivery Record ──
             await prisma.deliveries.create({
                 data: {
                     deliveryDate: event.challanDate ?? new Date(),
@@ -181,6 +182,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
             });
             summary.deliveriesCreated++;
 
+            // Batch progress emits
             if ((i + 1) % 25 === 0 || i === events.length - 1) {
                 emitProgress("yarn-grey-rcvd-progress", {
                     jobId, phase: "inserting", current: i + 1, total: events.length,

@@ -21,7 +21,7 @@ export interface AOPDeliveryParsedRow {
 
 interface AOPDeliveryUploadSummary {
     challansCreated: number;
-    challansUpdated: number;
+    existingChallansFound: number; // Renamed from challansUpdated for clarity
     deliveriesCreated: number;
     rowsSkipped: number;
     errors: { challanNo: number; deliveryType: string; message: string }[];
@@ -54,7 +54,7 @@ export const uploadAopDeliveryDataFromFile = async (
 ): Promise<AOPDeliveryUploadSummary> => {
     const summary: AOPDeliveryUploadSummary = {
         challansCreated: 0,
-        challansUpdated: 0,
+        existingChallansFound: 0,
         deliveriesCreated: 0,
         rowsSkipped: 0,
         errors: [],
@@ -150,8 +150,9 @@ export const uploadAopDeliveryDataFromFile = async (
                 continue;
             }
 
-            // ── 2. Universal Challan Upsert ──
-            const challan = await prisma.challan.upsert({
+            // ── 2. Find or Create Challan (NO UPSERT) ──
+            // This prevents accidental overwrites of existing challan data.
+            let challan = await prisma.challan.findUnique({
                 where: {
                     challanNo_toFactory_fromFactory: {
                         challanNo: event.challanNo,
@@ -159,25 +160,21 @@ export const uploadAopDeliveryDataFromFile = async (
                         fromFactory: event.fromFactory,
                     },
                 },
-                update: {
-                    challanDate: event.challanDate ?? new Date(),
-                    yarnCompId: composition.id,
-                },
-                create: {
-                    challanNo: event.challanNo,
-                    challanDate: event.challanDate ?? new Date(),
-                    toFactory: event.toFactory,
-                    fromFactory: event.fromFactory,
-                    yarnCompId: composition.id,
-                },
             });
 
-            // Simple tracking to see if it was newly created vs updated
-            const createdRecently = (new Date().getTime() - challan.createdAt.getTime()) < 2000; 
-            if (createdRecently) {
+            if (!challan) {
+                challan = await prisma.challan.create({
+                    data: {
+                        challanNo: event.challanNo,
+                        challanDate: event.challanDate ?? new Date(),
+                        toFactory: event.toFactory,
+                        fromFactory: event.fromFactory,
+                        yarnCompId: composition.id,
+                    },
+                });
                 summary.challansCreated++;
             } else {
-                summary.challansUpdated++;
+                summary.existingChallansFound++;
             }
 
             // ── 3. Create Delivery Record (Linked to Challan) ──
@@ -191,7 +188,7 @@ export const uploadAopDeliveryDataFromFile = async (
                     yarnCompId: composition.id,
                     fromFactory: event.fromFactory,
                     toFactory: event.toFactory,
-                    challanId: challan.id, // 👈 Links to the Universal Challan table
+                    challanId: challan.id, // 👈 Links to the found or newly created Challan
                 },
             });
             summary.deliveriesCreated++;

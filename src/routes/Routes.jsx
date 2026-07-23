@@ -21,6 +21,9 @@ import Login from "../dashboard/pages/users/login/Login";
 import AddNewUser from "../dashboard/pages/users/addNewUser/AddNewUser";
 import ProtectedRoute from "../dashboard/auth/ProtectedRoute";
 import PartyWiseView from "../dashboard/pages/partyWiseView/PartyWiseView";
+import Aop from "../dashboard/pages/movement/Aop";
+import Dyeing from "../dashboard/pages/movement/Dyeing";
+import Knitting from "../dashboard/pages/movement/Knitting";
 
 const routers = createBrowserRouter([
     {
@@ -116,7 +119,19 @@ const routers = createBrowserRouter([
                                 <PartyWiseView/>
                             </ProtectedRoute>
                         )
-                    }
+                    },
+                    {
+                        path: "challan/aop",
+                        element: <Aop/>
+                    },
+                    {
+                        path: "challan/dyeing",
+                        element: <Dyeing/>
+                    },
+                    {
+                        path: "challan/knitting",
+                        element: <Knitting/>
+                    },
                 ]
             }
         ]
