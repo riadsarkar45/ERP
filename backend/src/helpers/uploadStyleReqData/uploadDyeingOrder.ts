@@ -181,6 +181,7 @@ export const uploadDYEINGDataFromFile = async (
                 // so a plain value like "3" only matches THIS job's work order.
                 const existingWO = await prisma.workOrder.findFirst({
                     where: {
+                        orderType: "dyeingOrder",
                         workOrderNo,
                         jobNo: first.jobNo,
                         month: first.month,
