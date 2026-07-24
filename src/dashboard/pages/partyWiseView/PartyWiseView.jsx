@@ -272,9 +272,12 @@ const PartyWiseView = () => {
                             </tr>
                         </thead>
                          {
-                            selectOrderType === "knittingOrder" && <KnittingDetail/>
+                            selectOrderType === "knittingOrder" && <KnittingDetail detailView={detailView}/>
                          }       
-                        <DyeingDetail detailView={detailView} />
+                         {
+                            selectOrderType === "dyeingOrder" && <DyeingDetail detailView={detailView} />
+                         }       
+                        
                     </table>
                 </div>
             </div>
