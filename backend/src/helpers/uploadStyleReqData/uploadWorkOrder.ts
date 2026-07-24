@@ -191,7 +191,7 @@ export const uploadKWODataFromFile = async (
                 await prisma.$transaction(async (tx) => {
                     if (existingWO) {
                         await tx.workOrder.update({
-                            where: { id: existingWO.id },
+                            where: { orderType: "knittingOrder", id: existingWO.id },
                             data: {
                                 workOrderPlaceDate: first.workOrderDate || existingWO.workOrderPlaceDate,
                                 month: first.month || existingWO.month,

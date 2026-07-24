@@ -129,9 +129,11 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
             const composition = await prisma.composition.findFirst({
                 where: {
                     orderType: "dyeingOrder",
+                    color: event.color,
+                    composition: event.composition,
                     workOrder: {
                         jobNo: event.jobNo,
-                        orderType: "aopOrder",
+                        orderType: "dyeingOrder",
                     }
                 },
                 select: { id: true, workOrderId: true },
