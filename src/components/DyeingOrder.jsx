@@ -6,16 +6,15 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
 
     const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
 
-    const innerItem = "border-b border-gray-300 px-3 py-2 last:border-b-0";
+    const innerItem = "border-b border-gray-300 last:border-b-0 w-full py-2 px-3";
 
-    // All td share these base styles
     const baseTd = {
-        borderRight: "1px solid #d1d5db",
-        borderBottom: "1px solid #d1d5db",
+        borderRight: "1px solid #e2e8f0",
+        borderBottom: "1px solid #e2e8f0",
         padding: 0,
         textAlign: "center",
         verticalAlign: "middle",
-        overflow: "hidden", // Prevents text from overlapping the next column
+        overflow: "hidden",
     };
 
     const stickyTd = (colIndex, isHovered) => ({
@@ -32,16 +31,10 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
         cursor: "pointer",
     });
 
-    const plainTd = (isHovered) => ({
-        ...baseTd,
-        backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
-    });
-
-    // ── TOTALS: flatten every composition across all orders/workOrders and sum the numeric fields ──
     const totals = useMemo(() => {
         const acc = {
             orderQty: 0,
-            workOrderQty: 0,       // note: rendered from `unt.workOrderQty` under the "UNIT PRICE" header — see flag below
+            workOrderQty: 0,
             totalGreyDelivery: 0,
             shortExcess: 0,
             greyReturnReceived: 0,
@@ -103,7 +96,7 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
     };
 
     const footerTd = {
-        border: "1px solid #d1d5db",
+        border: "1px solid #e2e8f0",
         padding: "8px 12px",
         textAlign: "center",
         verticalAlign: "middle",
@@ -119,101 +112,96 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                     const isHovered = hoveredIndex === jobIndex;
 
                     return (
-                        <tr key={jobIndex} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <tr key={jobIndex}>
                             <td style={stickyTd(0, isHovered)}>
                                 {workOrders?.map((wo, i) => (
-                                    <div key={i}>{wo.factoryName || "-"}</div>
+                                    <div key={i} className={innerItem}>{wo.factoryName || "-"}</div>
                                 ))}
                             </td>
-                            {/* FIXED: was a plain <td> with no sticky positioning at all */}
                             <td
                                 style={stickyTd(1, isHovered)}
                                 onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}
                             >
-                                {job.jobNo || "NO JOB FOUND"}
+                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
                             <td style={stickyTd(2, isHovered)}>
                                 {workOrders?.map((wo, i) => (
-                                    <div key={i}>{wo.workOrderNo || "-"}</div>
+                                    <div key={i} className={innerItem}>{wo.workOrderNo || "-"}</div>
                                 ))}
                             </td>
                             <td style={stickyTd(3, isHovered)}>
                                 {workOrders.map((wo, i) => (
-                                    <div key={i}>{wo.styleRequirement?.buyerName || "-"}</div>
+                                    <div key={i} className={innerItem}>{wo.styleRequirement?.buyerName || "-"}</div>
                                 ))}
                             </td>
                             <td style={stickyTd(4, isHovered)}>
                                 {workOrders.map((wo, i) => (
-                                    <div key={i}>{wo.styleRequirement?.styleNo || "-"}</div>
+                                    <div key={i} className={innerItem}>{wo.styleRequirement?.styleNo || "-"}</div>
                                 ))}
                             </td>
                             <td style={stickyTd(5, isHovered)}>
                                 {workOrders?.map((mon, i) => (
-                                    <div key={i}>{mon.month || "-"}</div>
+                                    <div key={i} className={innerItem}>{mon.month || "-"}</div>
                                 ))}
                             </td>
 
-                            {/* COMPOSITION */}
+                            {/* FIXED: Changed from plain style to stickyTd(6, isHovered) */}
                             <td style={stickyTd(6, isHovered)}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((comp, j) => (
-                                        <span key={`${i}-${j}`} style={{ marginRight: '8px', display: 'inline-block' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {comp.composition || "-"}
-                                        </span>
+                                        </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* COLOR */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((col, j) => (
-                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} style={{ marginRight: '6px', cursor: 'pointer' }}>
+                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
                                             {col.color || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* ORDER QTY */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((ord, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {ord.orderQty || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* UNIT PRICE — ⚠️ renders wo.workOrderQty, not unitePrice; see flag below */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((unt, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {unt.workOrderQty || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* WORK ORDER QTY — ⚠️ renders totalGreyDelivery; see flag below */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.totalGreyDelivery || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
                                         const diff = (wrk.totalGreyDelivery || 0) - (wrk.workOrderQty || 0);
                                         const exceeded = diff > 0;
                                         return (
-                                            <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
+                                            <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
                                                 {exceeded ? diff : `(${Math.abs(diff)})`}
                                             </div>
                                         );
@@ -221,44 +209,42 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                                 )}
                             </td>
 
-                            {/* GREY RETURN RECEIVE */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.yarnDeliveriesWithColor?.GreyReturnReceived || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.yarnDeliveriesWithColor?.GreyReceived || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.yarnDeliveriesWithColor?.FinishReceived || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* DIFFERENCE (Finish vs Grey) */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
                                         const diff = (wrk.yarnDeliveriesWithColor?.FinishReceived || 0) - (wrk.yarnDeliveriesWithColor?.GreyReceived || 0);
                                         const exceeded = diff < 0;
                                         return (
-                                            <div key={`${i}-${j}`} style={{ marginRight: '6px', color: exceeded ? "red" : "green", fontWeight: "bold" }}>
+                                            <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
                                                 {exceeded ? Math.abs(diff) : `(${Math.abs(diff)})`}
                                             </div>
                                         );
@@ -266,63 +252,61 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                                 )}
                             </td>
 
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.unitePrice || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.yarnDeliveriesWithColor?.SentForCompacting || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* RECEIVED FROM COMPACTING */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '8px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             {wrk.yarnDeliveriesWithColor?.ReceivedFromCompacting || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '6px' }}>
-                                            {(wrk.yarnDeliveriesWithColor?.GreyReceived || 0) * (wrk.unitePrice || 0) || "-"}
+                                        <div key={`${i}-${j}`} className={innerItem}>
+                                            
+                                            {(wrk.yarnDeliveriesWithColor?.GreyReceived || 0) * (wrk.unitePrice || 0).toFixed(2) || "-"}
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* PAYABLE AMOUNT — ⚠️ hardcoded placeholder text, not a real value; see flag below */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '8px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             PAYABLE AMOUNT
                                         </div>
                                     ))
                                 )}
                             </td>
 
-                            {/* PENDING BILLING AMOUNT — ⚠️ same, hardcoded placeholder text */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: "8px 12px", textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} style={{ marginRight: '8px' }}>
+                                        <div key={`${i}-${j}`} className={innerItem}>
                                             PENDING BILLING AMOUNT
                                         </div>
                                     ))
@@ -338,39 +322,24 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                     <td colSpan={FROZEN_COUNT} style={footerStickyLabelTd}>
                         TOTAL
                     </td>
-                    {/* COLOR — not numeric */}
                     <td style={footerTd}>-</td>
-                    {/* ORDER QTY */}
                     <td style={footerTd}>{totals.orderQty}</td>
-                    {/* "UNIT PRICE" column — mirrors body's workOrderQty render */}
                     <td style={footerTd}>{totals.workOrderQty}</td>
-                    {/* "WORK ORDER QTY" column — mirrors body's totalGreyDelivery render */}
                     <td style={footerTd}>{totals.totalGreyDelivery}</td>
-                    {/* DELIVERY SHORT & EXCESS */}
                     <td style={{ ...footerTd, color: totals.shortExcess > 0 ? "red" : "green" }}>
                         {totals.shortExcess > 0 ? totals.shortExcess : `(${Math.abs(totals.shortExcess)})`}
                     </td>
-                    {/* GREY RETURN RECEIVE */}
                     <td style={footerTd}>{totals.greyReturnReceived}</td>
-                    {/* GREY RECEIVED FROM DYEING */}
                     <td style={footerTd}>{totals.greyReceived}</td>
-                    {/* FINISH FABRIC RECEIVED */}
                     <td style={footerTd}>{totals.finishReceived}</td>
-                    {/* BALANCE (Finish vs Grey diff) */}
                     <td style={{ ...footerTd, color: totals.finishVsGreyDiff < 0 ? "red" : "green" }}>
                         {totals.finishVsGreyDiff < 0 ? Math.abs(totals.finishVsGreyDiff) : `(${Math.abs(totals.finishVsGreyDiff)})`}
                     </td>
-                    {/* PRICE PER KG — not meaningful to sum */}
                     <td style={footerTd}>-</td>
-                    {/* TOTAL SENT FOR COMPACTING */}
                     <td style={footerTd}>{totals.sentForCompacting}</td>
-                    {/* TOTAL RECEIVED FROM COMPACTING */}
                     <td style={footerTd}>{totals.receivedFromCompacting}</td>
-                    {/* TOTAL BILLING AMOUNT (Grey Received × Unit Price) */}
                     <td style={footerTd}>{totals.greyReceivedValue.toFixed(2)}</td>
-                    {/* PAYABLE AMOUNT — body shows placeholder text, so no real total available */}
                     <td style={footerTd}>-</td>
-                    {/* PENDING BILLING AMOUNT — same */}
                     <td style={footerTd}>-</td>
                 </tr>
             </tfoot>
