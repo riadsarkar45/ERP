@@ -24,8 +24,7 @@ const getSavedWidths = (type, defaultWidths) => {
     return defaultWidths;
 };
 
-// 🔥 1. EXTRACTED: Pure function to apply deep filters. 
-// We move this OUTSIDE the component so it's clean and reusable.
+// Pure function to apply deep filters, kept outside the component so it's stable/reusable.
 const applyDeepFilters = (data, activeFilters) => {
     if (!data || Object.keys(activeFilters).length === 0) return data;
 
@@ -86,8 +85,7 @@ const AllOrders = ({ orderType }) => {
     const [jobId, setJobId] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
-    // 🔥 CHANGED: changedField is now keyed by yarnId -> { [yarnId]: { deliveryQty, challanNo, deliveryType, ... } }
-    // This lets multiple open compositions hold their own independent values at the same time.
+    // Keyed by yarnId -> { [yarnId]: { deliveryQty, challanNo, deliveryType, date, ... } }
     const [changedField, setChangedField] = useState({});
     const [styleNo, setStyleNo] = useState("");
     const [deliveries, setDeliveries] = useState({});
@@ -95,10 +93,16 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
     const [filters, setFilters] = useState({});
-    const [duplicateChallan, setDuplicateChallan] = useState([])
+    const [duplicateChallan, setDuplicateChallan] = useState([]);
+    const [challanIssue, setChallanIssue] = useState([]);
+
+    // NEW: pagination state, driven by getAllOrders' { pagination: { page, limit, total, totalPages } }
+    const [page, setPage] = useState(1);
+    const [limit] = useState(10);
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+
     const { handleRefresh, isUpdated } = InlineEdit();
     const { fetchData, error, loading } = useFetchData();
-
 
     const COLUMNS = useMemo(() => {
         const cols = [];
@@ -218,32 +222,44 @@ const AllOrders = ({ orderType }) => {
         return [...acc, acc[i - 1] + currentFrozenWidths[i - 1]];
     }, []);
 
+    // Reset to page 1 whenever orderType changes (switching tabs shouldn't keep an old page number).
     useEffect(() => {
-        fetchData(`/api/work-order/${orderType}`)
-            .then(data => {
-                if (data) setOrders(data);
-                console.log(data);
-            }
-            )
-    }, [orderType, isUpdated]);
+        setPage(1);
+    }, [orderType]);
 
-    // 🔥 2. Use the extracted function to get the final visible rows
+    // NOTE: getAllOrders now responds with { type, data, pagination }, not a raw array.
+    // Adjust `res.data` / `res.pagination` below if useFetchData already unwraps
+    // axios's response for you (i.e. if `fetchData` resolves directly to the JSON body).
+    useEffect(() => {
+        fetchData(`/api/work-order/${orderType}`, {
+            params: { page, limit }
+        })
+            .then(res => {
+                if (res) {
+                    setOrders(res.data ?? []);
+                    if (res.pagination) setPagination(res.pagination);
+                }
+            });
+    }, [orderType, isUpdated, page, limit]);
+
     const filteredOrders = useMemo(() => applyDeepFilters(orders, filters), [orders, filters]);
 
-    // 🔥 3. EXCEL-LIKE CASCADING DROPDOWNS: 
-    // Get options for a specific column by applying all OTHER filters, but ignoring its own filter.
     const getDropdownOptions = (targetColName) => {
         const tempFilters = { ...filters };
-        delete tempFilters[targetColName]; // Ignore this column's active filter
+        delete tempFilters[targetColName];
 
         const tempFilteredData = applyDeepFilters(orders, tempFilters);
         return getUniqueValues(tempFilteredData, targetColName);
     };
 
-    // 🔥 EARLY RETURNS MUST BE HERE (After all hooks)
     if (error) return <div className="p-4 bg-red-100 text-red-700 rounded">Something went wrong</div>;
-    if (loading) return <div className="p-4 text-gray-500"><Loader2 className="animate-spin" size={40} /></div>;
-
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full py-10">
+                <Loader2 className="h-14 w-14 animate-spin text-gray-500" />
+            </div>
+        );
+    }
     const getUniqueValues = (data, key) => {
         const values = new Set();
         if (!data) return [];
@@ -267,7 +283,7 @@ const AllOrders = ({ orderType }) => {
     const handleFilterApply = (columnName, selectedValues) => {
         setFilters(prev => {
             const newFilters = { ...prev };
-            const uniqueVals = getDropdownOptions(columnName); // Use cascading options to check if "Select All" was clicked
+            const uniqueVals = getDropdownOptions(columnName);
             if (!selectedValues || selectedValues.length === 0 || selectedValues.length === uniqueVals.length) delete newFilters[columnName];
             else newFilters[columnName] = selectedValues;
             return newFilters;
@@ -295,20 +311,22 @@ const AllOrders = ({ orderType }) => {
     };
 
     const handleEditRowData = async (workOrderIds) => {
-        setLoadingDeliveries(true); setIsEditing(true);
-        setJobId(workOrderIds)
+        setLoadingDeliveries(true);
+        setIsEditing(true);
+        setJobId(workOrderIds);
         setChangedField({});
         setDuplicateChallan([]);
+        setChallanIssue([]);
+
         fetchData(`/api/deliveries/${orderType}`, {
-            // Fix the typo here too!
             params: { workOrderIds: workOrderIds.join(',') }
         })
             .then(data => {
-                // 'data' is already the array, no need for data.data
                 if (data) {
                     setDeliveries(data);
                     setWorkOrderId(workOrderIds);
-                    setStyleNo(styleNo);
+                    // Removed the old `setStyleNo(styleNo)` no-op (set state to itself).
+                    // If styleNo should come from the fetched data, wire it up here instead.
                 }
             })
             .catch(error => {
@@ -317,18 +335,6 @@ const AllOrders = ({ orderType }) => {
             .finally(() => {
                 setLoadingDeliveries(false);
             });
-        // const res = await axiosPublic.get(`/api/deliveries/${orderType}`, {
-        //     params: { workOrderIds: workOrderIds.join(',') }
-        // });
-        // // fetchData(`/api/deliveries/${orderType}`, {
-        // //     params: { workOrderId: workOrderIds.join(',') }
-        // // }).then(data => { if (data) setDeliveries(data); setLoadingDeliveries(false) });
-
-        // if (res.data) setLoadingDeliveries(false);
-        // console.log(res.data);
-        // setDeliveries(res.data);
-        // setWorkOrderId(workOrderIds);
-        // setStyleNo(styleNo);
     };
 
     const handleEditOnChange = (yarnId, e) => {
@@ -337,7 +343,14 @@ const AllOrders = ({ orderType }) => {
 
         setChangedField(prev => {
             const rowPrev = prev[yarnId] || {};
-            const updatedRow = { ...rowPrev, [name]: value };
+            // Fixed: previously also set a literal `name` key to today's date on every
+            // keystroke, clobbering `[name]: value` and never actually sending `date`,
+            // which the backend requires.
+            const updatedRow = {
+                ...rowPrev,
+                [name]: value,
+                date: rowPrev.date ?? new Date().toISOString().split("T")[0],
+            };
 
             const isAopGreyReceived = updatedRow.deliveryType === "Aop Grey Received";
 
@@ -356,7 +369,6 @@ const AllOrders = ({ orderType }) => {
     const handleSubmit = async (yarnId, workOrderId) => {
         setIsLoading(true);
         const payload = changedField[yarnId] || {};
-        console.log(workOrderId, payload);
         try {
             const update = await axiosPublic.patch(
                 `/api/update-order`,
@@ -364,23 +376,22 @@ const AllOrders = ({ orderType }) => {
                 { params: { yarnId, workOrderId } }
             );
             if (update.status === 200) {
-                // const res = await axiosPublic.get(`/api/work-order/${orderType}`);
-                // const devs = await axiosPublic.get(`/api/deliveries/${orderType}`, {
-                //     params: { workOrderIds: jobId.join(',') }
-                // });
-                fetchData(`/api/work-order/${orderType}`)
-                    .then((data) => {
-                        setOrders(data.data)
-                    })
+                fetchData(`/api/work-order/${orderType}`, { params: { page, limit } })
+                    .then((res) => {
+                        if (res) {
+                            setOrders(res.data ?? []);
+                            if (res.pagination) setPagination(res.pagination);
+                        }
+                    });
 
+                // Fixed: was previously calling setOrders with delivery data.
                 fetchData(`/api/deliveries/${orderType}`, {
                     params: { workOrderIds: jobId.join(',') }
                 })
                     .then((dev) => {
-                        setOrders(dev.data)
-                    })
-                // setDeliveries(devs.data);
-                // setOrders(res.data);
+                        setDeliveries(dev);
+                    });
+
                 setChangedField(prev => {
                     const next = { ...prev };
                     delete next[yarnId];
@@ -390,16 +401,25 @@ const AllOrders = ({ orderType }) => {
         } catch (e) {
             console.log(e.message);
             if (e.response?.status === 409) {
-                const dupInfo = e.response.data?.deliveries; // { success, message, duplicate }
-                console.log("Duplicate challan detected:", dupInfo);
-                if (dupInfo?.duplicate) {
-                    setDuplicateChallan(prev => [...prev, dupInfo.duplicate]);
+                // Fixed: backend's 409 returns `deliveries` as an ARRAY of per-type
+                // failures, not a single object with `.duplicate`. Adjust the
+                // `d.duplicate` field to match whatever challanValidation actually returns.
+                const dupInfo = e.response.data?.deliveries ?? [];
+                setChallanIssue(dupInfo);
+
+                const duplicates = dupInfo
+                    .filter(d => d?.duplicate)
+                    .map(d => d.duplicate);
+
+                if (duplicates.length > 0) {
+                    setDuplicateChallan(prev => [...prev, ...duplicates]);
                 }
             }
         } finally {
             setIsLoading(false);
         }
     };
+
     return (
         <div>
             <button onClick={handleRefresh}>Refresh</button>
@@ -422,6 +442,7 @@ const AllOrders = ({ orderType }) => {
                             setJobId={setJobId}
                             orderType={orderType}
                             changedField={changedField}
+                            challanIssue={challanIssue}
                         />
                     )}
 
@@ -454,7 +475,7 @@ const AllOrders = ({ orderType }) => {
                                             {col.inputName && (
                                                 <FilterDropdown
                                                     columnName={col.inputName}
-                                                    uniqueValues={getDropdownOptions(col.inputName)} // 🔥 CHANGED: Pass cascading options!
+                                                    uniqueValues={getDropdownOptions(col.inputName)}
                                                     selectedValues={filters[col.inputName]}
                                                     onApply={handleFilterApply}
                                                 />
@@ -493,6 +514,25 @@ const AllOrders = ({ orderType }) => {
                                 currentFrozenLefts={currentFrozenLefts} />}
                     </table>
                 </div>
+            </div>
+
+            {/* NEW: pagination controls */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 8px" }}>
+                <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                >
+                    Previous
+                </button>
+                <span>
+                    Page {pagination.page} of {pagination.totalPages || 1} ({pagination.total} jobs)
+                </span>
+                <button
+                    onClick={() => setPage(p => (pagination.totalPages ? Math.min(pagination.totalPages, p + 1) : p + 1))}
+                    disabled={page >= (pagination.totalPages || 1)}
+                >
+                    Next
+                </button>
             </div>
         </div>
     );

@@ -2,7 +2,7 @@ import { X, Save, Loader2 } from 'lucide-react';
 import Input from './Input';
 import Deliveries from './Deliveries';
 
-const Modal = ({ setIsEditing, orderType, changedField, duplicateChallan, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
+const Modal = ({ setIsEditing, challanIssue, orderType, changedField, duplicateChallan, deliveriesLoading, isLoading, workOrderId, deliveries, handleSubmit, orderId, handleEditOnChange }) => {
     const deliveryTypes = [];
 
     if (orderType === "knittingOrder") {
@@ -61,6 +61,7 @@ const Modal = ({ setIsEditing, orderType, changedField, duplicateChallan, delive
                                 duplicateChallan={duplicateChallan}
                                 orderType={orderType}
                                 changedField={changedField}
+                                challanIssue={challanIssue}
                             />
                         }
 

@@ -80,15 +80,16 @@ const renderBreakdownCell = (items, renderItem, keyPrefix) => {
     });
 };
 
-const KnittingDetail = ({ detailView }) => {
+const DyeingDetail = ({ detailView }) => {
     // Totals across every row currently in detailView. Computed unconditionally
     // (before the early-return below) so hook order stays stable across renders.
     const totals = useMemo(() => {
         const acc = {
             workOrderQty: 0,
-            yarnDelivery: 0,
+            greyDelivery: 0,
             greyReceived: 0,
-            yarnReturn: 0,
+            greyReturn: 0,
+            FinishReceived:0,
             balance: 0,
             payableAmount: 0,
         };
@@ -102,9 +103,10 @@ const KnittingDetail = ({ detailView }) => {
                 acc.workOrderQty += Number(up.workOrderQty) || 0;
             });
 
-            acc.yarnDelivery += sumValue(deliveries?.YarnDelivery);
+            acc.greyDelivery += sumValue(deliveries?.GreyDelivery);
             acc.greyReceived += sumValue(deliveries?.GreyReceived);
-            acc.yarnReturn += sumValue(deliveries?.YarnReturn);
+            acc.greyReturn += sumValue(deliveries?.YarnReturn);
+            acc.FinishReceived += sumValue(deliveries?.FinishReceived);
             acc.balance += sumValue(deliveries?.Balance);
 
             if (deliveries?.PayableAmount !== undefined && deliveries?.PayableAmount !== null) {
@@ -176,26 +178,34 @@ const KnittingDetail = ({ detailView }) => {
                                 {renderBreakdownCell(unitePrice, (up) => up.workOrderQty, `qty-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.YarnDelivery, (v) => v, `yd-${i}`)}
+                                {renderBreakdownCell(deliveries?.GreyDelivery, (v) => v, `yd-${i}`)}
                             </td>
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => {
-                                    const yarnDelivery = Number(deliveries?.YarnDelivery) || 0;
-                                    const workOrderQty = Number(up.workOrderQty) || 0;
-                                    const diff = yarnDelivery - workOrderQty;
-                                    return diff > 0 ? Math.abs(diff) : `(${Math.abs(diff)})`;
-                                }, `short-${i}`)}
-                            </td>
+                            
+                            
                             <td style={cellStyle}>
                                 {renderBreakdownCell(deliveries?.GreyReceived, (v) => v, `grey-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.YarnReturn, (v) => v, `return-${i}`)}
+                                {renderBreakdownCell(unitePrice, (up) => {
+                                    const yarnDelivery = Number(deliveries?.GreyDelivery) || 0;
+                                    const workOrderQty = Number(up.workOrderQty) || 0;
+                                    const diff = yarnDelivery - workOrderQty;
+                                    return diff > 0 ? <span className='text-red-600'>{Math.abs(diff)}</span> : <span className='text-green-600'> ({Math.abs(diff)})</span>;
+                                }, `short-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.Balance, (v) => v, `balance-${i}`)}
+                                {renderBreakdownCell(deliveries?.FinishReceived, (v) => v, `return-${i}`)}
                             </td>
                             <td style={cellStyle}>
+                                {renderBreakdownCell(unitePrice, (up) => {
+                                    const yarnDelivery = Number(deliveries?.GreyReceived) || 0;
+                                    const workOrderQty = Number(up.FinishReceived) || 0;
+                                    const diff = yarnDelivery - workOrderQty;
+                                    return diff > 0 ? <span className='text-red-600'>{Math.abs(diff)}</span> : <span className='text-green-600'> ({Math.abs(diff)})</span>;
+                                }, `short-${i}`)}
+                            </td>
+                            <td style={cellStyle}>
+                                
                                 {renderBreakdownCell(unitePrice, (up) => {
                                     const price = Number(up.unitePrice) || 0;
                                     const qty = Number(up.workOrderQty) || 0;
@@ -226,7 +236,7 @@ const KnittingDetail = ({ detailView }) => {
                     </td>
                     {/* YARN DELIVERY */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnDelivery)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyDelivery)}</div>
                     </td>
                     {/* SHORT & EXCESS */}
                     <td style={footerCellStyle}>
@@ -254,4 +264,4 @@ const KnittingDetail = ({ detailView }) => {
     );
 };
 
-export default KnittingDetail;
+export default DyeingDetail;

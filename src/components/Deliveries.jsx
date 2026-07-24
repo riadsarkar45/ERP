@@ -8,7 +8,7 @@ const formatKg = (num) => {
   return `${Number(num).toLocaleString()} kg`;
 };
 
-const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
+const Deliveries = ({ deliveries, challanIssue, orderType, duplicateChallan, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
   const [openYarnIds, setOpenYarnIds] = useState(new Set());
   const [seeDetail, setSeeDetail] = useState(false)
   const [isDeleted, setIsDeleted] = useState({ isDeleted: false, deletedData: {}, isDeleting: false, isDeletingId: "" })
@@ -69,18 +69,6 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
     setSeeDetail(prev => !prev)
   }
 
-  const handleDeleteDeliveryChallan = async (deliveryId) => {
-    console.log(deliveryId, "deliveryId");
-    setIsDeleted({ isDeleting: true, isDeletingId: deliveryId })
-    const deleteDeliveryChallan = await axiosPublic.delete(`/api/delete-delivery/${deliveryId}`)
-    setSeeDetail(false)
-    console.log(deleteDeliveryChallan.data.deletedRecord, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-    if (deleteDeliveryChallan.data.type === "success") {
-      setIsDeleted({ isDeleted: true, isDeleting: false, deletedData: deleteDeliveryChallan.data.deletedRecord })
-      // setIsDeleted({ isDeleting: false })
-
-    }
-  }
 
   // Submits every currently-open row in one go, regardless of how many are open.
   const handleGlobalSubmit = async () => {
@@ -94,10 +82,9 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
     <div className="flex flex-col border border-gray-200 rounded-xl bg-white text-sm">
 
       {/* Info Strip */}
-      <div className="grid grid-cols-4 border-b border-gray-100">
+      <div className="grid grid-cols-3 border-b border-gray-100">
         {[
           { label: "Buyer", value: styleReq?.buyerName || "—", accent: true },
-          { label: "Order Qty", value: formatKg(totalOrderQty) },
           { label: "Work Order Qty", value: formatKg(totalWorkOrderQty) },
           { label: "Process Loss", pill: `${styleReq?.processLoss || 0}%` },
         ].map((c, i) => (
@@ -114,11 +101,11 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
         ))}
       </div>
 
-      {duplicateChallan?.length > 0 && (
-        <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 overflow-hidden">
+      {challanIssue?.length > 0 && (
+        <div className="mt-3 rounded-lg border border-red-600 bg-red-600 bg-opacity-20   overflow-hidden">
           <button
             onClick={() => handleSeeDetails()}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-red-800 hover:bg-amber-100 transition-colors"
 
           >
 
@@ -127,7 +114,13 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              {duplicateChallan.length} Duplicate Challan{duplicateChallan.length > 1 ? "s" : ""} Found
+              {
+                challanIssue?.map((i, idx) => {
+                  return (
+                    <h2 key={idx}>{i.message}</h2>
+                  )
+                })
+              }
             </span>
             <svg
               className={`w-4 h-4 transition-transform ${seeDetail ? "rotate-180" : ""}`}
@@ -137,34 +130,6 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
             </svg>
           </button>
 
-          {seeDetail && (
-            <div className="border-t border-amber-200 divide-y divide-amber-200">
-              {duplicateChallan.map((devs, i) => (
-                <div
-                  key={i}
-                  className="px-4 py-2 flex items-center justify-between text-sm bg-white"
-                >
-                  <span className="font-semibold text-gray-800">
-                    #{devs.challanNo}
-                  </span>
-                  <span className="text-blue-500 w-[10rem] bg-blue-500 bg-opacity-20 rounded-md flex justify-center p-2 ">{devs.deliveryType}</span>
-                  <span className="text-blue-500 w-[25rem] bg-blue-500 bg-opacity-20 rounded-md flex justify-center p-2 ">{devs.composition?.composition}</span>
-                  <span className="font-medium text-gray-900">
-                    Qty: <span className="text-blue-600">{devs.deliveryQty}</span>
-                  </span>
-                  <span className="font-medium text-gray-900">
-                    <span onClick={() => handleDeleteDeliveryChallan(devs.id)} className="bg-red-500 bg-opacity-15 border-red-500 p-2 rounded-md text-red-600">
-                      {
-                        isDeleted.isDeleting && devs.id === isDeleted.isDeletingId ?
-                          <span className="animate-spin"><Loader2 /></span>
-                          : <span>Delete</span>
-                      }
-                    </span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -338,8 +303,8 @@ const Deliveries = ({ deliveries, orderType, duplicateChallan, changedField, han
             onClick={handleGlobalSubmit}
             disabled={isLoading}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${isLoading
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-green-500 bg-opacity-15 text-green-600 hover:bg-opacity-25 cursor-pointer"
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-green-500 bg-opacity-15 text-green-600 hover:bg-opacity-25 cursor-pointer"
               }`}
           >
             {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : <Check className="w-4 h-4" />}

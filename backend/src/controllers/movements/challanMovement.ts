@@ -3,64 +3,72 @@ import prisma from "../../database/prismaClient/prisma";
 
 export const challanMovement = async (req: Request, res: Response) => {
     const { orderType } = req.params as { orderType: string };
-    console.log(orderType);
 
     if (!orderType) {
         return res.status(400).send({ msg: "No order type found", type: "error" });
     }
 
-    const movementChallan = await prisma.composition.findMany({
-        where: { orderType: orderType },
-        select: {
-            id: true,
-            composition: true,
-            unitePrice: true,
-            color: true,
-            workOrder: {
-                select: {
-                    jobId: true,
-                    jobNo: true,
-                }
-            },
-            challans: {
-                select: {
-                    id: true,
-                    challanNo: true,
-                    challanDate: true,
-                    toFactory: true,
-                    fromFactory: true,
-                    deliveries: {
-                        select: {
-                            id: true,
-                            challanNo: true,
-                            deliveryDate: true,
-                            deliveryQty: true,
-                            deliveryType: true
+    // Pagination params — default to page 1, 10 compositions per page.
+    // Query looks like: /api/challan-movement/dyeingOrder?page=2&limit=10
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10)); // cap to avoid abuse
+    const skip = (page - 1) * limit;
+
+    const where = { orderType };
+
+    // Run the page query and the total count in parallel.
+    const [movementChallan, totalCount] = await Promise.all([
+        prisma.composition.findMany({
+            where,
+            skip,
+            take: limit,
+            select: {
+                id: true,
+                composition: true,
+                unitePrice: true,
+                color: true,
+                workOrder: {
+                    select: {
+                        jobId: true,
+                        jobNo: true,
+                    }
+                },
+                challans: {
+                    select: {
+                        id: true,
+                        challanNo: true,
+                        challanDate: true,
+                        toFactory: true,
+                        fromFactory: true,
+                        deliveries: {
+                            select: {
+                                id: true,
+                                challanNo: true,
+                                deliveryDate: true,
+                                deliveryQty: true,
+                                deliveryType: true
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        }),
+        prisma.composition.count({ where })
+    ]);
 
-    // Fix: findMany returns an array, so we must check the length
     if (!movementChallan || movementChallan.length === 0) {
         return res.status(400).send({ msg: "No challan found", type: "error" });
     }
 
     // --- DATA TRANSFORMATION ---
-    // Group and sum deliveryQty by deliveryType for each challan
     const transformedData = movementChallan.map(composition => {
         const transformedChallans = composition.challans.map(challan => {
-
-            // 1. Sum quantities by deliveryType
             const deliverySums = challan.deliveries.reduce((acc, delivery) => {
                 const type = delivery.deliveryType;
                 acc[type] = (acc[type] || 0) + delivery.deliveryQty;
                 return acc;
             }, {} as Record<string, number>);
 
-            // 2. Convert the summed object back into a clean array
             const summedDeliveries = Object.keys(deliverySums).map(type => ({
                 deliveryType: type.replace(/\s+/g, ""),
                 totalQty: deliverySums[type]
@@ -68,7 +76,7 @@ export const challanMovement = async (req: Request, res: Response) => {
 
             return {
                 ...challan,
-                deliveries: summedDeliveries // Replace original deliveries with summed ones
+                deliveries: summedDeliveries
             };
         });
 
@@ -78,6 +86,13 @@ export const challanMovement = async (req: Request, res: Response) => {
         };
     });
 
-    // Return 200 OK for successful GET requests
-    return res.status(200).send(transformedData);
+    return res.status(200).send({
+        data: transformedData,
+        pagination: {
+            page,
+            limit,
+            totalCount,
+            totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+        }
+    });
 };

@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
 
+// Note: borderCollapse is "separate" (not "collapse") on the <table> so the
+// sticky header keeps its border while scrolling — collapsed borders and
+// position:sticky don't render reliably together across browsers. Each cell
+// draws its own border instead.
 const cellStyle = {
     border: "1px solid #999",
     padding: "6px 8px",
@@ -9,13 +13,20 @@ const cellStyle = {
     verticalAlign: "top",
 };
 
-// Used for cells that span multiple rows (challan no, date, composition,
-// to/from factory) so their content sits centered within the merged block
-// instead of pinned to the top.
 const mergedCellStyle = {
     ...cellStyle,
     verticalAlign: "middle",
     textAlign: "center",
+};
+
+// Frozen/sticky header cell — stays pinned to the top of the scroll
+// container while the body scrolls underneath it, Excel-style.
+const thStickyStyle = {
+    ...cellStyle,
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    background: "#f3f4f6",
 };
 
 const PAGE_SIZE = 10;
@@ -31,8 +42,17 @@ const pageButtonStyle = (active) => ({
     fontSize: "0.9rem",
 });
 
-// Column definitions, hoisted so identity is stable across renders (keeps
-// useMemo deps meaningful). `key` maps to the field name on a flattened row.
+// Maps the raw `deliveryType` string on each delivery entry (e.g.
+// { deliveryType: "YarnDelivery", totalQty: 137 }) onto the flattened row
+// field it should add into. Adjust the left-hand literal strings if the API
+// ever sends different exact spellings/casing for deliveryType.
+const DELIVERY_TYPE_MAP = {
+    YarnDelivery: "yarnDelivery",
+    YarnReturn: "yarnReturn",
+    YarnReceived: "yarnReceived",
+    GreyFabricReceived: "greyFabricReceived",
+};
+
 const tableHeader = [
     { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "Date", width: "10%", key: "challanDate" },
@@ -41,379 +61,403 @@ const tableHeader = [
     { header: "Color", width: "10%", key: "color" },
     { header: "To Factory", width: "9%", key: "toFactory" },
     { header: "From Factory", width: "9%", key: "fromFactory" },
-    { header: "Delivery Type", width: "10%", key: "deliveryType" },
-    { header: "Delivery Qty", width: "8%", key: "deliveryQty" },
+    { header: "Yarn Delivery", width: "10%", key: "yarnDelivery" },
+    { header: "Yarn Return", width: "10%", key: "yarnReturn" },
+    { header: "Yarn Received", width: "10%", key: "yarnReceived" },
+    { header: "Finish Fabric Received", width: "10%", key: "greyFabricReceived" },
     { header: "Price Per KG", width: "9%", key: "unitePrice" },
     { header: "Billing Amount", width: "9%", key: "billingAmount" },
     { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount" },
-]
+];
 
 const Knitting = () => {
-    const [movements, setMovements] = useState([])
-    const [page, setPage] = useState(1)
-    // filters[key] = Set of allowed string values for that column. A column
-    // with no entry here means "no filter active, show everything".
-    const [filters, setFilters] = useState({})
-    const [openFilterKey, setOpenFilterKey] = useState(null)
-    const [draftSelected, setDraftSelected] = useState(new Set())
-    const [filterSearch, setFilterSearch] = useState("")
-    const dropdownRef = useRef(null)
+    const [movements, setMovements] = useState([]);
+    const [page, setPage] = useState(1);
+    const [filters, setFilters] = useState({});
+    const [openFilterKey, setOpenFilterKey] = useState(null);
+    const [draftSelected, setDraftSelected] = useState(new Set());
+    const [filterSearch, setFilterSearch] = useState("");
+    const [totalPages, setTotalPages] = useState({})
+    const dropdownRef = useRef(null);
 
     const { fetchData, loading } = useFetchData();
-    useEffect(() => {
-        fetchData(`/api/challan-movement/${"knittingOrder"}`)
-            .then(data => {
-                if (data) setMovements(data);
-                console.log(data);
-            }
-            )
-    }, [fetchData])
 
-    // Close an open filter dropdown when clicking outside it.
     useEffect(() => {
-        if (!openFilterKey) return
+        fetchData(`/api/challan-movement/knittingOrder?page=${page}&limit=10`)
+            .then(data => {
+                if (!data) return;
+
+                setMovements(data.data);
+                setTotalPages(data.pagination.totalPages);
+            });
+    }, [fetchData, page]);
+
+    useEffect(() => {
+        if (!openFilterKey) return;
         const handleClick = (e) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-                setOpenFilterKey(null)
+                setOpenFilterKey(null);
             }
-        }
-        document.addEventListener("mousedown", handleClick)
-        return () => document.removeEventListener("mousedown", handleClick)
-    }, [openFilterKey])
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [openFilterKey]);
 
-    // Reset to page 1 whenever the underlying data or active filters change.
-    useEffect(() => {
-        setPage(1)
-    }, [movements, filters])
 
-    // Flatten movements -> challans -> deliveries into one row per delivery,
-    // keeping stable mvId/chId so we can re-group after filtering.
+
+    // Flatten movements -> challans into ONE ROW PER CHALLAN. Each challan's
+    // deliveries[] carry { deliveryType, totalQty } pairs (NOT fields named
+    // after the type directly) and are summed by type into their own
+    // columns, since one challan can have more than one delivery entry.
     const allRows = useMemo(() => {
-        const flat = []
+        const flat = [];
         movements?.forEach((mv, mvIdx) => {
-            const mvId = mv?.id ?? mvIdx
-            const challans = mv?.challans || []
+            const mvId = mv?.id ?? mvIdx;
+            const challans = mv?.challans || [];
             challans.forEach((ch) => {
-                const chId = ch.id
-                const deliveries = ch?.deliveries?.length ? ch.deliveries : [null]
-                deliveries.forEach((dv) => {
-                    flat.push({
-                        rowKey: `${chId}-${dv?.id ?? "no-delivery"}`,
-                        mvId,
-                        chId,
-                        challanNo: ch.challanNo,
-                        challanDate: ch.challanDate,
-                        composition: mv.composition,
-                        workOrder: mv.workOrder?.jobNo ?? "",
-                        toFactory: ch.toFactory,
-                        fromFactory: ch.fromFactory,
-                        deliveryType: dv?.deliveryType ?? "",
-                        deliveryQty: dv?.deliveryQty ?? "",
-                        unitePrice: mv.unitePrice,
-                        color: mv.color ?? "-",
-                    })
-                })
-            })
-        })
-        return flat
-    }, [movements])
+                const qtyByType = {
+                    yarnDelivery: 0,
+                    yarnReturn: 0,
+                    yarnReceived: 0,
+                    greyFabricReceived: 0,
+                };
+                (ch?.deliveries || []).forEach((dv) => {
+                    const field = DELIVERY_TYPE_MAP[dv?.deliveryType];
+                    if (field) {
+                        qtyByType[field] += Number(dv?.totalQty) || 0;
+                    }
+                });
 
-    // Unique values per column, for the filter dropdowns.
+                const uPrice = Number(mv.unitePrice) || 0;
+                // Billing computed off finished quantity received back;
+                // adjust if your business bills against a different qty.
+                const billingAmount = qtyByType.greyFabricReceived * uPrice;
+
+                flat.push({
+                    rowKey: `${ch.id}`,
+                    mvId,
+                    chId: ch.id,
+                    challanNo: ch.challanNo,
+                    challanDate: ch.challanDate,
+                    composition: mv.composition,
+                    workOrder: mv.workOrder?.jobNo ?? "",
+                    toFactory: ch.toFactory,
+                    fromFactory: ch.fromFactory,
+                    ...qtyByType,
+                    unitePrice: uPrice,
+                    billingAmount,
+                    color: mv.color ?? "-",
+                    paidBillingAmount: mv.paidBillingAmount ?? 0,
+                });
+            });
+        });
+        return flat;
+    }, [movements]);
+
     const filterOptions = useMemo(() => {
-        const opts = {}
+        const opts = {};
         tableHeader.forEach((col) => {
-            const set = new Set()
-            allRows.forEach((row) => set.add(String(row[col.key] ?? "")))
+            const set = new Set();
+            allRows.forEach((row) => {
+                let passes = true;
+                for (const c of tableHeader) {
+                    if (c.key === col.key) continue;
+                    const selected = filters[c.key];
+                    if (selected && !selected.has(String(row[c.key] ?? ""))) {
+                        passes = false;
+                        break;
+                    }
+                }
+                if (passes) {
+                    set.add(String(row[col.key] ?? ""));
+                }
+            });
             opts[col.key] = Array.from(set).sort((a, b) =>
                 a.localeCompare(b, undefined, { numeric: true })
-            )
-        })
-        return opts
-    }, [allRows])
+            );
+        });
+        return opts;
+    }, [allRows, filters]);
 
-    // Rows that pass every active column filter.
     const filteredRows = useMemo(() => {
         return allRows.filter((row) =>
             tableHeader.every((col) => {
-                const selected = filters[col.key]
-                if (!selected) return true
-                return selected.has(String(row[col.key] ?? ""))
+                const selected = filters[col.key];
+                if (!selected) return true;
+                return selected.has(String(row[col.key] ?? ""));
             })
-        )
-    }, [allRows, filters])
+        );
+    }, [allRows, filters]);
 
-    // Paginate by movement (not by flattened row) so a page break never cuts
-    // a merged challan/composition block in half. Movements fully filtered
-    // out simply don't appear here.
-    const uniqueMvIds = useMemo(() => {
-        const seen = new Set()
-        const ids = []
-        filteredRows.forEach((r) => {
-            if (!seen.has(r.mvId)) {
-                seen.add(r.mvId)
-                ids.push(r.mvId)
-            }
-        })
-        return ids
-    }, [filteredRows])
 
-    const totalPages = Math.max(1, Math.ceil(uniqueMvIds.length / PAGE_SIZE))
 
-    const pagedFilteredRows = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE
-        const pageIds = new Set(uniqueMvIds.slice(start, start + PAGE_SIZE))
-        return filteredRows.filter((r) => pageIds.has(r.mvId))
-    }, [filteredRows, uniqueMvIds, page])
 
-    // Re-derive rowSpan grouping from whatever survived filtering + paging.
+
+    // Re-derive rowSpan grouping (by movement only, since each row is
+    // already one challan) from whatever survived filtering + paging.
     const rows = useMemo(() => {
-        const result = []
-        for (let i = 0; i < pagedFilteredRows.length; i++) {
-            const row = pagedFilteredRows[i]
-            const isFirstOfChallan = i === 0 || pagedFilteredRows[i - 1].chId !== row.chId
-            const isFirstOfMovement = i === 0 || pagedFilteredRows[i - 1].mvId !== row.mvId
+        const result = [];
 
-            let challanRowSpan = 1
-            if (isFirstOfChallan) {
-                for (let j = i + 1; j < pagedFilteredRows.length && pagedFilteredRows[j].chId === row.chId; j++) {
-                    challanRowSpan++
-                }
-            }
-            let movementRowSpan = 1
+        for (let i = 0; i < filteredRows.length; i++) {
+            const row = filteredRows[i];
+
+            const isFirstOfMovement =
+                i === 0 || filteredRows[i - 1].mvId !== row.mvId;
+
+            let movementRowSpan = 1;
+
             if (isFirstOfMovement) {
-                for (let j = i + 1; j < pagedFilteredRows.length && pagedFilteredRows[j].mvId === row.mvId; j++) {
-                    movementRowSpan++
+                for (
+                    let j = i + 1;
+                    j < filteredRows.length &&
+                    filteredRows[j].mvId === row.mvId;
+                    j++
+                ) {
+                    movementRowSpan++;
                 }
             }
-            result.push({ ...row, isFirstOfChallan, isFirstOfMovement, challanRowSpan, movementRowSpan })
+
+            result.push({
+                ...row,
+                isFirstOfMovement,
+                movementRowSpan,
+            });
         }
-        return result
-    }, [pagedFilteredRows])
+
+        return result;
+    }, [filteredRows]);
 
     const goToPage = (p) => {
-        if (p < 1 || p > totalPages) return
-        setPage(p)
-    }
+        if (p < 1 || p > totalPages) return;
+        setPage(p);
+    };
 
     const pageNumbers = useMemo(() => {
-        const nums = []
+        const nums = [];
         for (let p = 1; p <= totalPages; p++) {
             if (p === 1 || p === totalPages || Math.abs(p - page) <= 1) {
-                nums.push(p)
+                nums.push(p);
             } else if (nums[nums.length - 1] !== "...") {
-                nums.push("...")
+                nums.push("...");
             }
         }
-        return nums
-    }, [totalPages, page])
+        return nums;
+    }, [totalPages, page]);
 
-    // --- filter dropdown handlers ---
     const openFilter = (key) => {
         if (openFilterKey === key) {
-            setOpenFilterKey(null)
-            return
+            setOpenFilterKey(null);
+            return;
         }
-        const options = filterOptions[key] || []
-        const current = filters[key]
-        setDraftSelected(current ? new Set(current) : new Set(options))
-        setFilterSearch("")
-        setOpenFilterKey(key)
-    }
+        const options = filterOptions[key] || [];
+        const current = filters[key];
+
+        let initialSelected;
+        if (current) {
+            const validSelected = new Set([...current].filter(v => options.includes(v)));
+            initialSelected = validSelected.size > 0 ? validSelected : new Set(options);
+        } else {
+            initialSelected = new Set(options);
+        }
+
+        setDraftSelected(initialSelected);
+        setFilterSearch("");
+        setOpenFilterKey(key);
+    };
 
     const toggleDraftValue = (val) => {
         setDraftSelected((prev) => {
-            const next = new Set(prev)
-            if (next.has(val)) next.delete(val)
-            else next.add(val)
-            return next
-        })
-    }
+            const next = new Set(prev);
+            if (next.has(val)) next.delete(val);
+            else next.add(val);
+            return next;
+        });
+    };
 
     const toggleSelectAllDraft = (options) => {
-        setDraftSelected((prev) => (prev.size === options.length ? new Set() : new Set(options)))
-    }
+        setDraftSelected((prev) => (prev.size === options.length ? new Set() : new Set(options)));
+    };
 
     const applyFilter = (key, options) => {
         setFilters((prev) => {
-            const next = { ...prev }
-            if (draftSelected.size === options.length) {
-                // everything selected == no filter needed
-                delete next[key]
+            const next = { ...prev };
+            if (draftSelected.size === options.length || options.length === 0) {
+                delete next[key];
             } else {
-                next[key] = new Set(draftSelected)
+                next[key] = new Set(draftSelected);
             }
-            return next
-        })
-        setOpenFilterKey(null)
-    }
+            return next;
+        });
+        setOpenFilterKey(null);
+    };
 
     const clearFilter = (key) => {
         setFilters((prev) => {
-            const next = { ...prev }
-            delete next[key]
-            return next
-        })
-        setOpenFilterKey(null)
-    }
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+        setOpenFilterKey(null);
+    };
+
+    if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
 
     return (
         <div style={{ width: "100%" }}>
-            <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", border: "1px solid #999" }}>
-                <thead>
-                    <tr>
-                        {tableHeader.map((th) => {
-                            const options = filterOptions[th.key] || []
-                            const isActive = !!filters[th.key]
-                            const isOpen = openFilterKey === th.key
-                            return (
-                                <th
-                                    key={th.key}
-                                    style={{
-                                        ...cellStyle,
-                                        width: th.width,
-                                        position: "relative",
-                                        overflow: "visible", // don't clip the absolutely-positioned filter dropdown below
-                                    }}
-                                >
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                            {th.header}
-                                        </span>
-                                        <button
-                                            onClick={() => openFilter(th.key)}
-                                            title="Filter"
-                                            style={{
-                                                border: "none",
-                                                background: "none",
-                                                cursor: "pointer",
-                                                color: isActive ? "#2563eb" : "#666",
-                                                fontSize: "0.8rem",
-                                                padding: 2,
-                                            }}
-                                        >
-                                            ▾
-                                        </button>
-                                    </div>
-
-                                    {isOpen && (
-                                        <div
-                                            ref={dropdownRef}
-                                            style={{
-                                                position: "absolute",
-                                                top: "100%",
-                                                left: 0,
-                                                zIndex: 20,
-                                                background: "#fff",
-                                                border: "1px solid #999",
-                                                borderRadius: 4,
-                                                width: 200,
-                                                maxHeight: 280,
-                                                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                                                textAlign: "left",
-                                                fontWeight: "normal",
-                                                display: "flex",
-                                                flexDirection: "column",
-                                            }}
-                                        >
-                                            {/* fixed: search box */}
-                                            <div style={{ padding: 8, borderBottom: "1px solid #ddd", flexShrink: 0 }}>
-                                                <input
-                                                    type="text"
-                                                    value={filterSearch}
-                                                    onChange={(e) => setFilterSearch(e.target.value)}
-                                                    placeholder="Search..."
-                                                    autoFocus
-                                                    style={{
-                                                        width: "100%",
-                                                        boxSizing: "border-box",
-                                                        padding: "4px 6px",
-                                                        border: "1px solid #ccc",
-                                                        borderRadius: 4,
-                                                        fontSize: "0.85rem",
-                                                    }}
-                                                />
-                                            </div>
-
-                                            {/* scrollable: select all + option checkboxes */}
-                                            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "6px 8px" }}>
-                                                <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: "bold", marginBottom: 6, cursor: "pointer" }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={draftSelected.size === options.length && options.length > 0}
-                                                        onChange={() => toggleSelectAllDraft(options)}
-                                                    />
-                                                    Select All
-                                                </label>
-                                                {options
-                                                    .filter((val) => val.toLowerCase().includes(filterSearch.toLowerCase()))
-                                                    .map((val) => (
-                                                        <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", padding: "2px 0", cursor: "pointer" }}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={draftSelected.has(val)}
-                                                                onChange={() => toggleDraftValue(val)}
-                                                            />
-                                                            {val === "" ? "(blank)" : val}
-                                                        </label>
-                                                    ))}
-                                            </div>
-
-                                            {/* fixed: Clear / Apply */}
-                                            <div style={{ display: "flex", justifyContent: "space-between", padding: 8, borderTop: "1px solid #ddd", flexShrink: 0 }}>
-                                                <button onClick={() => clearFilter(th.key)} style={{ ...pageButtonStyle(false), fontSize: "0.75rem" }}>
-                                                    Clear
-                                                </button>
-                                                <button onClick={() => applyFilter(th.key, options)} style={{ ...pageButtonStyle(true), fontSize: "0.75rem" }}>
-                                                    Apply
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </th>
-                            )
-                        })}
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row) => (
-                        <tr key={row.rowKey}>
-                            {row.isFirstOfChallan && (
-                                <td style={mergedCellStyle} rowSpan={row.challanRowSpan}>{row.challanNo}</td>
-                            )}
-                            {row.isFirstOfChallan && (
-                                <td style={mergedCellStyle} rowSpan={row.challanRowSpan}>{row.challanDate}</td>
-                            )}
-                            {row.isFirstOfMovement && (
-                                <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.workOrder}</td>
-                            )}
-                            {row.isFirstOfMovement && (
-                                <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.composition}</td>
-                            )}
-                            {row.isFirstOfMovement && (
-                                <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.color}</td>
-                            )}
-                            {row.isFirstOfChallan && (
-                                <td style={mergedCellStyle} rowSpan={row.challanRowSpan}>{row.toFactory}</td>
-                            )}
-                            {row.isFirstOfChallan && (
-                                <td style={mergedCellStyle} rowSpan={row.challanRowSpan}>{row.fromFactory}</td>
-                            )}
-                            <td style={cellStyle}>{row.deliveryType}</td>
-                            <td style={cellStyle}>{row.deliveryQty}</td>
-                            <td style={cellStyle}>{row.unitePrice}</td>
-                            <td style={cellStyle}>{row.deliveryQty * row.unitePrice}</td>
-                            <td style={cellStyle}>{row.paidBillingAmount}</td>
-                        </tr>
-                    ))}
-                    {rows.length === 0 && (
+            <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
+                <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
+                    <thead>
                         <tr>
-                            <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>
-                                No rows match the current filters.
-                            </td>
+                            {tableHeader.map((th) => {
+                                const options = filterOptions[th.key] || [];
+                                const isActive = !!filters[th.key];
+                                const isOpen = openFilterKey === th.key;
+                                return (
+                                    <th
+                                        key={th.key}
+                                        style={{
+                                            ...thStickyStyle,
+                                            width: th.width,
+                                            overflow: "visible",
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {th.header}
+                                            </span>
+                                            <button
+                                                onClick={() => openFilter(th.key)}
+                                                title="Filter"
+                                                style={{
+                                                    border: "none",
+                                                    background: "none",
+                                                    cursor: "pointer",
+                                                    color: isActive ? "#2563eb" : "#666",
+                                                    fontSize: "0.8rem",
+                                                    padding: 2,
+                                                }}
+                                            >
+                                                ▾
+                                            </button>
+                                        </div>
+
+                                        {isOpen && (
+                                            <div
+                                                ref={dropdownRef}
+                                                style={{
+                                                    position: "absolute",
+                                                    top: "100%",
+                                                    left: 0,
+                                                    zIndex: 20,
+                                                    background: "#fff",
+                                                    border: "1px solid #999",
+                                                    borderRadius: 4,
+                                                    width: 200,
+                                                    maxHeight: 280,
+                                                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                                                    textAlign: "left",
+                                                    fontWeight: "normal",
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                }}
+                                            >
+                                                <div style={{ padding: 8, borderBottom: "1px solid #ddd", flexShrink: 0 }}>
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearch}
+                                                        onChange={(e) => setFilterSearch(e.target.value)}
+                                                        placeholder="Search..."
+                                                        autoFocus
+                                                        style={{
+                                                            width: "100%",
+                                                            boxSizing: "border-box",
+                                                            padding: "4px 6px",
+                                                            border: "1px solid #ccc",
+                                                            borderRadius: 4,
+                                                            fontSize: "0.85rem",
+                                                        }}
+                                                    />
+                                                </div>
+
+                                                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "6px 8px" }}>
+                                                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: "bold", marginBottom: 6, cursor: "pointer" }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={draftSelected.size === options.length && options.length > 0}
+                                                            onChange={() => toggleSelectAllDraft(options)}
+                                                        />
+                                                        Select All
+                                                    </label>
+                                                    {options
+                                                        .filter((val) => val.toLowerCase().includes(filterSearch.toLowerCase()))
+                                                        .map((val) => (
+                                                            <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", padding: "2px 0", cursor: "pointer" }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={draftSelected.has(val)}
+                                                                    onChange={() => toggleDraftValue(val)}
+                                                                />
+                                                                {val === "" ? "(blank)" : val}
+                                                            </label>
+                                                        ))}
+                                                </div>
+
+                                                <div style={{ display: "flex", justifyContent: "space-between", padding: 8, borderTop: "1px solid #ddd", flexShrink: 0 }}>
+                                                    <button onClick={() => clearFilter(th.key)} style={{ ...pageButtonStyle(false), fontSize: "0.75rem" }}>
+                                                        Clear
+                                                    </button>
+                                                    <button onClick={() => applyFilter(th.key, options)} style={{ ...pageButtonStyle(true), fontSize: "0.75rem" }}>
+                                                        Apply
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </th>
+                                );
+                            })}
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {rows.map((row) => (
+                            <tr key={row.rowKey}>
+                                {/* Challan No, Date, To/From Factory: one per challan (no rowspan needed now) */}
+                                <td style={cellStyle}>{row.challanNo}</td>
+                                <td style={cellStyle}>{row.challanDate}</td>
+
+                                {/* Work Order, Composition, Color: merged across all challans of the same movement */}
+                                {row.isFirstOfMovement && (
+                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.workOrder}</td>
+                                )}
+                                {row.isFirstOfMovement && (
+                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.composition}</td>
+                                )}
+                                {row.isFirstOfMovement && (
+                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.color}</td>
+                                )}
+
+                                <td style={cellStyle}>{row.toFactory}</td>
+                                <td style={cellStyle}>{row.fromFactory}</td>
+
+                                <td style={cellStyle}>{row.yarnDelivery}</td>
+                                <td style={cellStyle}>{row.yarnReturn}</td>
+                                <td style={cellStyle}>{row.yarnReceived}</td>
+                                <td style={cellStyle}>{row.greyFabricReceived}</td>
+
+                                <td style={cellStyle}>{row.unitePrice}</td>
+                                <td style={cellStyle}>{row.billingAmount}</td>
+                                <td style={cellStyle}>{row.paidBillingAmount}</td>
+                            </tr>
+                        ))}
+                        {rows.length === 0 && (
+                            <tr>
+                                <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>
+                                    No rows match the current filters.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
             {totalPages > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>

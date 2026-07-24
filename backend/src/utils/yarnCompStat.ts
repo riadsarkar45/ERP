@@ -10,13 +10,14 @@ export const calculateYarnCompStat = (orders: any[]) => {
         .filter(order => Array.isArray(order.workOrders) && order.workOrders.length > 0)
         .map(order => ({
             ...order,
-
             workOrders: (order.workOrders || []).map((work: any) => ({
                 ...work,
-
                 compositions: (work.compositions || []).map((c: any) => {
 
-                    // 1. FIND THE BOOKING COLOR: Match the composition and color from yarnDyeingJobs
+                    // ⚠️ Matches on c.color, then reads .color back off the match —
+                    // this always resolves to c.color. If "booking color" is meant to be
+                    // a different value from yarnDyeingJobs, match by composition only
+                    // and decide which field actually represents the booking color.
                     const bookingColor = work.yarnDyeingJobs?.find(
                         (ydj: any) => ydj.composition === c.composition && ydj.color === c.color
                     )?.color || c.color;
@@ -36,7 +37,6 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     const totalReceivedForAop = sumByType(deliveries, "Received from AOP");
                     const totalYarnDeliveryYarnDye = sumByType(deliveries, "Yarn Delivery For Yarn Dye");
 
-                    // 2. INJECT COLOR INTO DELIVERIES: Map over deliveries to add the booking color
                     const deliveriesWithColor2 = deliveries.map((d: any) => ({
                         ...d,
                         deliveryType: d.deliveryType,
@@ -46,7 +46,7 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     const YarnDeliveryWithColorDeliveryType: Record<string, number> = {};
                     deliveriesWithColor2.forEach((ele: any) => {
                         if (ele.color === bookingColor) {
-                            const key = ele.deliveryType.replace(/\s+/g, "")
+                            const key = ele.deliveryType.replace(/\s+/g, "");
                             YarnDeliveryWithColorDeliveryType[key] =
                                 (YarnDeliveryWithColorDeliveryType[key] || 0) + ele.deliveryQty;
                         }
