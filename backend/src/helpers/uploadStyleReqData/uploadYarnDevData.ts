@@ -122,11 +122,12 @@ export const uploadYarnGreyRcvdDataFromFile = async (
             // ── 1. Resolve Composition ──
             const composition = await prisma.composition.findFirst({
                 where: {
+                    orderType: "knittingOrder",
                     color: event.color,
                     composition: event.composition,
                     workOrder: { jobNo: event.jobNo },
                 },
-                select: { id: true },
+                select: { id: true, workOrderId: true },
             });
 
             if (!composition) {
