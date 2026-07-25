@@ -1,15 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import useAxiosPublic from './Axios';
 import { useAuth } from '../dashboard/auth/AuthContext';
 import useAxiosSecureBase from './AxiosPrivate';
 
-// Use this for any call that needs the logged-in user's identity
-// (protected backend routes). Use useAxiosPublic for login/register/refresh,
-// which don't need an access token.
 const useAxiosPrivate = () => {
     const { accessToken, setAccessToken } = useAuth();
     const axiosPublic = useAxiosPublic();
     const axiosPrivateInstance = useAxiosSecureBase();
+    const refreshPromiseRef = useRef(null); // shared in-flight refresh, deduped across concurrent 401s
+
     useEffect(() => {
         const requestIntercept = axiosPrivateInstance.interceptors.request.use(
             (config) => {
@@ -26,17 +25,29 @@ const useAxiosPrivate = () => {
             async (error) => {
                 const prevRequest = error?.config;
 
-                // Only attempt one silent-refresh-and-retry per request, and never
-                // for the refresh call itself (would loop forever if refresh also 401s).
                 if (error?.response?.status === 401 && !prevRequest?._retry) {
                     prevRequest._retry = true;
+
                     try {
-                        const { data } = await axiosPublic.post('/api/refresh');
-                        setAccessToken(data.accessToken);
-                        prevRequest.headers['Authorization'] = `Bearer ${data.accessToken}`;
+                        // If a refresh is already in flight, piggyback on it instead of
+                        // starting a second one that would race against the rotated token.
+                        if (!refreshPromiseRef.current) {
+                            refreshPromiseRef.current = axiosPublic
+                                .post('/api/auth/refresh') // fixed: match AuthContext's endpoint
+                                .then(({ data }) => {
+                                    setAccessToken(data.accessToken);
+                                    return data.accessToken;
+                                })
+                                .finally(() => {
+                                    refreshPromiseRef.current = null;
+                                });
+                        }
+
+                        const newAccessToken = await refreshPromiseRef.current;
+                        prevRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
                         return axiosPrivateInstance(prevRequest);
                     } catch (refreshError) {
-                        setAccessToken(null); // refresh cookie is dead too — user needs to log in again
+                        setAccessToken(null);
                         return Promise.reject(refreshError);
                     }
                 }
@@ -45,8 +56,6 @@ const useAxiosPrivate = () => {
             }
         );
 
-        // Clean up old interceptors whenever accessToken changes, so they
-        // don't stack up and fire multiple times per request.
         return () => {
             axiosPrivateInstance.interceptors.request.eject(requestIntercept);
             axiosPrivateInstance.interceptors.response.eject(responseIntercept);
