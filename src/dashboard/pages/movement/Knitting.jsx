@@ -63,8 +63,8 @@ const tableHeader = [
     { header: "From Factory", width: "9%", key: "fromFactory" },
     { header: "Yarn Delivery", width: "10%", key: "yarnDelivery" },
     { header: "Yarn Return", width: "10%", key: "yarnReturn" },
-    { header: "Yarn Received", width: "10%", key: "yarnReceived" },
-    { header: "Finish Fabric Received", width: "10%", key: "greyFabricReceived" },
+    { header: "Greige Received", width: "10%", key: "yarnReceived" },
+    // { header: "Finish Fabric Received", width: "10%", key: "greyFabricReceived" },
     { header: "Price Per KG", width: "9%", key: "unitePrice" },
     { header: "Billing Amount", width: "9%", key: "billingAmount" },
     { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount" },
@@ -86,7 +86,7 @@ const Knitting = () => {
         fetchData(`/api/challan-movement/knittingOrder?page=${page}&limit=10`)
             .then(data => {
                 if (!data) return;
-
+                console.log(data);
                 setMovements(data.data);
                 setTotalPages(data.pagination.totalPages);
             });
@@ -118,7 +118,6 @@ const Knitting = () => {
                 const qtyByType = {
                     yarnDelivery: 0,
                     yarnReturn: 0,
-                    yarnReceived: 0,
                     greyFabricReceived: 0,
                 };
                 (ch?.deliveries || []).forEach((dv) => {
@@ -138,7 +137,7 @@ const Knitting = () => {
                     mvId,
                     chId: ch.id,
                     challanNo: ch.challanNo,
-                    challanDate: ch.challanDate,
+                    challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
                     composition: mv.composition,
                     workOrder: mv.workOrder?.jobNo ?? "",
                     toFactory: ch.toFactory,
@@ -440,7 +439,7 @@ const Knitting = () => {
 
                                 <td style={cellStyle}>{row.yarnDelivery}</td>
                                 <td style={cellStyle}>{row.yarnReturn}</td>
-                                <td style={cellStyle}>{row.yarnReceived}</td>
+                                {/* <td style={cellStyle}>{row.yarnReceived}</td> */}
                                 <td style={cellStyle}>{row.greyFabricReceived}</td>
 
                                 <td style={cellStyle}>{row.unitePrice}</td>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useFetchData } from "../../../hooks/fetch";
 import KnittingDetail from "./KnittingDetail";
 import DyeingDetail from "./DyeingDetail";
+import AopDetail from "./AopDetail";
 
 const BORDER_COLOR = "#aeb7c2";
 
@@ -23,6 +24,7 @@ const PartyWiseView = () => {
         fetchData(`/api/party-view-report/knittingOrder`)
             .then((data) => {
                 setFactories(data.factoryNames || []);
+                console.log(data);
             })
             .catch((e) => console.error(e));
     }, [fetchData]);
@@ -65,11 +67,11 @@ const PartyWiseView = () => {
     }
     if (selectOrderType === "aopOrder") {
         COLUMNS.push(
-            { header: "KNITTING FACTORY NAME", width: 220 },
+            { header: "AOP FACTORY NAME", width: 220 },
             { header: "JOB NO.", width: 120 },
             { header: "COMPOSITION", width: 320 },
             { header: "PRICE PER KG", width: 120 },
-            { header: "KNITTING WORK ORDER QTY", width: 220 },
+            { header: "AOP WORK ORDER QTY", width: 220 },
             { header: "YARN DELIVERY", width: 140 },
             { header: "SHORT & EXCESS", width: 140 },
             { header: "GREY RECEIVED", width: 140 },
@@ -276,6 +278,9 @@ const PartyWiseView = () => {
                          }       
                          {
                             selectOrderType === "dyeingOrder" && <DyeingDetail detailView={detailView} />
+                         }       
+                         {
+                            selectOrderType === "aopOrder" && <AopDetail detailView={detailView} />
                          }       
                         
                     </table>

@@ -138,7 +138,7 @@ const Dyeing = () => {
                     mvId,
                     chId: ch.id,
                     challanNo: ch.challanNo,
-                    challanDate: ch.challanDate,
+                    challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
                     composition: mv.composition,
                     workOrder: mv.workOrder?.jobNo ?? "",
                     toFactory: ch.toFactory,
