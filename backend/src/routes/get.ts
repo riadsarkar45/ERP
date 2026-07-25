@@ -1,5 +1,5 @@
 import express from "express";
-import { getAllOrders } from "../controllers/orders/getOrders";
+import { getAllOrders, getFilterOptions } from "../controllers/orders/getOrders";
 import { dashboardController } from "../controllers/dashboard/dashboard";
 import { getOrderSummaryByStyle } from "../controllers/orders/styleWiseOrder";
 import { allAudits } from "../controllers/audit/allAudits";
@@ -43,5 +43,7 @@ getRouters.get("/party-view-report/:factoryName", partyViewData);
 getRouters.get("/detail-party-report/:factoryName/:orderType", partyData);
 
 getRouters.get("/challan-movement/:orderType", challanMovement);
+
+getRouters.get("/work-order/:orderType/filter-options/:column", getFilterOptions);
 
 export default getRouters;

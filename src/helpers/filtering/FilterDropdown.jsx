@@ -1,24 +1,31 @@
 import { useState, useEffect, useRef } from "react";
 
-const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply }) => {
+const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply, onOpen, isLoading }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [tempSelected, setTempSelected] = useState(selectedValues || [...uniqueValues]);
     const [searchTerm, setSearchTerm] = useState("");
     const [pos, setPos] = useState({ top: 0, left: 0 });
-    
+
     const buttonRef = useRef(null);
     const dropdownRef = useRef(null);
 
-    // Calculate position and reset state when opening
+    const handleToggleOpen = () => {
+        const nextOpen = !isOpen;
+        setIsOpen(nextOpen);
+        // Fires the lazy fetch of this column's dropdown options (AllOrders.jsx
+        // wires this to loadFilterOptions). Previously this was never called,
+        // so uniqueValues stayed [] and nothing was ever selectable.
+        if (nextOpen && onOpen) onOpen();
+    };
+
     useEffect(() => {
         if (isOpen) {
             setTempSelected(selectedValues || [...uniqueValues]);
             setSearchTerm("");
-            
+
             if (buttonRef.current) {
                 const rect = buttonRef.current.getBoundingClientRect();
                 let left = rect.left;
-                // Prevent dropdown from going off the right side of the screen
                 if (left + 240 > window.innerWidth) {
                     left = window.innerWidth - 250;
                 }
@@ -30,7 +37,6 @@ const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply }) =
         }
     }, [isOpen, selectedValues, uniqueValues]);
 
-    // Close when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (
@@ -53,7 +59,7 @@ const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply }) =
     };
 
     const handleCheckboxChange = (value) => {
-        setTempSelected(prev => 
+        setTempSelected(prev =>
             prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
         );
     };
@@ -67,23 +73,23 @@ const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply }) =
         setIsOpen(false);
     };
 
-    const filteredUniqueValues = uniqueValues.filter(v => 
+    const filteredUniqueValues = uniqueValues.filter(v =>
         String(v).toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const selectAllChecked = tempSelected.length === uniqueValues.length;
+    const selectAllChecked = uniqueValues.length > 0 && tempSelected.length === uniqueValues.length;
     const selectAllIndeterminate = tempSelected.length > 0 && tempSelected.length < uniqueValues.length;
     const hasActiveFilter = selectedValues && selectedValues.length > 0 && selectedValues.length < uniqueValues.length;
 
     return (
         <div style={{ position: "relative", display: "inline-block", marginLeft: "8px" }}>
-            <button 
+            <button
                 ref={buttonRef}
-                onClick={() => setIsOpen(!isOpen)}
-                style={{ 
-                    background: "none", border: "none", cursor: "pointer", padding: "2px", 
-                    color: hasActiveFilter ? "#2563eb" : "#6b7280", 
-                    display: "flex", alignItems: "center", justifyContent: "center" 
+                onClick={handleToggleOpen}
+                style={{
+                    background: "none", border: "none", cursor: "pointer", padding: "2px",
+                    color: hasActiveFilter ? "#2563eb" : "#6b7280",
+                    display: "flex", alignItems: "center", justifyContent: "center"
                 }}
                 title="Filter"
             >
@@ -93,64 +99,64 @@ const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply }) =
             </button>
 
             {isOpen && (
-                <div 
+                <div
                     ref={dropdownRef}
-                    style={{ 
-                        position: "fixed", 
-                        top: `${pos.top}px`, 
-                        left: `${pos.left}px`, 
-                        zIndex: 9999, 
-                        backgroundColor: "white", 
-                        border: "1px solid #d1d5db", 
-                        borderRadius: "4px", 
-                        boxShadow: "0 4px 12px -1px rgba(0,0,0,0.15)", 
-                        width: "240px", 
-                        display: "flex", 
-                        flexDirection: "column", 
-                        fontSize: "13px" 
+                    style={{
+                        position: "fixed",
+                        top: `${pos.top}px`,
+                        left: `${pos.left}px`,
+                        zIndex: 9999,
+                        backgroundColor: "white",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "4px",
+                        boxShadow: "0 4px 12px -1px rgba(0,0,0,0.15)",
+                        width: "240px",
+                        display: "flex",
+                        flexDirection: "column",
+                        fontSize: "13px"
                     }}
                 >
-                    {/* 1. Search Box */}
                     <div style={{ padding: "8px", borderBottom: "1px solid #e5e7eb" }}>
-                        <input 
-                            type="text" 
-                            placeholder="Search..." 
-                            value={searchTerm} 
-                            onChange={(e) => setSearchTerm(e.target.value)} 
-                            style={{ 
-                                width: "100%", padding: "6px 8px", border: "1px solid #d1d5db", 
-                                borderRadius: "4px", fontSize: "12px", outline: "none", boxSizing: "border-box" 
-                            }} 
+                        <input
+                            type="text"
+                            placeholder="Search..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                                width: "100%", padding: "6px 8px", border: "1px solid #d1d5db",
+                                borderRadius: "4px", fontSize: "12px", outline: "none", boxSizing: "border-box"
+                            }}
                             autoFocus
                         />
                     </div>
-                    
-                    {/* 2. (Select All) Checkbox */}
+
                     <div style={{ padding: "8px", borderBottom: "1px solid #e5e7eb" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontWeight: 500 }}>
-                            <input 
-                                type="checkbox" 
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: isLoading ? "default" : "pointer", fontWeight: 500, opacity: isLoading ? 0.5 : 1 }}>
+                            <input
+                                type="checkbox"
                                 checked={selectAllChecked}
                                 ref={el => el && (el.indeterminate = selectAllIndeterminate)}
-                                onChange={toggleSelectAll} 
-                                style={{ cursor: "pointer" }} 
+                                onChange={toggleSelectAll}
+                                disabled={isLoading}
+                                style={{ cursor: isLoading ? "default" : "pointer" }}
                             />
                             <span>(Select All)</span>
                         </label>
                     </div>
 
-                    {/* 3. Scrollable List of Values */}
                     <div style={{ overflowY: "auto", padding: "8px", flex: 1, maxHeight: "250px" }}>
-                        {filteredUniqueValues.length === 0 ? (
+                        {isLoading ? (
+                            <div style={{ color: "#9ca3af", fontSize: "12px", textAlign: "center", padding: "8px 0" }}>Loading...</div>
+                        ) : filteredUniqueValues.length === 0 ? (
                             <div style={{ color: "#9ca3af", fontSize: "12px", textAlign: "center", padding: "8px 0" }}>No matches</div>
                         ) : (
                             filteredUniqueValues.map((val, idx) => (
                                 <label key={idx} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0", cursor: "pointer" }}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={tempSelected.includes(String(val))} 
-                                        onChange={() => handleCheckboxChange(String(val))} 
-                                        style={{ cursor: "pointer" }} 
+                                    <input
+                                        type="checkbox"
+                                        checked={tempSelected.includes(String(val))}
+                                        onChange={() => handleCheckboxChange(String(val))}
+                                        style={{ cursor: "pointer" }}
                                     />
                                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{val}</span>
                                 </label>
@@ -158,17 +164,17 @@ const FilterDropdown = ({ columnName, uniqueValues, selectedValues, onApply }) =
                         )}
                     </div>
 
-                    {/* 4. OK / Cancel Buttons */}
                     <div style={{ padding: "8px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-                        <button 
-                            onClick={handleCancel} 
+                        <button
+                            onClick={handleCancel}
                             style={{ padding: "4px 16px", fontSize: "12px", border: "1px solid #d1d5db", borderRadius: "4px", backgroundColor: "white", cursor: "pointer" }}
                         >
                             Cancel
                         </button>
-                        <button 
-                            onClick={handleApply} 
-                            style={{ padding: "4px 16px", fontSize: "12px", border: "none", borderRadius: "4px", backgroundColor: "#2563eb", color: "white", cursor: "pointer" }}
+                        <button
+                            onClick={handleApply}
+                            disabled={isLoading}
+                            style={{ padding: "4px 16px", fontSize: "12px", border: "none", borderRadius: "4px", backgroundColor: isLoading ? "#93c5fd" : "#2563eb", color: "white", cursor: isLoading ? "default" : "pointer" }}
                         >
                             OK
                         </button>
