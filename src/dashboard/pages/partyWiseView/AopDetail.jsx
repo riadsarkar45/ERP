@@ -194,18 +194,7 @@ const AopDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `finish-${i}`)}
 
-                                {/* ReturnFromAop */}
-                                {/* {renderBreakdownCell(unitePrice, (up) => {
-                                    // Match the total's convention: positive = excess (sent > ordered).
-                                    const sentForAop = sumValue(deliveries?.SentForAop);
-                                    const workOrderQty = Number(up.workOrderQty) || 0;
-                                    const diff = sentForAop - workOrderQty;
-
-                                    return diff > 0
-                                        ? <span className='text-green-600 font-extrabold'>{Math.abs(diff)}</span>
-                                        : <span className='text-red-600 font-extrabold'>({Math.abs(diff)})</span>;
-                                }, `short-${i}`)}
-                                aop return */}
+                               hhhh
                             </td>
 
                             <td style={cellStyle}>

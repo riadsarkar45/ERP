@@ -87,6 +87,7 @@ interface AWOParsedRow {
     awoFactoryName: string;
     awoWorkOrderQty: number;
     awoPricePerKg: number;
+    fabricReturnFromAop: number
 }
 
 interface AWOColumnIndices {
@@ -103,6 +104,7 @@ interface AWOColumnIndices {
     awoFactoryName: number;
     awoWorkOrderQty: number;
     awoPricePerKg: number;
+    fabricReturnFromAop: number
 }
 
 interface DWOColumnIndices {
@@ -606,6 +608,7 @@ const buildAWOColIndex = (headers: unknown[]): AWOColumnIndices => ({
     awoFactoryName: findPartialCol(headers, "aop factory name"),
     awoWorkOrderQty: findPartialCol(headers, "aop work order"),
     awoPricePerKg: findPartialCol(headers, "aop price per kg"),
+    fabricReturnFromAop: findPartialCol(headers, "fabric return from aop")
 });
 
 const buildDWOColIndex = (headers: unknown[]): DWOColumnIndices => ({
@@ -654,6 +657,7 @@ const parseAWORow = (row: unknown[], colIndex: AWOColumnIndices): AWOParsedRow =
     awoFactoryName: asString(getCellValue(row, colIndex.awoFactoryName)),
     awoWorkOrderQty: toNumber(getCellValue(row, colIndex.awoWorkOrderQty)),
     awoPricePerKg: toNumber(getCellValue(row, colIndex.awoPricePerKg)),
+    fabricReturnFromAop: toNumber(getCellValue(row, colIndex.fabricReturnFromAop))
 });
 
 const parseDWORow = (row: unknown[], colIndex: DWOColumnIndices): DWOParsedRow => ({
