@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 import { checkDataExist } from "../../utils/checkIfDataExist";
-import { skip } from "@prisma/client/runtime/library";
 
 export const createNewJob = async (req: Request, res: Response) => {
     const {
@@ -21,15 +20,17 @@ export const createNewJob = async (req: Request, res: Response) => {
 
     console.log(req.body);
 
-    const findStyleNo = await prisma.styleRequirement.findMany({
-        where: { styleNo: req.body.styleNo }
-    });
-
-    if (!findStyleNo) {
-        return res.status(400).send({ message: "Style not found", type: "error" });
-    }
-
     try {
+        // jobNo is the unique key on StyleRequirement — use that instead of styleNo,
+        // which is not guaranteed unique and can match the wrong row.
+        const findStyleRequirement = await prisma.styleRequirement.findUnique({
+            where: { jobNo: req.body.jobNo }
+        });
+
+        if (!findStyleRequirement) {
+            return res.status(400).send({ message: "Style requirement not found for this job no", type: "error" });
+        }
+
         const getJobNo = await checkDataExist(req.body.jobNo);
         const jobId = getJobNo?.id || null;
 
@@ -48,7 +49,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                 factoryName: req.body.factoryName,
                 orderType,
                 jobId,
-                // styleRequirementId: findStyleNo.id,
+                styleRequirementId: findStyleRequirement.id, // now actually linked
                 compositions: {
                     createMany: {
                         data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({
@@ -68,7 +69,6 @@ export const createNewJob = async (req: Request, res: Response) => {
             return res.status(500).send({ message: "Failed to save data", type: "error" });
         }
 
-        // insert yarnDyeingJobs if orderType is yarnDyeingOrder
         if (orderType === "yarnDyeingOrder") {
             const yarnRows = compositions.flatMap(({ composition, yarnColors }) =>
                 (yarnColors ?? []).map(({ color, qty }) => ({
@@ -82,9 +82,6 @@ export const createNewJob = async (req: Request, res: Response) => {
             if (yarnRows.length > 0) {
                 await prisma.yarnDyeingJobs.createMany({ data: yarnRows });
             }
-            // tomorrows plan
-            // tomorrow need to get yarnDyeingJobs unique id and set it yarnDeliveries prisma models 
-            //create complete separated model for color wise yarn deliveries 
         }
 
         return res.status(201).send({ message: "Data saved", type: "success" });

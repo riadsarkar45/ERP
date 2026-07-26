@@ -68,7 +68,7 @@ model Composition {
   additional   Int          @default(0)
   orderQty     Int
   workOrderQty Int
-  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
+  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   workOrderId  Int
   deliveries   deliveries[]
   orderType    String       @default("null")
