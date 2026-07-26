@@ -296,14 +296,20 @@ async function processYarnGreyRcvdSheet(
 }
 
 const isValidAOPDeliveryRow = (row: AOPDeliveryParsedRow): boolean => {
-    return !!(row.jobNo && (row.deliveryForAop > 0 || row.afterAopFabricRcvd > 0));
+    return !!(
+        row.jobNo &&
+        (row.deliveryForAop > 0 ||
+            row.afterAopFabricRcvd > 0 ||
+            row.aopFinishFabricRcvd > 0 ||
+            row.fabricReturnFromAop > 0)
+    );
 };
 
 async function processAOPDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
     // Clean keywords: the scanner will automatically strip spaces and match them perfectly
-    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd","fabric return from aop"];
+    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd", "fabric return from aop"];
     const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
 
