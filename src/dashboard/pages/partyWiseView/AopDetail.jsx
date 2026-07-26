@@ -97,6 +97,7 @@ const AopDetail = ({ detailView }) => {
             sentForAop: 0,
             receivedFromAop: 0,
             aopFinishFabricRcvd: 0,
+            returnFromAop: 0,
             balance: 0,
             payableAmount: 0,
         };
@@ -113,6 +114,7 @@ const AopDetail = ({ detailView }) => {
             acc.sentForAop += sumValue(deliveries?.SentForAop);
             acc.receivedFromAop += sumValue(deliveries?.ReceivedFromAop);
             acc.aopFinishFabricRcvd += sumValue(deliveries?.AOPFinishFabricRcvd);
+            acc.returnFromAop += sumValue(deliveries?.ReturnFromAop);
             acc.balance += sumValue(deliveries?.Balance);
 
             if (deliveries?.PayableAmount !== undefined && deliveries?.PayableAmount !== null) {
@@ -151,10 +153,10 @@ const AopDetail = ({ detailView }) => {
         );
     }
 
-    // Two SHORT & EXCESS totals, aggregated the same way the per-row cells
-    // derive them, rather than summing each row's already-rounded diffs.
-    const shortExcess1Total = totals.sentForAop - totals.workOrderQty; // sent for AOP vs work order qty
-    const shortExcess2Total = totals.receivedFromAop - totals.aopFinishFabricRcvd; // received from AOP vs finish fabric received
+    // Single SHORT & EXCESS total, aggregated the same way the per-row cell
+    // derives it (received from AOP vs finish fabric received) — this is the
+    // only diff column that actually exists in the body.
+    const shortExcessTotal = totals.receivedFromAop - totals.aopFinishFabricRcvd;
 
     return (
         <>
@@ -192,9 +194,7 @@ const AopDetail = ({ detailView }) => {
                                 {renderBreakdownCell(deliveries?.AOPFinishFabricRcvd, (v) => v, `finish-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `finish-${i}`)}
-
-                               hhhh
+                                {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `return-${i}`)}
                             </td>
 
                             <td style={cellStyle}>
@@ -253,13 +253,13 @@ const AopDetail = ({ detailView }) => {
                     <td style={footerCellStyle}>
                         <div style={{ padding: "10px 8px" }}>{formatNumber(totals.aopFinishFabricRcvd)}</div>
                     </td>
-                    {/* SHORT & EXCESS (sent for AOP vs work order qty) */}
+                    {/* FABRIC RETURN FROM AOP */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcess1Total)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.returnFromAop)}</div>
                     </td>
                     {/* SHORT & EXCESS (received from AOP vs finish fabric received) */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcess2Total)}</div>
+                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcessTotal)}</div>
                     </td>
                     {/* PRICE PER KG — not summable */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
