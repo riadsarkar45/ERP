@@ -62,7 +62,7 @@ export const updateJobs = async (req: Request, res: Response) => {
                     fromFactory,
                 },
             },
-            select: { id: true, yarnCompId: true },
+            select: { id: true },
         });
 
         if (!challan) {
@@ -72,13 +72,9 @@ export const updateJobs = async (req: Request, res: Response) => {
                     challanDate: deliveryDate,
                     toFactory,
                     fromFactory,
-                    yarnCompId: checkYarnIfExist.id,
                 },
-                select: { id: true, yarnCompId: true },
+                select: { id: true },
             });
-        } else if (challan.yarnCompId !== null && challan.yarnCompId !== checkYarnIfExist.id) {
-            // Existing challan belongs to a different composition — don't silently reuse it.
-            return res.status(409).json({ type: "error", message: "Challan does not belong to this yarn/composition" });
         }
 
         const delivers = deliveries.filter(

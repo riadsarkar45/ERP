@@ -380,6 +380,7 @@ const AllOrders = ({ orderType }) => {
 
     const handleSubmit = async (yarnId, workOrderId) => {
         setIsLoading(true);
+        setChallanIssue([])
         const payload = changedField[yarnId] || {};
         try {
             const update = await axiosPublic.patch(
@@ -388,6 +389,8 @@ const AllOrders = ({ orderType }) => {
                 { params: { yarnId, workOrderId } }
             );
             if (update.status === 200) {
+                setChallanIssue([{ message: "Delivery Added", type: "success" }])
+
                 fetchData(`/api/work-order/${orderType}`, { params: { page, limit, filters: filtersParam } })
                     .then((res) => {
                         if (res) {
@@ -411,26 +414,22 @@ const AllOrders = ({ orderType }) => {
                 });
             }
         } catch (e) {
-            console.log(e.message);
             if (e.response?.status === 409) {
-                // Backend's 409 returns `deliveries` as an ARRAY of per-type
-                // failures, not a single object with `.duplicate`.
-                const dupInfo = e.response.data?.deliveries ?? [];
-                setChallanIssue(dupInfo);
-
-                const duplicates = dupInfo
-                    .filter(d => d?.duplicate)
-                    .map(d => d.duplicate);
-
-                if (duplicates.length > 0) {
-                    setDuplicateChallan(prev => [...prev, ...duplicates]);
-                }
+                setChallanIssue(prev => [
+                    ...prev,
+                    e.response.data ?? { message: "PLEASE TRY AGAIN WITH CORRECT FACTORY NAME", type: "error" }
+                ]);
+            } else {
+                setChallanIssue(prev => [
+                    ...prev,
+                    { message: e.response?.data?.message ?? "Something went wrong, please try again", type: "error" }
+                ]);
             }
         } finally {
             setIsLoading(false);
         }
     };
-
+    console.log(challanIssue, "challan ISSUE");
     return (
         <div>
             <button onClick={handleRefresh}>Refresh</button>

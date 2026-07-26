@@ -69,7 +69,7 @@ const Deliveries = ({ deliveries, challanIssue, orderType, duplicateChallan, cha
     setSeeDetail(prev => !prev)
   }
 
-
+  console.log(challanIssue, "challan issue");
   // Submits every currently-open row in one go, regardless of how many are open.
   const handleGlobalSubmit = async () => {
     const rowsToSubmit = visibleRows.filter(r => openYarnIds.has(r.yarnId));
@@ -102,34 +102,39 @@ const Deliveries = ({ deliveries, challanIssue, orderType, duplicateChallan, cha
       </div>
 
       {challanIssue?.length > 0 && (
-        <div className="mt-3 rounded-lg border border-red-600 bg-red-600 bg-opacity-20   overflow-hidden">
+        <div className="mt-3 rounded-lg border border-red-600 bg-red-600 bg-opacity-20 overflow-hidden">
           <button
             onClick={() => handleSeeDetails()}
             className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-red-800 hover:bg-amber-100 transition-colors"
-
           >
-
             <span className="flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              {
-                challanIssue?.map((i, idx) => {
-                  return (
-                    <h2 key={idx}>{i.message}</h2>
-                  )
-                })
-              }
+              <span>
+                {challanIssue.length === 1
+                  ? (typeof challanIssue[0] === "string" ? challanIssue[0] : challanIssue[0]?.message) ?? "Error"
+                  : `${challanIssue.length} issues found`}
+              </span>
             </span>
             <svg
-              className={`w-4 h-4 transition-transform ${seeDetail ? "rotate-180" : ""}`}
+              className={`w-4 h-4 shrink-0 transition-transform ${seeDetail ? "rotate-180" : ""}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
+          {seeDetail && (
+            <ul className="px-4 pb-2.5 space-y-1">
+              {challanIssue.map((i, idx) => (
+                <li key={idx} className="text-sm text-red-800">
+                  {typeof i === "string" ? i : i?.message ?? "Unknown error"}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
