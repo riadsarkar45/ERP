@@ -35,12 +35,6 @@ export const challanValidation = async (
             message: `Invalid destination factory. This work order belongs to "${workOrder.factoryName}".`,
         };
     }
-
-    // 🔥 CHANGED: duplicate check now scoped to challanNo + toFactory + yarnId + deliveryType.
-    // A single challan can legitimately cover multiple delivery types for the SAME
-    // composition (e.g. a "normal" delivery and a "return" both filed under the same
-    // challan/shipment). Only flag a duplicate if the exact same composition + delivery
-    // type is being submitted twice against the same challan/factory.
     const duplicate = await prisma.deliveries.findFirst({
         where: {
             challanNo: Number(challanNo),

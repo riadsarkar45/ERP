@@ -36,7 +36,7 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                             styleNo: orderInfo.styleNo as string,
                             buyerName: orderInfo.buyerName as string,
                             jobNo: orderInfo.jobNo as string,
-                            processLoss: orderInfo.processLoss as number,
+                            processLoss: Number(orderInfo.processLoss) as number,
                             poNo: orderInfo.poNo as string,
                             salesContact: orderInfo.salesContact as string,
                         },
