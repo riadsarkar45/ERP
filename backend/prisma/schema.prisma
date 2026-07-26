@@ -30,13 +30,14 @@ model WorkOrder {
   jobNo              String
   orderType          String
   compositions       Composition[]
-  styleRequirement   StyleRequirement? @relation(fields: [jobNo], references: [jobNo])
+  styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
+  styleRequirementId Int?
   jobs               jobs?             @relation(fields: [jobId], references: [id])
   jobId              Int?
   yarnDyeingJobs     yarnDyeingJobs[]
   factoryName        String            @default("NULL")
 
-  @@index([jobNo])
+  @@index([styleRequirementId])
   @@index([styleNo])
   @@index([jobId])
 }

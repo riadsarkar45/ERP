@@ -21,8 +21,8 @@ export const createNewJob = async (req: Request, res: Response) => {
     console.log(req.body);
 
     try {
-        // jobNo is the unique key on StyleRequirement, and WorkOrder now relates
-        // to it directly via jobNo (no separate styleRequirementId column).
+        // jobNo is the unique key on StyleRequirement — use that instead of styleNo,
+        // which is not guaranteed unique and can match the wrong row.
         const findStyleRequirement = await prisma.styleRequirement.findUnique({
             where: { jobNo: req.body.jobNo }
         });
@@ -45,10 +45,11 @@ export const createNewJob = async (req: Request, res: Response) => {
                 month: req.body.month,
                 styleNo: req.body.styleNo,
                 lotNo: req.body.lotNo,
-                jobNo: req.body.jobNo, // this scalar field also satisfies the styleRequirement relation
+                jobNo: req.body.jobNo,
                 factoryName: req.body.factoryName,
                 orderType,
                 jobId,
+                styleRequirementId: findStyleRequirement.id, // now actually linked
                 compositions: {
                     createMany: {
                         data: compositions.map(({ composition, color, orderQty, workOrderQty, unitPrice }) => ({
