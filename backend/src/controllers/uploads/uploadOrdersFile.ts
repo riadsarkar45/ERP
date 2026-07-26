@@ -226,7 +226,7 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     aopReceivedFromFactoryName: asString(getCellValue(row, colIndex.aopReceivedFromFactoryName)),
     aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
     aopFabricDeliveryFactoryNameSM: asString(getCellValue(row, colIndex.aopFabricDeliveryFactoryNameSM)),
-    fabricReturnFromAop: toNumber(getCellValue(row, colIndex.afterAopFabricRcvd))
+    fabricReturnFromAop: toNumber(getCellValue(row, colIndex.fabricReturnFromAop))
 });
 
 // ── YARN & GREY RCVD Specific Parsing ──────────────────────────────
