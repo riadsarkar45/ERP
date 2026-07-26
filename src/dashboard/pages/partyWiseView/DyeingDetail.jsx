@@ -11,6 +11,12 @@ const cellStyle = {
     boxSizing: "border-box",
 };
 
+const centeredCellStyle = {
+    ...cellStyle,
+    verticalAlign: "middle",
+    textAlign: "center",
+};
+
 const footerCellStyle = {
     ...cellStyle,
     position: "sticky",
@@ -43,19 +49,20 @@ const formatMoney = (value) => {
     return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// Mirrors the per-row SHORT & EXCESS convention already used below:
-// diff > 0 renders plain, diff <= 0 renders in parentheses.
+// Convention: diff > 0 => excess (green, plain). diff <= 0 => short (red, parens).
 const renderShortExcess = (diff) => {
     const formatted = formatNumber(Math.abs(diff));
     return diff > 0 ? formatted : `(${formatted})`;
 };
 
-const renderBreakdownCell = (items, renderItem, keyPrefix) => {
+const renderBreakdownCell = (items, renderItem, keyPrefix, center = false) => {
     const list = normalizeToArray(items);
-    
+
     if (list.length === 0) {
         return (
-            <div style={{ padding: "10px 8px", minHeight: "36px" }}>
+            <div style={center
+                ? { padding: "10px 8px", minHeight: "36px", display: "flex", alignItems: "center", justifyContent: "center" }
+                : { padding: "10px 8px", minHeight: "36px" }}>
                 &nbsp;
             </div>
         );
@@ -63,13 +70,14 @@ const renderBreakdownCell = (items, renderItem, keyPrefix) => {
 
     return list.map((item, idx) => {
         const isLastItem = idx === list.length - 1;
-        
+
         return (
             <div
                 key={`${keyPrefix}-${idx}`}
                 style={{
                     padding: "10px 8px",
-                    // ONLY draw a line BETWEEN items. 
+                    ...(center ? { display: "flex", alignItems: "center", justifyContent: "center" } : {}),
+                    // ONLY draw a line BETWEEN items.
                     // The last item relies on the parent <td>'s bottom border, preventing double borders.
                     borderBottom: isLastItem ? "none" : `1px solid ${BORDER_COLOR}`,
                 }}
@@ -88,8 +96,7 @@ const DyeingDetail = ({ detailView }) => {
             workOrderQty: 0,
             greyDelivery: 0,
             greyReceived: 0,
-            greyReturn: 0,
-            FinishReceived:0,
+            finishReceived: 0,
             balance: 0,
             payableAmount: 0,
         };
@@ -105,8 +112,7 @@ const DyeingDetail = ({ detailView }) => {
 
             acc.greyDelivery += sumValue(deliveries?.GreyDelivery);
             acc.greyReceived += sumValue(deliveries?.GreyReceived);
-            acc.greyReturn += sumValue(deliveries?.YarnReturn);
-            acc.FinishReceived += sumValue(deliveries?.FinishReceived);
+            acc.finishReceived += sumValue(deliveries?.FinishReceived);
             acc.balance += sumValue(deliveries?.Balance);
 
             if (deliveries?.PayableAmount !== undefined && deliveries?.PayableAmount !== null) {
@@ -127,12 +133,12 @@ const DyeingDetail = ({ detailView }) => {
         return (
             <tbody>
                 <tr>
-                    <td 
-                        colSpan={11} 
-                        style={{ 
-                            border: `1px solid ${BORDER_COLOR}`, 
-                            padding: "40px", 
-                            textAlign: "center", 
+                    <td
+                        colSpan={11}
+                        style={{
+                            border: `1px solid ${BORDER_COLOR}`,
+                            padding: "40px",
+                            textAlign: "center",
                             color: "#6b7280",
                             fontSize: "14px",
                             backgroundColor: "#fafafa"
@@ -145,34 +151,31 @@ const DyeingDetail = ({ detailView }) => {
         );
     }
 
-    // SHORT & EXCESS total, aggregated the same way the per-row cell derives
-    // it (yarn delivered minus work order qty) rather than summing each
-    // row's already-rounded per-composition diffs.
-    const shortExcessTotal = totals.yarnDelivery - totals.workOrderQty;
+    // Two SHORT & EXCESS totals, aggregated the same way the per-row cells
+    // derive them, rather than summing each row's already-rounded diffs.
+    const shortExcess1Total = totals.greyDelivery - totals.workOrderQty; // grey delivery vs work order qty
+    const shortExcess2Total = totals.greyReceived - totals.finishReceived; // grey received vs finish received
 
     return (
         <>
             <tbody>
-                
+
                 {detailView.map((d, i) => {
                     const factory = d.workOrders || [];
-                    const deliveries = d.deliveryTotals || {}; 
+                    const deliveries = d.deliveryTotals || {};
                     const comps = d.rows || [];
                     const unitePrice = factory.flatMap((c) => c.compositions || []) || [];
 
                     return (
                         <tr key={i}>
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(factory, (f) => f.factoryName, `factory-${i}`)}
+                            <td style={centeredCellStyle}>
+                                {renderBreakdownCell(factory, (f) => f.factoryName, `factory-${i}`, true)}
                             </td>
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(d.jobNo, (jn) => jn, `job-${i}`)}
+                            <td style={centeredCellStyle}>
+                                {renderBreakdownCell(d.jobNo, (jn) => jn, `job-${i}`, true)}
                             </td>
                             <td style={cellStyle}>
                                 {renderBreakdownCell(comps, (c) => c.composition, `comp-${i}`)}
-                            </td>
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => up.unitePrice, `price-${i}`)}
                             </td>
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => up.workOrderQty, `qty-${i}`)}
@@ -180,32 +183,44 @@ const DyeingDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(deliveries?.GreyDelivery, (v) => v, `yd-${i}`)}
                             </td>
-                            
-                            
+
                             <td style={cellStyle}>
                                 {renderBreakdownCell(deliveries?.GreyReceived, (v) => v, `grey-${i}`)}
                             </td>
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => {
-                                    const yarnDelivery = Number(deliveries?.GreyDelivery) || 0;
+                                    // Match the total's convention: positive = excess (delivered > ordered).
+                                    const greyDelivery = sumValue(deliveries?.GreyDelivery);
                                     const workOrderQty = Number(up.workOrderQty) || 0;
-                                    const diff = yarnDelivery - workOrderQty;
-                                    return diff > 0 ? <span className='text-red-600'>{Math.abs(diff)}</span> : <span className='text-green-600'> ({Math.abs(diff)})</span>;
+                                    const diff = greyDelivery - workOrderQty;
+
+                                    return diff > 0
+                                        ? <span className='text-green-600 font-extrabold'>{Math.abs(diff)}</span>
+                                        : <span className='text-red-600 font-extrabold'>({Math.abs(diff)})</span>;
                                 }, `short-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.FinishReceived, (v) => v, `return-${i}`)}
+                                {renderBreakdownCell(deliveries?.FinishReceived, (v) => v, `finish-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => {
-                                    const yarnDelivery = Number(deliveries?.GreyReceived) || 0;
-                                    const workOrderQty = Number(up.FinishReceived) || 0;
-                                    const diff = yarnDelivery - workOrderQty;
-                                    return diff > 0 ? <span className='text-red-600'>{Math.abs(diff)}</span> : <span className='text-green-600'> ({Math.abs(diff)})</span>;
-                                }, `short-${i}`)}
+                                {renderBreakdownCell(unitePrice, () => {
+                                    // Grey received vs finish received is a delivery-level comparison,
+                                    // not per-composition — `up` has no FinishReceived field.
+                                    const greyReceived = sumValue(deliveries?.GreyReceived);
+                                    const finishReceived = sumValue(deliveries?.FinishReceived);
+                                    const diff = greyReceived - finishReceived;
+
+                                    return diff > 0
+                                        ? <span className='text-green-600 font-extrabold'>{Math.abs(diff)}</span>
+                                        : <span className='text-red-600 font-extrabold'>({Math.abs(diff)})</span>;
+                                }, `short2-${i}`)}
+                            </td>
+
+                            <td style={cellStyle}>
+                                {renderBreakdownCell(unitePrice, (up) => up.unitePrice, `price-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                
+
                                 {renderBreakdownCell(unitePrice, (up) => {
                                     const price = Number(up.unitePrice) || 0;
                                     const qty = Number(up.workOrderQty) || 0;
@@ -220,39 +235,39 @@ const DyeingDetail = ({ detailView }) => {
 
             <tfoot>
                 <tr>
-                    {/* KNITTING FACTORY NAME — total label */}
+                    {/* FACTORY NAME — total label */}
                     <td style={footerCellStyle}>
                         <div style={{ padding: "10px 8px" }}>TOTAL</div>
                     </td>
-                    {/* JOB NO. */}
+                    {/* JOB NO. — not summable */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* COMPOSITION */}
+                    {/* COMPOSITION — not summable */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* PRICE PER KG — not summable */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* KNITTING WORK ORDER QTY */}
+                    {/* WORK ORDER QTY */}
                     <td style={footerCellStyle}>
                         <div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div>
                     </td>
-                    {/* YARN DELIVERY */}
+                    {/* GREY DELIVERY */}
                     <td style={footerCellStyle}>
                         <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyDelivery)}</div>
-                    </td>
-                    {/* SHORT & EXCESS */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcessTotal)}</div>
                     </td>
                     {/* GREY RECEIVED */}
                     <td style={footerCellStyle}>
                         <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReceived)}</div>
                     </td>
-                    {/* YARN RETURN */}
+                    {/* SHORT & EXCESS (grey delivery vs work order qty) */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnReturn)}</div>
+                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcess1Total)}</div>
                     </td>
-                    {/* BALANCE */}
+                    {/* FINISH RECEIVED */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.balance)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.finishReceived)}</div>
+                    </td>
+                    {/* SHORT & EXCESS (grey received vs finish received) */}
+                    <td style={footerCellStyle}>
+                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcess2Total)}</div>
                     </td>
                     {/* PAYABLE AMOUNT */}
                     <td style={footerCellStyle}>

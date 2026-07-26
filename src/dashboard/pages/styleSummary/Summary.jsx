@@ -499,7 +499,7 @@ export default function Summary() {
                 const shortExcess1 = totalRequired === 0 ? "_" : (totalRequired - yarnDelivery).toFixed(2);
 
                 const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
-                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Yarn_Received');
+                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
                 const balance = (greyReceived + yarnReturn) - (knittingWOQty - yarnDelivery);
 
                 const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
@@ -509,7 +509,7 @@ export default function Summary() {
                 const hasGreyData = greyReturnRcvd || greyReceivedDyeing || greyDelivery;
 
                 const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_for_AOP');
-                const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_from_AOP');
+                const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                 const aopBalance = aopReceived - aopSent;
                 const aopLoss = aopSent > 0 ? (((aopSent - aopReceived) / aopSent) * 100).toFixed(2) + "%" : "_";
 
@@ -908,7 +908,7 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                     {/* 28. PROCESS LOSS % */}
+                                    {/* 28. PROCESS LOSS % */}
                                     <td className="p-0 align-top" style={getCellStyle(27)}>
                                         <div className="divide-y divide-gray-200">
                                             {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{row.processLoss || 0}%</div>)}
@@ -1021,7 +1021,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 20. TOTAL KNITTING (GREY) */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Received', 19)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Grey_Fabric_Received', 19)}
 
                                     {/* 21. RETURN YARN RECEIVED */}
                                     {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Return', 20)}
@@ -1033,7 +1033,7 @@ export default function Summary() {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
-                                                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Yarn_Received');
+                                                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
                                                 const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
                                                 const balance = (greyReceived + yarnReturn) - (workOrderQty - yarnDelivery);
                                                 return (
@@ -1063,7 +1063,7 @@ export default function Summary() {
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const diff = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received') +
-                                                    getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing') -
+                                                    getBreakdownValue(cb, 'dyeingOrder_Grey_Received') -
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
                                                 const isExceeded = diff > 0;
                                                 const hasAnyData = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received') ||
@@ -1078,20 +1078,18 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-
                                     {/* 29. FINISH DELIVERY FROM AOP */}
                                     {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_For_Aop', 28)}
-
                                     {/* 30. FINISH RECEIVED FROM AOP */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Received_from_Aop', 29)}
+                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Received_From_Aop', 29)}
 
                                     {/* 31. AOP FAB. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(30)}>
                                         <div className="divide-y divide-gray-200">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
-                                                const sent = getBreakdownValue(cb, 'aopOrder_Sent_for_AOP');
-                                                const received = getBreakdownValue(cb, 'aopOrder_Received_from_AOP');
+                                                const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
+                                                const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                                                 const diff = received - sent;
                                                 const isExceeded = diff > 0;
                                                 return (
@@ -1108,8 +1106,8 @@ export default function Summary() {
                                         <div className="divide-y divide-gray-200">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
-                                                const sent = getBreakdownValue(cb, 'aopOrder_Sent_for_AOP');
-                                                const received = getBreakdownValue(cb, 'aopOrder_Received_from_AOP');
+                                                const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
+                                                const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                                                 const loss = sent > 0 ? (((sent - received) / sent) * 100).toFixed(2) : "_";
                                                 return <div key={j} className="px-3 py-2 whitespace-nowrap">{loss === "_" ? "_" : `${loss}%`}</div>;
                                             })}
@@ -1194,16 +1192,15 @@ export default function Summary() {
                                 >
                                     <ChevronLeft size={16} className="mr-1" /> Prev
                                 </button>
-                                
+
                                 {getPageNumbers().map(page => (
                                     <button
                                         key={page}
                                         onClick={() => setCurrentPage(page)}
-                                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium ${
-                                            currentPage === page
-                                                ? 'bg-blue-600 text-white z-10'
-                                                : 'bg-white text-gray-700 hover:bg-gray-50'
-                                        }`}
+                                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium ${currentPage === page
+                                            ? 'bg-blue-600 text-white z-10'
+                                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                                            }`}
                                     >
                                         {page}
                                     </button>
@@ -1219,7 +1216,7 @@ export default function Summary() {
                             </nav>
                         </div>
                     </div>
-                    
+
                     {/* Mobile Pagination */}
                     <div className="flex justify-between sm:hidden w-full">
                         <button

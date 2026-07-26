@@ -170,7 +170,8 @@ interface AOPDeliveryColumnIndices {
     aopFinishFabricRcvp: number;
     aopReceivedFromFactoryName: number;
     aopFabricDeliveryFactoryNameSM: number;
-    aopFinishFabricRcvd: number
+    aopFinishFabricRcvd: number;
+    fabricReturnFromAop: number
 }
 
 const parseDateValue = (val: unknown): Date | null => {
@@ -202,7 +203,8 @@ const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices 
     aopReceivedFromFactoryName: findPartialCol(headers, "aop received from factory"),
     aopFabricDeliveryFactoryNameSM: findPartialCol(headers, "aop fabric delivery factory"),
     // aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
-    aopFinishFabricRcvp: findPartialCol(headers, "aop finish fabric rcvd")
+    aopFinishFabricRcvp: findPartialCol(headers, "aop finish fabric rcvd"),
+    fabricReturnFromAop: findPartialCol(headers, "fabric return from aop")
 
 });
 
@@ -222,6 +224,7 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     aopReceivedFromFactoryName: asString(getCellValue(row, colIndex.aopReceivedFromFactoryName)),
     aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
     aopFabricDeliveryFactoryNameSM: asString(getCellValue(row, colIndex.aopFabricDeliveryFactoryNameSM)),
+    fabricReturnFromAop: toNumber(getCellValue(row, colIndex.afterAopFabricRcvd))
 });
 
 // ── YARN & GREY RCVD Specific Parsing ──────────────────────────────
@@ -298,7 +301,7 @@ async function processAOPDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
     // Clean keywords: the scanner will automatically strip spaces and match them perfectly
-    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd",];
+    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd","fabric return from aop"];
     const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
 

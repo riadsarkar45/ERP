@@ -37,13 +37,14 @@ const PartyWiseView = () => {
             { header: "KNITTING FACTORY NAME", width: 220 },
             { header: "JOB NO.", width: 120 },
             { header: "COMPOSITION", width: 320 },
-            { header: "PRICE PER KG", width: 120 },
             { header: "KNITTING WORK ORDER QTY", width: 220 },
             { header: "YARN DELIVERY", width: 140 },
-            { header: "SHORT & EXCESS", width: 140 },
             { header: "GREY RECEIVED", width: 140 },
             { header: "YARN RETURN", width: 140 },
-            { header: "BALANCE", width: 140 },
+
+            { header: "SHORT & EXCESS", width: 140 },
+            // { header: "BALANCE", width: 140 },
+            { header: "PRICE PER KG", width: 120 },
             { header: "PAYABLE AMOUNT", width: 180 },
 
         )
@@ -53,14 +54,14 @@ const PartyWiseView = () => {
             { header: "DYEING FACTORY NAME", width: 220 },
             { header: "JOB NO.", width: 120 },
             { header: "COMPOSITION", width: 320 },
-            { header: "PRICE PER KG", width: 120 },
             { header: "DYEING WORK ORDER QTY", width: 220 },
             { header: "GREY DELIVERY", width: 140 },
             { header: "GREY RECEIVE", width: 140 },
             { header: "GREY DEV SHORT & EXCESS", width: 140 },
             { header: "FINISH RECEIVE", width: 140 },
             { header: "FINISH RCV SHORT & EXCESS", width: 140 },
-            { header: "GREY RECEIVED", width: 140 },
+            { header: "PRICE PER KG", width: 120 },
+
             { header: "PAYABLE AMOUNT", width: 180 },
 
         )
@@ -70,13 +71,13 @@ const PartyWiseView = () => {
             { header: "AOP FACTORY NAME", width: 220 },
             { header: "JOB NO.", width: 120 },
             { header: "COMPOSITION", width: 320 },
-            { header: "PRICE PER KG", width: 120 },
             { header: "AOP WORK ORDER QTY", width: 220 },
-            { header: "YARN DELIVERY", width: 140 },
+            { header: "SENT FOR AOP", width: 140 },
+            { header: "RECEIVE FROM AOP", width: 140 },
+            { header: "FINISH RECEIVED FROM AOP", width: 140 },
+            { header: "RETURN FROM AOP", width: 140 },
             { header: "SHORT & EXCESS", width: 140 },
-            { header: "GREY RECEIVED", width: 140 },
-            { header: "YARN RETURN", width: 140 },
-            { header: "BALANCE", width: 140 },
+            { header: "PRICE PER KG", width: 120 },
             { header: "PAYABLE AMOUNT", width: 180 },
 
         )
@@ -121,7 +122,7 @@ const PartyWiseView = () => {
                     <button
                         key={i}
                         onClick={() => handleOrderType(v)}
-                        className={`px-4 py-2 text-sm font-medium transition-colors ${selectOrderType === v
+                        className={`px-4 py-2 text-sm  uppercase font-medium transition-colors ${selectOrderType === v
                             ? "bg-blue-800 text-white"
                             : "bg-blue-100 text-blue-900 hover:bg-blue-200"
                             }`}
@@ -273,16 +274,16 @@ const PartyWiseView = () => {
                                 ))}
                             </tr>
                         </thead>
-                         {
-                            selectOrderType === "knittingOrder" && <KnittingDetail detailView={detailView}/>
-                         }       
-                         {
+                        {
+                            selectOrderType === "knittingOrder" && <KnittingDetail detailView={detailView} />
+                        }
+                        {
                             selectOrderType === "dyeingOrder" && <DyeingDetail detailView={detailView} />
-                         }       
-                         {
+                        }
+                        {
                             selectOrderType === "aopOrder" && <AopDetail detailView={detailView} />
-                         }       
-                        
+                        }
+
                     </table>
                 </div>
             </div>

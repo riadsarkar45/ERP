@@ -17,6 +17,7 @@ export interface AOPDeliveryParsedRow {
     aopFinishFabricRcvd: number;
     aopReceivedFromFactoryName: string;
     aopFabricDeliveryFactoryNameSM: string;
+    fabricReturnFromAop: number
 }
 
 interface AOPDeliveryUploadSummary {
@@ -114,9 +115,22 @@ export const uploadAopDeliveryDataFromFile = async (
                 fromFactory: row.aopReceivedFromFactoryName,
             });
         }
+
+        if (row.fabricReturnFromAop > 0) {
+            events.push({
+                challanDate: row.challanDate,
+                challanNo: row.challanNo,
+                deliveryQty: row.fabricReturnFromAop,
+                deliveryType: "Return From Aop",
+                jobNo: row.jobNo,
+                color: row.color,
+                composition: row.composition,
+                toFactory: row.aopFabricDeliveryFactoryNameSM,
+                fromFactory: row.aopReceivedFromFactoryName,
+            });
+        }
     }
 
-    console.log(`📊 AOP Delivery: ${events.length} delivery events from ${rows.length} valid rows`);
 
     emitProgress("aop-delivery-progress", { jobId, phase: "starting", current: 0, total: events.length });
 
