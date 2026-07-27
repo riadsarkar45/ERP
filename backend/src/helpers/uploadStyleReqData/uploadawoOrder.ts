@@ -101,35 +101,11 @@ export const uploadAOWDataFromFile = async (
         validRows.push(row);
     }
 
-    // IMPORTANT: this key is ONLY for grouping rows into the correct work
-    // order internally. It must never be written to the database or used
-    // in DB where-clauses directly — jobNo/month scoping here is what
-    // stops two different jobs that happen to share a plain workOrderNo
-    // (e.g. both have "3") from being merged into one work order.
-    //
-    // SPECIAL CASE: workOrderNo/month are often "0" in the source sheet —
-    // this means the real work order hasn't been placed yet against a
-    // factory. Rows can still legitimately be grouped together (same
-    // pattern as real WOs: one WO, multiple composition/color lines) but
-    // ONLY when they share the same PO — different POs under the same
-    // jobNo with workOrderNo "0" are DIFFERENT pending line items and must
-    // NOT collapse into one WorkOrder record. Using PO instead of month
-    // here is what keeps them apart.
     const isPendingWO = (row: AWOParsedRow): boolean => {
         const wo = normalizeWONo(row.workOrderNo);
         return wo === '0' || wo === '';
     };
 
-    // SPECIAL CASE 2: the SAME workOrderNo/jobNo/month/PO/color/composition
-    // can appear on multiple rows when a single work order's fabric was
-    // split across more than one AOP factory (e.g. partially processed at
-    // Factory A, partially at Factory B). These rows are otherwise
-    // identical, so without factoryName in the key they'd collapse into
-    // ONE WorkOrder — the first row's factoryName wins, the other
-    // factory's assignment is silently dropped, AND the identical
-    // composition/qty gets inserted twice (double-counting the order
-    // quantity). Including factoryName keeps each factory as its own
-    // WorkOrder + Composition instead.
     const buildWOKey = (row: AWOParsedRow): string => {
         const wo = normalizeWONo(row.workOrderNo);
         const factory = normalizeMatchText(row.awoFactoryName);

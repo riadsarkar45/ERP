@@ -38,6 +38,12 @@ interface DeliveryEvent {
     composition: string;
     toFactory: string;
     fromFactory: string;
+    // NEW: the AOP factory itself (always row.aopReceivedFromFactoryName,
+    // regardless of which of toFactory/fromFactory it landed in above) —
+    // this is what matches WorkOrder.factoryName from the AWO upload, and
+    // is what disambiguates a job whose fabric was split across multiple
+    // AOP factories (same color/composition, different factory).
+    aopFactory: string;
 }
 
 const emitProgress = (event: string, payload: Record<string, unknown>) => {
@@ -49,9 +55,9 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
-// NEW: same normalization used on the AWO side — MUST stay identical between
-// the two files or matches will drift again. Consider moving this to a
-// shared /utils/textNormalize.ts and importing it in both places.
+// Same normalization used on the AWO side — MUST stay identical between the
+// two files or matches will drift again. Consider moving this to a shared
+// /utils/textNormalize.ts and importing it in both places.
 const normalizeMatchText = (value: string): string => {
     if (!value || typeof value !== 'string') return '';
     return value
@@ -99,6 +105,7 @@ export const uploadAopDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: row.aopReceivedFromFactoryName,
                 fromFactory: "",
+                aopFactory: row.aopReceivedFromFactoryName,
             });
         }
 
@@ -113,6 +120,7 @@ export const uploadAopDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: row.aopFabricDeliveryFactoryNameSM,
                 fromFactory: row.aopReceivedFromFactoryName,
+                aopFactory: row.aopReceivedFromFactoryName,
             });
         }
 
@@ -127,6 +135,7 @@ export const uploadAopDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: row.aopFabricDeliveryFactoryNameSM,
                 fromFactory: row.aopReceivedFromFactoryName,
+                aopFactory: row.aopReceivedFromFactoryName,
             });
         }
 
@@ -141,6 +150,7 @@ export const uploadAopDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: row.aopFabricDeliveryFactoryNameSM,
                 fromFactory: row.aopReceivedFromFactoryName,
+                aopFactory: row.aopReceivedFromFactoryName,
             });
         }
     }
@@ -155,12 +165,12 @@ export const uploadAopDeliveryDataFromFile = async (
             const normalizedJobNo = normalizeJobNo(event.jobNo);
             const targetColor = normalizeMatchText(event.color);
             const targetComposition = normalizeMatchText(event.composition);
+            const targetFactory = normalizeMatchText(event.aopFactory);
 
             // ── 1. Resolve Composition ──
-            // CHANGED: pull ALL candidate compositions for this job/orderType,
-            // then match in JS using the same normalization as the AWO insert
-            // side, instead of relying on Postgres exact string equality.
-            // This is what was silently failing before on whitespace/case drift.
+            // Pull ALL candidate compositions for this job/orderType, along
+            // with their parent WorkOrder's factoryName, then match in JS
+            // using the same normalization used on the AWO insert side.
             const candidateCompositions = await prisma.composition.findMany({
                 where: {
                     orderType: "aopOrder",
@@ -174,22 +184,37 @@ export const uploadAopDeliveryDataFromFile = async (
                     workOrderId: true,
                     color: true,
                     composition: true,
-                    styleRequirementRowId: true, // NEW: prefer FK match when present
+                    styleRequirementRowId: true,
+                    workOrder: { select: { factoryName: true } },
                 },
             });
 
-            let composition = candidateCompositions.find(c =>
+            const colorCompMatches = candidateCompositions.filter(c =>
                 normalizeMatchText(c.color) === targetColor &&
                 normalizeMatchText(c.composition) === targetComposition
             );
 
+            // CHANGED: a job's fabric can be split across multiple AOP
+            // factories with IDENTICAL color/composition (see AWO upload
+            // fix). When that happens, color+composition alone is
+            // ambiguous — factory is required to pick the right one.
+            let composition = colorCompMatches.length <= 1
+                ? colorCompMatches[0]
+                : colorCompMatches.find(c => normalizeMatchText(c.workOrder?.factoryName || '') === targetFactory);
+
             if (!composition) {
                 const availablePairs = candidateCompositions
-                    .map(c => `color="${c.color}" composition="${c.composition}"`)
+                    .map(c => `color="${c.color}" composition="${c.composition}" factory="${c.workOrder?.factoryName ?? ''}"`)
                     .join(' | ');
 
+                const ambiguityNote = colorCompMatches.length > 1
+                    ? ` This job has ${colorCompMatches.length} compositions with matching color/composition across different factories, ` +
+                      `but none has factoryName matching delivery row's AOP factory "${event.aopFactory}" — check for a factory name spelling mismatch between the A.W.O and Delivery sheets.`
+                    : '';
+
                 const msg = `No matching A.W.O Composition found for jobNo "${event.jobNo}" ` +
-                    `(normalized: "${normalizedJobNo}"), color "${event.color}", composition "${event.composition}". ` +
+                    `(normalized: "${normalizedJobNo}"), color "${event.color}", composition "${event.composition}", ` +
+                    `factory "${event.aopFactory}".${ambiguityNote} ` +
                     `Available compositions for this job: ${availablePairs || 'NONE — upload the A.W.O sheet first'}.`;
                 summary.errors.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, message: msg });
                 console.error(`❌ ${msg}`);
