@@ -120,13 +120,24 @@ export const uploadAOWDataFromFile = async (
         return wo === '0' || wo === '';
     };
 
+    // SPECIAL CASE 2: the SAME workOrderNo/jobNo/month/PO/color/composition
+    // can appear on multiple rows when a single work order's fabric was
+    // split across more than one AOP factory (e.g. partially processed at
+    // Factory A, partially at Factory B). These rows are otherwise
+    // identical, so without factoryName in the key they'd collapse into
+    // ONE WorkOrder — the first row's factoryName wins, the other
+    // factory's assignment is silently dropped, AND the identical
+    // composition/qty gets inserted twice (double-counting the order
+    // quantity). Including factoryName keeps each factory as its own
+    // WorkOrder + Composition instead.
     const buildWOKey = (row: AWOParsedRow): string => {
         const wo = normalizeWONo(row.workOrderNo);
+        const factory = normalizeMatchText(row.awoFactoryName);
         if (isPendingWO(row)) {
             const po = typeof row.poNo === 'string' ? row.poNo.trim() : String(row.poNo ?? '');
-            return `PENDING::${normalizeJobNo(row.jobNo)}::${po}`;
+            return `PENDING::${normalizeJobNo(row.jobNo)}::${po}::${factory}`;
         }
-        return `${wo}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+        return `${wo}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}::${factory}`;
     };
 
     try {
@@ -233,12 +244,12 @@ export const uploadAOWDataFromFile = async (
                     styleReqRowLookup.set(key, srRow.id);
                 }
 
-                // Scoped by workOrderNo + jobNo + (month OR PO), matching
-                // buildWOKey exactly. For pending rows (workOrderNo "N/A",
-                // originally "0"), month is unreliable/also "0" — PO (stored
-                // as lotNo) is what actually distinguishes them, so it's
-                // used here instead of month to avoid two different pending
-                // POs for the same job colliding on the same DB record.
+                // Scoped by workOrderNo + jobNo + (month OR PO) + factoryName,
+                // matching buildWOKey exactly. factoryName is included because
+                // the same WO/PO/color/composition can legitimately be split
+                // across multiple AOP factories (see buildWOKey comment) — 
+                // without it, re-uploads would match the wrong factory's WO
+                // and overwrite it instead of creating/updating its own.
                 const existingWO = await prisma.workOrder.findFirst({
                     where: isPendingWO(first)
                         ? {
@@ -246,12 +257,14 @@ export const uploadAOWDataFromFile = async (
                             workOrderNo,
                             jobNo: first.jobNo,
                             lotNo: first.poNo,
+                            factoryName: first.awoFactoryName,
                         }
                         : {
                             orderType: "aopOrder",
                             workOrderNo,
                             jobNo: first.jobNo,
                             month: first.month,
+                            factoryName: first.awoFactoryName,
                         },
                     orderBy: { id: 'desc' }
                 });
