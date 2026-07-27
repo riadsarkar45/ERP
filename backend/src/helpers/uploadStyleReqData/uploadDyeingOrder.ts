@@ -21,6 +21,7 @@ interface AWOUploadSummary {
     workOrdersCreated: number;
     workOrdersUpdated: number;
     compositionsInserted: number;
+    compositionsUnmatched: number;
     rowsSkipped: number;
     errors: { workOrderNo: string; message: string }[];
 }
@@ -44,6 +45,18 @@ const normalizeWONo = (woNo: string): string => {
     return woNo.trim().replace(/\s+/g, " ");
 };
 
+// Normalization for free-text fields used in cross-sheet matching (color,
+// composition, factory). MUST stay identical to the same helper in
+// uploadDyeingGreyDeliveryDataFromFile.ts or matches will drift.
+const normalizeMatchText = (value: string): string => {
+    if (!value || typeof value !== 'string') return '';
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .toLowerCase();
+};
+
 export const uploadDYEINGDataFromFile = async (
     rows: AWOParsedRow[],
     jobId: string
@@ -52,6 +65,7 @@ export const uploadDYEINGDataFromFile = async (
         workOrdersCreated: 0,
         workOrdersUpdated: 0,
         compositionsInserted: 0,
+        compositionsUnmatched: 0,
         rowsSkipped: 0,
         errors: [],
     };
@@ -93,8 +107,33 @@ export const uploadDYEINGDataFromFile = async (
     // in DB where-clauses directly — jobNo/month scoping here is what
     // stops two different jobs that happen to share a plain workOrderNo
     // (e.g. both have "3") from being merged into one work order.
-    const buildWOKey = (row: AWOParsedRow): string =>
-        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+    //
+    // SPECIAL CASE 1: workOrderNo can be "0" in the source sheet, meaning
+    // the work order hasn't actually been issued yet. Different POs under
+    // the same job with workOrderNo "0" are DIFFERENT pending line items
+    // and must not collapse into one WorkOrder — PO is used instead of
+    // month to keep them apart (month is unreliable/also "0" for these).
+    //
+    // SPECIAL CASE 2: the same WO/PO/color/composition can appear on
+    // multiple rows when a single work order's fabric was split across
+    // more than one dyeing factory. Without factory in the key these rows
+    // would collapse into ONE WorkOrder, the first row's factory would
+    // win, and the other factory's assignment + composition qty would be
+    // silently dropped/duplicated. Factory is included to keep them apart.
+    const isPendingWO = (row: AWOParsedRow): boolean => {
+        const wo = normalizeWONo(row.workOrderNo);
+        return wo === '0' || wo === '';
+    };
+
+    const buildWOKey = (row: AWOParsedRow): string => {
+        const wo = normalizeWONo(row.workOrderNo);
+        const factory = normalizeMatchText(row.dwoFactoryName);
+        if (isPendingWO(row)) {
+            const po = typeof row.poNo === 'string' ? row.poNo.trim() : String(row.poNo ?? '');
+            return `PENDING::${normalizeJobNo(row.jobNo)}::${po}::${factory}`;
+        }
+        return `${wo}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}::${factory}`;
+    };
 
     try {
         const groupedByWO = new Map<string, AWOParsedRow[]>();
@@ -125,17 +164,22 @@ export const uploadDYEINGDataFromFile = async (
             const first = woRows[0];
             if (!first) continue;
 
-            const workOrderNo = first.workOrderNo;
+            // "0" in the source sheet means the work order hasn't actually
+            // been issued yet (see isPendingWO). Store "N/A" instead of "0"
+            // so it reads unambiguously in the DB/UI as "not yet placed".
+            const workOrderNo = isPendingWO(first) ? "N/A" : first.workOrderNo;
             const normalizedJobNo = normalizeJobNo(first.jobNo);
 
             console.log(`🔍 Looking up StyleRequirement for jobNo: "${normalizedJobNo}" (from raw: "${first.jobNo}")`);
 
             try {
-                const styleReq = await prisma.styleRequirement.findUnique({
+                let styleReq = await prisma.styleRequirement.findUnique({
                     where: { jobNo: normalizedJobNo },
                     select: { id: true, jobNo: true },
                 });
 
+                // If the exact match fails, actually USE the fallback match
+                // instead of just logging it and skipping.
                 if (!styleReq) {
                     const fallbackSearch = await prisma.styleRequirement.findFirst({
                         where: {
@@ -148,12 +192,14 @@ export const uploadDYEINGDataFromFile = async (
                     });
 
                     if (fallbackSearch) {
-                        console.log(`⚠️ Fallback match found: DB has "${fallbackSearch.jobNo}" for input "${first.jobNo}"`);
+                        console.log(`⚠️ Using fallback match: DB has "${fallbackSearch.jobNo}" for input "${first.jobNo}"`);
+                        styleReq = fallbackSearch;
                     }
+                }
 
+                if (!styleReq) {
                     const msg = `StyleRequirement not found for jobNo "${normalizedJobNo}" (raw: "${first.jobNo}"). ` +
-                        `Upload Style Requirement sheet first. ` +
-                        `Available in DB: ${fallbackSearch ? `found "${fallbackSearch.jobNo}"` : 'no match'}`;
+                        `Upload Style Requirement sheet first.`;
                     summary.errors.push({ workOrderNo, message: msg });
                     console.error(`❌ ${msg}`);
                     emitProgress("dyeing-progress", {
@@ -177,15 +223,38 @@ export const uploadDYEINGDataFromFile = async (
                     continue;
                 }
 
-                // Scoped by workOrderNo + jobNo + month, matching buildWOKey,
-                // so a plain value like "3" only matches THIS job's work order.
+                // Pull the canonical StyleRequirementRow set for this job so
+                // DWO composition/color values can be resolved against them
+                // instead of trusted blind.
+                const styleReqRows = await prisma.styleRequirementRow.findMany({
+                    where: { styleRequirementId: styleReq.id },
+                    select: { id: true, color: true, composition: true },
+                });
+
+                const styleReqRowLookup = new Map<string, number>();
+                for (const srRow of styleReqRows) {
+                    const key = `${normalizeMatchText(srRow.color)}::${normalizeMatchText(srRow.composition)}`;
+                    styleReqRowLookup.set(key, srRow.id);
+                }
+
+                // Scoped by workOrderNo + jobNo + (month OR PO) + factoryName,
+                // matching buildWOKey exactly.
                 const existingWO = await prisma.workOrder.findFirst({
-                    where: {
-                        orderType: "dyeingOrder",
-                        workOrderNo,
-                        jobNo: first.jobNo,
-                        month: first.month,
-                    },
+                    where: isPendingWO(first)
+                        ? {
+                            orderType: "dyeingOrder",
+                            workOrderNo,
+                            jobNo: first.jobNo,
+                            lotNo: first.poNo,
+                            factoryName: first.dwoFactoryName,
+                        }
+                        : {
+                            orderType: "dyeingOrder",
+                            workOrderNo,
+                            jobNo: first.jobNo,
+                            month: first.month,
+                            factoryName: first.dwoFactoryName,
+                        },
                     orderBy: { id: 'desc' }
                 });
 
@@ -194,7 +263,7 @@ export const uploadDYEINGDataFromFile = async (
                 await prisma.$transaction(async (tx) => {
                     if (existingWO) {
                         await tx.workOrder.update({
-                            where: {id: existingWO.id },
+                            where: { id: existingWO.id },
                             data: {
                                 workOrderPlaceDate: first.workOrderDate || existingWO.workOrderPlaceDate,
                                 month: first.month || existingWO.month,
@@ -236,16 +305,32 @@ export const uploadDYEINGDataFromFile = async (
                         }
                     });
 
-                    const compositionsData = woRows.map(row => ({
-                        composition: row.composition || "N/A",
-                        unitePrice: Number(row.dwoPricePerKg) || 0,
-                        color: row.color || "N/A",
-                        additional: 0,
-                        orderQty: Number(row.dwoWorkOrderQty) || 0,
-                        workOrderQty: Number(row.dwoWorkOrderQty) || 0,
-                        workOrderId: workOrderId,
-                        orderType: "dyeingOrder"
-                    }));
+                    const compositionsData = woRows.map(row => {
+                        const matchKey = `${normalizeMatchText(row.color)}::${normalizeMatchText(row.composition)}`;
+                        const styleRequirementRowId = styleReqRowLookup.get(matchKey) ?? null;
+
+                        if (!styleRequirementRowId) {
+                            summary.compositionsUnmatched++;
+                            console.warn(
+                                `⚠️ No StyleRequirementRow match for jobNo "${normalizedJobNo}", ` +
+                                `color "${row.color}", composition "${row.composition}". ` +
+                                `Inserting composition WITHOUT styleRequirementRowId link — ` +
+                                `this will likely cause delivery matching to fail later.`
+                            );
+                        }
+
+                        return {
+                            composition: row.composition || "N/A",
+                            unitePrice: Number(row.dwoPricePerKg) || 0,
+                            color: row.color || "N/A",
+                            additional: 0,
+                            orderQty: Number(row.dwoWorkOrderQty) || 0,
+                            workOrderQty: Number(row.dwoWorkOrderQty) || 0,
+                            workOrderId: workOrderId,
+                            orderType: "dyeingOrder",
+                            styleRequirementRowId,
+                        };
+                    });
 
                     await tx.composition.createMany({ data: compositionsData });
                     summary.compositionsInserted += compositionsData.length;

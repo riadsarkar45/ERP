@@ -16,7 +16,7 @@ export interface YarnGreyRcvdParsedRow {
 
 interface YarnGreyRcvdUploadSummary {
     challansCreated: number;
-    existingChallansFound: number; // Renamed from challansUpdated for clarity
+    existingChallansFound: number;
     deliveriesCreated: number;
     rowsSkipped: number;
     errors: { challanNo: number; deliveryType: string; message: string }[];
@@ -32,6 +32,12 @@ interface DeliveryEvent {
     composition: string;
     toFactory: string;
     fromFactory: string;
+    // NEW: the knitting factory itself (always row.nameOfKnittingFactory,
+    // regardless of which of toFactory/fromFactory it landed in below) —
+    // matches WorkOrder.factoryName from the KWO upload, and is what
+    // disambiguates a job whose fabric was split across multiple knitting
+    // factories (same color/composition, different factory).
+    knittingFactory: string;
 }
 
 const emitProgress = (event: string, payload: Record<string, unknown>) => {
@@ -41,6 +47,22 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
         return;
     }
     io.emit(event, payload);
+};
+
+// Same normalization used on the KWO upload side — MUST stay identical
+// between the two files or matches will drift again.
+const normalizeMatchText = (value: string): string => {
+    if (!value || typeof value !== 'string') return '';
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .toLowerCase();
+};
+
+const normalizeJobNo = (jobNo: string): string => {
+    if (!jobNo || typeof jobNo !== 'string') return '';
+    return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 };
 
 export const uploadYarnGreyRcvdDataFromFile = async (
@@ -77,6 +99,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
                 composition: row.composition,
                 toFactory: row.nameOfKnittingFactory,
                 fromFactory: "",
+                knittingFactory: row.nameOfKnittingFactory,
             });
         }
 
@@ -92,6 +115,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
                 composition: row.composition,
                 toFactory: "", // Received AT our store/factory
                 fromFactory: row.nameOfKnittingFactory, // FROM the knitting factory
+                knittingFactory: row.nameOfKnittingFactory,
             });
         }
 
@@ -107,6 +131,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
                 composition: row.composition,
                 toFactory: "", // Returned TO yarn store
                 fromFactory: row.nameOfKnittingFactory, // FROM the knitting factory
+                knittingFactory: row.nameOfKnittingFactory,
             });
         }
     }
@@ -119,20 +144,57 @@ export const uploadYarnGreyRcvdDataFromFile = async (
         if (!event) continue;
 
         try {
+            const normalizedJobNo = normalizeJobNo(event.jobNo);
+            const targetColor = normalizeMatchText(event.color);
+            const targetComposition = normalizeMatchText(event.composition);
+            const targetFactory = normalizeMatchText(event.knittingFactory);
+
             // ── 1. Resolve Composition ──
-            const composition = await prisma.composition.findFirst({
+            // CHANGED: pull ALL candidate compositions for this job/orderType
+            // (with their parent WorkOrder's factoryName), then match in JS
+            // using normalized text instead of exact Postgres string
+            // equality — and disambiguate by factory when a job's fabric
+            // was split across multiple knitting factories with identical
+            // color/composition (see KWO upload fix).
+            const candidateCompositions = await prisma.composition.findMany({
                 where: {
                     orderType: "knittingOrder",
-                    color: event.color,
-                    composition: event.composition,
-                    workOrder: { jobNo: event.jobNo },
+                    workOrder: { jobNo: event.jobNo, orderType: "knittingOrder" },
                 },
-                select: { id: true, workOrderId: true },
+                select: {
+                    id: true,
+                    workOrderId: true,
+                    color: true,
+                    composition: true,
+                    workOrder: { select: { factoryName: true } },
+                },
             });
 
+            const colorCompMatches = candidateCompositions.filter(c =>
+                normalizeMatchText(c.color) === targetColor &&
+                normalizeMatchText(c.composition) === targetComposition
+            );
+
+            let composition = colorCompMatches.length <= 1
+                ? colorCompMatches[0]
+                : colorCompMatches.find(c => normalizeMatchText(c.workOrder?.factoryName || '') === targetFactory);
+
             if (!composition) {
-                const msg = `No matching Composition found for jobNo "${event.jobNo}", color "${event.color}", composition "${event.composition}".`;
+                const availablePairs = candidateCompositions
+                    .map(c => `color="${c.color}" composition="${c.composition}" factory="${c.workOrder?.factoryName ?? ''}"`)
+                    .join(' | ');
+
+                const ambiguityNote = colorCompMatches.length > 1
+                    ? ` This job has ${colorCompMatches.length} compositions with matching color/composition across different factories, ` +
+                      `but none has factoryName matching delivery row's knitting factory "${event.knittingFactory}" — check for a factory name spelling mismatch between the KWO and Delivery sheets.`
+                    : '';
+
+                const msg = `No matching Composition found for jobNo "${event.jobNo}" ` +
+                    `(normalized: "${normalizedJobNo}"), color "${event.color}", composition "${event.composition}", ` +
+                    `factory "${event.knittingFactory}".${ambiguityNote} ` +
+                    `Available compositions for this job: ${availablePairs || 'NONE — upload the KWO sheet first'}.`;
                 summary.errors.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, message: msg });
+                console.error(`❌ ${msg}`);
                 emitProgress("yarn-grey-rcvd-progress", {
                     jobId, phase: "error", current: i + 1, total: events.length,
                     challanNo: event.challanNo, message: msg,

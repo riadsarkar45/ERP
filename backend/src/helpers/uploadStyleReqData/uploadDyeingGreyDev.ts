@@ -9,7 +9,7 @@ export interface DyeingGreyDeliveryParsedRow {
     composition: string;
     greyDeliveryQty: number;
     greyReceivedQty: number;
-    finishReceivedQty: number; // ✅ ADDED
+    finishReceivedQty: number;
     dyeingFactoryName: string;
     toFactory: string;
     fromFactory: string;
@@ -17,7 +17,7 @@ export interface DyeingGreyDeliveryParsedRow {
 
 interface DyeingGreyDeliveryUploadSummary {
     challansCreated: number;
-    existingChallansFound: number; // Renamed from challansUpdated for clarity
+    existingChallansFound: number;
     deliveriesCreated: number;
     rowsSkipped: number;
     errors: { challanNo: number; deliveryType: string; message: string }[];
@@ -33,6 +33,12 @@ interface DeliveryEvent {
     composition: string;
     toFactory: string;
     fromFactory: string;
+    // NEW: the dyeing factory itself (always row.dyeingFactoryName,
+    // regardless of which of toFactory/fromFactory it landed in below) —
+    // matches WorkOrder.factoryName from the DWO upload, and is what
+    // disambiguates a job whose fabric was split across multiple dyeing
+    // factories (same color/composition, different factory).
+    dyeingFactory: string;
 }
 
 const emitProgress = (event: string, payload: Record<string, unknown>) => {
@@ -42,6 +48,22 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
         return;
     }
     io.emit(event, payload);
+};
+
+// Same normalization used on the DWO upload side — MUST stay identical
+// between the two files or matches will drift again.
+const normalizeMatchText = (value: string): string => {
+    if (!value || typeof value !== 'string') return '';
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .toLowerCase();
+};
+
+const normalizeJobNo = (jobNo: string): string => {
+    if (!jobNo || typeof jobNo !== 'string') return '';
+    return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 };
 
 export const uploadDyeingGreyDeliveryDataFromFile = async (
@@ -83,6 +105,7 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: dyeingFactory,
                 fromFactory: sourceFactory,
+                dyeingFactory: row.dyeingFactoryName,
             });
         }
 
@@ -98,10 +121,11 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: receivingFactory,
                 fromFactory: dyeingFactory,
+                dyeingFactory: row.dyeingFactoryName,
             });
         }
 
-        // 3. FINISH RECEIVED (Finished fabric received back) ✅ ADDED
+        // 3. FINISH RECEIVED (Finished fabric received back)
         if (row.finishReceivedQty > 0) {
             events.push({
                 challanDate: row.challanDate,
@@ -113,6 +137,7 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
                 composition: row.composition,
                 toFactory: receivingFactory,
                 fromFactory: dyeingFactory, // Or finishing factory if different
+                dyeingFactory: row.dyeingFactoryName,
             });
         }
     }
@@ -125,23 +150,60 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
         if (!event) continue;
 
         try {
+            const normalizedJobNo = normalizeJobNo(event.jobNo);
+            const targetColor = normalizeMatchText(event.color);
+            const targetComposition = normalizeMatchText(event.composition);
+            const targetFactory = normalizeMatchText(event.dyeingFactory);
+
             // ── 1. Resolve Composition ──
-            const composition = await prisma.composition.findFirst({
+            // CHANGED: pull ALL candidate compositions for this job/orderType
+            // (with their parent WorkOrder's factoryName), then match in JS
+            // using normalized text instead of exact Postgres string
+            // equality — and disambiguate by factory when a job's fabric
+            // was split across multiple dyeing factories with identical
+            // color/composition (see DWO upload fix).
+            const candidateCompositions = await prisma.composition.findMany({
                 where: {
                     orderType: "dyeingOrder",
-                    color: event.color,
-                    composition: event.composition,
                     workOrder: {
                         jobNo: event.jobNo,
                         orderType: "dyeingOrder",
-                    }
+                    },
                 },
-                select: { id: true, workOrderId: true },
+                select: {
+                    id: true,
+                    workOrderId: true,
+                    color: true,
+                    composition: true,
+                    workOrder: { select: { factoryName: true } },
+                },
             });
 
+            const colorCompMatches = candidateCompositions.filter(c =>
+                normalizeMatchText(c.color) === targetColor &&
+                normalizeMatchText(c.composition) === targetComposition
+            );
+
+            let composition = colorCompMatches.length <= 1
+                ? colorCompMatches[0]
+                : colorCompMatches.find(c => normalizeMatchText(c.workOrder?.factoryName || '') === targetFactory);
+
             if (!composition) {
-                const msg = `No matching Composition found for jobNo "${event.jobNo}", color "${event.color}", composition "${event.composition}".`;
+                const availablePairs = candidateCompositions
+                    .map(c => `color="${c.color}" composition="${c.composition}" factory="${c.workOrder?.factoryName ?? ''}"`)
+                    .join(' | ');
+
+                const ambiguityNote = colorCompMatches.length > 1
+                    ? ` This job has ${colorCompMatches.length} compositions with matching color/composition across different factories, ` +
+                      `but none has factoryName matching delivery row's dyeing factory "${event.dyeingFactory}" — check for a factory name spelling mismatch between the DWO and Delivery sheets.`
+                    : '';
+
+                const msg = `No matching Composition found for jobNo "${event.jobNo}" ` +
+                    `(normalized: "${normalizedJobNo}"), color "${event.color}", composition "${event.composition}", ` +
+                    `factory "${event.dyeingFactory}".${ambiguityNote} ` +
+                    `Available compositions for this job: ${availablePairs || 'NONE — upload the DWO sheet first'}.`;
                 summary.errors.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, message: msg });
+                console.error(`❌ ${msg}`);
                 emitProgress("dyeing-grey-delivery-progress", {
                     jobId, phase: "error", current: i + 1, total: events.length,
                     challanNo: event.challanNo, message: msg,
