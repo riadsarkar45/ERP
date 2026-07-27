@@ -61,17 +61,17 @@ model yarnDyeingJobs {
 // }
 
 model Composition {
-  id           Int          @id @default(autoincrement())
-  composition  String
-  unitePrice   Float
-  color        String
-  additional   Int          @default(0)
-  orderQty     Int
-  workOrderQty Int
-  workOrder    WorkOrder    @relation(fields: [workOrderId], references: [id])
-  workOrderId  Int
-  deliveries   deliveries[]
-  orderType    String       @default("null")
+  id                    Int                  @id @default(autoincrement())
+  composition           String
+  unitePrice            Float
+  color                 String
+  additional            Int                  @default(0)
+  orderQty              Int
+  workOrderQty          Float
+  workOrder             WorkOrder            @relation(fields: [workOrderId], references: [id])
+  workOrderId           Int
+  deliveries            deliveries[]
+  orderType             String               @default("null")
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
   challans              Challan[]
