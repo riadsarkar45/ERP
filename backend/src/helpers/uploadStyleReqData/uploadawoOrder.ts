@@ -21,7 +21,7 @@ interface AWOUploadSummary {
     workOrdersCreated: number;
     workOrdersUpdated: number;
     compositionsInserted: number;
-    compositionsUnmatched: number; // NEW: compositions inserted without a StyleRequirementRow match
+    compositionsUnmatched: number;
     rowsSkipped: number;
     errors: { workOrderNo: string; message: string }[];
 }
@@ -45,10 +45,10 @@ const normalizeWONo = (woNo: string): string => {
     return woNo.trim().replace(/\s+/g, " ");
 };
 
-// NEW: normalization for free-text fields used in cross-sheet matching
-// (color, composition). Collapses whitespace, strips invisible/full-width
-// artifacts Excel sometimes introduces, and lowercases for comparison only —
-// the ORIGINAL casing is still what gets stored/displayed.
+// Normalization for free-text fields used in cross-sheet matching (color,
+// composition). Collapses whitespace, strips invisible/full-width artifacts
+// Excel sometimes introduces, and lowercases for comparison only — the
+// ORIGINAL casing is still what gets stored/displayed.
 const normalizeMatchText = (value: string): string => {
     if (!value || typeof value !== 'string') return '';
     return value
@@ -106,8 +106,28 @@ export const uploadAOWDataFromFile = async (
     // in DB where-clauses directly — jobNo/month scoping here is what
     // stops two different jobs that happen to share a plain workOrderNo
     // (e.g. both have "3") from being merged into one work order.
-    const buildWOKey = (row: AWOParsedRow): string =>
-        `${normalizeWONo(row.workOrderNo)}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+    //
+    // SPECIAL CASE: workOrderNo/month are often "0" in the source sheet —
+    // this means the real work order hasn't been placed yet against a
+    // factory. Rows can still legitimately be grouped together (same
+    // pattern as real WOs: one WO, multiple composition/color lines) but
+    // ONLY when they share the same PO — different POs under the same
+    // jobNo with workOrderNo "0" are DIFFERENT pending line items and must
+    // NOT collapse into one WorkOrder record. Using PO instead of month
+    // here is what keeps them apart.
+    const isPendingWO = (row: AWOParsedRow): boolean => {
+        const wo = normalizeWONo(row.workOrderNo);
+        return wo === '0' || wo === '';
+    };
+
+    const buildWOKey = (row: AWOParsedRow): string => {
+        const wo = normalizeWONo(row.workOrderNo);
+        if (isPendingWO(row)) {
+            const po = typeof row.poNo === 'string' ? row.poNo.trim() : String(row.poNo ?? '');
+            return `PENDING::${normalizeJobNo(row.jobNo)}::${po}`;
+        }
+        return `${wo}::${normalizeJobNo(row.jobNo)}::${row.month.trim()}`;
+    };
 
     try {
         const groupedByWO = new Map<string, AWOParsedRow[]>();
@@ -138,7 +158,11 @@ export const uploadAOWDataFromFile = async (
             const first = woRows[0];
             if (!first) continue;
 
-            const workOrderNo = first.workOrderNo;
+            // "0" in the source sheet means the work order hasn't actually
+            // been issued yet (see isPendingWO). Store "N/A" instead of "0"
+            // so it reads unambiguously in the DB/UI as "not yet placed"
+            // rather than looking like a real (if unusual) WO number.
+            const workOrderNo = isPendingWO(first) ? "N/A" : first.workOrderNo;
             const normalizedJobNo = normalizeJobNo(first.jobNo);
 
             console.log(`🔍 Looking up StyleRequirement for jobNo: "${normalizedJobNo}" (from raw: "${first.jobNo}")`);
@@ -149,9 +173,9 @@ export const uploadAOWDataFromFile = async (
                     select: { id: true, jobNo: true },
                 });
 
-                // CHANGED: if the exact match fails, actually USE the fallback
-                // match instead of just logging it and skipping. This is what
-                // was silently dropping whole work orders before.
+                // If the exact match fails, actually USE the fallback match
+                // instead of just logging it and skipping. This is what was
+                // silently dropping whole work orders before.
                 if (!styleReq) {
                     const fallbackSearch = await prisma.styleRequirement.findFirst({
                         where: {
@@ -195,10 +219,9 @@ export const uploadAOWDataFromFile = async (
                     continue;
                 }
 
-                // NEW: pull the canonical StyleRequirementRow set for this job so
-                // AWO composition/color values can be resolved against them instead
-                // of trusted blind. ASSUMPTION: StyleRequirementRow has
-                // { id, styleRequirementId, color, composition } — adjust field names if different.
+                // Pull the canonical StyleRequirementRow set for this job so
+                // AWO composition/color values can be resolved against them
+                // instead of trusted blind.
                 const styleReqRows = await prisma.styleRequirementRow.findMany({
                     where: { styleRequirementId: styleReq.id },
                     select: { id: true, color: true, composition: true },
@@ -210,15 +233,26 @@ export const uploadAOWDataFromFile = async (
                     styleReqRowLookup.set(key, srRow.id);
                 }
 
-                // Scoped by workOrderNo + jobNo + month, matching buildWOKey,
-                // so a plain value like "3" only matches THIS job's work order.
+                // Scoped by workOrderNo + jobNo + (month OR PO), matching
+                // buildWOKey exactly. For pending rows (workOrderNo "N/A",
+                // originally "0"), month is unreliable/also "0" — PO (stored
+                // as lotNo) is what actually distinguishes them, so it's
+                // used here instead of month to avoid two different pending
+                // POs for the same job colliding on the same DB record.
                 const existingWO = await prisma.workOrder.findFirst({
-                    where: {
-                        orderType: "aopOrder",
-                        workOrderNo,
-                        jobNo: first.jobNo,
-                        month: first.month,
-                    },
+                    where: isPendingWO(first)
+                        ? {
+                            orderType: "aopOrder",
+                            workOrderNo,
+                            jobNo: first.jobNo,
+                            lotNo: first.poNo,
+                        }
+                        : {
+                            orderType: "aopOrder",
+                            workOrderNo,
+                            jobNo: first.jobNo,
+                            month: first.month,
+                        },
                     orderBy: { id: 'desc' }
                 });
 
@@ -292,7 +326,7 @@ export const uploadAOWDataFromFile = async (
                             workOrderQty: Number(row.awoWorkOrderQty) || 0,
                             workOrderId: workOrderId,
                             orderType: "aopOrder",
-                            styleRequirementRowId, // NEW: FK link, null if unmatched
+                            styleRequirementRowId,
                         };
                     });
 
