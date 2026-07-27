@@ -21,6 +21,7 @@ interface AWOUploadSummary {
     workOrdersCreated: number;
     workOrdersUpdated: number;
     compositionsInserted: number;
+    compositionsUnmatched: number; // NEW: compositions inserted without a StyleRequirementRow match
     rowsSkipped: number;
     errors: { workOrderNo: string; message: string }[];
 }
@@ -44,6 +45,19 @@ const normalizeWONo = (woNo: string): string => {
     return woNo.trim().replace(/\s+/g, " ");
 };
 
+// NEW: normalization for free-text fields used in cross-sheet matching
+// (color, composition). Collapses whitespace, strips invisible/full-width
+// artifacts Excel sometimes introduces, and lowercases for comparison only —
+// the ORIGINAL casing is still what gets stored/displayed.
+const normalizeMatchText = (value: string): string => {
+    if (!value || typeof value !== 'string') return '';
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width chars
+        .toLowerCase();
+};
+
 export const uploadAOWDataFromFile = async (
     rows: AWOParsedRow[],
     jobId: string
@@ -52,6 +66,7 @@ export const uploadAOWDataFromFile = async (
         workOrdersCreated: 0,
         workOrdersUpdated: 0,
         compositionsInserted: 0,
+        compositionsUnmatched: 0,
         rowsSkipped: 0,
         errors: [],
     };
@@ -129,11 +144,14 @@ export const uploadAOWDataFromFile = async (
             console.log(`🔍 Looking up StyleRequirement for jobNo: "${normalizedJobNo}" (from raw: "${first.jobNo}")`);
 
             try {
-                const styleReq = await prisma.styleRequirement.findUnique({
+                let styleReq = await prisma.styleRequirement.findUnique({
                     where: { jobNo: normalizedJobNo },
                     select: { id: true, jobNo: true },
                 });
 
+                // CHANGED: if the exact match fails, actually USE the fallback
+                // match instead of just logging it and skipping. This is what
+                // was silently dropping whole work orders before.
                 if (!styleReq) {
                     const fallbackSearch = await prisma.styleRequirement.findFirst({
                         where: {
@@ -146,12 +164,14 @@ export const uploadAOWDataFromFile = async (
                     });
 
                     if (fallbackSearch) {
-                        console.log(`⚠️ Fallback match found: DB has "${fallbackSearch.jobNo}" for input "${first.jobNo}"`);
+                        console.log(`⚠️ Using fallback match: DB has "${fallbackSearch.jobNo}" for input "${first.jobNo}"`);
+                        styleReq = fallbackSearch;
                     }
+                }
 
+                if (!styleReq) {
                     const msg = `StyleRequirement not found for jobNo "${normalizedJobNo}" (raw: "${first.jobNo}"). ` +
-                        `Upload Style Requirement sheet first. ` +
-                        `Available in DB: ${fallbackSearch ? `found "${fallbackSearch.jobNo}"` : 'no match'}`;
+                        `Upload Style Requirement sheet first.`;
                     summary.errors.push({ workOrderNo, message: msg });
                     console.error(`❌ ${msg}`);
                     emitProgress("awo-progress", {
@@ -173,6 +193,21 @@ export const uploadAOWDataFromFile = async (
                         jobId, phase: "error", current: i + 1, total: totalWOs, workOrderNo, message: msg
                     });
                     continue;
+                }
+
+                // NEW: pull the canonical StyleRequirementRow set for this job so
+                // AWO composition/color values can be resolved against them instead
+                // of trusted blind. ASSUMPTION: StyleRequirementRow has
+                // { id, styleRequirementId, color, composition } — adjust field names if different.
+                const styleReqRows = await prisma.styleRequirementRow.findMany({
+                    where: { styleRequirementId: styleReq.id },
+                    select: { id: true, color: true, composition: true },
+                });
+
+                const styleReqRowLookup = new Map<string, number>();
+                for (const srRow of styleReqRows) {
+                    const key = `${normalizeMatchText(srRow.color)}::${normalizeMatchText(srRow.composition)}`;
+                    styleReqRowLookup.set(key, srRow.id);
                 }
 
                 // Scoped by workOrderNo + jobNo + month, matching buildWOKey,
@@ -234,16 +269,32 @@ export const uploadAOWDataFromFile = async (
                         }
                     });
 
-                    const compositionsData = woRows.map(row => ({
-                        composition: row.composition || "N/A",
-                        unitePrice: Number(row.awoPricePerKg) || 0,
-                        color: row.color || "N/A",
-                        additional: 0,
-                        orderQty: Number(row.awoWorkOrderQty) || 0,
-                        workOrderQty: Number(row.awoWorkOrderQty) || 0,
-                        workOrderId: workOrderId,
-                        orderType: "aopOrder"
-                    }));
+                    const compositionsData = woRows.map(row => {
+                        const matchKey = `${normalizeMatchText(row.color)}::${normalizeMatchText(row.composition)}`;
+                        const styleRequirementRowId = styleReqRowLookup.get(matchKey) ?? null;
+
+                        if (!styleRequirementRowId) {
+                            summary.compositionsUnmatched++;
+                            console.warn(
+                                `⚠️ No StyleRequirementRow match for jobNo "${normalizedJobNo}", ` +
+                                `color "${row.color}", composition "${row.composition}". ` +
+                                `Inserting composition WITHOUT styleRequirementRowId link — ` +
+                                `this will likely cause delivery matching to fail later.`
+                            );
+                        }
+
+                        return {
+                            composition: row.composition || "N/A",
+                            unitePrice: Number(row.awoPricePerKg) || 0,
+                            color: row.color || "N/A",
+                            additional: 0,
+                            orderQty: Number(row.awoWorkOrderQty) || 0,
+                            workOrderQty: Number(row.awoWorkOrderQty) || 0,
+                            workOrderId: workOrderId,
+                            orderType: "aopOrder",
+                            styleRequirementRowId, // NEW: FK link, null if unmatched
+                        };
+                    });
 
                     await tx.composition.createMany({ data: compositionsData });
                     summary.compositionsInserted += compositionsData.length;

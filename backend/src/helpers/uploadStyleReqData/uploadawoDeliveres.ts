@@ -22,7 +22,7 @@ export interface AOPDeliveryParsedRow {
 
 interface AOPDeliveryUploadSummary {
     challansCreated: number;
-    existingChallansFound: number; // Renamed from challansUpdated for clarity
+    existingChallansFound: number;
     deliveriesCreated: number;
     rowsSkipped: number;
     errors: { challanNo: number; deliveryType: string; message: string }[];
@@ -49,6 +49,23 @@ const emitProgress = (event: string, payload: Record<string, unknown>) => {
     io.emit(event, payload);
 };
 
+// NEW: same normalization used on the AWO side — MUST stay identical between
+// the two files or matches will drift again. Consider moving this to a
+// shared /utils/textNormalize.ts and importing it in both places.
+const normalizeMatchText = (value: string): string => {
+    if (!value || typeof value !== 'string') return '';
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .toLowerCase();
+};
+
+const normalizeJobNo = (jobNo: string): string => {
+    if (!jobNo || typeof jobNo !== 'string') return '';
+    return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+};
+
 export const uploadAopDeliveryDataFromFile = async (
     rows: AOPDeliveryParsedRow[],
     jobId: string
@@ -71,7 +88,6 @@ export const uploadAopDeliveryDataFromFile = async (
             continue;
         }
 
-        // 1. Sent For Aop
         if (row.deliveryForAop > 0) {
             events.push({
                 challanDate: row.challanDate,
@@ -86,7 +102,6 @@ export const uploadAopDeliveryDataFromFile = async (
             });
         }
 
-        // 2. Received From Aop
         if (row.afterAopFabricRcvd > 0) {
             events.push({
                 challanDate: row.challanDate,
@@ -101,7 +116,6 @@ export const uploadAopDeliveryDataFromFile = async (
             });
         }
 
-        // 3. AOP Finish Fabric Rcvd
         if (row.aopFinishFabricRcvd > 0) {
             events.push({
                 challanDate: row.challanDate,
@@ -131,7 +145,6 @@ export const uploadAopDeliveryDataFromFile = async (
         }
     }
 
-
     emitProgress("aop-delivery-progress", { jobId, phase: "starting", current: 0, total: events.length });
 
     for (let i = 0; i < events.length; i++) {
@@ -139,22 +152,45 @@ export const uploadAopDeliveryDataFromFile = async (
         if (!event) continue;
 
         try {
+            const normalizedJobNo = normalizeJobNo(event.jobNo);
+            const targetColor = normalizeMatchText(event.color);
+            const targetComposition = normalizeMatchText(event.composition);
+
             // ── 1. Resolve Composition ──
-            const composition = await prisma.composition.findFirst({
+            // CHANGED: pull ALL candidate compositions for this job/orderType,
+            // then match in JS using the same normalization as the AWO insert
+            // side, instead of relying on Postgres exact string equality.
+            // This is what was silently failing before on whitespace/case drift.
+            const candidateCompositions = await prisma.composition.findMany({
                 where: {
-                    color: event.color,
-                    composition: event.composition,
                     orderType: "aopOrder",
                     workOrder: {
                         jobNo: event.jobNo,
                         orderType: "aopOrder",
                     },
                 },
-                select: { id: true, workOrderId: true },
+                select: {
+                    id: true,
+                    workOrderId: true,
+                    color: true,
+                    composition: true,
+                    styleRequirementRowId: true, // NEW: prefer FK match when present
+                },
             });
 
+            let composition = candidateCompositions.find(c =>
+                normalizeMatchText(c.color) === targetColor &&
+                normalizeMatchText(c.composition) === targetComposition
+            );
+
             if (!composition) {
-                const msg = `No matching A.W.O Composition found for jobNo "${event.jobNo}", color "${event.color}", composition "${event.composition}". Upload the A.W.O sheet first.`;
+                const availablePairs = candidateCompositions
+                    .map(c => `color="${c.color}" composition="${c.composition}"`)
+                    .join(' | ');
+
+                const msg = `No matching A.W.O Composition found for jobNo "${event.jobNo}" ` +
+                    `(normalized: "${normalizedJobNo}"), color "${event.color}", composition "${event.composition}". ` +
+                    `Available compositions for this job: ${availablePairs || 'NONE — upload the A.W.O sheet first'}.`;
                 summary.errors.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, message: msg });
                 console.error(`❌ ${msg}`);
                 emitProgress("aop-delivery-progress", {
@@ -165,7 +201,6 @@ export const uploadAopDeliveryDataFromFile = async (
             }
 
             // ── 2. Find or Create Challan (NO UPSERT) ──
-            // This prevents accidental overwrites of existing challan data.
             let challan = await prisma.challan.findUnique({
                 where: {
                     challanNo_toFactory_fromFactory: {
@@ -202,12 +237,11 @@ export const uploadAopDeliveryDataFromFile = async (
                     yarnCompId: composition.id,
                     fromFactory: event.fromFactory,
                     toFactory: event.toFactory,
-                    challanId: challan.id, // 👈 Links to the found or newly created Challan
+                    challanId: challan.id,
                 },
             });
             summary.deliveriesCreated++;
 
-            // Batch progress emits
             if ((i + 1) % 25 === 0 || i === events.length - 1) {
                 emitProgress("aop-delivery-progress", {
                     jobId, phase: "inserting", current: i + 1, total: events.length,
