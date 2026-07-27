@@ -164,7 +164,7 @@ model deliveries {
   id           Int      @id @default(autoincrement())
   challanNo    Int
   deliveryDate DateTime
-  deliveryQty  Int
+  deliveryQty  Float
   deliveryType String // "Yarn Delivery", "Knitting Delivery", "Dyeing Delivery", "Sent For Aop", "Received From Aop", etc.
   yarnId       Int
   toFactory    String
