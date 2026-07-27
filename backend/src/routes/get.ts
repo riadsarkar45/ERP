@@ -11,7 +11,7 @@ import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
-import { partyViewData } from "../controllers/partyViewData/partyViewData";
+import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 import { challanMovement } from "../controllers/movements/challanMovement";
 
 const getRouters = express.Router();
@@ -38,9 +38,9 @@ getRouters.delete("/delete-delivery/:deliveryId", authenticate, authorize("SUPER
 
 getRouters.get("/glance-report", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), GlanceReport);
 
-getRouters.get("/party-view-report", partyViewData);
+getRouters.get("/party-view-report/:factoryName", partyViewData);
 
-// getRouters.get("/detail-party-report/:factoryName/:orderType");
+getRouters.get("/detail-party-report/:factoryName/:orderType", partyData);
 
 getRouters.get("/challan-movement/:orderType", challanMovement);
 
