@@ -460,6 +460,7 @@ interface DyeingGreyDeliveryColumnIndices {
     dyeingFactoryName: number;
     toFactory: number;
     fromFactory: number;
+    greyReturnFromFactory: number;
 }
 
 const buildDyeingGreyDeliveryColIndex = (headers: unknown[]): DyeingGreyDeliveryColumnIndices => ({
@@ -476,6 +477,7 @@ const buildDyeingGreyDeliveryColIndex = (headers: unknown[]): DyeingGreyDelivery
     
     dyeingFactoryName: findPartialCol(headers, "dyeing factory name"), // Matches "GREY DEL & RECVED FROM DYEING FACTORY NAME"
     toFactory: findPartialCol(headers, "finished fabric delivery"),    // Matches "FINISHED FABRIC DELIVERY FACTORY NAME"
+    greyReturnFromFactory: findPartialCol(headers, "grey return from dyeing"),
     fromFactory: findPartialCol(headers, "remarks"),                   // Remarks often contains "FROM [Factory Name]"
 });
 
@@ -491,18 +493,19 @@ const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDelivery
     dyeingFactoryName: asString(getCellValue(row, colIndex.dyeingFactoryName)),
     toFactory: asString(getCellValue(row, colIndex.toFactory)),
     fromFactory: asString(getCellValue(row, colIndex.fromFactory)),
+    greyReturnFromFactory: toNumber(getCellValue(row, colIndex.greyReturnFromFactory))
 });
 
 const isValidDyeingGreyDeliveryRow = (row: DyeingGreyDeliveryParsedRow): boolean => {
     // ✅ UPDATED: Now checks for finishReceivedQty as well
-    return !!(row.jobNo && (row.greyDeliveryQty > 0 || row.greyReceivedQty > 0 || row.finishReceivedQty > 0));
+    return !!(row.jobNo && (row.greyDeliveryQty > 0 || row.greyReceivedQty > 0 || row.finishReceivedQty > 0 || row.greyReturnFromFactory > 0));
 };
 
 
 async function processDyeingGreyDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: DyeingGreyDeliveryParsedRow[]; headerFound: boolean }> {
-    const DYEING_GREY_DELIVERY_KEYWORDS = ["challan no", "job no", "dyeing delivery", "dyeing received"];
+    const DYEING_GREY_DELIVERY_KEYWORDS = ["challan no", "job no", "dyeing delivery", "dyeing received", "grey return from dyeing"];
     const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
 

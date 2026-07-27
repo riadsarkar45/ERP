@@ -13,6 +13,7 @@ export interface DyeingGreyDeliveryParsedRow {
     dyeingFactoryName: string;
     toFactory: string;
     fromFactory: string;
+    greyReturnFromFactory: number;
 }
 
 interface DyeingGreyDeliveryUploadSummary {
@@ -100,6 +101,21 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
                 challanNo: row.challanNo,
                 deliveryQty: row.greyDeliveryQty,
                 deliveryType: "Grey Delivery",
+                jobNo: row.jobNo,
+                color: row.color,
+                composition: row.composition,
+                toFactory: dyeingFactory,
+                fromFactory: sourceFactory,
+                dyeingFactory: row.dyeingFactoryName,
+            });
+        }
+        // 1. GREY DELIVERY (Grey fabric sent to dyeing factory)
+        if (row.greyReturnFromFactory > 0) {
+            events.push({
+                challanDate: row.challanDate,
+                challanNo: row.challanNo,
+                deliveryQty: row.greyDeliveryQty,
+                deliveryType: "Grey Return",
                 jobNo: row.jobNo,
                 color: row.color,
                 composition: row.composition,
