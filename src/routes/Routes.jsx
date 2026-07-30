@@ -24,6 +24,7 @@ import PartyWiseView from "../dashboard/pages/partyWiseView/PartyWiseView";
 import Aop from "../dashboard/pages/movement/Aop";
 import Dyeing from "../dashboard/pages/movement/Dyeing";
 import Knitting from "../dashboard/pages/movement/Knitting";
+import GlanceReport from "../dashboard/pages/MIS/GlanceReport";
 
 const routers = createBrowserRouter([
     {
@@ -116,22 +117,27 @@ const routers = createBrowserRouter([
                         path: "party-wise-view",
                         element: (
                             <ProtectedRoute allowedRoles={["SUPER ADMIN", "ADMIN"]}>
-                                <PartyWiseView/>
+                                <PartyWiseView />
                             </ProtectedRoute>
                         )
                     },
                     {
                         path: "challan/aop",
-                        element: <Aop/>
+                        element: <Aop />
                     },
                     {
                         path: "challan/dyeing",
-                        element: <Dyeing/>
+                        element: <Dyeing />
                     },
                     {
                         path: "challan/knitting",
-                        element: <Knitting/>
+                        element: <Knitting />
                     },
+                    
+                    {
+                        path: "mis/glance",
+                        element: <GlanceReport />
+                    }
                 ]
             }
         ]

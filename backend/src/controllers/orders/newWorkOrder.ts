@@ -13,12 +13,12 @@ export const createNewJob = async (req: Request, res: Response) => {
             workOrderQty: string;
             orderQty: string;
             unitPrice: string;
-            yarnColors?: { color: string; qty: string }[];
+            yarnColors?: { color: string; qty: string; price: string }[];
         }[];
         orderType: string;
     };
 
-    console.log(req.body);
+    // console.log(req.body);
 
     try {
         // jobNo is the unique key on StyleRequirement — use that instead of styleNo,
@@ -57,7 +57,9 @@ export const createNewJob = async (req: Request, res: Response) => {
                             color,
                             orderQty: Number(orderQty),
                             workOrderQty: Number(workOrderQty),
-                            unitePrice: Number(unitPrice),
+                            // For yarnDyeingOrder, price lives per-color in yarnColors instead —
+                            // unitPrice is not sent from the frontend for that order type, so default to 0.
+                            unitePrice: unitPrice !== undefined ? Number(unitPrice) : 0,
                             orderType: orderType
                         }))
                     }
@@ -71,9 +73,10 @@ export const createNewJob = async (req: Request, res: Response) => {
 
         if (orderType === "yarnDyeingOrder") {
             const yarnRows = compositions.flatMap(({ composition, yarnColors }) =>
-                (yarnColors ?? []).map(({ color, qty }) => ({
+                (yarnColors ?? []).map(({ color, qty, price }) => ({
                     color,
                     qty: Number(qty),
+                    unitePrice: Number(price),
                     composition,
                     workOrderId: workOrder.id,
                 }))

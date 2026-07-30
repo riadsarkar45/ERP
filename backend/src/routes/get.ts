@@ -42,6 +42,10 @@ getRouters.get("/party-view-report/:factoryName", partyViewData);
 
 getRouters.get("/detail-party-report/:factoryName/:orderType", partyData);
 
+getRouters.get("/glance-report/:factoryName/:orderType", partyData);
+
+getRouters.get("/management-view", partyData);
+
 getRouters.get("/challan-movement/:orderType", challanMovement);
 
 getRouters.get("/work-order/:orderType/filter-options/:column", getFilterOptions);

@@ -50,6 +50,7 @@ model yarnDyeingJobs {
   createdAt   DateTime   @default(now())
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
   workOrderId Int?
+  unitePrice Float @default(0.0)
   // yarnDeliveries yarnDeliveries[]
 }
 

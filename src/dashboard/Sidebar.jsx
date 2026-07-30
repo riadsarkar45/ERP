@@ -20,8 +20,6 @@ const Sidebar = () => {
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const [isOrdersOpen, setIsOrdersOpen] = useState(false);
-    const [isMovementOpen, setIsMovementOpen] = useState(false);
     const isActive = (path) => location.pathname === path;
     const { user } = useContext(AuthContext)
     const orderSubItems = [
@@ -35,6 +33,25 @@ const Sidebar = () => {
         { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package },
         { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package },
     ];
+    const misSubItems = [
+        { path: "/dashboard/mis/glance", label: "At A Glance (Stock)", icon: FileText },
+        // { path: "/dashboard/mis/dyeing", label: "Dyeing", icon: FileText },
+        // { path: "/dashboard/mis/knitting", label: "Knitting", icon: FileText },
+    ];
+
+    // Each dropdown's open state is seeded from whether we've landed on one of
+    // its sub-routes, but after that the user's click is the only thing that
+    // controls it — no OR-ing with an "active" check that would keep forcing
+    // it back open every render.
+    const [isOrdersOpen, setIsOrdersOpen] = useState(
+        () => orderSubItems.some(item => item.path === location.pathname)
+    );
+    const [isMovementOpen, setIsMovementOpen] = useState(
+        () => movementSubItems.some(item => item.path === location.pathname)
+    );
+    const [isMisOpen, setIsMisOpen] = useState(
+        () => misSubItems.some(item => item.path === location.pathname)
+    );
 
     const navItems = [
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
@@ -42,11 +59,13 @@ const Sidebar = () => {
         { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
+        { path: "/dashboard/management-view", label: "Management View", icon: UserRoundPlus },
     ];
 
-    // Auto-open dropdown if current route is an order sub-route
+    // Auto-open dropdown if current route is an order/movement/mis sub-route
     const isOrdersActive = orderSubItems.some(item => isActive(item.path));
-    const isMovementActive = orderSubItems.some(item => isActive(item.path));
+    const isMovementActive = movementSubItems.some(item => isActive(item.path));
+    const isMisActive = misSubItems.some(item => isActive(item.path));
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -61,6 +80,7 @@ const Sidebar = () => {
         if (path.includes('cutting')) return { title: 'Daily Fabric Cutting Report' };
         if (path.includes('new-user')) return { title: 'Add New User' };
         if (path.includes('party-wise-view')) return { title: 'Manage Party Wise View' };
+        if (path.includes('management-view')) return { title: 'Manage Management View' };
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
@@ -77,10 +97,17 @@ const Sidebar = () => {
             '/dashboard/challan/knitting': { title: 'Knitting Movement', subtitle: 'Manage knitting challans' },
         };
 
+        const misRouteMap = {
+            '/dashboard/mis/glance': { title: 'MIS - AOP', subtitle: 'At A Glance' },
+            // '/dashboard/mis/dyeing': { title: 'MIS - Dyeing', subtitle: 'Dyeing MIS report' },
+            // '/dashboard/mis/knitting': { title: 'MIS - Knitting', subtitle: 'Knitting MIS report' },
+        };
+
         // Look up by the actual path, in either map
         return (
             routeMap[path] ||
             movementRouteMap[path] ||
+            misRouteMap[path] ||
             { title: 'Dashboard', subtitle: 'Welcome back, System Admin' }
         );
     };
@@ -152,7 +179,7 @@ const Sidebar = () => {
                         {/* Orders Dropdown */}
                         <li>
                             <button
-                                onClick={() => !isCollapsed && setIsOrdersOpen(!isOrdersOpen)}
+                                onClick={() => !isCollapsed && setIsOrdersOpen(prev => !prev)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
                                     } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
                                 title={isCollapsed ? 'Orders' : ''}
@@ -162,14 +189,14 @@ const Sidebar = () => {
                                     {!isCollapsed && <span className="font-medium text-sm">Orders</span>}
                                 </div>
                                 {!isCollapsed && (
-                                    (isOrdersOpen || isOrdersActive)
+                                    isOrdersOpen
                                         ? <ChevronDown size={16} />
                                         : <ChevronRight size={16} />
                                 )}
                             </button>
 
                             {/* Sub Items */}
-                            {(isOrdersOpen || isOrdersActive) && !isCollapsed && (
+                            {isOrdersOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {orderSubItems.map(item => (
                                         <li key={item.path}>
@@ -212,8 +239,8 @@ const Sidebar = () => {
                         {/* Movement Dropdown */}
                         <li>
                             <button
-                                onClick={() => !isCollapsed && setIsMovementOpen(!isMovementOpen)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                onClick={() => !isCollapsed && setIsMovementOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isMovementActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
                                     } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
                                 title={isCollapsed ? 'Movement' : ''}
                             >
@@ -222,16 +249,57 @@ const Sidebar = () => {
                                     {!isCollapsed && <span className="font-medium text-sm">Movement</span>}
                                 </div>
                                 {!isCollapsed && (
-                                    (isMovementOpen || isMovementActive)
+                                    isMovementOpen
                                         ? <ChevronDown size={16} />
                                         : <ChevronRight size={16} />
                                 )}
                             </button>
 
                             {/* Sub Items */}
-                            {(movementSubItems || isMovementOpen) && !isCollapsed && (
+                            {isMovementOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {movementSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+
+                        {/* MIS Dropdown */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsMisOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isMisActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'MIS' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <FileText size={20} className="shrink-0" />
+                                    {!isCollapsed && <span className="font-medium text-sm">MIS</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    isMisOpen
+                                        ? <ChevronDown size={16} />
+                                        : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {/* Sub Items */}
+                            {isMisOpen && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {misSubItems.map(item => (
                                         <li key={item.path}>
                                             <Link
                                                 to={item.path}

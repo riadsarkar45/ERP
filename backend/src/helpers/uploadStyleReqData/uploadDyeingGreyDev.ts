@@ -114,7 +114,7 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
             events.push({
                 challanDate: row.challanDate,
                 challanNo: row.challanNo,
-                deliveryQty: row.greyDeliveryQty,
+                deliveryQty: row.greyReturnFromFactory,
                 deliveryType: "Grey Return",
                 jobNo: row.jobNo,
                 color: row.color,

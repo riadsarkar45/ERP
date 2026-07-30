@@ -12,6 +12,8 @@ const defaultRow = () => ({
     color: '',
 });
 
+const defaultYarnColor = () => ({ color: "", qty: "", price: "" });
+
 const NewOrder = () => {
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
@@ -48,7 +50,7 @@ const NewOrder = () => {
             setRows(req.data.data[0]?.rows.map(row => ({
                 ...row,
                 workOrderQty: "",
-                yarnColors: [{ color: "", qty: "" }],
+                yarnColors: [defaultYarnColor()],
             })) || []);
             setFormData(prev => ({
                 ...prev,
@@ -66,7 +68,7 @@ const NewOrder = () => {
             if (value === "yarnDyeingOrder") {
                 setRows(prev => prev.map(row => ({
                     ...row,
-                    yarnColors: row.yarnColors ?? [{ color: "", qty: "" }],
+                    yarnColors: row.yarnColors ?? [defaultYarnColor()],
                 })));
             }
         }
@@ -90,7 +92,7 @@ const NewOrder = () => {
     const handleAddYarnColor = (rowIndex) => {
         setRows(prev => prev.map((row, i) =>
             i === rowIndex
-                ? { ...row, yarnColors: [...(row.yarnColors ?? [{ color: "", qty: "" }]), { color: "", qty: "" }] }
+                ? { ...row, yarnColors: [...(row.yarnColors ?? [defaultYarnColor()]), defaultYarnColor()] }
                 : row
         ));
     };
@@ -100,7 +102,7 @@ const NewOrder = () => {
             i === rowIndex
                 ? {
                     ...row,
-                    yarnColors: (row.yarnColors ?? [{ color: "", qty: "" }]).map((c, ci) =>
+                    yarnColors: (row.yarnColors ?? [defaultYarnColor()]).map((c, ci) =>
                         ci === colorIndex ? { ...c, [field]: value } : c
                     )
                 }
@@ -113,7 +115,7 @@ const NewOrder = () => {
             i === rowIndex
                 ? {
                     ...row,
-                    yarnColors: (row.yarnColors ?? [{ color: "", qty: "" }]).filter((_, ci) => ci !== colorIndex)
+                    yarnColors: (row.yarnColors ?? [defaultYarnColor()]).filter((_, ci) => ci !== colorIndex)
                 }
                 : row
         ));
@@ -136,8 +138,9 @@ const NewOrder = () => {
                     color: row.color,
                     orderQty: row.orderQty,
                     workOrderQty: row.workOrderQty,
-                    unitPrice: row.unitPrice,
-                    ...(orderType === "yarnDyeingOrder" && { yarnColors: row.yarnColors }),
+                    ...(orderType === "yarnDyeingOrder"
+                        ? { yarnColors: row.yarnColors } // each item: { color, qty, price }
+                        : { unitPrice: row.unitPrice }),
                 }))
             };
 
@@ -247,13 +250,17 @@ const NewOrder = () => {
                                         readOnly
                                         value={styleRow.orderQty}
                                     />
-                                    <Input
-                                        label={`Price Per Kg ${index + 1}`}
-                                        value={styleRow.unitPrice}
-                                        onChange={(e) => handleRowChange(index, "unitPrice", e.target.value)}
-                                        required
-                                        placeholder="Unit Price"
-                                    />
+
+                                    {
+                                        orderType === "yarnDyeingOrder" ? " " : <Input
+                                            label={`Price Per Kg ${index + 1}`}
+                                            value={styleRow.unitPrice}
+                                            onChange={(e) => handleRowChange(index, "unitPrice", e.target.value)}
+                                            required
+                                            placeholder="Unit Price"
+
+                                        />
+                                    }
                                     {
                                         orderType === "yarnDyeingOrder" ? " " : <Input
                                             label={`Work Order Qty ${index + 1}`}
@@ -275,7 +282,7 @@ const NewOrder = () => {
                                 {/* Yarn Color sub-rows — only for yarnDyeingOrder */}
                                 {orderType === "yarnDyeingOrder" && (
                                     <div className="ml-4 pl-4 border-l-2 border-blue-200 space-y-2">
-                                        {(styleRow.yarnColors ?? [{ color: "", qty: "" }]).map((yarnItem, ci) => (
+                                        {(styleRow.yarnColors ?? [defaultYarnColor()]).map((yarnItem, ci) => (
                                             <div key={ci} className="flex items-end gap-3">
                                                 <div className="w-48">
                                                     <Input
@@ -291,6 +298,15 @@ const NewOrder = () => {
                                                         placeholder="Qty"
                                                         value={yarnItem.qty}
                                                         onChange={(e) => handleYarnColorChange(index, ci, "qty", e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="w-36">
+                                                    <Input
+                                                        label={ci === 0 ? `Price Per Kg ${index + 1}` : ""}
+                                                        value={yarnItem.price}
+                                                        onChange={(e) => handleYarnColorChange(index, ci, "price", e.target.value)}
+                                                        required
+                                                        placeholder="Unit Price"
                                                     />
                                                 </div>
                                                 {(styleRow.yarnColors ?? []).length > 1 && (

@@ -71,6 +71,7 @@ export const partyData = async (req: Request, res: Response) => {
             ? { workOrders: { some: whereClause } }
             : {},
         orderBy: { id: "asc" },
+        // take: 20,
         select: {
             jobNo: true,
             id: true,

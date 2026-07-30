@@ -13,11 +13,6 @@ export const calculateYarnCompStat = (orders: any[]) => {
             workOrders: (order.workOrders || []).map((work: any) => ({
                 ...work,
                 compositions: (work.compositions || []).map((c: any) => {
-
-                    // ⚠️ Matches on c.color, then reads .color back off the match —
-                    // this always resolves to c.color. If "booking color" is meant to be
-                    // a different value from yarnDyeingJobs, match by composition only
-                    // and decide which field actually represents the booking color.
                     const bookingColor = work.yarnDyeingJobs?.find(
                         (ydj: any) => ydj.composition === c.composition && ydj.color === c.color
                     )?.color || c.color;
@@ -162,43 +157,108 @@ export const findDeliveryDetail = async (id: number) => {
 
 
 
-/**
- * Returns a breakdown of total delivered qty per deliveryType, per style,
- * per row. deliveryType is treated as fully dynamic — whatever strings
- * exist in the data become the keys, nothing is hardcoded.
- *
- * Output shape per style:
- *   {
- *     id, styleNo, ... (other style fields),
- *     deliveryBreakdown: [
- *       { rowId, color, composition, byDeliveryType: { "Yarn Delivery": 450, "Dyeing Delivery": 120 } },
- *       ...
- *     ]
- *   }
- */
-/**
- * Sums deliveryQty grouped by deliveryType, across ALL workOrders and
- * compositions for a style — no row/color matching involved at all.
- *
- * Output per style:
- *   { id, styleNo, ... other style fields, deliveryTotals: { "Yarn Delivery": 450, "Dyeing Delivery": 120 } }
- */
+// export const glanceReportManagement = (styles: any[]) => {
+//     return styles.map((s: any) => {
+//         const workOrders = s.workOrders ?? [];
+//         const deliveryTotals: Record<string, number> = {};
+
+//         workOrders.forEach((w: any) => {
+//             w.compositions?.forEach((c: any) => {
+//                 (c.deliveries ?? []).forEach((d: any) => {
+//                     const type = d.deliveryType?.trim().replace(/\s+/g, "") || "Unknown";
+//                     deliveryTotals[type] = (deliveryTotals[type] ?? 0) + (d.deliveryQty || 0);
+//                 });
+//             });
+//         });
+
+//         return { ...s, deliveryTotals };
+//     });
+// };
+
+export const getJobWiseGlanceTotals = (styles: any[]) => {
+    return styles.map((s: any) => {
+        let totalWorkOrderQty = 0;
+        let totalPayableAmount = 0;
+        const deliveryTotals: Record<string, number> = {};
+        let factoryName = "Unknown";
+
+        const workOrders = s.workOrders ?? [];
+        if (workOrders.length > 0) {
+            factoryName = workOrders[0].factoryName || "Unknown";
+        }
+
+        workOrders.forEach((w: any) => {
+            const compositions = w.compositions ?? [];
+            
+            compositions.forEach((c: any) => {
+                const qty = Number(c.workOrderQty) || 0;
+                const price = Number(c.unitePrice) || 0;
+                
+                // 1. Calculate Job-level Qty and Payable Amount
+                totalWorkOrderQty += qty;
+                totalPayableAmount += qty * price;
+
+                // 2. Aggregate Deliveries for this job
+                const deliveries = c.deliveries ?? [];
+                deliveries.forEach((d: any) => {
+                    const type = (d.deliveryType || "").trim().replace(/\s+/g, "") || "Unknown";
+                    const dQty = Number(d.deliveryQty) || 0;
+                    deliveryTotals[type] = (deliveryTotals[type] ?? 0) + dQty;
+                });
+            });
+        });
+
+        // Calculate weighted average unit price for display purposes
+        const averageUnitPrice = totalWorkOrderQty > 0 ? (totalPayableAmount / totalWorkOrderQty) : 0;
+
+        return {
+            jobNo: s.jobNo,
+            id: s.id,
+            factoryName,
+            totalWorkOrderQty,
+            averageUnitPrice,
+            totalPayableAmount,
+            deliveryTotals,
+        };
+    });
+};
+
 export const getDeliveryBreakdownByType = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
-        const deliveryTotals: Record<string, number> = {};
+        const deliveryTotals: Record<string, number[]> = {};
 
         workOrders.forEach((w: any) => {
             w.compositions?.forEach((c: any) => {
                 (c.deliveries ?? []).forEach((d: any) => {
-                    const type = d.deliveryType?.trim().replace(/\s+/g, "") || "Unknown";
-                    deliveryTotals[type] = (deliveryTotals[type] ?? 0) + (d.deliveryQty || 0);
+                    // Robust normalization: trim and remove ALL whitespace
+                    const rawType = d.deliveryType || "";
+                    const type = rawType.trim().replace(/\s+/g, "") || "Unknown";
+
+                    if (!deliveryTotals[type]) {
+                        deliveryTotals[type] = [];
+                    }
+                    deliveryTotals[type].push(Number(d.deliveryQty) || 0);
                 });
             });
         });
 
         return { ...s, deliveryTotals };
     });
+};
+
+// NEW: A dedicated helper to safely sum deliveries for a SPECIFIC composition
+export const getDeliverySum = (deliveries: any[], targetType: string): number => {
+    if (!Array.isArray(deliveries)) return 0;
+    const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "");
+    
+    return deliveries.reduce((acc, d) => {
+        const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "");
+        if (normalizedType === normalizedTarget) {
+            return acc + (Number(d.deliveryQty) || 0);
+        }
+        return acc;
+    }, 0);
 };
 
 /**

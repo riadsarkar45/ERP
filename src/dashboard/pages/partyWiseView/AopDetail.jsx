@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 
 const BORDER_COLOR = "#000000";
 
+// Base cell style: The <td> provides the outer 1px border.
 const cellStyle = {
-    // Use exactly 1px. Fractional pixels (like 0.8px) cause blurry/messy double borders in browsers.
     border: `1px solid ${BORDER_COLOR}`,
     padding: 0,
     verticalAlign: "top",
@@ -32,13 +32,6 @@ const normalizeToArray = (value) => {
     return [value];
 };
 
-// Sums a field that may come through as a single number, a numeric string,
-// or an array of either (same shapes normalizeToArray already handles for display).
-const sumValue = (value) => {
-    const list = normalizeToArray(value);
-    return list.reduce((acc, v) => acc + (Number(v) || 0), 0);
-};
-
 const formatNumber = (value) => {
     const num = Number(value) || 0;
     return num.toLocaleString("en-US");
@@ -49,10 +42,25 @@ const formatMoney = (value) => {
     return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// Convention: diff > 0 => excess (green, plain). diff <= 0 => short (red, parens).
-const renderShortExcess = (diff) => {
+const renderColoredShortExcess = (diff) => {
     const formatted = formatNumber(Math.abs(diff));
-    return diff > 0 ? formatted : `(${formatted})`;
+    return diff > 0
+        ? <span className='text-green-600 font-extrabold'>{formatted}</span>
+        : <span className='text-red-600 font-extrabold'>({formatted})</span>;
+};
+
+// Safely sums deliveries for a SPECIFIC composition, preventing cross-contamination
+const getDeliverySum = (deliveries, targetType) => {
+    if (!Array.isArray(deliveries)) return 0;
+    const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "");
+
+    return deliveries.reduce((acc, d) => {
+        const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "");
+        if (normalizedType === normalizedTarget) {
+            return acc + (Number(d.deliveryQty) || 0);
+        }
+        return acc;
+    }, 0);
 };
 
 const renderBreakdownCell = (items, renderItem, keyPrefix, center = false) => {
@@ -77,7 +85,7 @@ const renderBreakdownCell = (items, renderItem, keyPrefix, center = false) => {
                 style={{
                     padding: "10px 8px",
                     ...(center ? { display: "flex", alignItems: "center", justifyContent: "center" } : {}),
-                    // ONLY draw a line BETWEEN items.
+                    // PROPER BORDERS: Only draw a line BETWEEN items. 
                     // The last item relies on the parent <td>'s bottom border, preventing double borders.
                     borderBottom: isLastItem ? "none" : `1px solid ${BORDER_COLOR}`,
                 }}
@@ -89,8 +97,7 @@ const renderBreakdownCell = (items, renderItem, keyPrefix, center = false) => {
 };
 
 const AopDetail = ({ detailView }) => {
-    // Totals across every row currently in detailView. Computed unconditionally
-    // (before the early-return below) so hook order stays stable across renders.
+    // Calculate totals using the EXACT SAME per-composition logic as the rows
     const totals = useMemo(() => {
         const acc = {
             workOrderQty: 0,
@@ -98,34 +105,28 @@ const AopDetail = ({ detailView }) => {
             receivedFromAop: 0,
             aopFinishFabricRcvd: 0,
             returnFromAop: 0,
-            balance: 0,
             payableAmount: 0,
+            totalReceivedFromAop: 0,
         };
 
         (detailView || []).forEach((d) => {
             const factory = d.workOrders || [];
-            const deliveries = d.deliveryTotals || {};
-            const unitePriceArr = factory.flatMap((c) => c.compositions || []) || [];
+            const compositions = factory.flatMap((c) => c.compositions || []) || [];
 
-            unitePriceArr.forEach((up) => {
+            compositions.forEach((up) => {
+                console.log(up, "uppppppp checking");
                 acc.workOrderQty += Number(up.workOrderQty) || 0;
+                // acc.totalReceivedFromAop += Number(up.receivedFromAop) || 0
+                acc.sentForAop += getDeliverySum(up.deliveries, "SentForAop");
+                acc.receivedFromAop += getDeliverySum(up.deliveries, "ReceivedFromAop");
+                acc.aopFinishFabricRcvd += getDeliverySum(up.deliveries, "AOPFinishFabricRcvd");
+                acc.returnFromAop += getDeliverySum(up.deliveries, "ReturnFromAop");
+                acc.totalReceivedFromAop += getDeliverySum(up.deliveries, "ReceivedFromAop");
+
+                // const price = Number(up.unitePrice) || 0;
+                // // const qty = Number(totals.) || 0;
+                // acc.payableAmount  = qty;
             });
-
-            acc.sentForAop += sumValue(deliveries?.SentForAop);
-            acc.receivedFromAop += sumValue(deliveries?.ReceivedFromAop);
-            acc.aopFinishFabricRcvd += sumValue(deliveries?.AOPFinishFabricRcvd);
-            acc.returnFromAop += sumValue(deliveries?.ReturnFromAop);
-            acc.balance += sumValue(deliveries?.Balance);
-
-            if (deliveries?.PayableAmount !== undefined && deliveries?.PayableAmount !== null) {
-                acc.payableAmount += sumValue(deliveries.PayableAmount);
-            } else {
-                unitePriceArr.forEach((up) => {
-                    const price = Number(up.unitePrice) || 0;
-                    const qty = Number(up.workOrderQty) || 0;
-                    acc.payableAmount += price * qty;
-                });
-            }
         });
 
         return acc;
@@ -153,20 +154,13 @@ const AopDetail = ({ detailView }) => {
         );
     }
 
-    // Single SHORT & EXCESS total, aggregated the same way the per-row cell
-    // derives it (received from AOP vs finish fabric received) — this is the
-    // only diff column that actually exists in the body.
-    const shortExcessTotal = totals.receivedFromAop - totals.aopFinishFabricRcvd;
-
     return (
         <>
             <tbody>
-
                 {detailView.map((d, i) => {
                     const factory = d.workOrders || [];
-                    const deliveries = d.deliveryTotals || {};
-                    const comps = d.rows || [];
-                    const unitePrice = factory.flatMap((c) => c.compositions || []) || [];
+                    // This is the source of truth for row-level data
+                    const compositions = factory.flatMap((c) => c.compositions || []) || [];
 
                     return (
                         <tr key={i}>
@@ -177,49 +171,47 @@ const AopDetail = ({ detailView }) => {
                                 {renderBreakdownCell(d.jobNo, (jn) => jn, `job-${i}`, true)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(comps, (c) => c.composition, `comp-${i}`)}
+                                {renderBreakdownCell(compositions, (up, idx) => d.rows?.[idx]?.composition || "N/A", `comp-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => up.workOrderQty, `qty-${i}`)}
+                                {renderBreakdownCell(compositions, (up) => formatNumber(up.workOrderQty), `qty-${i}`)}
+                            </td>
+                            <td style={cellStyle}>
+                                {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "SentForAop")), `sent-${i}`)}
+                            </td>
+                            <td style={cellStyle}>
+                                {renderBreakdownCell(compositions, (up) => {
+                                    const AOP_sentForAop = getDeliverySum(up.deliveries, "SentForAop");
+                                    const AOP_workOrderQty = getDeliverySum(up.deliveries, "workOrderQty");
+                                    return renderColoredShortExcess(AOP_sentForAop - AOP_workOrderQty);
+                                }, `short-${i}`)}
+                            </td>
+                            <td style={cellStyle}>
+                                {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "ReturnFromAop")), `return-${i}`)}
+                            </td>
+                            <td style={cellStyle}>
+                                {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "ReceivedFromAop")), `received-${i}`)}
+                            </td>
+                            <td style={cellStyle}>
+                                {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "AOPFinishFabricRcvd")), `finish-${i}`)}
                             </td>
 
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.SentForAop, (v) => v, `sent-${i}`)}
-                            </td>
-
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReceivedFromAop, (v) => v, `received-${i}`)}
-                            </td>
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.AOPFinishFabricRcvd, (v) => v, `finish-${i}`)}
+                                {renderBreakdownCell(compositions, (up) => {
+                                    const receivedFromAop = getDeliverySum(up.deliveries, "ReceivedFromAop");
+                                    const AopSentForAop = getDeliverySum(up.deliveries, "SentForAop");
+                                    const AopReturnFromAop = getDeliverySum(up.deliveries, "ReturnFromAop");
+                                    return renderColoredShortExcess(receivedFromAop + AopReturnFromAop - AopSentForAop);
+                                }, `short-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `return-${i}`)}
-                            </td>
-
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, () => {
-                                    // Received-from-AOP vs finish-fabric-received is a delivery-level
-                                    // comparison, not per-composition — `up` has no AOPFinishFabricRcvd field.
-                                    const receivedFromAop = sumValue(deliveries?.ReceivedFromAop);
-                                    const aopFinishFabricRcvd = sumValue(deliveries?.AOPFinishFabricRcvd);
-                                    const diff = receivedFromAop - aopFinishFabricRcvd;
-
-                                    return diff > 0
-                                        ? <span className='text-green-600 font-extrabold'>{Math.abs(diff)}</span>
-                                        : <span className='text-red-600 font-extrabold'>({Math.abs(diff)})</span>;
-                                }, `short2-${i}`)}
+                                {renderBreakdownCell(compositions, (up) => formatMoney(up.unitePrice), `price-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => up.unitePrice, `price-${i}`)}
-                            </td>
-                            <td style={cellStyle}>
-
-                                {renderBreakdownCell(unitePrice, (up) => {
+                                {renderBreakdownCell(compositions, (up) => {
                                     const price = Number(up.unitePrice) || 0;
-                                    const qty = Number(up.workOrderQty) || 0;
-                                    const payable = deliveries?.PayableAmount ?? (price * qty);
-                                    return typeof payable === "number" ? payable.toFixed(2) : payable;
+                                    const receivedFromAop = getDeliverySum(up.deliveries, "ReceivedFromAop");
+                                    return formatMoney(price * receivedFromAop);
                                 }, `payable-${i}`)}
                             </td>
                         </tr>
@@ -229,44 +221,34 @@ const AopDetail = ({ detailView }) => {
 
             <tfoot>
                 <tr>
-                    {/* FACTORY NAME — total label */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>TOTAL</div>
-                    </td>
-                    {/* JOB NO. — not summable */}
+                    {/* 1. FACTORY NAME */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
+                    {/* 2. JOB NO. */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* COMPOSITION — not summable */}
+                    {/* 3. COMPOSITION */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* WORK ORDER QTY */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div>
-                    </td>
-                    {/* SENT FOR AOP */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.sentForAop)}</div>
-                    </td>
-                    {/* RECEIVED FROM AOP */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.receivedFromAop)}</div>
-                    </td>
-                    {/* AOP FINISH FABRIC RECEIVED */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.aopFinishFabricRcvd)}</div>
-                    </td>
-                    {/* FABRIC RETURN FROM AOP */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.returnFromAop)}</div>
-                    </td>
-                    {/* SHORT & EXCESS (received from AOP vs finish fabric received) */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcessTotal)}</div>
-                    </td>
-                    {/* PRICE PER KG — not summable */}
+                    {/* 4. WORK ORDER QTY */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div></td>
+                    {/* 5. SENT FOR AOP */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.sentForAop)}</div></td>
+                    {/* Del. Short & Excess */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.sentForAop - totals.workOrderQty)}</div></td>
+                    {/* 8. RETURN FROM AOP */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.returnFromAop)}</div></td>
+                    {/* 6. RECEIVE FROM AOP */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.receivedFromAop)}</div></td>
+                    {/* 7. FINISH RECEIVED FROM AOP */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.aopFinishFabricRcvd)}</div></td>
+                    {/* 9. SHORT & EXCESS */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.receivedFromAop + totals.returnFromAop - totals.sentForAop)}</div></td>
+                    {/* 10. PRICE PER KG */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount)}</div>
-                    </td>
+                    {/* 11. PAYABLE AMOUNT */}
+                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>
+                        {
+                            
+                        }
+                    </div></td>
                 </tr>
             </tfoot>
         </>
