@@ -13,12 +13,6 @@ const cellStyle = {
     verticalAlign: "top",
 };
 
-const mergedCellStyle = {
-    ...cellStyle,
-    verticalAlign: "middle",
-    textAlign: "center",
-};
-
 // Frozen/sticky header cell — stays pinned to the top of the scroll
 // container while the body scrolls underneath it, Excel-style.
 const thStickyStyle = {
@@ -43,11 +37,12 @@ const pageButtonStyle = (active) => ({
 });
 
 const tableHeader = [
+    { header: "", width: "40px", key: "select", noFilter: true }, // Checkbox column
     { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "Date", width: "10%", key: "challanDate" },
     { header: "Work Order", width: "9%", key: "workOrder" },
     { header: "Composition", width: "10%", key: "composition" },
-    { header: "Color", width: "10%", key: "color" }, // FIXED: was "composition" — collided with the Composition column's key
+    { header: "Color", width: "10%", key: "color" },
     { header: "To Factory", width: "9%", key: "toFactory" },
     { header: "From Factory", width: "9%", key: "fromFactory" },
     { header: "Sent For Aop", width: "10%", key: "sentForAop" },
@@ -66,8 +61,9 @@ const Aop = () => {
     const [openFilterKey, setOpenFilterKey] = useState(null);
     const [draftSelected, setDraftSelected] = useState(new Set());
     const [filterSearch, setFilterSearch] = useState("");
+    const [selectedRows, setSelectedRows] = useState(new Set()); // Track selected checkboxes
     const dropdownRef = useRef(null);
-    const [totalPages, setTotalPages] = useState({})
+    const [totalPages, setTotalPages] = useState(1);
 
     const { fetchData, loading } = useFetchData();
 
@@ -76,9 +72,9 @@ const Aop = () => {
             .then(data => {
                 if (data) setMovements(data.data);
                 console.log(data);
-                setTotalPages(data.pagination.totalPages);
+                setTotalPages(data.pagination?.totalPages || 1);
             });
-    }, [fetchData]);
+    }, [fetchData, page]); // Added 'page' to dependency array
 
     useEffect(() => {
         if (!openFilterKey) return;
@@ -90,7 +86,6 @@ const Aop = () => {
         document.addEventListener("mousedown", handleClick);
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
-
 
     // Flatten and PIVOT the data: 1 row per challan, with delivery types as columns
     const allRows = useMemo(() => {
@@ -150,6 +145,7 @@ const Aop = () => {
     const filterOptions = useMemo(() => {
         const opts = {};
         tableHeader.forEach((col) => {
+            if (col.noFilter) return; // Skip checkbox column
             const set = new Set();
             allRows.forEach((row) => set.add(String(row[col.key] ?? "")));
             opts[col.key] = Array.from(set).sort((a, b) =>
@@ -162,50 +158,13 @@ const Aop = () => {
     const filteredRows = useMemo(() => {
         return allRows.filter((row) =>
             tableHeader.every((col) => {
+                if (col.noFilter) return true;
                 const selected = filters[col.key];
                 if (!selected) return true;
                 return selected.has(String(row[col.key] ?? ""));
             })
         );
     }, [allRows, filters]);
-
-
-
-
-  
-
-    // Calculate rowSpan ONLY for movements (compositions), since each challan is now exactly 1 row
-    const rows = useMemo(() => {
-        const result = [];
-
-        for (let i = 0; i < filteredRows.length; i++) {
-            const row = filteredRows[i];
-
-            const isFirstOfMovement =
-                i === 0 || filteredRows[i - 1].mvId !== row.mvId;
-
-            let movementRowSpan = 1;
-
-            if (isFirstOfMovement) {
-                for (
-                    let j = i + 1;
-                    j < filteredRows.length &&
-                    filteredRows[j].mvId === row.mvId;
-                    j++
-                ) {
-                    movementRowSpan++;
-                }
-            }
-
-            result.push({
-                ...row,
-                isFirstOfMovement,
-                movementRowSpan,
-            });
-        }
-
-        return result;
-    }, [filteredRows]);
 
     const goToPage = (p) => {
         if (p < 1 || p > totalPages) return;
@@ -280,6 +239,31 @@ const Aop = () => {
                     <thead>
                         <tr>
                             {tableHeader.map((th) => {
+                                if (th.noFilter) {
+                                    return (
+                                        <th
+                                            key={th.key}
+                                            style={{
+                                                ...thStickyStyle,
+                                                width: th.width,
+                                                textAlign: "center",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey))}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedRows(new Set(filteredRows.map(r => r.rowKey)));
+                                                    } else {
+                                                        setSelectedRows(new Set());
+                                                    }
+                                                }}
+                                            />
+                                        </th>
+                                    );
+                                }
+
                                 const options = filterOptions[th.key] || [];
                                 const isActive = !!filters[th.key];
                                 const isOpen = openFilterKey === th.key;
@@ -389,24 +373,32 @@ const Aop = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((row) => (
+                        {filteredRows.map((row) => (
                             <tr key={row.rowKey}>
+                                <td style={{ ...cellStyle, textAlign: "center" }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedRows.has(row.rowKey)}
+                                        onChange={(e) => {
+                                            setSelectedRows((prev) => {
+                                                const next = new Set(prev);
+                                                if (e.target.checked) {
+                                                    next.add(row.rowKey);
+                                                } else {
+                                                    next.delete(row.rowKey);
+                                                }
+                                                return next;
+                                            });
+                                        }}
+                                    />
+                                </td>
                                 <td style={cellStyle}>{row.challanNo}</td>
                                 <td style={cellStyle}>{row.challanDate}</td>
-
-                                {row.isFirstOfMovement && (
-                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.workOrder}</td>
-                                )}
-                                {row.isFirstOfMovement && (
-                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.composition}</td>
-                                )}
-                                {row.isFirstOfMovement && (
-                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.color}</td>
-                                )}
-
+                                <td style={cellStyle}>{row.workOrder}</td>
+                                <td style={cellStyle}>{row.composition}</td>
+                                <td style={cellStyle}>{row.color}</td>
                                 <td style={cellStyle}>{row.toFactory}</td>
                                 <td style={cellStyle}>{row.fromFactory}</td>
-
                                 <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
                                 <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
                                 <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
@@ -416,7 +408,7 @@ const Aop = () => {
                                 <td style={cellStyle}>{row.paidBillingAmount}</td>
                             </tr>
                         ))}
-                        {rows.length === 0 && (
+                        {filteredRows.length === 0 && (
                             <tr>
                                 <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>
                                     No rows match the current filters.

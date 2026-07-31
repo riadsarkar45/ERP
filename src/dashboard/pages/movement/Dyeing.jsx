@@ -13,14 +13,6 @@ const cellStyle = {
     verticalAlign: "top",
 };
 
-// Used for cells that span multiple rows (work order, composition) so their
-// content sits centered within the merged block instead of pinned to the top.
-const mergedCellStyle = {
-    ...cellStyle,
-    verticalAlign: "middle",
-    textAlign: "center",
-};
-
 // Frozen/sticky header cell — stays pinned to the top of the scroll
 // container while the body scrolls underneath it, Excel-style.
 const thStickyStyle = {
@@ -30,8 +22,6 @@ const thStickyStyle = {
     zIndex: 10,
     background: "#f3f4f6",
 };
-
-const PAGE_SIZE = 10;
 
 const pageButtonStyle = (active) => ({
     border: "1px solid #999",
@@ -54,84 +44,79 @@ const DELIVERY_TYPE_MAP = {
     FinishReceived: "finishReceive",
 };
 
-// Column definitions, hoisted so identity is stable across renders (keeps
-// useMemo deps meaningful). `key` maps to the field name on a flattened row.
-// This list has exactly as many entries as the <td>s rendered per row below —
-// keep them in sync if you add/remove a column.
+// Column definitions. Added a "select" column at the start.
 const tableHeader = [
-    { header: "Challan No", width: "9%", key: "challanNo", merged: false },
-    { header: "Date", width: "10%", key: "challanDate", merged: false },
-    { header: "Work Order", width: "9%", key: "workOrder", merged: true },
-    { header: "Composition", width: "10%", key: "composition", merged: true },
-    { header: "To Factory", width: "9%", key: "toFactory", merged: false },
-    { header: "From Factory", width: "9%", key: "fromFactory", merged: false },
-    { header: "Grey Delivery", width: "10%", key: "greyDelivery", merged: false },
-    { header: "Grey Receive", width: "8%", key: "greyReceive", merged: false },
-    { header: "Grey Return", width: "8%", key: "greyReturn", merged: false },
-    { header: "Finish Receive", width: "8%", key: "finishReceive", merged: false },
-    { header: "Price Per KG", width: "9%", key: "unitePrice", merged: false },
-    { header: "Billing Amount", width: "9%", key: "billingAmount", merged: false },
-    { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount", merged: false },
-]
+    { header: "", width: "40px", key: "select", noFilter: true },
+    { header: "Challan No", width: "9%", key: "challanNo" },
+    { header: "Date", width: "10%", key: "challanDate" },
+    { header: "Work Order", width: "9%", key: "workOrder" },
+    { header: "Composition", width: "10%", key: "composition" },
+    { header: "To Factory", width: "9%", key: "toFactory" },
+    { header: "From Factory", width: "9%", key: "fromFactory" },
+    { header: "Grey Delivery", width: "10%", key: "greyDelivery" },
+    { header: "Grey Receive", width: "8%", key: "greyReceive" },
+    { header: "Grey Return", width: "8%", key: "greyReturn" },
+    { header: "Finish Receive", width: "8%", key: "finishReceive" },
+    { header: "Price Per KG", width: "9%", key: "unitePrice" },
+    { header: "Billing Amount", width: "9%", key: "billingAmount" },
+    { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount" },
+];
 
 const Dyeing = () => {
-    const [movements, setMovements] = useState([])
-    const [page, setPage] = useState(1)
-    // filters[key] = Set of allowed string values for that column. A column
-    // with no entry here means "no filter active, show everything".
-    const [filters, setFilters] = useState({})
-    const [openFilterKey, setOpenFilterKey] = useState(null)
-    const [draftSelected, setDraftSelected] = useState(new Set())
-    const [totalPages, setTotalPages] = useState({})
-
-    const [filterSearch, setFilterSearch] = useState("")
-    const dropdownRef = useRef(null)
-
+    const [movements, setMovements] = useState([]);
+    const [page, setPage] = useState(1);
+    const [filters, setFilters] = useState({});
+    const [openFilterKey, setOpenFilterKey] = useState(null);
+    const [draftSelected, setDraftSelected] = useState(new Set());
+    const [selectedRows, setSelectedRows] = useState(new Set()); // Track selected checkboxes
+    const [totalPages, setTotalPages] = useState(1);
+    const [filterSearch, setFilterSearch] = useState("");
+    
+    const dropdownRef = useRef(null);
     const { fetchData } = useFetchData();
+
     useEffect(() => {
         fetchData(`/api/challan-movement/dyeingOrder?page=${page}&limit=10`).then(data => {
             if (data) setMovements(data.data);
-            setTotalPages(data.pagination.totalPages);
-        })
-    }, [fetchData, page])
+            setTotalPages(data.pagination?.totalPages || 1);
+        });
+    }, [fetchData, page]); // Added 'page' to dependency array
 
     // Close an open filter dropdown when clicking outside it.
     useEffect(() => {
-        if (!openFilterKey) return
+        if (!openFilterKey) return;
         const handleClick = (e) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-                setOpenFilterKey(null)
+                setOpenFilterKey(null);
             }
-        }
-        document.addEventListener("mousedown", handleClick)
-        return () => document.removeEventListener("mousedown", handleClick)
-    }, [openFilterKey])
-
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [openFilterKey]);
 
     const allRows = useMemo(() => {
-        const flat = []
+        const flat = [];
         movements?.forEach((mv, mvIdx) => {
-            const mvId = mv?.id ?? mvIdx
-            const challans = mv?.challans || []
+            const mvId = mv?.id ?? mvIdx;
+            const challans = mv?.challans || [];
+            
             challans.forEach((ch) => {
                 const qtyByType = {
                     greyDelivery: 0,
                     greyReceive: 0,
                     greyReturn: 0,
                     finishReceive: 0,
-                }
-                    ; (ch?.deliveries || []).forEach((dv) => {
-                        const field = DELIVERY_TYPE_MAP[dv?.deliveryType]
-                        if (field) {
-                            qtyByType[field] += Number(dv?.totalQty) || 0
-                        }
-                    })
+                };
+                
+                (ch?.deliveries || []).forEach((dv) => {
+                    const field = DELIVERY_TYPE_MAP[dv?.deliveryType];
+                    if (field) {
+                        qtyByType[field] += Number(dv?.totalQty) || 0;
+                    }
+                });
 
-                const unitePrice = Number(mv.unitePrice) || 0
-                // Billing is computed off finished quantity delivered back;
-                // adjust here if your business logic bills against a
-                // different quantity (e.g. greyDelivery).
-                const billingAmount = qtyByType.finishReceive * unitePrice
+                const unitePrice = Number(mv.unitePrice) || 0;
+                const billingAmount = qtyByType.finishReceive * unitePrice;
 
                 flat.push({
                     rowKey: `${ch.id}`,
@@ -146,80 +131,38 @@ const Dyeing = () => {
                     ...qtyByType,
                     unitePrice,
                     billingAmount,
-                    // No separate "paid" field exists on the API payload shown;
-                    // wire this up to the real field once it's available.
                     paidBillingAmount: mv.paidBillingAmount ?? 0,
-                })
-            })
-        })
-        return flat
-    }, [movements])
+                });
+            });
+        });
+        return flat;
+    }, [movements]);
 
     // Unique values per column, for the filter dropdowns.
     const filterOptions = useMemo(() => {
-        const opts = {}
+        const opts = {};
         tableHeader.forEach((col) => {
-            const set = new Set()
-            allRows.forEach((row) => set.add(String(row[col.key] ?? "")))
+            if (col.noFilter) return; // Skip checkbox column
+            const set = new Set();
+            allRows.forEach((row) => set.add(String(row[col.key] ?? "")));
             opts[col.key] = Array.from(set).sort((a, b) =>
                 a.localeCompare(b, undefined, { numeric: true })
-            )
-        })
-        return opts
-    }, [allRows])
+            );
+        });
+        return opts;
+    }, [allRows]);
 
     // Rows that pass every active column filter.
     const filteredRows = useMemo(() => {
         return allRows.filter((row) =>
             tableHeader.every((col) => {
-                const selected = filters[col.key]
-                if (!selected) return true
-                return selected.has(String(row[col.key] ?? ""))
+                if (col.noFilter) return true;
+                const selected = filters[col.key];
+                if (!selected) return true;
+                return selected.has(String(row[col.key] ?? ""));
             })
-        )
-    }, [allRows, filters])
-
-    // Paginate by movement (not by challan row) so a page break never cuts
-    // a merged work-order/composition block in half. Movements fully
-    // filtered out simply don't appear here.
-
-
-
-
-
-    // Re-derive rowSpan grouping (by movement only now, since each row is
-    // already one challan) from whatever survived filtering + paging.
-    const rows = useMemo(() => {
-        const result = [];
-
-        for (let i = 0; i < filteredRows.length; i++) {
-            const row = filteredRows[i];
-
-            const isFirstOfMovement =
-                i === 0 || filteredRows[i - 1].mvId !== row.mvId;
-
-            let movementRowSpan = 1;
-
-            if (isFirstOfMovement) {
-                for (
-                    let j = i + 1;
-                    j < filteredRows.length &&
-                    filteredRows[j].mvId === row.mvId;
-                    j++
-                ) {
-                    movementRowSpan++;
-                }
-            }
-
-            result.push({
-                ...row,
-                isFirstOfMovement,
-                movementRowSpan,
-            });
-        }
-
-        return result;
-    }, [filteredRows]);
+        );
+    }, [allRows, filters]);
 
     const goToPage = (p) => {
         if (p < 1 || p > totalPages) return;
@@ -227,65 +170,64 @@ const Dyeing = () => {
     };
 
     const pageNumbers = useMemo(() => {
-        const nums = []
+        const nums = [];
         for (let p = 1; p <= totalPages; p++) {
             if (p === 1 || p === totalPages || Math.abs(p - page) <= 1) {
-                nums.push(p)
+                nums.push(p);
             } else if (nums[nums.length - 1] !== "...") {
-                nums.push("...")
+                nums.push("...");
             }
         }
-        return nums
-    }, [totalPages, page])
+        return nums;
+    }, [totalPages, page]);
 
     // --- filter dropdown handlers ---
     const openFilter = (key) => {
         if (openFilterKey === key) {
-            setOpenFilterKey(null)
-            return
+            setOpenFilterKey(null);
+            return;
         }
-        const options = filterOptions[key] || []
-        const current = filters[key]
-        setDraftSelected(current ? new Set(current) : new Set(options))
-        setFilterSearch("")
-        setOpenFilterKey(key)
-    }
+        const options = filterOptions[key] || [];
+        const current = filters[key];
+        setDraftSelected(current ? new Set(current) : new Set(options));
+        setFilterSearch("");
+        setOpenFilterKey(key);
+    };
 
     const toggleDraftValue = (val) => {
         setDraftSelected((prev) => {
-            const next = new Set(prev)
-            if (next.has(val)) next.delete(val)
-            else next.add(val)
-            return next
-        })
-    }
+            const next = new Set(prev);
+            if (next.has(val)) next.delete(val);
+            else next.add(val);
+            return next;
+        });
+    };
 
     const toggleSelectAllDraft = (options) => {
-        setDraftSelected((prev) => (prev.size === options.length ? new Set() : new Set(options)))
-    }
+        setDraftSelected((prev) => (prev.size === options.length ? new Set() : new Set(options)));
+    };
 
     const applyFilter = (key, options) => {
         setFilters((prev) => {
-            const next = { ...prev }
+            const next = { ...prev };
             if (draftSelected.size === options.length) {
-                // everything selected == no filter needed
-                delete next[key]
+                delete next[key];
             } else {
-                next[key] = new Set(draftSelected)
+                next[key] = new Set(draftSelected);
             }
-            return next
-        })
-        setOpenFilterKey(null)
-    }
+            return next;
+        });
+        setOpenFilterKey(null);
+    };
 
     const clearFilter = (key) => {
         setFilters((prev) => {
-            const next = { ...prev }
-            delete next[key]
-            return next
-        })
-        setOpenFilterKey(null)
-    }
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+        setOpenFilterKey(null);
+    };
 
     return (
         <div style={{ width: "100%" }}>
@@ -294,19 +236,42 @@ const Dyeing = () => {
                     <thead>
                         <tr>
                             {tableHeader.map((th) => {
-                                const options = filterOptions[th.key] || []
-                                const isActive = !!filters[th.key]
-                                const isOpen = openFilterKey === th.key
+                                if (th.noFilter) {
+                                    return (
+                                        <th
+                                            key={th.key}
+                                            style={{
+                                                ...thStickyStyle,
+                                                width: th.width,
+                                                textAlign: "center",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey))}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedRows(new Set(filteredRows.map(r => r.rowKey)));
+                                                    } else {
+                                                        setSelectedRows(new Set());
+                                                    }
+                                                }}
+                                            />
+                                        </th>
+                                    );
+                                }
+
+                                const options = filterOptions[th.key] || [];
+                                const isActive = !!filters[th.key];
+                                const isOpen = openFilterKey === th.key;
+                                
                                 return (
                                     <th
                                         key={th.key}
                                         style={{
                                             ...thStickyStyle,
                                             width: th.width,
-                                            // sticky needs its own containing block for the absolutely
-                                            // positioned filter dropdown below, hence position stays set
-                                            // via thStickyStyle rather than plain "relative" here.
-                                            overflow: "visible", // don't clip the absolutely-positioned filter dropdown below
+                                            overflow: "visible",
                                         }}
                                     >
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
@@ -349,7 +314,6 @@ const Dyeing = () => {
                                                     flexDirection: "column",
                                                 }}
                                             >
-                                                {/* fixed: search box */}
                                                 <div style={{ padding: 8, borderBottom: "1px solid #ddd", flexShrink: 0 }}>
                                                     <input
                                                         type="text"
@@ -368,7 +332,6 @@ const Dyeing = () => {
                                                     />
                                                 </div>
 
-                                                {/* scrollable: select all + option checkboxes */}
                                                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "6px 8px" }}>
                                                     <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: "bold", marginBottom: 6, cursor: "pointer" }}>
                                                         <input
@@ -392,7 +355,6 @@ const Dyeing = () => {
                                                         ))}
                                                 </div>
 
-                                                {/* fixed: Clear / Apply */}
                                                 <div style={{ display: "flex", justifyContent: "space-between", padding: 8, borderTop: "1px solid #ddd", flexShrink: 0 }}>
                                                     <button onClick={() => clearFilter(th.key)} style={{ ...pageButtonStyle(false), fontSize: "0.75rem" }}>
                                                         Clear
@@ -404,39 +366,46 @@ const Dyeing = () => {
                                             </div>
                                         )}
                                     </th>
-                                )
+                                );
                             })}
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((row) => (
+                        {filteredRows.map((row) => (
                             <tr key={row.rowKey}>
-                                {/* Challan No, Date, To/From Factory: one per challan (no rowspan needed now) */}
+                                <td style={{ ...cellStyle, textAlign: "center" }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedRows.has(row.rowKey)}
+                                        onChange={(e) => {
+                                            setSelectedRows((prev) => {
+                                                const next = new Set(prev);
+                                                if (e.target.checked) {
+                                                    next.add(row.rowKey);
+                                                } else {
+                                                    next.delete(row.rowKey);
+                                                }
+                                                return next;
+                                            });
+                                        }}
+                                    />
+                                </td>
                                 <td style={cellStyle}>{row.challanNo}</td>
                                 <td style={cellStyle}>{row.challanDate}</td>
-
-                                {/* Work Order, Composition: merged across all challans of the same movement */}
-                                {row.isFirstOfMovement && (
-                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.workOrder}</td>
-                                )}
-                                {row.isFirstOfMovement && (
-                                    <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.composition}</td>
-                                )}
-
+                                <td style={cellStyle}>{row.workOrder}</td>
+                                <td style={cellStyle}>{row.composition}</td>
                                 <td style={cellStyle}>{row.toFactory}</td>
                                 <td style={cellStyle}>{row.fromFactory}</td>
-
-                                <td style={cellStyle}>{row.greyDelivery}</td>
-                                <td style={cellStyle}>{row.greyReceive}</td>
-                                <td style={cellStyle}>{row.greyReturn}</td>
-                                <td style={cellStyle}>{row.finishReceive}</td>
-
+                                <td style={cellStyle}>{row.greyDelivery > 0 ? row.greyDelivery : "-"}</td>
+                                <td style={cellStyle}>{row.greyReceive > 0 ? row.greyReceive : "-"}</td>
+                                <td style={cellStyle}>{row.greyReturn > 0 ? row.greyReturn : "-"}</td>
+                                <td style={cellStyle}>{row.finishReceive > 0 ? row.finishReceive : "-"}</td>
                                 <td style={cellStyle}>{row.unitePrice}</td>
                                 <td style={cellStyle}>{row.billingAmount}</td>
                                 <td style={cellStyle}>{row.paidBillingAmount}</td>
                             </tr>
                         ))}
-                        {rows.length === 0 && (
+                        {filteredRows.length === 0 && (
                             <tr>
                                 <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>
                                     No rows match the current filters.
