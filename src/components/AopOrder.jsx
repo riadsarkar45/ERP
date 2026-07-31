@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isEdit, setJobId, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [getJobIndex, setJobIndex] = useState("");
     const [hoveredIndex, setHoveredIndex] = useState(null);
-    const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
+    // const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
 
     const hoverColorChange = (jobId) => {
         console.log(jobId, "job id");
@@ -111,14 +111,22 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                     const isHovered = hoveredIndex === jobIndex;
 
                     return (
-                        <tr 
-                            onClick={() => hoverColorChange(jobIndex)} 
-                            className={`${getJobIndex === jobIndex ? "bg-green-600 bg-opacity-15" : ""}`} 
+                        <tr
+                            onClick={() => hoverColorChange(jobIndex)}
+                            className={`${getJobIndex === jobIndex ? "bg-green-600 bg-opacity-15" : ""}`}
                             key={jobIndex}
                         >
                             <td style={stickyTd(0, isHovered)}>
                                 {workOrders?.map((wo, i) => (
-                                    <div key={i} className={innerItem}>{wo.factoryName || "-"}</div>
+                                    wo.factoryName === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-gray-500`}>-</div>
+                                    ) : (
+                                        <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : wo.factoryName}
+                                        </div>
+                                    )
                                 ))}
                             </td>
                             <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
@@ -160,10 +168,10 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((col, j) => (
-                                        <div 
-                                            onClick={() => handleEditRowData(col.id)} 
-                                            key={`${i}-${j}`} 
-                                            className={innerItem} 
+                                        <div
+                                            onClick={() => handleEditRowData(col.id)}
+                                            key={`${i}-${j}`}
+                                            className={innerItem}
                                             style={{ cursor: 'pointer' }}
                                         >
                                             {col.color || "-"}
@@ -172,37 +180,30 @@ const AopOrder = ({ orders, setJobId, handleEditRowData, FROZEN_COUNT, currentFr
                                 )}
                             </td>
 
-                            {/* ORDER QTY */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((ord, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {ord.orderQty || "-"}
-                                        </div>
-                                    ))
-                                )}
-                            </td>
+                            
 
                             {/* UNIT PRICE */}
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((unt, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {unt.unitePrice || "-"}
-                                        </div>
-                                    ))
-                                )}
+                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : unt.unitePrice || "-"}
+
+                                    </div>
+                                )))}
                             </td>
 
                             {/* WORK ORDER QTY */}
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((unt, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {unt.workOrderQty || "-"}
-                                        </div>
-                                    ))
-                                )}
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : wrk.workOrderQty || "-"}
+
+                                    </div>
+                                )))}
                             </td>
 
                             {/* SENT FOR AOP */}

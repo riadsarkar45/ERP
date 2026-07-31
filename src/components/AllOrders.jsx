@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { FunnelX, Loader, Loader2, Save } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
@@ -10,6 +10,7 @@ import AopOrder from "./AopOrder";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 import FilterDropdown from "../helpers/filtering/FilterDropdown";
 import useAxiosPrivate from "../hooks/UseAxiosPrivate";
+import Toast from "./Toast";
 
 export const FROZEN_COUNT = 7;
 
@@ -75,7 +76,7 @@ const AllOrders = ({ orderType }) => {
     const [limit] = useState(10);
     const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
 
-    const { handleRefresh, isUpdated } = InlineEdit();
+    const { handleInlineEdit, changedField: updatedFields, toastType, toastMessage, setShowToast, showToast, isInlineEditingLoading, handleOnChange, isEdit, isUpdated, handleEditedSubmit } = InlineEdit();
     const { fetchData, error, loading } = useFetchData();
     // Separate instance for filter-options requests — its own `loading` state
     // is intentionally NOT wired into the top-level full-page loader below,
@@ -96,7 +97,7 @@ const AllOrders = ({ orderType }) => {
                 { header: "MONTH", width: defaultWidths[5], inputName: "month" },
                 { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
                 { header: "COLOR", width: 200, inputName: "color" },
-                { header: "ORDER QTY", width: 110, inputName: "orderQty" },
+                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },
                 { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
                 { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
                 { header: "YARN DELIVERY", width: 140, inputName: "totalYarnDelivery" },
@@ -118,7 +119,7 @@ const AllOrders = ({ orderType }) => {
                 { header: "MONTH", width: defaultWidths[5], inputName: "month" },
                 { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
                 { header: "COLOR", width: 200, inputName: "bookingColor" },
-                { header: "ORDER QTY", width: 110, inputName: "orderQty" },
+                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },
                 { header: "DYEING WORK ORDER QTY", width: 180, inputName: "workOrderQty" },
                 { header: "GREY DELIVERY", width: 140, inputName: "greyReceived" },
                 { header: "DELIVERY SHORT & EXCESS", width: 180, inputName: "greyReceived" },
@@ -164,7 +165,7 @@ const AllOrders = ({ orderType }) => {
                 { header: "MONTH", width: defaultWidths[5], inputName: "month" },
                 { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
                 { header: "COLOR", width: 200, inputName: "color" },
-                { header: "ORDER QTY", width: 110, inputName: "orderQty" },
+                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },
                 { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
                 { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
                 { header: "SENT FOR AOP", width: 140, inputName: "totalYarnDelivery" },
@@ -232,6 +233,7 @@ const AllOrders = ({ orderType }) => {
                 if (res) {
                     setOrders(res.data ?? []);
                     if (res.pagination) setPagination(res.pagination);
+                    console.log(res.pagination);
                 }
             })
             .finally(() => {
@@ -322,6 +324,7 @@ const AllOrders = ({ orderType }) => {
         document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
     };
 
+    // handle deliveries
     const handleEditRowData = async (workOrderIds) => {
         setLoadingDeliveries(true);
         setIsEditing(true);
@@ -429,10 +432,33 @@ const AllOrders = ({ orderType }) => {
             setIsLoading(false);
         }
     };
-    console.log(challanIssue, "challan ISSUE");
+    const handleClearFilters = () => {
+        setFilters({});
+        setFilterOptions({});
+    };
     return (
         <div>
-            <button onClick={handleRefresh}>Refresh</button>
+            {
+                showToast && (
+                    <Toast
+                        message={toastMessage}
+                        type={toastType}
+                        onClose={() => setShowToast(false)}
+                        duration={3000}
+                    />
+                )
+            }
+            <div className="flex gap-2">
+                {
+                    isEdit.isEditing && <button onClick={() => handleEditedSubmit()} title="Save Changes" className="bg-blue-700 text-white rounded-md p-2 text-lg"><Save /></button>
+                }
+                {
+                    isInlineEditingLoading && <button title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg"><Loader /></button>
+                }
+                {
+                    Object.keys(filters).length > 0 && <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg"><FunnelX /></button>
+                }
+            </div>
             <div className="mb-5 p-2 rounded-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {(!orders || orders.length < 1) && !isRefetching && <div>No order found</div>}
                 {isRefetching && (
@@ -528,14 +554,31 @@ const AllOrders = ({ orderType }) => {
                             handleEditRowData={handleEditRowData}
                             FROZEN_COUNT={FROZEN_COUNT}
                             currentFrozenWidths={currentFrozenWidths}
+                            isEdit={isEdit}
+                            updatedFields={updatedFields}
+                            handleOnChange={handleOnChange}
+                            handleInlineEdit={handleInlineEdit}
                             currentFrozenLefts={currentFrozenLefts} />}
-                        {orderType === "dyeingOrder" && <DyeingOrder orders={orders} handleEditRowData={handleEditRowData} FROZEN_COUNT={FROZEN_COUNT} currentFrozenWidths={currentFrozenWidths} currentFrozenLefts={currentFrozenLefts} />}
+                        {orderType === "dyeingOrder" && <DyeingOrder
+                            orders={orders}
+                            handleEditRowData={handleEditRowData}
+                            updatedFields={updatedFields}
+                            isEdit={isEdit}
+                            handleOnChange={handleOnChange}
+                            handleInlineEdit={handleInlineEdit}
+                            FROZEN_COUNT={FROZEN_COUNT}
+                            currentFrozenWidths={currentFrozenWidths}
+                            currentFrozenLefts={currentFrozenLefts} />}
                         {orderType === "aopOrder" &&
                             <AopOrder orders={orders}
                                 handleEditRowData={handleEditRowData}
                                 setJobId={setJobId}
                                 FROZEN_COUNT={FROZEN_COUNT}
                                 currentFrozenWidths={currentFrozenWidths}
+                                updatedFields={updatedFields}
+                                handleOnChange={handleOnChange}
+                                isEdit={isEdit}
+                                handleInlineEdit={handleInlineEdit}
                                 currentFrozenLefts={currentFrozenLefts} />}
                     </table>
                 </div>

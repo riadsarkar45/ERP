@@ -2,9 +2,9 @@ import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
-const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFields, handleOnChange, isEdit,  FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
-    const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
+    // const { handleInlineEdit, updatedFields, handleOnChange, isEdit, } = InlineEdit();
 
     const innerItem = "border-b border-gray-300 px-3 py-2 last:border-b-0";
 
@@ -110,7 +110,7 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
             </span>
         );
     };
-
+    // onKeyDown={(e) => e.key === "Enter" && handleSubmit()
     return (
         <>
             <tbody>
@@ -128,7 +128,7 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
                                     ) : (
                                         <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
-                                                <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+                                                <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                             ) : wo.factoryName}
                                         </div>
                                     )
@@ -172,19 +172,14 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
                                 )))}
                             </td>
 
-                            {/* COL 8 — ORDER QTY */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((ord, j) => (<div key={`${i}-${j}`} className={innerItem}>{ord.orderQty || "-"}</div>)))}
-                            </td>
-
                             {/* COL 9 — UNIT PRICE */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
                                     <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
-                                        ) : unt.unitePrice || "-"} 
-                                        
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : unt.unitePrice || "-"}
+
                                     </div>
                                 )))}
                             </td>
@@ -193,9 +188,10 @@ const KnittingOrder = ({ orders, handleEditRowData, setJobId, FROZEN_COUNT, curr
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.rowId === wo.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={changedField.currentValue} onChange={(e) => handleOnChange(e)} onKeyDown={(e) => e.key === "Enter" && handleSubmit()} />
+                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                         ) : wrk.workOrderQty || "-"}
+                                        
                                     </div>
                                 )))}
                             </td>

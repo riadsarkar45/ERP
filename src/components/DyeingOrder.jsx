@@ -1,10 +1,8 @@
 import { useState, useMemo } from "react";
-import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
-    const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
 
     const innerItem = "border-b border-gray-300 last:border-b-0 w-full py-2 px-3";
 
@@ -115,7 +113,15 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                         <tr key={jobIndex}>
                             <td style={stickyTd(0, isHovered)}>
                                 {workOrders?.map((wo, i) => (
-                                    <div key={i} className={innerItem}>{wo.factoryName || "-"}</div>
+                                    wo.factoryName === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-gray-500`}>-</div>
+                                    ) : (
+                                        <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : wo.factoryName}
+                                        </div>
+                                    )
                                 ))}
                             </td>
                             <td
@@ -167,23 +173,14 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                             </td>
 
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((ord, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {ord.orderQty || "-"}
-                                        </div>
-                                    ))
-                                )}
-                            </td>
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : wrk.workOrderQty || "-"}
 
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((unt, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {unt.workOrderQty || "-"}
-                                        </div>
-                                    ))
-                                )}
+                                    </div>
+                                )))}
                             </td>
 
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
@@ -253,13 +250,14 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                             </td>
 
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.unitePrice || "-"}
-                                        </div>
-                                    ))
-                                )}
+                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : unt.unitePrice || "-"}
+
+                                    </div>
+                                )))}
                             </td>
 
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
@@ -286,7 +284,7 @@ const DyeingOrder = ({ orders, handleEditRowData, FROZEN_COUNT, currentFrozenWid
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
-                                            
+
                                             {(wrk.yarnDeliveriesWithColor?.GreyReceived || 0) * (wrk.unitePrice || 0).toFixed(2) || "-"}
                                         </div>
                                     ))
