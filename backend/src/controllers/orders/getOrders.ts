@@ -102,7 +102,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
             prisma.jobs.findMany({
                 where,
                 skip,
-                take: limit,
+                take: 150,
                 select: {
                     jobNo: true,
                     createdAt: true,
@@ -159,11 +159,13 @@ export const getAllOrders = async (req: Request, res: Response) => {
             return res.status(404).json({ type: "error", message: "No factory order details found" });
         }
 
-        const comptStats = calculateYarnCompStat(jobsResult);
+        // 🔥 UNCOMMENTED: this was disabled before, so delivery stats (including
+        // Grey Return) were never being computed and attached to the response at all.
+        const statsResult = calculateYarnCompStat(jobsResult);
 
         return res.status(200).json({
             type: "success",
-            data: comptStats,
+            data: statsResult,
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         });
     } catch (e) {
@@ -204,8 +206,6 @@ export const getFilterOptions = async (req: Request, res: Response) => {
             }
 
             case "styleRequirement": {
-                // buyerName is a required (non-nullable) String — `{ not: null }` is
-                // invalid Prisma syntax on a column that can never be null. No guard needed.
                 const rows = await prisma.styleRequirement.findMany({
                     where: {
                         workOrders: { some: workOrderWhere },

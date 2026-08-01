@@ -109,7 +109,7 @@ export const uploadYarnGreyRcvdDataFromFile = async (
                 challanDate: row.challanDate,
                 challanNo: row.challanNo,
                 deliveryQty: row.greyReceivedQty,
-                deliveryType: "Grey Received",
+                deliveryType: "Grey Fabric Received",
                 jobNo: row.jobNo,
                 color: row.color,
                 composition: row.composition,
