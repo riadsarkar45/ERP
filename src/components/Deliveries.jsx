@@ -214,7 +214,7 @@ const Deliveries = ({ deliveries, challanIssue, orderType, duplicateChallan, cha
                         />
                       </div>
 
-                      {(rowChangedField.deliveryType === "Grey Received" || rowChangedField.deliveryType === "Aop Grey Received") && (<div className="flex flex-col gap-1">
+                      {(rowChangedField.deliveryType === "Grey Received" && orderType === "dyeingOrder" && orderType === "aopOrder" || rowChangedField.deliveryType === "Aop Grey Received") && (<div className="flex flex-col gap-1">
                         <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
                         <input
                           onChange={(e) => handleEditOnChange(row.yarnId, e)}

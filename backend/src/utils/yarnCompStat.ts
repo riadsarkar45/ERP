@@ -19,18 +19,18 @@ export const calculateYarnCompStat = (orders: any[]) => {
 
                     const deliveries = c.deliveries || [];
 
-                    const totalYarnDelivery = sumByType(deliveries, "Yarn Delivery");
-                    const greyReceived = sumByType(deliveries, "Grey Received");
-                    const totalGreyDelivery = sumByType(deliveries, "Grey Delivery");
-                    const totalGreyReturnReceived = sumByType(deliveries, "Grey Return Received");
-                    const totalGreyReceivedFromDyeing = sumByType(deliveries, "Grey Received From Dyeing");
-                    const totalYarnReturn = sumByType(deliveries, "Yarn Return");
-                    const totalFinishFabricReceived = sumByType(deliveries, "Finish Received");
-                    const totalSentForCompacting = sumByType(deliveries, "Sent For Compacting");
-                    const totalReceivedFromCompacting = sumByType(deliveries, "Received From Compacting");
-                    const totalSentForAop = sumByType(deliveries, "Sent for AOP");
-                    const totalReceivedForAop = sumByType(deliveries, "Received from AOP");
-                    const totalYarnDeliveryYarnDye = sumByType(deliveries, "Yarn Delivery For Yarn Dye");
+                    // const totalYarnDelivery = sumByType(deliveries, "Yarn Delivery");
+                    // const greyReceived = sumByType(deliveries, "Grey Received");
+                    // const totalGreyDelivery = sumByType(deliveries, "Grey Delivery");
+                    // const totalGreyReturnReceived = sumByType(deliveries, "Grey Return");
+                    // const totalGreyReceivedFromDyeing = sumByType(deliveries, "Grey Received From Dyeing");
+                    // const totalYarnReturn = sumByType(deliveries, "Yarn Return");
+                    // const totalFinishFabricReceived = sumByType(deliveries, "Finish Received");
+                    // const totalSentForCompacting = sumByType(deliveries, "Sent For Compacting");
+                    // const totalReceivedFromCompacting = sumByType(deliveries, "Received From Compacting");
+                    // const totalSentForAop = sumByType(deliveries, "Sent for AOP");
+                    // const totalReceivedForAop = sumByType(deliveries, "Received from AOP");
+                    // const totalYarnDeliveryYarnDye = sumByType(deliveries, "Yarn Delivery For Yarn Dye");
 
                     const deliveriesWithColor2 = deliveries.map((d: any) => ({
                         ...d,
@@ -50,18 +50,18 @@ export const calculateYarnCompStat = (orders: any[]) => {
                     return {
                         ...c,
                         yarnDeliveriesWithColor: YarnDeliveryWithColorDeliveryType,
-                        totalYarnDelivery,
-                        totalYarnReturn,
-                        greyReceived,
-                        totalGreyDelivery,
-                        totalGreyReceivedFromDyeing,
-                        totalGreyReturnReceived,
-                        totalFinishFabricReceived,
-                        totalSentForCompacting,
-                        totalReceivedFromCompacting,
-                        totalSentForAop,
-                        totalReceivedForAop,
-                        totalYarnDeliveryYarnDye
+                        // totalYarnDelivery,
+                        // totalYarnReturn,
+                        // greyReceived,
+                        // totalGreyDelivery,
+                        // totalGreyReceivedFromDyeing,
+                        // totalGreyReturnReceived,
+                        // totalFinishFabricReceived,
+                        // totalSentForCompacting,
+                        // totalReceivedFromCompacting,
+                        // totalSentForAop,
+                        // totalReceivedForAop,
+                        // totalYarnDeliveryYarnDye
                     };
                 })
             }))

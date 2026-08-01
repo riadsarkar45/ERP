@@ -92,6 +92,7 @@ export const updateJobs = async (req: Request, res: Response) => {
                     challanNoNum,
                     workOrderId,
                     toFactory,
+                    fromFactory,
                     checkYarnIfExist.id,
                     delivery.deliveryType
                 );
