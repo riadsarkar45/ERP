@@ -102,7 +102,8 @@ export const getAllOrders = async (req: Request, res: Response) => {
             prisma.jobs.findMany({
                 where,
                 skip,
-                take: 150,
+
+                take: limit,
                 select: {
                     jobNo: true,
                     createdAt: true,

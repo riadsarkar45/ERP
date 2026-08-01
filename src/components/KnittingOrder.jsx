@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
-const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFields, handleOnChange, isEdit,  FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFields, handleOnChange, isEdit, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
     // const { handleInlineEdit, updatedFields, handleOnChange, isEdit, } = InlineEdit();
 
@@ -72,7 +72,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
             totalYarnDelivery: 0,
             delShortExcess: 0,
             yarnReturn: 0,
-            yarnReceived: 0,
+            GreyFabricReceived: 0,
             rcvdShortExcess: 0,
             payableAmount: 0,
         };
@@ -84,7 +84,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                     const workOrderQty = Number(comp.workOrderQty) || 0;
                     const delivered = Number(comp.yarnDeliveriesWithColor?.YarnDelivery) || 0;
                     const returned = Number(comp.yarnDeliveriesWithColor?.YarnReturn) || 0;
-                    const received = Number(comp.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                    const received = Number(comp.yarnDeliveriesWithColor?.GreyFabricReceived) || 0;
                     const price = Number(comp.unitePrice) || 0;
 
                     acc.orderQty += orderQty;
@@ -92,7 +92,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                     acc.totalYarnDelivery += delivered;
                     acc.delShortExcess += workOrderQty - delivered;
                     acc.yarnReturn += returned;
-                    acc.yarnReceived += received;
+                    acc.GreyFabricReceived += received;
                     acc.rcvdShortExcess += received + returned - delivered;
                     acc.payableAmount += received * price;
                 });
@@ -172,17 +172,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                                 )))}
                             </td>
 
-                            {/* COL 9 — UNIT PRICE */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : unt.unitePrice || "-"}
 
-                                    </div>
-                                )))}
-                            </td>
 
                             {/* COL 10 — WORK ORDER QTY */}
                             <td style={plainTd(isHovered)}>
@@ -190,15 +180,15 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                                     <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : wrk.workOrderQty || "-"}
-                                        
+                                        ) : wrk.workOrderQty?.toFixed(2) || "-"}
+
                                     </div>
                                 )))}
                             </td>
 
                             {/* COL 11 — TOTAL YARN DELIVERY */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnDelivery || "-"}</div>)))}
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnDelivery?.toFixed(2) || "-"}</div>)))}
                             </td>
 
                             {/* COL 12 — DEL SHORT & EXCESS */}
@@ -210,7 +200,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                                     const exceeded = diff > 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
-                                            {exceeded ? `(${Math.abs(diff)})` : Math.abs(diff)}
+                                            {exceeded ? `(${Math.abs(diff?.toFixed(2))})` : Math.abs(diff?.toFixed(2))}
                                         </div>
                                     );
                                 }))}
@@ -218,34 +208,48 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
 
                             {/* COL 13 — YARN RETURN */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{wrk.yarnDeliveriesWithColor?.YarnReturn || "-"}</div>)))}
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{wrk.yarnDeliveriesWithColor?.YarnReturn?.toFixed(2) || "-"}</div>)))}
                             </td>
 
-                            {/* COL 14 — YARN RECEIVED */}
+                            {/* COL 14 — GREY RECEIVED */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnReceived || "-"}</div>)))}
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
+                                    <div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.GreyFabricReceived?.toFixed(2) || "-"}</div>
+                                )))}
                             </td>
-
                             {/* COL 15 — RCVD SHORT & EXCESS */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const grey = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                                    const grey = Number(wrk.yarnDeliveriesWithColor?.GreyFabricReceived) || 0;
                                     const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
                                     const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
                                     const diff2 = grey + ret - del;
                                     const exceed = diff2 < 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceed ? "red" : "green" }}>
-                                            {exceed ? `(${Math.abs(diff2)})` : diff2}
+                                            {exceed ? `(${Math.abs(diff2?.toFixed(2))})` : diff2?.toFixed(2)}
                                         </div>
                                     );
                                 }))}
                             </td>
+                            {/* COL 9 — UNIT PRICE */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : unt.unitePrice?.toFixed(2) || "-"}
+
+                                    </div>
+                                )))}
+                            </td>
+
+
 
                             {/* COL 16 — PAYABLE AMOUNT */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const received = Number(wrk.yarnDeliveriesWithColor?.YarnReceived) || 0;
+                                    const received = Number(wrk.yarnDeliveriesWithColor?.GreyFabricReceived) || 0;
                                     const price = Number(wrk.unitePrice) || 0;
                                     const total = received * price;
                                     return (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{total > 0 ? total.toFixed(2) : "-"}</div>);
@@ -254,7 +258,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
 
                             {/* COL 17 — PAID BILLING AMOUNT */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>PAID BILLING AMOUNT</div>)))}
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>-</div>)))}
                             </td>
 
                             {/* COL 18 — PENDING BILLING AMOUNT */}
@@ -289,31 +293,29 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                     <td style={footerPlainTd}><div className={innerItem}></div></td>
 
                     {/* COL 8 — ORDER QTY total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.orderQty)}</div></td>
+                    {/* <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.orderQty)}</div></td>                    */}
+
+                    {/* COL 10 — WORK ORDER QTY total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div></td>
+
+                    {/* COL 11 — TOTAL YARN DELIVERY total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div></td>
+                    {/* COL 12 — DEL SHORT & EXCESS total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(totals.delShortExcess?.toFixed(2))}</div></td>
+                    {/* COL 13 — YARN RETURN total */}
+                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div></td>
+
+                    {/* COL 14 — GREY RECEIVED total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div></td>
+
+                    {/* COL 15 — RCVD SHORT & EXCESS total */}
+                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(-totals.rcvdShortExcess?.toFixed(2)) /* exceed=red when negative, so flip sign for green/red parity with per-row logic */}</div></td>
 
                     {/* COL 9 — UNIT PRICE (not summable, blank) */}
                     <td style={footerPlainTd}><div className={innerItem}></div></td>
 
-                    {/* COL 10 — WORK ORDER QTY total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.workOrderQty)}</div></td>
-
-                    {/* COL 11 — TOTAL YARN DELIVERY total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.totalYarnDelivery)}</div></td>
-
-                    {/* COL 12 — DEL SHORT & EXCESS total */}
-                    {/* COL 12 — DEL SHORT & EXCESS total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(totals.delShortExcess)}</div></td>
-                    {/* COL 13 — YARN RETURN total */}
-                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.yarnReturn)}</div></td>
-
-                    {/* COL 14 — YARN RECEIVED total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.yarnReceived)}</div></td>
-
-                    {/* COL 15 — RCVD SHORT & EXCESS total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(-totals.rcvdShortExcess) /* exceed=red when negative, so flip sign for green/red parity with per-row logic */}</div></td>
-
                     {/* COL 16 — PAYABLE AMOUNT total */}
-                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.payableAmount) > 0 ? formatNumber(totals.payableAmount.toFixed(2)) : "-"}</div></td>
+                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.payableAmount.toFixed(2)) ?? "-"}</div></td>
 
                     {/* COL 17 — PAID BILLING AMOUNT (placeholder, blank) */}
                     <td style={footerPlainTd}><div className={innerItem}>-</div></td>

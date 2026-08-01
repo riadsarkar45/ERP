@@ -48,28 +48,36 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
     // ── TOTALS: flatten every composition across all orders/workOrders and sum the numeric fields ──
     const totals = useMemo(() => {
         const acc = {
-            orderQty: 0,
+            // orderQty: 0,
             workOrderQty: 0,
             sentForAop: 0,
             shortExcess: 0,
+            ReturnFromAop: 0,
             receivedFromAop: 0,
+            FinishFromAop: 0,
+            rcvdShortExcess: 0,
             payableAmount: 0,
         };
 
         (orders || []).forEach(job => {
             (job.workOrders || []).forEach(wo => {
                 (wo.compositions || []).forEach(comp => {
-                    const orderQty = Number(comp.orderQty) || 0;
+                    // const orderQty = Number(comp.orderQty) || 0;
                     const workOrderQty = Number(comp.workOrderQty) || 0;
                     const sentForAop = Number(comp.yarnDeliveriesWithColor?.SentForAop) || 0;
+                    const ReturnFromAop = Number(comp.yarnDeliveriesWithColor?.ReturnFromAop) || 0;
                     const receivedFromAop = Number(comp.yarnDeliveriesWithColor?.ReceivedFromAop) || 0;
+                    const FinishFromAop = Number(comp.yarnDeliveriesWithColor?.AOPFinishFabricRcvd) || 0;
                     const unitePrice = Number(comp.unitePrice) || 0;
 
-                    acc.orderQty += orderQty;
+                    // acc.orderQty += orderQty;
                     acc.workOrderQty += workOrderQty;
                     acc.sentForAop += sentForAop;
                     acc.shortExcess += sentForAop - workOrderQty;
+                    acc.ReturnFromAop += ReturnFromAop;
                     acc.receivedFromAop += receivedFromAop;
+                    acc.FinishFromAop += FinishFromAop;
+                    acc.rcvdShortExcess += ReturnFromAop + receivedFromAop - sentForAop;
                     acc.payableAmount += receivedFromAop * unitePrice;
                 });
             });
@@ -180,19 +188,9 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 )}
                             </td>
 
-                            
 
-                            {/* UNIT PRICE */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : unt.unitePrice || "-"}
 
-                                    </div>
-                                )))}
-                            </td>
+
 
                             {/* WORK ORDER QTY */}
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
@@ -200,7 +198,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                     <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : wrk.workOrderQty || "-"}
+                                        ) : wrk.workOrderQty?.toFixed(2) || "-"}
 
                                     </div>
                                 )))}
@@ -211,7 +209,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.yarnDeliveriesWithColor?.SentForAop || "-"}
+                                            {wrk.yarnDeliveriesWithColor?.SentForAop?.toFixed(2) || "-"}
                                         </div>
                                     ))
                                 )}
@@ -222,13 +220,23 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
                                         const diff = (wrk.yarnDeliveriesWithColor?.SentForAop || 0) - (wrk.workOrderQty || 0);
-                                        const exceeded = diff > 0;
+                                        const exceeded = diff?.toFixed(2) > 0;
                                         return (
                                             <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                                {exceeded ? diff : `(${Math.abs(diff)})`}
+                                                {exceeded ? diff : `(${Math.abs(diff?.toFixed(2))})`}
                                             </div>
                                         );
                                     })
+                                )}
+                            </td>
+                            {/* RETURN FROM AOP */}
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((wrk, j) => (
+                                        <div key={`${i}-${j}`} className={innerItem}>
+                                            {wrk.yarnDeliveriesWithColor?.ReturnFromAop?.toFixed(2) || "-"}
+                                        </div>
+                                    ))
                                 )}
                             </td>
 
@@ -237,10 +245,45 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.yarnDeliveriesWithColor?.ReceivedFromAop || "-"}
+                                            {wrk.yarnDeliveriesWithColor?.ReceivedFromAop?.toFixed(2) || "-"}
                                         </div>
                                     ))
                                 )}
+                            </td>
+                            {/* FINISH FROM AOP */}
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((wrk, j) => (
+                                        <div key={`${i}-${j}`} className={innerItem}>
+                                            {wrk.yarnDeliveriesWithColor?.AOPFinishFabricRcvd?.toFixed(2) || "-"}
+                                        </div>
+                                    ))
+                                )}
+                            </td>
+                            {/* DEL. SHORT & EXCESS */}
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((wrk, j) => {
+                                        const diff = (wrk.yarnDeliveriesWithColor?.ReturnFromAop + wrk.yarnDeliveriesWithColor?.ReceivedFromAop || 0) - (wrk.yarnDeliveriesWithColor?.SentForAop || 0);
+                                        const exceeded = diff?.toFixed(2) > 0;
+                                        return (
+                                            <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
+                                                {exceeded ? diff?.toFixed(2) : `(${Math.abs(diff?.toFixed(2))})`}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </td>
+                            {/* UNIT PRICE */}
+                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
+                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
+                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : unt.unitePrice?.toFixed(2) || "-"}
+
+                                    </div>
+                                )))}
                             </td>
 
                             {/* PAYABLE AMOUNT */}
@@ -248,7 +291,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
-                                            {(wrk.yarnDeliveriesWithColor?.ReceivedFromAop || 0) * (wrk.unitePrice || 0) || "-"}
+                                            {(wrk.yarnDeliveriesWithColor?.ReceivedFromAop?.toFixed(2) || 0) * (wrk.unitePrice?.toFixed(2) || 0) || "-"}
                                         </div>
                                     ))
                                 )}
@@ -264,21 +307,29 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                         TOTAL
                     </td>
                     {/* COLOR — not numeric, left blank */}
-                    <td style={footerTd}>-</td>
+                    <td style={footerTd}></td>
                     {/* ORDER QTY */}
-                    <td style={footerTd}>{totals.orderQty}</td>
-                    {/* UNIT PRICE — not meaningful to sum */}
-                    <td style={footerTd}>-</td>
+                    {/* <td style={footerTd}>{totals.orderQty}</td>                    */}
                     {/* WORK ORDER QTY */}
-                    <td style={footerTd}>{totals.workOrderQty}</td>
+                    <td style={footerTd}>{totals.workOrderQty.toFixed(2)}</td>
                     {/* SENT FOR AOP */}
-                    <td style={footerTd}>{totals.sentForAop}</td>
+                    <td style={footerTd}>{totals.sentForAop.toFixed(2)}</td>
+
                     {/* DEL. SHORT & EXCESS */}
                     <td style={{ ...footerTd, color: totals.shortExcess > 0 ? "red" : "green" }}>
-                        {totals.shortExcess > 0 ? totals.shortExcess : `(${Math.abs(totals.shortExcess)})`}
+                        {totals.shortExcess > 0 ? totals.shortExcess : `(${Math.abs(totals.shortExcess.toFixed(2))})`}
                     </td>
+                    {/* RETURN FROM AOP */}
+                    <td style={footerTd}>{totals.ReturnFromAop.toFixed(2)}</td>
                     {/* RECEIVED FROM AOP */}
-                    <td style={footerTd}>{totals.receivedFromAop}</td>
+                    <td style={footerTd}>{totals.receivedFromAop.toFixed(2)}</td>
+                    {/* FINISH FROM AOP */}
+                    <td style={footerTd}>{totals.FinishFromAop.toFixed(2)}</td>
+                    {/* DEL. SHORT & EXCESS */}
+                    <td style={{ ...footerTd, color: totals.rcvdShortExcess > 0 ? "red" : "green" }}>
+                        {totals.rcvdShortExcess > 0 ? totals.rcvdShortExcess : `(${Math.abs(totals.rcvdShortExcess.toFixed(3))})`}
+                    </td>
+                    <td style={footerTd}>-</td>
                     {/* PAYABLE AMOUNT */}
                     <td style={footerTd}>{totals.payableAmount.toFixed(2)}</td>
                 </tr>
