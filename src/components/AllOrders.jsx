@@ -232,6 +232,7 @@ const AllOrders = ({ orderType }) => {
             .then(res => {
                 if (res) {
                     setOrders(res.data ?? []);
+                    console.log(res.data, "orders data");
                     if (res.pagination) setPagination(res.pagination);
                     console.log(res.pagination);
                 }
@@ -338,6 +339,7 @@ const AllOrders = ({ orderType }) => {
         })
             .then(data => {
                 if (data) {
+                    console.log(data, "deliveries data");
                     setDeliveries(data);
                     setWorkOrderId(workOrderIds);
                     // Removed the old `setStyleNo(styleNo)` no-op (set state to itself).
@@ -407,6 +409,7 @@ const AllOrders = ({ orderType }) => {
                     params: { workOrderIds: jobId.join(',') }
                 })
                     .then((dev) => {
+                        console.log(dev);
                         setDeliveries(dev);
                     });
 

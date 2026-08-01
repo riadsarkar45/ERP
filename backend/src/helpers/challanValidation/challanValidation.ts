@@ -10,8 +10,9 @@ export const challanValidation = async (
     challanNo: number,
     workOrderId: string,
     toFactory: string,
+    fromFactory: string, // 🔥 ADDED: needed to validate the reverse (receiving) direction
     yarnId: number,
-    deliveryType: string // 🔥 ADDED: same challan can legitimately cover multiple delivery types
+    deliveryType: string
 ): Promise<ChallanValidationResult> => {
     const workOrder = await prisma.workOrder.findFirst({
         where: {
@@ -29,16 +30,24 @@ export const challanValidation = async (
         };
     }
 
-    if (workOrder.factoryName !== toFactory) {
+    // The work order's factory must be on ONE side of the transaction —
+    // either receiving (toFactory) for an outbound delivery, or
+    // sending back (fromFactory) for a return/receipt.
+    const isOutbound = workOrder.factoryName === toFactory;
+    const isReturn = workOrder.factoryName === fromFactory;
+
+    if (!isOutbound && !isReturn) {
         return {
             success: false,
-            message: `Invalid destination factory. This work order belongs to "${workOrder.factoryName}".`,
+            message: `Invalid factory. This work order belongs to "${workOrder.factoryName}", which is neither the sending nor receiving factory on this delivery.`,
         };
     }
+
     const duplicate = await prisma.deliveries.findFirst({
         where: {
             challanNo: Number(challanNo),
             toFactory,
+            fromFactory, // 🔥 scope duplicate check to the full direction too, not just toFactory
             yarnId: Number(yarnId),
             deliveryType,
         },
