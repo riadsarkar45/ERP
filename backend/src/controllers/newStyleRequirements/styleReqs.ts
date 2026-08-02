@@ -12,6 +12,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
     const styles = await prisma.styleRequirement.findMany({
         where: whereClause,
         orderBy: { id: "asc" },
+        take:40,
         select: {
             salesContact: true,
             styleNo: true,

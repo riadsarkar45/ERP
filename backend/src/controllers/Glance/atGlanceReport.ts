@@ -7,7 +7,6 @@ export const GlanceReport = async (req: Request, res: Response) => {
     try {
         const styles = await prisma.styleRequirement.findMany({
             orderBy: { id: "desc" },
-            take: 40,
             select: {
                 salesContact: true,
                 styleNo: true,
