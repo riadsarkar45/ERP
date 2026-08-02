@@ -81,14 +81,14 @@ const GlanceReport = () => {
         setFactoryName("");
 
         fetchData(`/api/party-view-report/${orderType}`)
-            .then((data) => setFactories(data.factoryNames || []))
+            .then((data) => setFactories(data.factoryNames || []) )
             .catch((e) => console.error(e));
     };
 
     const handleFetchDetail = (factoryName) => {
         setFactoryName(factoryName);
         fetchData(`/api/glance-report/${factoryName}/${selectOrderType}`)
-            .then((data) => setDetailView(data.data || []))
+            .then((data) => {setDetailView(data.data || []), console.log(data);})
             .catch((e) => console.error(e));
     };
 

@@ -5,6 +5,7 @@ import { createNewStyleRequirement } from "../controllers/newStyleRequirements/c
 import { cuttingDataUpdate } from "../controllers/fabricCutting/fabricCuttingData";
 import { createNewJob } from "../controllers/orders/newWorkOrder";
 import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
+import { generateBill } from "../controllers/generateBill/generatebill";
 
 const router = express.Router();
 
@@ -19,5 +20,8 @@ router.post("/create-new-audit", createNewAudit)
 router.post("/new-style-requirements", createNewStyleRequirement)
 
 router.post("/cutting-production", cuttingDataUpdate)
+
+router.post("/generate-bill", generateBill);
+
 
 export default router;

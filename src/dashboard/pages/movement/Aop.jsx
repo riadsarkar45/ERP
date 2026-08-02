@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
+import useAxiosPublic from '../../../hooks/Axios';
 
 // Note: borderCollapse is "separate" (not "collapse") on the <table> so the
 // sticky header keeps its border while scrolling — collapsed borders and
@@ -64,9 +65,10 @@ const Aop = () => {
     const [selectedRows, setSelectedRows] = useState(new Set()); // Track selected checkboxes
     const dropdownRef = useRef(null);
     const [totalPages, setTotalPages] = useState(1);
+    const [challanIds, setChallanIds] = useState([]); // Track selected challan IDs
 
     const { fetchData, loading } = useFetchData();
-
+    const axiosPublic = useAxiosPublic();
     useEffect(() => {
         fetchData(`/api/challan-movement/aopOrder?page=${page}&limit=10`)
             .then(data => {
@@ -230,10 +232,55 @@ const Aop = () => {
         setOpenFilterKey(null);
     };
 
+    const handleBillPreparation = (challanId) => {
+        if (challanIds.includes(challanId)) {
+            setChallanIds((prev) => prev.filter(id => id !== challanId));
+        } else {
+            setChallanIds((prev) => [...prev, challanId])
+
+        }
+    }
+
+    const handleGenerateBill = async () => {
+        if (challanIds.length === 0) {
+            alert("Please select at least one challan to generate the bill.");
+            return;
+        }
+
+        try {
+            const response = await axiosPublic.post(
+                "/api/generate-bill",
+                { challanIds },
+                { responseType: "blob" }   // tell axios to expect binary (PDF) data
+            );
+
+            const blob = new Blob([response.data], { type: "application/pdf" });
+            const url = window.URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `bill-${Date.now()}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Bill generation failed:", error);
+            alert("Failed to generate bill. Please try again.");
+        }
+    };
+    console.log(challanIds);
+
     if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
 
     return (
         <div style={{ width: "100%" }}>
+            {
+                challanIds.length > 0 && <div>
+                    <button onClick={() => handleGenerateBill()} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md mb-5 border border-blue-500">Generate Bill</button>
+                </div>
+            }
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
@@ -259,6 +306,7 @@ const Aop = () => {
                                                         setSelectedRows(new Set());
                                                     }
                                                 }}
+                                            // onClick={() => handleBillPreparation(th.id)}
                                             />
                                         </th>
                                     );
@@ -373,41 +421,45 @@ const Aop = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredRows.map((row) => (
-                            <tr key={row.rowKey}>
-                                <td style={{ ...cellStyle, textAlign: "center" }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedRows.has(row.rowKey)}
-                                        onChange={(e) => {
-                                            setSelectedRows((prev) => {
-                                                const next = new Set(prev);
-                                                if (e.target.checked) {
-                                                    next.add(row.rowKey);
-                                                } else {
-                                                    next.delete(row.rowKey);
-                                                }
-                                                return next;
-                                            });
-                                        }}
-                                    />
-                                </td>
-                                <td style={cellStyle}>{row.challanNo}</td>
-                                <td style={cellStyle}>{row.challanDate}</td>
-                                <td style={cellStyle}>{row.workOrder}</td>
-                                <td style={cellStyle}>{row.composition}</td>
-                                <td style={cellStyle}>{row.color}</td>
-                                <td style={cellStyle}>{row.toFactory}</td>
-                                <td style={cellStyle}>{row.fromFactory}</td>
-                                <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
-                                <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
-                                <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
-                                <td style={cellStyle}>{row.deliveryQty}</td>
-                                <td style={cellStyle}>{row.unitePrice}</td>
-                                <td style={cellStyle}>{row.billingAmount}</td>
-                                <td style={cellStyle}>{row.paidBillingAmount}</td>
-                            </tr>
-                        ))}
+                        {filteredRows.map((row) => {
+                            // console.log(row, "rows to identify");
+                            return (
+                                <tr key={row.rowKey}>
+                                    <td style={{ ...cellStyle, textAlign: "center" }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedRows.has(row.rowKey)}
+                                            onChange={(e) => {
+                                                setSelectedRows((prev) => {
+                                                    const next = new Set(prev);
+                                                    if (e.target.checked) {
+                                                        next.add(row.rowKey);
+                                                    } else {
+                                                        next.delete(row.rowKey);
+                                                    }
+                                                    return next;
+                                                });
+                                            }}
+                                            onClick={() => handleBillPreparation(row.chId)}
+                                        />
+                                    </td>
+                                    <td style={cellStyle}>{row.challanNo} {"=>"} {row.chId}</td>
+                                    <td style={cellStyle}>{row.challanDate}</td>
+                                    <td style={cellStyle}>{row.workOrder}</td>
+                                    <td style={cellStyle}>{row.composition}</td>
+                                    <td style={cellStyle}>{row.color}</td>
+                                    <td style={cellStyle}>{row.toFactory}</td>
+                                    <td style={cellStyle}>{row.fromFactory}</td>
+                                    <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
+                                    <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
+                                    <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
+                                    <td style={cellStyle}>{row.deliveryQty}</td>
+                                    <td style={cellStyle}>{row.unitePrice}</td>
+                                    <td style={cellStyle}>{row.billingAmount}</td>
+                                    <td style={cellStyle}>{row.paidBillingAmount}</td>
+                                </tr>
+                            )
+                        })}
                         {filteredRows.length === 0 && (
                             <tr>
                                 <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>

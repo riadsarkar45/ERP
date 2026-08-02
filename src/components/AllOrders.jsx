@@ -402,6 +402,7 @@ const AllOrders = ({ orderType }) => {
                 fetchData(`/api/work-order/${orderType}`, { params: { page, limit, filters: filtersParam } })
                     .then((res) => {
                         if (res) {
+                            console.log(res.data, "work orders");
                             setOrders(res.data ?? []);
                             if (res.pagination) setPagination(res.pagination);
                         }

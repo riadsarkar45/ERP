@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 
 const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
-    const [hoveredIndex, setHoveredIndex] = useState(null);
+    const [hoveredIndex] = useState(null);
 
 
     const innerItem = "border-b border-gray-300 last:border-b-0 w-full py-2 px-3";
@@ -50,7 +50,7 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                 (wo.compositions || []).forEach(comp => {
                     // const orderQty = Number(comp.orderQty) || 0;
                     const workOrderQty = Number(comp.workOrderQty) || 0;
-                    const totalGreyDelivery = Number(comp.totalGreyDelivery) || 0;
+                    const totalGreyDelivery = Number(comp.yarnDeliveriesWithColor?.GreyDelivery) || 0;
                     const greyReturnReceived = Number(comp.yarnDeliveriesWithColor?.GreyReturn) || 0;
                     const greyReceived = Number(comp.yarnDeliveriesWithColor?.GreyReceived) || 0;
                     const finishReceived = Number(comp.yarnDeliveriesWithColor?.FinishReceived) || 0;
@@ -187,7 +187,7 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.totalGreyDelivery?.toFixed(2) || "-"}
+                                            {wrk.yarnDeliveriesWithColor?.GreyDelivery?.toFixed(2) || "-"}
                                         </div>
                                     ))
                                 )}
@@ -195,7 +195,7 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
-                                        const diff = (wrk.totalGreyDelivery || 0) - (wrk.workOrderQty || 0);
+                                        const diff = (wrk.yarnDeliveriesWithColor?.GreyDelivery || 0) - (wrk.workOrderQty || 0);
                                         const exceeded = diff?.toFixed(2) > 0;
                                         return (
                                             <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
@@ -294,12 +294,20 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
 
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
+                                    wo.compositions?.map((wrk, j) => {
+                                        const greyReceived = Number(wrk.yarnDeliveriesWithColor?.GreyReceived ?? 0).toFixed(2);
+                                        const unitePrice = Number(wrk.unitePrice ?? 0).toFixed(2);
+                                        const payableAmount = (Number(greyReceived) * Number(unitePrice)).toFixed(2);
+                                        return (
+                                            <div key={`${i}-${j}`} className={innerItem}>
 
-                                            {(wrk.yarnDeliveriesWithColor?.GreyReceived?.toFixed(2) || 0) * (wrk.unitePrice?.toFixed(2) || 0) || "-"}
-                                        </div>
-                                    ))
+                                                {
+                                                    payableAmount !== "0.00" ? payableAmount : "-"
+                                                }
+
+                                            </div>
+                                        )
+                                    })
                                 )}
                             </td>
 

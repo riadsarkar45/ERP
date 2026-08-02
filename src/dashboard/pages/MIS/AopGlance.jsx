@@ -88,16 +88,16 @@ const renderBreakdownCell = (items, renderItem, keyPrefix, center = false) => {
     });
 };
 
-const AopGlance = ({ detailView }) => {
+const DyeingGlance = ({ detailView }) => {
     // Totals across every row currently in detailView. Computed unconditionally
     // (before the early-return below) so hook order stays stable across renders.
     const totals = useMemo(() => {
         const acc = {
             workOrderQty: 0,
-            sentForAop: 0,
-            receivedFromAop: 0,
-            aopFinishFabricRcvd: 0,
-            returnFromAop: 0,
+            greyDelivery: 0,
+            greyReturn: 0,
+            greyReceived: 0,
+            finishReceived: 0,
             balance: 0,
             payableAmount: 0,
         };
@@ -111,11 +111,10 @@ const AopGlance = ({ detailView }) => {
                 acc.workOrderQty += Number(up.workOrderQty) || 0;
             });
 
-            acc.sentForAop += sumValue(deliveries?.SentForAop);
-            acc.receivedFromAop += sumValue(deliveries?.ReceivedFromAop);
-            acc.aopFinishFabricRcvd += sumValue(deliveries?.AOPFinishFabricRcvd);
-            acc.returnFromAop += sumValue(deliveries?.ReturnFromAop);
-            acc.balance += sumValue(deliveries?.Balance);
+            acc.greyDelivery += sumValue(deliveries?.GreyDelivery);
+            acc.greyReturn += sumValue(deliveries?.GreyReturn);
+            acc.greyReceived += sumValue(deliveries?.GreyReceived);
+            acc.finishReceived += sumValue(deliveries?.FinishReceived);
 
             if (deliveries?.PayableAmount !== undefined && deliveries?.PayableAmount !== null) {
                 acc.payableAmount += sumValue(deliveries.PayableAmount);
@@ -127,6 +126,9 @@ const AopGlance = ({ detailView }) => {
                 });
             }
         });
+
+        // Balance = Total Work Order Qty - Total Finish Received
+        acc.balance = acc.workOrderQty - acc.finishReceived;
 
         return acc;
     }, [detailView]);
@@ -153,68 +155,70 @@ const AopGlance = ({ detailView }) => {
         );
     }
 
-    // Single SHORT & EXCESS total, aggregated the same way the per-row cell
-    // derives it (received from AOP vs finish fabric received) — this is the
-    // only diff column that actually exists in the body.
-    const shortExcessTotal = totals.receivedFromAop - totals.aopFinishFabricRcvd;
-
     return (
         <>
             <tbody>
-
                 {detailView.map((d, i) => {
                     const factory = d.workOrders || [];
                     const deliveries = d.deliveryTotals || {};
                     // const comps = d.rows || [];
                     const unitePrice = factory.flatMap((c) => c.compositions || []) || [];
 
+                    // Calculate row-level balance
+                    const rowWorkOrderQty = sumValue(unitePrice.map(up => up.workOrderQty));
+                    const rowFinishReceived = sumValue(deliveries?.FinishReceived);
+                    const rowBalance = rowWorkOrderQty - rowFinishReceived;
+
                     return (
                         <tr key={i}>
+                            {/* FACTORY NAME */}
                             <td style={centeredCellStyle}>
                                 {renderBreakdownCell(factory, (f) => f.factoryName, `factory-${i}`, true)}
                             </td>
+                            {/* JOB NO. */}
                             <td style={centeredCellStyle}>
                                 {renderBreakdownCell(d.jobNo, (jn) => jn, `job-${i}`, true)}
                             </td>
-                            {/* <td style={cellStyle}>
-                                {renderBreakdownCell(comps, (c) => c.composition, `comp-${i}`)}
-                            </td> */}
+                            
+                            {/* WORK ORDER QTY */}
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => up.workOrderQty, `qty-${i}`)}
                             </td>
-
+                            {/* GREY FABRIC DEL. FOR DYEING */}
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.SentForAop, (v) => v, `sent-${i}`)}
+                                {renderBreakdownCell(deliveries?.SentForAop, (v) => v, `grey-del-${i}`)}
                             </td>
-
+                            {/* RECEIVED FROM AOP */}
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReceivedFromAop, (v) => v, `received-${i}`)}
+                                {renderBreakdownCell(deliveries?.ReceivedFromAop, (v) => v, `grey-ret-${i}`)}
                             </td>
+                            {/* FINISH FABRIC RCVD FROM DYEING */}
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.AOPFinishFabricRcvd, (v) => v, `finish-${i}`)}
+                                {renderBreakdownCell(deliveries?.AOPFinishFabricRcvd, (v) => v, `grey-rcv-${i}`)}
+                                return
                             </td>
+                            {/* FINISH FABRIC RCVD FROM DYEING */}
                             <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `return-${i}`)}
+                                {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `finish-rcv-${i}`)}
+                                RETURN
+                                
+{/* "ReturnFromAop": */}
                             </td>
-
+                            {/* BALANCE (Work Order Qty - Finish Received) */}
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, () => {
-                                    // Received-from-AOP vs finish-fabric-received is a delivery-level
-                                    // comparison, not per-composition — `up` has no AOPFinishFabricRcvd field.
-                                    const receivedFromAop = sumValue(deliveries?.ReceivedFromAop);
-                                    const aopFinishFabricRcvd = sumValue(deliveries?.AOPFinishFabricRcvd);
-                                    const diff = receivedFromAop - aopFinishFabricRcvd;
-
-                                    return diff > 0
-                                        ? <span className='text-green-600 font-extrabold'>{Math.abs(diff)}</span>
-                                        : <span className='text-red-600 font-extrabold'>({Math.abs(diff)})</span>;
-                                }, `short2-${i}`)}
+                                    // > 0 means Short (Red), <= 0 means Excess (Green)
+                                    return rowBalance > 0
+                                        ? <span className='text-red-600 font-extrabold'>{Math.abs(rowBalance)}</span>
+                                        : <span className='text-green-600 font-extrabold'>({Math.abs(rowBalance)})</span>;
+                                }, `balance-${i}`)}
                             </td>
+                            {/* PRICE PER KG */}
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => up.unitePrice, `price-${i}`)}
                             </td>
+                            {/* PAYABLE AMOUNT */}
                             <td style={cellStyle}>
-
                                 {renderBreakdownCell(unitePrice, (up) => {
                                     const price = Number(up.unitePrice) || 0;
                                     const qty = Number(up.workOrderQty) || 0;
@@ -241,25 +245,25 @@ const AopGlance = ({ detailView }) => {
                     <td style={footerCellStyle}>
                         <div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div>
                     </td>
-                    {/* SENT FOR AOP */}
+                    {/* GREY DELIVERY */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.sentForAop)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyDelivery)}</div>
                     </td>
-                    {/* RECEIVED FROM AOP */}
+                    {/* GREY RETURN */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.receivedFromAop)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReturn)}</div>
                     </td>
-                    {/* AOP FINISH FABRIC RECEIVED */}
+                    {/* GREY RECEIVED */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.aopFinishFabricRcvd)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReceived)}</div>
                     </td>
-                    {/* FABRIC RETURN FROM AOP */}
+                    {/* FINISH RECEIVED */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.returnFromAop)}</div>
+                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.finishReceived)}</div>
                     </td>
-                    {/* SHORT & EXCESS (received from AOP vs finish fabric received) */}
+                    {/* BALANCE */}
                     <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(shortExcessTotal)}</div>
+                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(totals.balance)}</div>
                     </td>
                     {/* PRICE PER KG — not summable */}
                     <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
@@ -273,4 +277,4 @@ const AopGlance = ({ detailView }) => {
     );
 };
 
-export default AopGlance;
+export default DyeingGlance;
