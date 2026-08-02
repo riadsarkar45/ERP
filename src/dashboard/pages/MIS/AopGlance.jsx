@@ -3,10 +3,10 @@ import React, { useMemo } from 'react';
 const BORDER_COLOR = "#000000";
 
 const cellStyle = {
-    // Use exactly 1px. Fractional pixels (like 0.8px) cause blurry/messy double borders in browsers.
     border: `1px solid ${BORDER_COLOR}`,
-    padding: 0,
-    verticalAlign: "top",
+    padding: "10px 8px",
+    verticalAlign: "middle",
+    textAlign: "center",
     fontSize: "13px",
     boxSizing: "border-box",
 };
@@ -26,128 +26,103 @@ const footerCellStyle = {
     fontWeight: 700,
 };
 
-const normalizeToArray = (value) => {
-    if (Array.isArray(value)) return value;
-    if (value === null || value === undefined || value === "") return [];
-    return [value];
-};
+const formatNumber = (value) => Number(value || 0).toLocaleString("en-US");
+const formatMoney = (value) => Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Sums a field that may come through as a single number, a numeric string,
-// or an array of either (same shapes normalizeToArray already handles for display).
-const sumValue = (value) => {
-    const list = normalizeToArray(value);
-    return list.reduce((acc, v) => acc + (Number(v) || 0), 0);
-};
-
-const formatNumber = (value) => {
-    const num = Number(value) || 0;
-    return num.toLocaleString("en-US");
-};
-
-const formatMoney = (value) => {
-    const num = Number(value) || 0;
-    return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-// Convention: diff > 0 => excess (green, plain). diff <= 0 => short (red, parens).
-const renderShortExcess = (diff) => {
+const renderColoredShortExcess = (diff) => {
     const formatted = formatNumber(Math.abs(diff));
-    return diff > 0 ? formatted : `(${formatted})`;
+    return diff > 0
+        ? <span className='text-green-600 font-extrabold'>{formatted}</span>
+        : <span className='text-red-600 font-extrabold'>({formatted})</span>;
 };
 
-const renderBreakdownCell = (items, renderItem, keyPrefix, center = false) => {
-    const list = normalizeToArray(items);
-
-    if (list.length === 0) {
-        return (
-            <div style={center
-                ? { padding: "10px 8px", minHeight: "36px", display: "flex", alignItems: "center", justifyContent: "center" }
-                : { padding: "10px 8px", minHeight: "36px" }}>
-                &nbsp;
-            </div>
-        );
-    }
-
-    return list.map((item, idx) => {
-        const isLastItem = idx === list.length - 1;
-
-        return (
-            <div
-                key={`${keyPrefix}-${idx}`}
-                style={{
-                    padding: "10px 8px",
-                    ...(center ? { display: "flex", alignItems: "center", justifyContent: "center" } : {}),
-                    // ONLY draw a line BETWEEN items.
-                    // The last item relies on the parent <td>'s bottom border, preventing double borders.
-                    borderBottom: isLastItem ? "none" : `1px solid ${BORDER_COLOR}`,
-                }}
-            >
-                {renderItem(item, idx)}
-            </div>
-        );
-    });
+const getDeliverySum = (deliveries, targetType) => {
+    if (!Array.isArray(deliveries)) return 0;
+    const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "").toLowerCase();
+    
+    return deliveries.reduce((acc, d) => {
+        const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "").toLowerCase();
+        if (normalizedType === normalizedTarget) {
+            return acc + (Number(d.deliveryQty) || 0);
+        }
+        return acc;
+    }, 0);
 };
 
-const DyeingGlance = ({ detailView }) => {
-    // Totals across every row currently in detailView. Computed unconditionally
-    // (before the early-return below) so hook order stays stable across renders.
+const AopGlance = ({ detailView }) => {
+    const processedData = useMemo(() => {
+        return (detailView || []).map((job) => {
+            const factoryName = job.workOrders?.[0]?.factoryName || "Unknown Factory";
+            
+            let totalWorkOrderQty = 0;
+            let totalPayableAmount = 0;
+            let sentForAop = 0;
+            let receivedFromAop = 0;
+            let aopFinishFabricRcvd = 0;
+            let returnFromAop = 0;
+
+            job.workOrders?.forEach((wo) => {
+                wo.compositions?.forEach((comp) => {
+                    const workOrderQty = Number(comp.workOrderQty) || 0;
+                    totalWorkOrderQty += workOrderQty;
+
+                    const compSentForAop = getDeliverySum(comp.deliveries, "SentForAop");
+                    const compReceivedFromAop = getDeliverySum(comp.deliveries, "ReceivedFromAop");
+                    const compAopFinishFabricRcvd = getDeliverySum(comp.deliveries, "AOPFinishFabricRcvd");
+                    const compReturnFromAop = getDeliverySum(comp.deliveries, "ReturnFromAop");
+
+                    sentForAop += compSentForAop;
+                    receivedFromAop += compReceivedFromAop;
+                    aopFinishFabricRcvd += compAopFinishFabricRcvd;
+                    returnFromAop += compReturnFromAop;
+
+                    const price = Number(comp.unitePrice) || 0;
+                    // AOP billing is typically based on the finished fabric received
+                    totalPayableAmount += (compAopFinishFabricRcvd * price);
+                });
+            });
+
+            const averageUnitPrice = totalWorkOrderQty > 0 ? (totalPayableAmount / totalWorkOrderQty) : 0;
+
+            return {
+                jobNo: job.jobNo,
+                factoryName,
+                totalWorkOrderQty,
+                averageUnitPrice,
+                totalPayableAmount,
+                sentForAop,
+                receivedFromAop,
+                aopFinishFabricRcvd,
+                returnFromAop,
+            };
+        });
+    }, [detailView]);
+
     const totals = useMemo(() => {
         const acc = {
             workOrderQty: 0,
-            greyDelivery: 0,
-            greyReturn: 0,
-            greyReceived: 0,
-            finishReceived: 0,
-            balance: 0,
-            payableAmount: 0,
+            sentForAop: 0,
+            receivedFromAop: 0,
+            aopFinishFabricRcvd: 0,
+            returnFromAop: 0,
+            payableAmount: 0
         };
-
-        (detailView || []).forEach((d) => {
-            const factory = d.workOrders || [];
-            const deliveries = d.deliveryTotals || {};
-            const unitePriceArr = factory.flatMap((c) => c.compositions || []) || [];
-
-            unitePriceArr.forEach((up) => {
-                acc.workOrderQty += Number(up.workOrderQty) || 0;
-            });
-
-            acc.greyDelivery += sumValue(deliveries?.GreyDelivery);
-            acc.greyReturn += sumValue(deliveries?.GreyReturn);
-            acc.greyReceived += sumValue(deliveries?.GreyReceived);
-            acc.finishReceived += sumValue(deliveries?.FinishReceived);
-
-            if (deliveries?.PayableAmount !== undefined && deliveries?.PayableAmount !== null) {
-                acc.payableAmount += sumValue(deliveries.PayableAmount);
-            } else {
-                unitePriceArr.forEach((up) => {
-                    const price = Number(up.unitePrice) || 0;
-                    const qty = Number(up.workOrderQty) || 0;
-                    acc.payableAmount += price * qty;
-                });
-            }
+        processedData.forEach((job) => {
+            acc.workOrderQty += job.totalWorkOrderQty;
+            acc.sentForAop += job.sentForAop;
+            acc.receivedFromAop += job.receivedFromAop;
+            acc.aopFinishFabricRcvd += job.aopFinishFabricRcvd;
+            acc.returnFromAop += job.returnFromAop;
+            acc.payableAmount += job.totalPayableAmount;
         });
-
-        // Balance = Total Work Order Qty - Total Finish Received
-        acc.balance = acc.workOrderQty - acc.finishReceived;
-
         return acc;
-    }, [detailView]);
+    }, [processedData]);
 
-    if (!detailView || detailView.length === 0) {
+    if (!processedData || processedData.length === 0) {
         return (
             <tbody>
                 <tr>
-                    <td
-                        colSpan={11}
-                        style={{
-                            border: `1px solid ${BORDER_COLOR}`,
-                            padding: "40px",
-                            textAlign: "center",
-                            color: "#6b7280",
-                            fontSize: "14px",
-                            backgroundColor: "#fafafa"
-                        }}
-                    >
+                    <td colSpan={10} style={{ ...cellStyle, padding: "40px", color: "#6b7280", backgroundColor: "#fafafa" }}>
                         Select a factory from the list above to view detailed breakdown.
                     </td>
                 </tr>
@@ -158,123 +133,57 @@ const DyeingGlance = ({ detailView }) => {
     return (
         <>
             <tbody>
-                {detailView.map((d, i) => {
-                    const factory = d.workOrders || [];
-                    const deliveries = d.deliveryTotals || {};
-                    // const comps = d.rows || [];
-                    const unitePrice = factory.flatMap((c) => c.compositions || []) || [];
-
-                    // Calculate row-level balance
-                    const rowWorkOrderQty = sumValue(unitePrice.map(up => up.workOrderQty));
-                    const rowFinishReceived = sumValue(deliveries?.FinishReceived);
-                    const rowBalance = rowWorkOrderQty - rowFinishReceived;
-
-                    return (
-                        <tr key={i}>
-                            {/* FACTORY NAME */}
-                            <td style={centeredCellStyle}>
-                                {renderBreakdownCell(factory, (f) => f.factoryName, `factory-${i}`, true)}
-                            </td>
-                            {/* JOB NO. */}
-                            <td style={centeredCellStyle}>
-                                {renderBreakdownCell(d.jobNo, (jn) => jn, `job-${i}`, true)}
-                            </td>
-                            
-                            {/* WORK ORDER QTY */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => up.workOrderQty, `qty-${i}`)}
-                            </td>
-                            {/* GREY FABRIC DEL. FOR DYEING */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.SentForAop, (v) => v, `grey-del-${i}`)}
-                            </td>
-                            {/* RECEIVED FROM AOP */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReceivedFromAop, (v) => v, `grey-ret-${i}`)}
-                            </td>
-                            {/* FINISH FABRIC RCVD FROM DYEING */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.AOPFinishFabricRcvd, (v) => v, `grey-rcv-${i}`)}
-                                return
-                            </td>
-                            {/* FINISH FABRIC RCVD FROM DYEING */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(deliveries?.ReturnFromAop, (v) => v, `finish-rcv-${i}`)}
-                                RETURN
-                                
-{/* "ReturnFromAop": */}
-                            </td>
-                            {/* BALANCE (Work Order Qty - Finish Received) */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, () => {
-                                    // > 0 means Short (Red), <= 0 means Excess (Green)
-                                    return rowBalance > 0
-                                        ? <span className='text-red-600 font-extrabold'>{Math.abs(rowBalance)}</span>
-                                        : <span className='text-green-600 font-extrabold'>({Math.abs(rowBalance)})</span>;
-                                }, `balance-${i}`)}
-                            </td>
-                            {/* PRICE PER KG */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => up.unitePrice, `price-${i}`)}
-                            </td>
-                            {/* PAYABLE AMOUNT */}
-                            <td style={cellStyle}>
-                                {renderBreakdownCell(unitePrice, (up) => {
-                                    const price = Number(up.unitePrice) || 0;
-                                    const qty = Number(up.workOrderQty) || 0;
-                                    const payable = deliveries?.PayableAmount ?? (price * qty);
-                                    return typeof payable === "number" ? payable.toFixed(2) : payable;
-                                }, `payable-${i}`)}
-                            </td>
-                        </tr>
-                    );
-                })}
+                {processedData.map((job, i) => (
+                    <tr key={i}>
+                        {/* 1. AOP FACTORY NAME */}
+                        <td style={centeredCellStyle}>{job.factoryName}</td>
+                        {/* 2. JOB NO. */}
+                        <td style={centeredCellStyle}>{job.jobNo}</td>
+                        {/* 3. AOP WORK ORDER QTY */}
+                        <td style={cellStyle}>{formatNumber(job.totalWorkOrderQty)}</td>
+                        {/* 4. SENT FOR AOP */}
+                        <td style={cellStyle}>{formatNumber(job.sentForAop)}</td>
+                        {/* 5. RECEIVE FROM AOP */}
+                        <td style={cellStyle}>{formatNumber(job.receivedFromAop)}</td>
+                        {/* 6. FINISH RECEIVED FROM AOP */}
+                        <td style={cellStyle}>{formatNumber(job.aopFinishFabricRcvd)}</td>
+                        {/* 7. RETURN FROM AOP */}
+                        <td style={cellStyle}>{formatNumber(job.returnFromAop)}</td>
+                        {/* 8. SHORT & EXCESS */}
+                        <td style={cellStyle}>{renderColoredShortExcess(job.receivedFromAop - job.aopFinishFabricRcvd)}</td>
+                        {/* 9. PRICE PER KG */}
+                        <td style={cellStyle}>{formatMoney(job.averageUnitPrice)}</td>
+                        {/* 10. PAYABLE AMOUNT */}
+                        <td style={cellStyle}>{formatMoney(job.totalPayableAmount)}</td>
+                    </tr>
+                ))}
             </tbody>
-
             <tfoot>
                 <tr>
-                    {/* FACTORY NAME — total label */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>TOTAL</div>
-                    </td>
-                    {/* JOB NO. — not summable */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* COMPOSITION — not summable */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* WORK ORDER QTY */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div>
-                    </td>
-                    {/* GREY DELIVERY */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyDelivery)}</div>
-                    </td>
-                    {/* GREY RETURN */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReturn)}</div>
-                    </td>
-                    {/* GREY RECEIVED */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReceived)}</div>
-                    </td>
-                    {/* FINISH RECEIVED */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatNumber(totals.finishReceived)}</div>
-                    </td>
-                    {/* BALANCE */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{renderShortExcess(totals.balance)}</div>
-                    </td>
-                    {/* PRICE PER KG — not summable */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    {/* PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}>
-                        <div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount)}</div>
-                    </td>
+                    {/* 1. TOTAL Label */}
+                    <td style={footerCellStyle}>TOTAL</td>
+                    {/* 2. JOB NO. (Empty) */}
+                    <td style={footerCellStyle}>&nbsp;</td>
+                    {/* 3. WORK ORDER QTY */}
+                    <td style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
+                    {/* 4. SENT FOR AOP */}
+                    <td style={footerCellStyle}>{formatNumber(totals.sentForAop)}</td>
+                    {/* 5. RECEIVE FROM AOP */}
+                    <td style={footerCellStyle}>{formatNumber(totals.receivedFromAop)}</td>
+                    {/* 6. FINISH RECEIVED FROM AOP */}
+                    <td style={footerCellStyle}>{formatNumber(totals.aopFinishFabricRcvd)}</td>
+                    {/* 7. RETURN FROM AOP */}
+                    <td style={footerCellStyle}>{formatNumber(totals.returnFromAop)}</td>
+                    {/* 8. SHORT & EXCESS */}
+                    <td style={footerCellStyle}>{renderColoredShortExcess(totals.receivedFromAop - totals.aopFinishFabricRcvd)}</td>
+                    {/* 9. PRICE PER KG (Empty) */}
+                    <td style={footerCellStyle}>&nbsp;</td>
+                    {/* 10. PAYABLE AMOUNT */}
+                    <td style={footerCellStyle}>{formatMoney(totals.payableAmount)}</td>
                 </tr>
             </tfoot>
         </>
     );
 };
 
-export default DyeingGlance;
+export default AopGlance;
