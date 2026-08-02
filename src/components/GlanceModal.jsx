@@ -2,11 +2,18 @@ import { useState } from 'react';
 import { RefreshCcw, X, WrapText, AlignJustify } from 'lucide-react';
 
 const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
-    console.log(glanceReport, "glanceReport");
-
     // Wrap / Unwrap toggle state
     const [isWrapped, setIsWrapped] = useState(false);
-    const wrapClass = isWrapped ? "whitespace-normal break-words" : "whitespace-nowrap";
+
+    // When wrapped, we force every column to the SAME narrow width (via
+    // table-layout: fixed) so short 2-word headers/cells are also forced
+    // to break onto multiple lines instead of just sitting on one line
+    // with room to spare.
+    const WRAPPED_COL_WIDTH = 110; // px, tweak to taste
+
+    const wrapClass = isWrapped
+        ? "whitespace-normal break-words"
+        : "whitespace-nowrap";
 
     const YARN_TABLE_HEADERS = [
         "JOB NO",
@@ -66,7 +73,10 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
     ];
 
     // Reusable cell class (real <td>, no inner divs => no drift between columns)
-    const cellClass = `px-4 py-3 text-sm text-center text-gray-700 border border-gray-400 ${wrapClass}`;
+    const cellClass = `px-4 py-3 text-sm text-center text-gray-700 border border-gray-400 align-top ${wrapClass}`;
+    const cellStyle = isWrapped
+        ? { width: WRAPPED_COL_WIDTH, maxWidth: WRAPPED_COL_WIDTH, wordBreak: "break-word" }
+        : undefined;
 
     // Small helper so we don't repeat the Math.abs/formatting pattern everywhere
     const ShortExcess = ({ value }) => {
@@ -122,13 +132,17 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                     <div className="p-2 overflow-y-auto max-h-[calc(90vh-140px)]">
                         <div className="overflow-x-auto border-2 border-gray-400 rounded-md">
 
-                            <table className={`${isWrapped ? "w-full" : "min-w-[2200px] w-full"} border-collapse border border-gray-400`}>
+                            <table
+                                className={`${isWrapped ? "w-full" : "min-w-[2200px] w-full"} border-collapse border border-gray-400`}
+                                style={{ tableLayout: isWrapped ? "fixed" : "auto" }}
+                            >
                                 <thead className="sticky top-0 z-20">
                                     <tr className="bg-gray-100 border-b-2 border-gray-400">
                                         {YARN_TABLE_HEADERS.map((header, I) => (
                                             <th
                                                 key={I}
                                                 className={`px-4 py-3 text-center text-xs font-semibold text-gray-700 border border-gray-400 bg-gray-100 ${wrapClass}`}
+                                                style={cellStyle}
                                             >
                                                 {header}
                                             </th>
@@ -187,64 +201,66 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                         <td
                                                             rowSpan={subRowCount}
                                                             className={`px-4 py-3 text-sm font-semibold text-gray-900 border border-gray-400 bg-white align-top left-0 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)] ${wrapClass}`}
+                                                            style={cellStyle}
                                                         >
                                                             {job.jobNo || "-"}
                                                         </td>
                                                     )}
 
-                                                    <td className={cellClass}>{com?.color || "-"}</td>
-                                                    <td className={cellClass}>{com?.composition || "-"}</td>
-                                                    <td className={cellClass}>{com?.orderQty || "-"}</td>
-                                                    <td className={cellClass}>{com ? "MU" : "-"}</td>
-                                                    <td className={cellClass}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
-                                                    <td className={cellClass}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
-                                                    <td className={cellClass}>{comp?.knittingOrder_Yarn_Delivery ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.knittingOrder_Yarn_Return ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.knittingOrder_Grey_Fabric_Received ?? "-"}</td>
-                                                    <td className={cellClass}>{comp ? <ShortExcess value={knitShortExcess} /> : "-"}</td>
-                                                    <td className={cellClass}>{comp?.dyeingOrder_Grey_Delivery ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.dyeingOrder_Grey_Return ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.dyeingOrder_Grey_Received ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.dyeingOrder_Finish_Received ?? "-"}</td>
-                                                    <td className={cellClass}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
-                                                    <td className={cellClass}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
-                                                    <td className={cellClass}>{comp?.aopOrder_Sent_for_AOP ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.aopOrder_Return_From_Aop ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.aopOrder_Received_From_Aop ?? "-"}</td>
-                                                    <td className={cellClass}>{comp?.aopOrder_AOP_Finish_Fabric_Rcvd ?? "-"}</td>
-                                                    <td className={cellClass}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
-                                                    <td className={cellClass}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}>FORMULA</td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
-                                                    <td className={cellClass}><input className="border rounded-md p-2" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>{com?.color || "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{com?.composition || "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{com?.orderQty || "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{com ? "MU" : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Yarn_Delivery ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Yarn_Return ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Grey_Fabric_Received ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={knitShortExcess} /> : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Grey_Delivery ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Grey_Return ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Grey_Received ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Finish_Received ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.aopOrder_Sent_for_AOP ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.aopOrder_Return_From_Aop ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.aopOrder_Received_From_Aop ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp?.aopOrder_AOP_Finish_Fabric_Rcvd ?? "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}>FORMULA</td>
+                                                    <td className={cellClass} style={cellStyle}><input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" /></td>
+
                                                 </tr>
                                             );
                                         });
