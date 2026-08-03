@@ -85,7 +85,7 @@ const AllOrders = ({ orderType }) => {
 
     const COLUMNS = useMemo(() => {
         const cols = [];
-        const defaultWidths = [160, 100, 120, 180, 180, 100, 260];
+        const defaultWidths = [160, 80, 120, 180, 180, 100, 260];
 
         if (orderType === "knittingOrder") {
             cols.push(

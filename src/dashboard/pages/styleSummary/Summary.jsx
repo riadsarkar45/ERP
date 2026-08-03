@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon } from "lucide-react";
+import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
@@ -172,11 +172,12 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 position: "fixed",
                 zIndex: 9999,
                 background: "#fff",
-                border: "1px solid #d1d5db",
+                border: "1px solid #000307",
                 borderRadius: 6,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                 minWidth: 220,
                 maxWidth: 280,
+            
             }}
             className="filter-dropdown"
         >
@@ -394,14 +395,14 @@ export default function Summary() {
         <td
             className="p-0 align-top"
             style={{
-                backgroundColor: colIndex >= 6 ? '#e0e7ff' : '#ffffff',
-                borderRight: '1px solid #e5e7eb',
-                borderBottom: '1px solid #e5e7eb',
+                backgroundColor: colIndex >= 6 ? '#fbf8f8' : '#f9f3f3',
+                borderRight: '1px solid #000000',
+                borderBottom: '1px solid #000206',
             }}
         >
             <div className="divide-y divide-red-600">
                 {compBreakdown.map((cb, j) => {
-                    if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400 italic">_</div>;
+                    if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-black italic">_</div>;
                     const value = cb?.[key];
                     return <div key={j} className="px-3 py-2 whitespace-nowrap">{value !== undefined && value !== null ? value : "_"}</div>;
                 })}
@@ -409,7 +410,7 @@ export default function Summary() {
         </td>
     );
 
-    const getColBg = (index) => index >= 6 ? '#e0e7ff' : '#ffffff';
+    const getColBg = (index) => index >= 6 ? '#fefeff' : '#ffffff';
     const getFrozenStyle = (index) => ({
         position: 'sticky',
         left: `${FROZEN_LEFTS[index]}px`,
@@ -418,15 +419,15 @@ export default function Summary() {
         maxWidth: `${FROZEN_WIDTHS[index]}px`,
         zIndex: 20,
         backgroundColor: '#ffffff',
-        borderRight: '1px solid #e5e7eb',
-        borderBottom: '1px solid #e5e7eb',
+        borderRight: '1px solid #000000',
+        borderBottom: '1px solid #000000',
         boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : 'none',
         overflow: index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
     });
     const getCellStyle = (index) => ({
         backgroundColor: getColBg(index),
-        borderRight: '1px solid #e5e7eb',
-        borderBottom: '1px solid #e5e7eb',
+        borderRight: '1px solid #000001',
+        borderBottom: '1px solid #000000',
     });
 
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
@@ -630,12 +631,12 @@ export default function Summary() {
                     </button>
                     {
                         glanceReport.isGlanceLoading ?
-                            <button className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="See at a glance">
+                            <button className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="See MAKE YOUR RECONCIALATION">
                                 <span className="animate-spin"><RefreshCcw size={18} className="text-gray-600" /></span>
                             </button> :
-                            <button onClick={() => handleGlanceReport()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export">
-                                <ViewIcon size={18} className="text-gray-600" />
-                                At a glance
+                            <button onClick={() => handleGlanceReport()} className="flex font-semibold items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="RECONCIALATION">
+                                <Pen size={20} className="text-gray-600" />
+                                MAKE YOUR RECONCIALATION
                             </button>
                     }
                 </div>
@@ -724,8 +725,8 @@ export default function Summary() {
                                             minWidth: index < FROZEN_COUNT ? `${FROZEN_WIDTHS[index]}px` : 'auto',
                                             maxWidth: index < FROZEN_COUNT ? `${FROZEN_WIDTHS[index]}px` : 'auto',
                                             zIndex: index < FROZEN_COUNT ? 40 : 30,
-                                            borderRight: '1px solid #d1d5db',
-                                            borderBottom: '2px solid #d1d5db',
+                                            borderRight: '1px solid #000409',
+                                            borderBottom: '2px solid #00060e',
                                             boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.15)' : 'none',
                                             overflow: index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
                                         }}
@@ -765,7 +766,7 @@ export default function Summary() {
                                             isEditing.editingField === "salesContact" && isEditing.rowId === row.id ?
                                                 <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
                                                     name="salesContract"
-                                                    className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : row.salesContact
+                                                    className=" bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : row.salesContact
                                         }
                                     </td>
 
@@ -834,7 +835,7 @@ export default function Summary() {
 
                                     {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
                                                 {
                                                     isEditing.editingField === "color" && isEditing.rowId === cell.id ?
@@ -849,7 +850,7 @@ export default function Summary() {
 
                                     {/* 7. COMPOSITION */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(6)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>
                                                     {
@@ -867,7 +868,7 @@ export default function Summary() {
 
                                     {/* 8. FINISH DIA */}
                                     <td className="p-0 align-top" style={getCellStyle(7)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) =>
                                                 <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
                                                     {
@@ -884,7 +885,7 @@ export default function Summary() {
 
                                     {/* 9. ORDER QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
                                                 {
                                                     isEditing.editingField === "orderQty" && isEditing.rowId === cell.id ?
@@ -899,7 +900,7 @@ export default function Summary() {
 
                                     {/* 10. 1st BOOKING */}
                                     <td className="p-0 align-top" style={getCellStyle(9)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div key={j} className="px-3 py-2 whitespace-nowrap">
                                                     {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
@@ -910,14 +911,14 @@ export default function Summary() {
 
                                     {/* 28. PROCESS LOSS % */}
                                     <td className="p-0 align-top" style={getCellStyle(27)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">{row.processLoss || 0}%</div>)}
                                         </div>
                                     </td>
 
                                     {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
                                                 const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
                                                 const netAdditional = Number(cell.additional) - lossQty;
@@ -933,7 +934,7 @@ export default function Summary() {
 
                                     {/* 11. ADDITIONAL BOOKING */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className="px-3 py-2 whitespace-nowrap">
                                                     {
@@ -952,7 +953,7 @@ export default function Summary() {
 
                                     {/* 12. REQUIRED YARN QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(11)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div key={j} className="px-3 py-2 whitespace-nowrap">
                                                     {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
@@ -966,7 +967,7 @@ export default function Summary() {
 
                                     {/* 14. SHORT & EXCESS */}
                                     <td className="p-0 align-top" style={getCellStyle(13)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
                                                 const cb = compBreakdown[j] || {};
                                                 if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
@@ -988,7 +989,7 @@ export default function Summary() {
 
                                     {/* 16. SHORT & EXCESS (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(15)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
                                                 const cb = compBreakdown[j] || {};
                                                 if (cb.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
@@ -1015,7 +1016,7 @@ export default function Summary() {
 
                                     {/* 19. PARTY STOCK */}
                                     <td className="p-0 align-top" style={getCellStyle(18)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {row.rows.map((_, j) => <div key={j} className="px-3 py-2 whitespace-nowrap">party stock</div>)}
                                         </div>
                                     </td>
@@ -1028,7 +1029,7 @@ export default function Summary() {
 
                                     {/* 22. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(21)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
@@ -1059,7 +1060,7 @@ export default function Summary() {
 
                                     {/* 27. GREY BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(26)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const diff = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received') +
@@ -1085,7 +1086,7 @@ export default function Summary() {
 
                                     {/* 31. AOP FAB. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(30)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
@@ -1103,7 +1104,7 @@ export default function Summary() {
 
                                     {/* 32. AOP PROCESS LOSS (%) */}
                                     <td className="p-0 align-top" style={getCellStyle(31)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
@@ -1128,7 +1129,7 @@ export default function Summary() {
 
                                     {/* 37. RE-PROCESS FAB. BALANCE (+/-) */}
                                     <td className="p-0 align-top" style={getCellStyle(36)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
@@ -1147,7 +1148,7 @@ export default function Summary() {
 
                                     {/* 38. RE-PROCESS PROCESS LOSS (%) */}
                                     <td className="p-0 align-top" style={getCellStyle(37)}>
-                                        <div className="divide-y divide-gray-200">
+                                        <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400">_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');

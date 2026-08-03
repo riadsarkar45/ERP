@@ -12,12 +12,12 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
     };
 
     // Updated innerItem to ensure proper full-width borders
-    const innerItem = "border-b border-gray-300 last:border-b-0 w-full py-2 px-3";
+    const innerItem = "border-b border-black text-black last:border-b-0 w-full py-2 px-3";
 
     // All td share these base styles
     const baseTd = {
-        borderRight: "1px solid #e2e8f0",
-        borderBottom: "1px solid #e2e8f0",
+        borderRight: "1px solid #000000",
+        borderBottom: "1px solid #000000",
         padding: 0, // Padding is 0 so innerItem borders align perfectly
         textAlign: "center",
         verticalAlign: "middle",
@@ -103,7 +103,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
     };
 
     const footerTd = {
-        border: "1px solid #e2e8f0",
+        border: "1px solid #000000",
         padding: "8px 12px",
         textAlign: "center",
         verticalAlign: "middle",
@@ -129,7 +129,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                     wo.factoryName === "NULL" ? (
                                         <div key={i} className={`${innerItem} text-gray-500`}>-</div>
                                     ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                             ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
@@ -173,7 +173,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             </td>
 
                             {/* COLOR */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((col, j) => (
                                         <div
@@ -193,7 +193,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
 
 
                             {/* WORK ORDER QTY */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
                                     <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
@@ -205,7 +205,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             </td>
 
                             {/* SENT FOR AOP */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
@@ -216,7 +216,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             </td>
 
                             {/* DEL. SHORT & EXCESS */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
                                         const diff = (wrk.yarnDeliveriesWithColor?.SentForAop || 0) - (wrk.workOrderQty || 0);
@@ -230,7 +230,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 )}
                             </td>
                             {/* RETURN FROM AOP */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
@@ -241,7 +241,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             </td>
 
                             {/* RECEIVED FROM AOP */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
@@ -251,7 +251,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 )}
                             </td>
                             {/* FINISH FROM AOP */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>
@@ -261,7 +261,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 )}
                             </td>
                             {/* DEL. SHORT & EXCESS */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
                                         const diff = (wrk.yarnDeliveriesWithColor?.ReturnFromAop + wrk.yarnDeliveriesWithColor?.ReceivedFromAop || 0) - (wrk.yarnDeliveriesWithColor?.SentForAop || 0);
@@ -275,7 +275,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                 )}
                             </td>
                             {/* UNIT PRICE */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
                                     <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
@@ -287,7 +287,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             </td>
 
                             {/* PAYABLE AMOUNT */}
-                            <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => (
                                         <div key={`${i}-${j}`} className={innerItem}>

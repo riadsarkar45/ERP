@@ -1,0 +1,14 @@
+ .../src/controllers/movements/challanMovement.ts   |  2 [32m+[m[31m-[m
+ src/components/AllOrders.jsx                       |  2 [32m+[m[31m-[m
+ src/components/AopOrder.jsx                        | 30 [32m++++[m[31m-----[m
+ src/components/DyeingOrder.jsx                     | 38 [32m+++++[m[31m------[m
+ src/components/KnittingOrder.jsx                   | 16 [32m++[m[31m---[m
+ src/dashboard/pages/MIS/AopGlance.jsx              | 74 [32m+++++++++++++++[m[31m------[m
+ src/dashboard/pages/MIS/DyeingGlance.jsx           | 63 [32m++++++++++++[m[31m------[m
+ src/dashboard/pages/MIS/GlanceReport.jsx           | 24 [32m++++[m[31m---[m
+ src/dashboard/pages/MIS/KnittingGlance.jsx         | 59 [32m++++++++++++[m[31m-----[m
+ src/dashboard/pages/movement/Aop.jsx               | 13 [32m+++[m[31m-[m
+ src/dashboard/pages/movement/Dyeing.jsx            | 11 [32m++[m[31m--[m
+ src/dashboard/pages/movement/Knitting.jsx          | 22 [32m++++[m[31m---[m
+ src/dashboard/pages/styleSummary/Summary.jsx       | 75 [32m+++++++++++[m[31m-----------[m
+ 13 files changed, 269 insertions(+), 160 deletions(-)

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
+import { formatToErpDate } from '../../../helpers/date/formateDate';
 
 // Note: borderCollapse is "separate" (not "collapse") on the <table> so the
 // sticky header keeps its border while scrolling — collapsed borders and
@@ -47,8 +48,8 @@ const DELIVERY_TYPE_MAP = {
 // Column definitions. Added a "select" column at the start.
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true },
-    { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "Date", width: "10%", key: "challanDate" },
+    { header: "Challan No", width: "9%", key: "challanNo" },  
     { header: "Work Order", width: "9%", key: "workOrder" },
     { header: "Composition", width: "10%", key: "composition" },
     { header: "To Factory", width: "9%", key: "toFactory" },
@@ -123,7 +124,9 @@ const Dyeing = () => {
                     mvId,
                     chId: ch.id,
                     challanNo: ch.challanNo,
-                    challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
+                    // challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
+                    challanDate: formatToErpDate(ch.challanDate),
+                    // challanDate: formatToErpDate(ch.challanDate),
                     composition: mv.composition,
                     workOrder: mv.workOrder?.jobNo ?? "",
                     toFactory: ch.toFactory,
@@ -389,9 +392,9 @@ const Dyeing = () => {
                                             });
                                         }}
                                     />
-                                </td>
-                                <td style={cellStyle}>{row.challanNo}</td>
+                                </td>                                
                                 <td style={cellStyle}>{row.challanDate}</td>
+                                <td style={cellStyle}>{row.challanNo}</td>
                                 <td style={cellStyle}>{row.workOrder}</td>
                                 <td style={cellStyle}>{row.composition}</td>
                                 <td style={cellStyle}>{row.toFactory}</td>

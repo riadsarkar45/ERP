@@ -41,7 +41,7 @@ export const challanMovement = async (req: Request, res: Response) => {
                         toFactory: true,
                         fromFactory: true,
                         deliveries: {
-                            select: {
+                            select: {                          
                                 id: true,
                                 challanNo: true,
                                 deliveryDate: true,
