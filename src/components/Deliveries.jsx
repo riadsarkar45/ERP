@@ -7,9 +7,19 @@ const formatKg = (num) => {
   return `${Number(num).toLocaleString()} kg`;
 };
 
-// Delivery types that mean "we are receiving into this factory" — for these,
-// the factory name defaults into the FROM field instead of the TO field.
-const RECEIVE_DELIVERY_TYPES = ["Received From Aop", "Grey Received", "Grey Return", "Return From Aop", "Yarn Return", "Grey Fabric Received", "Aop Grey Received"];
+// ✅ 1. EXPANDED: Added all "Receiving" types across all order types so the logic works for Dyeing/Knitting too
+const RECEIVE_DELIVERY_TYPES = [
+  "Received from AOP",
+  "Grey Received",
+  "Aop Grey Received",
+  "Yarn Received",
+  "Grey Received From Dyeing",
+  "Finish Fabric Received",
+  "Received From Compacting",
+  "Yarn Received From Yarn Dye",
+  "Finish Received",
+  "AOP Finish Fabric Rcvd"
+];
 
 const flattenDeliveries = (workOrders) => {
   return (workOrders || []).flatMap((wo) =>
@@ -32,24 +42,20 @@ const flattenDeliveries = (workOrders) => {
   );
 };
 
-const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
+const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplicateChallan, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
   const [openYarnIds, setOpenYarnIds] = useState(new Set());
 
-  // Flatten work orders -> compositions into rows
   const baseRows = flattenDeliveries(deliveries);
-
-  // Info strip pulls from the first row that actually has style requirement data
   const styleReq = baseRows.find((r) => r.buyerName || r.processLoss) || {};
   const totalWorkOrderQty = baseRows.reduce((sum, r) => sum + (r.workOrderQty || 0), 0);
 
   const [removedIds, setRemovedIds] = useState(new Set());
   const visibleRows = baseRows.filter((r) => !removedIds.has(r.id));
 
-  // Group visible rows by their parent work order / factory for display
   const groupedRows = visibleRows.reduce((groups, row) => {
     const key = row.workOrderId;
     if (!groups[key]) {
-      groups[key] = { workOrderId: row.workOrderId, factoryName: row.factoryName, rows: [] };
+      groups[key] = { workOrderId: row.workOrderId, factoryName: row.factoryName, jobNo: row.jobNo, rows: [] };
     }
     groups[key].rows.push(row);
     return groups;
@@ -66,12 +72,11 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
   };
 
   const deliveryTypes = [];
-  if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Fabric Received");
-  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Delivery", "Grey Return", "Grey Received", "Sent For Compacting", "Received From Compacting");
-  if (orderType === "aopOrder") deliveryTypes.push("Sent For Aop", "Received From Aop", "AOP Finish Fabric Rcvd", "Return From Aop");
+  if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Received");
+  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return Received", "Grey Received From Dyeing", "Finish Fabric Received", "Sent For Compacting", "Received From Compacting");
+  if (orderType === "aopOrder") deliveryTypes.push("Sent for AOP", "Received from AOP", "Aop Grey Received");
   if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
 
-  // Aggregate deliveries by type for a composition
   const aggregateDeliveries = (deliveriesArr) => {
     const map = {};
     for (const d of deliveriesArr) {
@@ -84,16 +89,11 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
   const handleShowDeliveryInputs = (yarnId) => {
     setOpenYarnIds((prev) => {
       const next = new Set(prev);
-      if (next.has(yarnId)) {
-        next.delete(yarnId);
-      } else {
-        next.add(yarnId);
-      }
+      if (next.has(yarnId)) next.delete(yarnId);
+      else next.add(yarnId);
       return next;
     });
   };
-
-
 
   const handleGlobalSubmit = async () => {
     const rowsToSubmit = visibleRows.filter((r) => openYarnIds.has(r.yarnId));
@@ -114,7 +114,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
       const parsedQty = Number(rowChangedField.deliveryQty);
       const parsedFinishQty = rowChangedField.finishReceivedQty ? Number(rowChangedField.finishReceivedQty) : 0;
 
-      // 📦 3. SANITIZE THE DELIVERIES ARRAY
       let finalDeliveries = [];
       if (rowChangedField.deliveries && rowChangedField.deliveries.length > 0) {
         finalDeliveries = rowChangedField.deliveries.map(d => ({
@@ -131,11 +130,14 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         ];
       }
 
-      // Construct full payload with fallbacks to default values
+      // ✅ 2 & 3. FIXED LOGIC & EMPTY STRING BUG:
+      // - If receiving, this factory is the destination (toFactory).
+      // - If sending (!receiving), this factory is the source (fromFactory).
+      // - Using `||` ensures that if the user leaves it blank (""), it correctly falls back to the work order factory instead of sending a blank string to the backend.
       const fullPayload = {
         ...rowChangedField,
-        toFactory: rowChangedField.toFactory !== undefined ? rowChangedField.toFactory : (!isReceiveType ? row.factoryName : ""),
-        fromFactory: rowChangedField.fromFactory !== undefined ? rowChangedField.fromFactory : (isReceiveType ? row.factoryName : ""),
+        toFactory: rowChangedField.toFactory || (isReceiveType ? row.factoryName : ""),
+        fromFactory: rowChangedField.fromFactory || (!isReceiveType ? row.factoryName : ""),
         date: rowChangedField.date || new Date().toISOString().split("T")[0],
         challanNo: rowChangedField.challanNo || "",
         deliveryType: rowChangedField.deliveryType,
@@ -171,7 +173,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         ))}
       </div>
 
-      {/* ✅ SUCCESS MESSAGES (Stored in challanIssue) */}
       {challanIssue?.length > 0 && (
         challanIssue.map((issue, index) => (
           <div key={index} className="bg-green-100 border border-green-500 text-green-700 p-4 rounded-md mb-3 mt-2 flex items-center gap-3">
@@ -184,7 +185,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         ))
       )}
 
-      {/* ✅ ERROR MESSAGES (Stored in deliveryIssue) */}
       {(deliveryIssue?.deliveries?.length > 0 || (Array.isArray(deliveryIssue) && deliveryIssue.length > 0)) && (
         (deliveryIssue.deliveries || deliveryIssue).map((issue, index) => (
           <div key={index} className={`${issue.type === "error" ? "bg-red-100 border border-red-500 text-red-700" : "bg-amber-100 border border-amber-500 text-amber-700"} p-4 rounded-md mb-3 mt-2 flex items-center gap-3`}>
@@ -197,18 +197,16 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         ))
       )}
 
-      {/* Rows, grouped by the work order / factory they came from */}
       <div className="overflow-y-auto max-h-[32rem] divide-y divide-gray-100">
         {groupList.length === 0 ? (
           <div className="py-10 text-center text-[11px] tracking-widest uppercase text-gray-300">No compositions found</div>
         ) : (
           groupList.map((group) => (
             <div key={group.workOrderId}>
-              {/* Factory / work order header */}
               {groupList.length > 1 && (
                 <div className="px-5 pt-3 pb-1 flex items-center gap-2 bg-gray-50">
                   <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">
-                    {group.factoryName || `Work Order #${group.workOrderId}`}
+                    {group.factoryName || `Job No #${group.jobNo}`}
                   </span>
                 </div>
               )}
@@ -216,16 +214,12 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
               {group.rows.map((row) => {
                 const aggregated = aggregateDeliveries(row.deliveries);
 
-                // 🧮 CALCULATE REMAINING DELIVERY (workOrderQty + return - delivery qty)
                 let totalDelivery = 0;
                 let totalReturn = 0;
                 Object.entries(aggregated).forEach(([type, qty]) => {
                   const lowerType = type.toLowerCase();
-                  if (lowerType.includes("return")) {
-                    totalReturn += Number(qty);
-                  } else if (lowerType.includes("delivery") || lowerType.includes("sent")) {
-                    totalDelivery += Number(qty);
-                  }
+                  if (lowerType.includes("return")) totalReturn += Number(qty);
+                  else if (lowerType.includes("delivery") || lowerType.includes("sent")) totalDelivery += Number(qty);
                 });
                 const remainingDelivery = (Number(row.workOrderQty) || 0) + totalReturn - totalDelivery;
 
@@ -236,7 +230,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                 return (
                   <div key={row.id} className={`${isOpen && "bg-green-300 bg-opacity-30 p-2"} flex flex-col px-5 py-4 gap-3`}>
 
-                    {/* Composition label + work order qty + remaining badge */}
                     <div className="flex items-center gap-3 flex-wrap">
                       <span
                         onClick={() => handleShowDeliveryInputs(row.yarnId)}
@@ -244,20 +237,24 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                       >
                         {row.composition}
                       </span>
-                      <span className="text-[10px] text-gray-400">{formatKg(row.workOrderQty)} work order qty</span>
-
-                      {/* ✅ REMAINING DELIVERY BADGE */}
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${remainingDelivery > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                          remainingDelivery < 0 ? 'bg-red-50 text-red-600 border-red-200' :
-                            'bg-green-50 text-green-600 border-green-200'
-                        }`}>
-                        {formatKg(Math.abs(remainingDelivery))} {remainingDelivery > 0 ? 'remaining' : remainingDelivery < 0 ? 'excess' : 'fulfilled'}
+                      <span className="text-[10px] text-gray-400">
+                        {row.workOrderQty > 0 ? formatKg(row.workOrderQty) : "No Qty"} work order qty
                       </span>
 
+                      {row.workOrderQty > 0 && (
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${remainingDelivery > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                            remainingDelivery < 0 ? 'bg-red-50 text-red-600 border-red-200' :
+                              'bg-green-50 text-green-600 border-green-200'
+                          }`}>
+                          {formatKg(Math.abs(remainingDelivery))} {remainingDelivery > 0 ? 'remaining' : remainingDelivery < 0 ? 'excess' : 'fulfilled'}
+                        </span>
+                      )}
 
+                      {row.jobNo && (
+                        <span className="text-[18px] text-gray-900">· {row.jobNo}</span>
+                      )}
                     </div>
 
-                    {/* Aggregated delivery summary */}
                     {Object.keys(aggregated).length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(aggregated).map(([type, qty]) => (
@@ -269,7 +266,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                       </div>
                     )}
 
-                    {/* Single input row per composition */}
                     {isOpen && (
                       <div className="flex flex-wrap gap-2 items-end">
                         <div className="flex flex-col gap-1">
@@ -283,26 +279,18 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                           />
                         </div>
 
-                        {(
-                          (
-                            ["Grey Received", "Grey Fabric Received"].includes(rowChangedField.deliveryType) &&
-                            ["dyeingOrder", "aopOrder"].includes(orderType)
-                          ) ||
-                          rowChangedField.deliveryType === "Aop Grey Received"
-                        ) && (
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[9px] uppercase tracking-wider text-gray-400">
-                                Finish Qty
-                              </span>
-                              <input
-                                onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                                name="finishReceivedQty"
-                                className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                                type="text"
-                                placeholder="Finish Qty"
-                              />
-                            </div>
-                          )}
+                        {((rowChangedField.deliveryType === "Grey Received" && (orderType === "dyeingOrder" || orderType === "aopOrder")) || rowChangedField.deliveryType === "Aop Grey Received") && (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
+                            <input
+                              onChange={(e) => handleEditOnChange(row.yarnId, e)}
+                              name="finishReceivedQty"
+                              className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+                              type="text"
+                              placeholder="Finish Qty"
+                            />
+                          </div>
+                        )}
 
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] uppercase tracking-wider text-gray-400">Challan</span>
@@ -326,6 +314,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                           />
                         </div>
 
+                        {/* ✅ FIXED INVERTED LOGIC IN UI INPUTS */}
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] uppercase tracking-wider text-gray-400">
                             {orderType === "aopOrder" && "Aop Factory"}
@@ -338,7 +327,8 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                             name="toFactory"
                             className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
                             type="text"
-                            defaultValue={!isReceiveType ? group.factoryName : ""}
+                            // If receiving, this factory is the destination (To)
+                            defaultValue={isReceiveType ? group.factoryName : ""}
                             placeholder="To Factory"
                           />
                         </div>
@@ -351,7 +341,8 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                             name="fromFactory"
                             className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
                             type="text"
-                            defaultValue={isReceiveType ? group.factoryName : ""}
+                            // If sending (!receiving), this factory is the source (From)
+                            defaultValue={!isReceiveType ? group.factoryName : ""}
                             placeholder="From Factory"
                           />
                         </div>
@@ -384,7 +375,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         )}
       </div>
 
-      {/* Single global submit button */}
       {openYarnIds.size > 0 && (
         <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-100 bg-gray-50 rounded-b-xl">
           <span className="text-[11px] text-gray-400">

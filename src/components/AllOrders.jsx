@@ -363,14 +363,20 @@ const AllOrders = ({ orderType }) => {
 
         setChangedField(prev => {
             const rowPrev = prev[yarnId] || {};
-            // Fixed: previously also set a literal `name` key to today's date on every
-            // keystroke, clobbering `[name]: value` and never actually sending `date`,
-            // which the backend requires.
             const updatedRow = {
                 ...rowPrev,
                 [name]: value,
                 date: rowPrev.date ?? new Date().toISOString().split("T")[0],
             };
+
+            // The delivery type flip changes which side ("to"/"from") should be
+            // this work order's own factory. Any previously typed toFactory/
+            // fromFactory values were for the OLD direction and are now stale —
+            // drop them so the submit-time fallback recomputes the correct side.
+            if (name === "deliveryType") {
+                delete updatedRow.toFactory;
+                delete updatedRow.fromFactory;
+            }
 
             const isAopGreyReceived = updatedRow.deliveryType === "Aop Grey Received";
 
@@ -588,7 +594,7 @@ const AllOrders = ({ orderType }) => {
                 </div>
             </div>
 
-           
+
         </div>
     );
 };
