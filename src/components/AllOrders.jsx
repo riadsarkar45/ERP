@@ -377,7 +377,7 @@ const AllOrders = ({ orderType }) => {
             const deliveries = [
                 { deliveryType: updatedRow.deliveryType, qty: updatedRow.deliveryQty },
                 ...(updatedRow.finishReceivedQty ? [{
-                    deliveryType: isAopGreyReceived ? "Finish Received From Aop" : "Finish Received",
+                    deliveryType: isAopGreyReceived ? "AOP Finish Fabric Rcvd" : "Finish Received",
                     qty: updatedRow.finishReceivedQty
                 }] : []),
             ];
