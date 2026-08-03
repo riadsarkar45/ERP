@@ -83,9 +83,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
             return res.status(400).json({ type: "error", message: "orderType is required" });
         }
 
-        const page = Math.max(1, Number(req.query.page) || 1);
-        const limit = Math.max(1, Number(req.query.limit) || 10);
-        const skip = (page - 1) * limit;
+        // const page = Math.max(1, Number(req.query.page) || 1);
+        // const limit = Math.max(1, Number(req.query.limit) || 50);
+        // const skip = (page - 1) * limit;
 
         let filters: Record<string, string[]> = {};
         if (typeof req.query.filters === "string") {
@@ -101,9 +101,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
         const [jobsResult, total] = await Promise.all([
             prisma.jobs.findMany({
                 where,
-                skip,
+                // skip,
 
-                take: limit,
+                take: 40,
                 select: {
                     jobNo: true,
                     createdAt: true,
@@ -167,7 +167,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
         return res.status(200).json({
             type: "success",
             data: statsResult,
-            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+            // pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         });
     } catch (e) {
         console.error(e);

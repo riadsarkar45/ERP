@@ -588,24 +588,7 @@ const AllOrders = ({ orderType }) => {
                 </div>
             </div>
 
-            {/* Pagination controls */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 8px" }}>
-                <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                >
-                    Previous
-                </button>
-                <span>
-                    Page {pagination.page} of {pagination.totalPages || 1} ({pagination.total} jobs)
-                </span>
-                <button
-                    onClick={() => setPage(p => (pagination.totalPages ? Math.min(pagination.totalPages, p + 1) : p + 1))}
-                    disabled={page >= (pagination.totalPages || 1)}
-                >
-                    Next
-                </button>
-            </div>
+           
         </div>
     );
 };

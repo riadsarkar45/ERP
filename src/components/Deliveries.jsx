@@ -9,7 +9,7 @@ const formatKg = (num) => {
 
 // Delivery types that mean "we are receiving into this factory" — for these,
 // the factory name defaults into the FROM field instead of the TO field.
-const RECEIVE_DELIVERY_TYPES = ["Received from AOP", "Grey Received", "Aop Grey Received"];
+const RECEIVE_DELIVERY_TYPES = ["Received from AOP", "Grey Received", "Grey Return", "Return From Aop", "Aop Grey Received"];
 
 const flattenDeliveries = (workOrders) => {
   return (workOrders || []).flatMap((wo) =>
