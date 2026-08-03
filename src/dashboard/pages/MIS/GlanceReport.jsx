@@ -36,11 +36,14 @@ const GlanceReport = () => {
             { header: "JOB NO.", width: 120 },
             { header: "KNITTING WORK ORDER QTY", width: 220 },
             { header: "YARN DELIVERY", width: 140 },
+            { header: "SHORT & EXCESS", width: 140 },
+            { header: "YARN DEL. (%)", width: 140 },
             { header: "GREY RECEIVED", width: 140 },
             { header: "YARN RETURN", width: 140 },
-            { header: "SHORT & EXCESS", width: 140 },
-            { header: "PRICE PER KG", width: 120 },
-            { header: "PAYABLE AMOUNT", width: 180 }
+            { header: "PARTY STOCK", width: 140 },
+             { header: "RECEIVED (%)", width: 140 },
+            // { header: "PRICE PER KG", width: 120 },
+            // { header: "PAYABLE AMOUNT", width: 180 }
         );
     }
     if (selectOrderType === "dyeingOrder") {
@@ -50,13 +53,15 @@ const GlanceReport = () => {
             { header: "DYEING WORK ORDER QTY", width: 220 },
             { header: "GREY DELIVERY", width: 140 },
             { header: "GREY DEV SHORT & EXCESS", width: 140 },
+            { header: "DELIVERY (%)", width: 140 },
             { header: "GREY RETURN", width: 140 },
             { header: "GREY RECEIVE", width: 140 },
                    // <-- Fixed: Added Grey Return
             { header: "FINISH RECEIVE", width: 140 },
-            { header: "FINISH RCV SHORT & EXCESS", width: 140 },
+            { header: "PROCESS LOSS", width: 140 },
             // { header: "PRICE PER KG", width: 120 },
-            { header: "PARTY STOCK", width: 180 }
+            { header: "PARTY STOCK", width: 180 },
+            { header: "RECEIVED (%)", width: 140 },
         );
     }
     if (selectOrderType === "aopOrder") {
@@ -65,12 +70,15 @@ const GlanceReport = () => {
             { header: "JOB NO.", width: 120 },
             { header: "AOP WORK ORDER QTY", width: 220 },
             { header: "SENT FOR AOP", width: 140 },
+            { header: "DEL.SHORT & EXCESS", width: 140 },
+             { header: "DELIVERY (%)", width: 140 },
             { header: "RECEIVE FROM AOP", width: 140 },
             { header: "FINISH RECEIVED FROM AOP", width: 140 },
             { header: "RETURN FROM AOP", width: 140 },
-            { header: "SHORT & EXCESS", width: 140 },
-            { header: "PRICE PER KG", width: 120 },
-            { header: "PAYABLE AMOUNT", width: 180 }
+            { header: "PROCESS LOSS", width: 180 },
+            { header: "PARTY STOCK", width: 140 },            
+            // { header: "PRICE PER KG", width: 120 },            
+            { header: "RECEIVED (%)", width: 140 },
         );
     }
 

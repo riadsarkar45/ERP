@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
 import useAxiosPublic from '../../../hooks/Axios';
+import { formatToErpDate } from '../../../helpers/date/formateDate';
 
 // Note: borderCollapse is "separate" (not "collapse") on the <table> so the
 // sticky header keeps its border while scrolling — collapsed borders and
@@ -39,8 +40,8 @@ const pageButtonStyle = (active) => ({
 
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true }, // Checkbox column
-    { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "Date", width: "10%", key: "challanDate" },
+    { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "Work Order", width: "9%", key: "workOrder" },
     { header: "Composition", width: "10%", key: "composition" },
     { header: "Color", width: "10%", key: "color" },
@@ -54,6 +55,8 @@ const tableHeader = [
     { header: "Billing Amount", width: "9%", key: "billingAmount" },
     { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount" },
 ];
+
+
 
 const Aop = () => {
     const [movements, setMovements] = useState([]);
@@ -125,7 +128,8 @@ const Aop = () => {
                     mvId,
                     chId,
                     challanNo: ch.challanNo,
-                    challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
+                    // challanDate: formatToErpDate(ch.challanDate),
+                    challanDate: formatToErpDate(ch.challanDate),
                     composition: mv.composition,
                     workOrder: mv.workOrder?.jobNo ?? "",
                     toFactory: ch.toFactory,
@@ -143,6 +147,9 @@ const Aop = () => {
         });
         return flat;
     }, [movements]);
+
+
+    // Example usage:
 
     const filterOptions = useMemo(() => {
         const opts = {};
@@ -443,8 +450,8 @@ const Aop = () => {
                                             onClick={() => handleBillPreparation(row.chId)}
                                         />
                                     </td>
+                                    <td style={cellStyle}>{formatToErpDate(row.challanDate)}</td>
                                     <td style={cellStyle}>{row.challanNo} {"=>"} {row.chId}</td>
-                                    <td style={cellStyle}>{row.challanDate}</td>
                                     <td style={cellStyle}>{row.workOrder}</td>
                                     <td style={cellStyle}>{row.composition}</td>
                                     <td style={cellStyle}>{row.color}</td>

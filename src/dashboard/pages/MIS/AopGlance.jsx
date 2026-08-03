@@ -22,12 +22,12 @@ const footerCellStyle = {
     position: "sticky",
     bottom: 0,
     zIndex: 5,
-    backgroundColor: "#f3f4f6",
+    // backgroundColor: "#f3f4f6",
     fontWeight: 700,
 };
 
-const formatNumber = (value) => Number(value || 0).toLocaleString("en-US");
-const formatMoney = (value) => Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatNumber = (value) => Number(value || 0).toFixed(2).toLocaleString("en-US");
+const formatMoney = (value) => Number(value || 0).toFixed(2).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const renderColoredShortExcess = (diff) => {
     const formatted = formatNumber(Math.abs(diff));
@@ -39,7 +39,7 @@ const renderColoredShortExcess = (diff) => {
 const getDeliverySum = (deliveries, targetType) => {
     if (!Array.isArray(deliveries)) return 0;
     const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "").toLowerCase();
-    
+
     return deliveries.reduce((acc, d) => {
         const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "").toLowerCase();
         if (normalizedType === normalizedTarget) {
@@ -53,7 +53,7 @@ const AopGlance = ({ detailView }) => {
     const processedData = useMemo(() => {
         return (detailView || []).map((job) => {
             const factoryName = job.workOrders?.[0]?.factoryName || "Unknown Factory";
-            
+
             let totalWorkOrderQty = 0;
             let totalPayableAmount = 0;
             let sentForAop = 0;
@@ -143,43 +143,81 @@ const AopGlance = ({ detailView }) => {
                         <td style={cellStyle}>{formatNumber(job.totalWorkOrderQty)}</td>
                         {/* 4. SENT FOR AOP */}
                         <td style={cellStyle}>{formatNumber(job.sentForAop)}</td>
+                        {/* 8. Del.SHORT & EXCESS */}
+                        <td className='bg-yellow-500 bg-opacity-20' style={cellStyle}>{renderColoredShortExcess(job.sentForAop - job.totalWorkOrderQty)}</td>
+                        {/* 8. Del.% */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {(
+                                job.totalWorkOrderQty
+                                    ? (job.sentForAop / job.totalWorkOrderQty) * 100
+                                    : 0
+                            ).toFixed(2)}%
+                        </td>
+
                         {/* 5. RECEIVE FROM AOP */}
                         <td style={cellStyle}>{formatNumber(job.receivedFromAop)}</td>
                         {/* 6. FINISH RECEIVED FROM AOP */}
                         <td style={cellStyle}>{formatNumber(job.aopFinishFabricRcvd)}</td>
                         {/* 7. RETURN FROM AOP */}
                         <td style={cellStyle}>{formatNumber(job.returnFromAop)}</td>
+                        {/* 7. PROCESS LOSS */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {(
+                                job.receivedFromAop
+                                    ? ((job.receivedFromAop - job.aopFinishFabricRcvd) / job.receivedFromAop) * 100
+                                    : 0
+                            ).toFixed(2)}%
+                        </td>
                         {/* 8. SHORT & EXCESS */}
-                        <td style={cellStyle}>{renderColoredShortExcess(job.receivedFromAop - job.aopFinishFabricRcvd)}</td>
+                        <td className='bg-yellow-500 bg-opacity-20' style={cellStyle}>{renderColoredShortExcess(job.receivedFromAop + job.returnFromAop - job.aopFinishFabricRcvd)}</td>
+                        {/* {RECEIVED %} */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {(
+                                job.sentForAop
+                                    ? ((job.receivedFromAop || 0 + job.returnFromAop || 0) / job.sentForAop || 0) * 100
+                                    : 0
+                            ).toFixed(2)}%
+                        </td>
+
+
                         {/* 9. PRICE PER KG */}
-                        <td style={cellStyle}>{formatMoney(job.averageUnitPrice)}</td>
+                        {/* <td style={cellStyle}>{formatMoney(job.averageUnitPrice)}</td> */}
                         {/* 10. PAYABLE AMOUNT */}
-                        <td style={cellStyle}>{formatMoney(job.totalPayableAmount)}</td>
+                        {/* <td style={cellStyle}>{formatMoney(job.totalPayableAmount)}</td> */}
                     </tr>
                 ))}
             </tbody>
             <tfoot>
                 <tr>
                     {/* 1. TOTAL Label */}
-                    <td style={footerCellStyle}>TOTAL</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>TOTAL</td>
                     {/* 2. JOB NO. (Empty) */}
-                    <td style={footerCellStyle}>&nbsp;</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>&nbsp;</td>
                     {/* 3. WORK ORDER QTY */}
-                    <td style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
                     {/* 4. SENT FOR AOP */}
-                    <td style={footerCellStyle}>{formatNumber(totals.sentForAop)}</td>
-                    {/* 5. RECEIVE FROM AOP */}
-                    <td style={footerCellStyle}>{formatNumber(totals.receivedFromAop)}</td>
-                    {/* 6. FINISH RECEIVED FROM AOP */}
-                    <td style={footerCellStyle}>{formatNumber(totals.aopFinishFabricRcvd)}</td>
-                    {/* 7. RETURN FROM AOP */}
-                    <td style={footerCellStyle}>{formatNumber(totals.returnFromAop)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.sentForAop)}</td>
                     {/* 8. SHORT & EXCESS */}
-                    <td style={footerCellStyle}>{renderColoredShortExcess(totals.receivedFromAop - totals.aopFinishFabricRcvd)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{renderColoredShortExcess(totals.sentForAop - totals.workOrderQty)}</td>
+                    {/* 8. DEl. % */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{ }</td>
+                    {/* 5. RECEIVE FROM AOP */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.receivedFromAop)}</td>
+                    {/* 6. FINISH RECEIVED FROM AOP */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.aopFinishFabricRcvd)}</td>
+                    {/* 7. RETURN FROM AOP */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.returnFromAop)}</td>
+                    {/* 7. RETURN FROM AOP */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{ }</td>
+
+                    {/* 8. SHORT & EXCESS */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{renderColoredShortExcess(totals.receivedFromAop + totals.returnFromAop - totals.sentForAop)}</td>
                     {/* 9. PRICE PER KG (Empty) */}
-                    <td style={footerCellStyle}>&nbsp;</td>
+                    {/* <td style={footerCellStyle}>&nbsp;</td> */}
                     {/* 10. PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}>{formatMoney(totals.payableAmount)}</td>
+                    {/* <td style={footerCellStyle}>{formatMoney(totals.payableAmount)}</td> */}
+                    {/* 8. RCVD % */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{ }</td>
                 </tr>
             </tfoot>
         </>

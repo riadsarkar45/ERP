@@ -22,12 +22,12 @@ const footerCellStyle = {
     position: "sticky",
     bottom: 0,
     zIndex: 5,
-    backgroundColor: "#f3f4f6",
+    // backgroundColor: "#f3f4f6",
     fontWeight: 700,
 };
 
-const formatNumber = (value) => Number(value || 0).toLocaleString("en-US");
-const formatMoney = (value) => Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatNumber = (value) => Number(value || 0).toFixed(2).toLocaleString("en-US");
+const formatMoney = (value) => Number(value || 0).toFixed(2).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const renderColoredShortExcess = (diff) => {
     const formatted = formatNumber(Math.abs(diff));
@@ -39,7 +39,7 @@ const renderColoredShortExcess = (diff) => {
 const getDeliverySum = (deliveries, targetType) => {
     if (!Array.isArray(deliveries)) return 0;
     const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "").toLowerCase();
-    
+
     return deliveries.reduce((acc, d) => {
         const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "").toLowerCase();
         if (normalizedType === normalizedTarget) {
@@ -49,11 +49,12 @@ const getDeliverySum = (deliveries, targetType) => {
     }, 0);
 };
 
+
 const KnittingGlance = ({ detailView }) => {
     const processedData = useMemo(() => {
         return (detailView || []).map((job) => {
             const factoryName = job.workOrders?.[0]?.factoryName || "Unknown Factory";
-            
+
             let totalWorkOrderQty = 0;
             let totalPayableAmount = 0;
             let yarnDelivery = 0;
@@ -137,39 +138,63 @@ const KnittingGlance = ({ detailView }) => {
                         <td style={cellStyle}>{formatNumber(job.totalWorkOrderQty)}</td>
                         {/* 4. YARN DELIVERY */}
                         <td style={cellStyle}>{formatNumber(job.yarnDelivery)}</td>
+                        {/* 7. DEL.SHORT & EXCESS */}
+                        <td className='bg-yellow-500 bg-opacity-20' style={cellStyle}>{renderColoredShortExcess(job.yarnDelivery - job.totalWorkOrderQty)}</td>
+                        {/* 7. YARN DELIVERY (%) */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {renderColoredShortExcess(
+                                job.totalWorkOrderQty
+                                    ? (job.yarnDelivery / job.totalWorkOrderQty) * 100
+                                    : 0
+                            )}%
+                        </td>
                         {/* 5. GREY RECEIVED */}
                         <td style={cellStyle}>{formatNumber(job.greyReceived)}</td>
                         {/* 6. YARN RETURN */}
                         <td style={cellStyle}>{formatNumber(job.yarnReturn)}</td>
                         {/* 7. SHORT & EXCESS */}
-                        <td style={cellStyle}>{renderColoredShortExcess(job.yarnDelivery - job.totalWorkOrderQty)}</td>
+                        <td className='bg-yellow-500 bg-opacity-20' style={cellStyle}>{renderColoredShortExcess(job.greyReceived + job.yarnReturn - job.totalWorkOrderQty)}</td>
+                        {/* 7. RECEIVED (%) */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {renderColoredShortExcess(
+                                job.totalWorkOrderQty
+                                    ? ((job.greyReceived + job.yarnReturn) / job.totalWorkOrderQty) * 100
+                                    : 0
+                            )}%
+                        </td>
                         {/* 8. PRICE PER KG */}
-                        <td style={cellStyle}>{formatMoney(job.averageUnitPrice)}</td>
+                        {/* <td style={cellStyle}>{formatMoney(job.averageUnitPrice)}</td> */}
                         {/* 9. PAYABLE AMOUNT */}
-                        <td style={cellStyle}>{formatMoney(job.totalPayableAmount)}</td>
+                        {/* <td style={cellStyle}>{formatMoney(job.totalPayableAmount)}</td> */}
                     </tr>
                 ))}
             </tbody>
             <tfoot>
                 <tr>
                     {/* 1. TOTAL Label */}
-                    <td style={footerCellStyle}>TOTAL</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>TOTAL</td>
                     {/* 2. JOB NO. (Empty) */}
-                    <td style={footerCellStyle}>&nbsp;</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>&nbsp;</td>
                     {/* 3. WORK ORDER QTY */}
-                    <td style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
                     {/* 4. YARN DELIVERY */}
-                    <td style={footerCellStyle}>{formatNumber(totals.yarnDelivery)}</td>
-                    {/* 5. GREY RECEIVED */}
-                    <td style={footerCellStyle}>{formatNumber(totals.greyReceived)}</td>
-                    {/* 6. YARN RETURN */}
-                    <td style={footerCellStyle}>{formatNumber(totals.yarnReturn)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.yarnDelivery)}</td>
                     {/* 7. SHORT & EXCESS */}
-                    <td style={footerCellStyle}>{renderColoredShortExcess(totals.yarnDelivery - totals.workOrderQty)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{renderColoredShortExcess(totals.yarnDelivery - totals.workOrderQty)}</td>
+                    {/* 7. YARN DEL. (%) */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{}-</td>
+                    {/* 5. GREY RECEIVED */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.greyReceived)}</td>
+                    {/* 6. YARN RETURN */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.yarnReturn)}</td>
+                    {/* 7. SHORT & EXCESS */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{renderColoredShortExcess(totals.greyReceived + totals.yarnReturn - totals.yarnDelivery)}</td>
+                    {/* 7. RECEIVED (%) */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{}-</td>
                     {/* 8. PRICE PER KG (Empty) */}
-                    <td style={footerCellStyle}>&nbsp;</td>
+                    {/* <td style={footerCellStyle}>&nbsp;</td> */}
                     {/* 9. PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}>{formatMoney(totals.payableAmount)}</td>
+                    {/* <td style={footerCellStyle}>{formatMoney(totals.payableAmount)}</td> */}
                 </tr>
             </tfoot>
         </>

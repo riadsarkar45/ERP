@@ -16,7 +16,7 @@ const footerCellStyle = {
     position: "sticky",
     bottom: 0,
     zIndex: 5,
-    backgroundColor: "#f3f4f6",
+    // backgroundColor: "#f3f4f6",
     fontWeight: 700,
 };
 
@@ -26,8 +26,8 @@ const sumArray = (arr) => {
     return arr.reduce((acc, val) => acc + (Number(val) || 0), 0);
 };
 
-const formatNumber = (value) => Number(value || 0).toLocaleString("en-US");
-const formatMoney = (value) => Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatNumber = (value) => Number(value || 0).toFixed(2).toLocaleString("en-US");
+const formatMoney = (value) => Number(value || 0).toFixed(2).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const renderColoredShortExcess = (diff) => {
     const formatted = formatNumber(Math.abs(diff));
@@ -137,7 +137,15 @@ const DyeingGlance = ({ detailView }) => {
                         {/* 4. GREY DELIVERY */}
                         <td style={cellStyle}>{formatNumber(job.greyDelivery)}</td>
                         {/* 6. GREY DEV SHORT & EXCESS */}
-                        <td style={cellStyle}>{renderColoredShortExcess(job.greyDelivery - job.totalWorkOrderQty)}</td>
+                        <td className='bg-yellow-500 bg-opacity-20' style={cellStyle}>{renderColoredShortExcess(job.greyDelivery - job.totalWorkOrderQty)}</td>
+                        {/* 6. DELIVERY (%) */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {(
+                                job.totalWorkOrderQty
+                                    ? (job.greyDelivery / job.totalWorkOrderQty) * 100
+                                    : 0
+                            ).toFixed(2)}%
+                        </td>
                         {/* 7. GREY RETURN */}
                         <td style={cellStyle}>{formatNumber(job.greyReturn)}</td>
                         {/* 5. GREY RECEIVE */}
@@ -145,37 +153,54 @@ const DyeingGlance = ({ detailView }) => {
                         {/* 8. FINISH RECEIVE */}
                         <td style={cellStyle}>{formatNumber(job.finishReceived)}</td>
                         {/* 9. FINISH RCV SHORT & EXCESS */}
-                        <td style={cellStyle}>{renderColoredShortExcess(job.greyReceived - job.finishReceived)}</td>
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {(
+                                job.greyReceived
+                                    ? ((job.greyReceived - job.finishReceived) / job.greyReceived) * 100
+                                    : 0
+                            ).toFixed(2)}%
+                        </td>
                         {/* 10. PRICE PER KG */}
                         {/* <td style={cellStyle}>{formatMoney(job.averageUnitPrice)}</td> */}
                         {/* 11. PAYABLE AMOUNT */}
-                        <td style={cellStyle}>{renderColoredShortExcess(job.greyReceived + job.greyReturn - job.greyDelivery)}</td>
+                        <td className='bg-yellow-500 bg-opacity-20' style={cellStyle}>{renderColoredShortExcess(job.greyReceived + job.greyReturn - job.greyDelivery)}</td>
+                        {/* 6. DELIVERY (%) */}
+                        <td className='bg-[#0af07d] bg-opacity-20' style={cellStyle}>
+                            {(
+                                job.greyDelivery
+                                    ? ((job.greyReceived ||0 + job.greyReturn ||0) / job.greyDelivery ||0) * 100
+                                    : 0
+                            ).toFixed(2)}%
+                        </td>
                     </tr>
                 ))}
             </tbody>
             <tfoot>
                 <tr>
                     {/* 1. TOTAL Label */}
-                    <td style={footerCellStyle}>TOTAL</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>TOTAL</td>
                     {/* 2. JOB NO. (Empty) */}
-                    <td style={footerCellStyle}>&nbsp;</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>&nbsp;</td>
                     {/* 3. WORK ORDER QTY */}
-                    <td style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.workOrderQty)}</td>
                     {/* 4. GREY DELIVERY */}
-                    <td style={footerCellStyle}>{formatNumber(totals.greyDelivery)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.greyDelivery)}</td>
                     {/* 6. GREY DEV SHORT & EXCESS */}
-                    <td style={footerCellStyle}>{renderColoredShortExcess(totals.greyDelivery - totals.workOrderQty)}</td>
+                    <td  className='bg-yellow-100'style={footerCellStyle}>{renderColoredShortExcess(totals.greyDelivery - totals.workOrderQty)}</td>
+                    {/* 6. DELIVERY (%) */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{ }</td>
                     {/* 7. GREY RETURN */}
-                    <td style={footerCellStyle}>{formatNumber(totals.greyReturn)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.greyReturn)}</td>
                     {/* 5. GREY RECEIVE */}
-                    <td style={footerCellStyle}>{formatNumber(totals.greyReceived)}</td>
-
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.greyReceived)}</td>
                     {/* 8. FINISH RECEIVE */}
-                    <td style={footerCellStyle}>{formatNumber(totals.finishReceived)}</td>
-                    {/* 9. FINISH RCV SHORT & EXCESS */}
-                    <td style={footerCellStyle}>&nbsp;</td>
-                    {/* 11. PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}>{renderColoredShortExcess(totals.greyReceived + totals.greyReturn - totals.greyDelivery)}</td>
+                    <td className='bg-yellow-100' style={footerCellStyle}>{formatNumber(totals.finishReceived)}</td>
+                    {/* 9. PROCESS LOSS*/}
+                    <td className='bg-yellow-100' style={footerCellStyle}>&nbsp;</td>
+                    {/* 11.FINISH RCV SHORT & EXCESS */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{renderColoredShortExcess(totals.greyReceived + totals.greyReturn - totals.greyDelivery)}</td>
+                    {/* 6. RECEIVED (%) */}
+                    <td className='bg-yellow-100' style={footerCellStyle}>{ }</td>
                 </tr>
             </tfoot>
         </>

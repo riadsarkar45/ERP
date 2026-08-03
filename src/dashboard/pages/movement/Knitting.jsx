@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
+import { formatToErpDate } from '../../../helpers/date/formateDate';
 
 // Note: borderCollapse is "separate" (not "collapse") on the <table> so the
 // sticky header keeps its border while scrolling — collapsed borders and
 // position:sticky don't render reliably together across browsers. Each cell
 // draws its own border instead.
 const cellStyle = {
-    border: "1px solid #999",
-    padding: "6px 8px",
+    border: "70px solid #000",
+    padding: "60px 80px",
     overflow: "hidden",
     textOverflow: "ellipsis",
     verticalAlign: "top",
@@ -26,13 +27,13 @@ const thStickyStyle = {
     position: "sticky",
     top: 0,
     zIndex: 10,
-    background: "#f3f4f6",
+    background: "red",
 };
 
 const PAGE_SIZE = 10;
 
 const pageButtonStyle = (active) => ({
-    border: "1px solid #999",
+    border: "1px solid #000000",
     background: active ? "#333" : "#fff",
     color: active ? "#fff" : "#333",
     padding: "4px 10px",
@@ -54,8 +55,8 @@ const DELIVERY_TYPE_MAP = {
 };
 
 const tableHeader = [
-    { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "Date", width: "10%", key: "challanDate" },
+    { header: "Challan No", width: "9%", key: "challanNo" },    
     { header: "Work Order", width: "9%", key: "workOrder" },
     { header: "Composition", width: "10%", key: "composition" },
     { header: "Color", width: "10%", key: "color" },
@@ -137,7 +138,8 @@ const Knitting = () => {
                     mvId,
                     chId: ch.id,
                     challanNo: ch.challanNo,
-                    challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
+                    // challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
+                    challanDate: formatToErpDate(ch.challanDate),
                     composition: mv.composition,
                     workOrder: mv.workOrder?.jobNo ?? "",
                     toFactory: ch.toFactory,
@@ -303,7 +305,7 @@ const Knitting = () => {
 
     return (
         <div style={{ width: "100%" }}>
-            <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
+            <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #000000" }}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
                         <tr>
@@ -349,7 +351,7 @@ const Knitting = () => {
                                                     left: 0,
                                                     zIndex: 20,
                                                     background: "#fff",
-                                                    border: "1px solid #999",
+                                                    border: "1px solid #000000",
                                                     borderRadius: 4,
                                                     width: 200,
                                                     maxHeight: 280,
@@ -360,7 +362,7 @@ const Knitting = () => {
                                                     flexDirection: "column",
                                                 }}
                                             >
-                                                <div style={{ padding: 8, borderBottom: "1px solid #ddd", flexShrink: 0 }}>
+                                                <div style={{ padding: 8, borderBottom: "1px solid #000000", flexShrink: 0 }}>
                                                     <input
                                                         type="text"
                                                         value={filterSearch}
@@ -420,8 +422,8 @@ const Knitting = () => {
                         {rows.map((row) => (
                             <tr key={row.rowKey}>
                                 {/* Challan No, Date, To/From Factory: one per challan (no rowspan needed now) */}
-                                <td style={cellStyle}>{row.challanNo}</td>
                                 <td style={cellStyle}>{row.challanDate}</td>
+                                <td style={cellStyle}>{row.challanNo}</td>                               
 
                                 {/* Work Order, Composition, Color: merged across all challans of the same movement */}
                                 {row.isFirstOfMovement && (

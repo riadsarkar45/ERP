@@ -6,11 +6,11 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
     const [hoveredIndex, setHoveredIndex] = useState(null);
     // const { handleInlineEdit, updatedFields, handleOnChange, isEdit, } = InlineEdit();
 
-    const innerItem = "border-b border-gray-300 px-3 py-2 last:border-b-0";
+    const innerItem = "border-b border-black text-black px-3 py-2 last:border-b-0";
 
     const baseTd = {
-        borderRight: "1px solid #d1d5db",
-        borderBottom: "1px solid #d1d5db",
+        borderRight: "1px solid #000000",
+        borderBottom: "1px solid #000000",
         padding: 0,
         textAlign: "center",
         verticalAlign: "middle",
@@ -124,9 +124,9 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                             <td style={stickyTd(0, isHovered)}>
                                 {workOrders?.map((wo, i) => (
                                     wo.factoryName === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-gray-500`}>-</div>
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
                                     ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem}  cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                             ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
@@ -194,10 +194,10 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                             {/* COL 12 — DEL SHORT & EXCESS */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const workOrderQty = Number(wrk.workOrderQty) || 0;
-                                    const totalYarnDelivery = Number(wrk.totalYarnDelivery) || 0;
+                                    const workOrderQty = Number(wrk.workOrderQty?.toFixed(2)) || 0;
+                                    const totalYarnDelivery = Number(wrk.totalYarnDelivery?.toFixed(2)) || 0;
                                     const diff = workOrderQty - totalYarnDelivery;
-                                    const exceeded = diff > 0;
+                                    const exceeded = diff?.toFixed(2) > 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
                                             {exceeded ? `(${Math.abs(diff?.toFixed(2))})` : Math.abs(diff?.toFixed(2))}
