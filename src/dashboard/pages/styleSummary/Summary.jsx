@@ -399,7 +399,7 @@ export default function Summary() {
                 borderBottom: '1px solid #e5e7eb',
             }}
         >
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-red-600">
                 {compBreakdown.map((cb, j) => {
                     if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-gray-400 italic">_</div>;
                     const value = cb?.[key];

@@ -1,73 +1,233 @@
 import type { Request, Response } from "express";
+import type { Prisma } from "@prisma/client";
 import prisma from "../../database/prismaClient/prisma";
 import { calculateOrdersForStyleSummary } from "../../utils/yarnCompStat";
 
-export const styleRequirements = async (req: Request, res: Response) => {
-    const { jobNo } = req.params as { jobNo: string | undefined };
+const DIRECT_FIELDS = new Set([
+    "jobNo",
+    "styleNo",
+    "buyerName",
+    "salesContact",
+    "poNo",
+]);
 
-    const whereClause: any = jobNo ? { jobNo } : {};
+const ROWS_RELATION_FIELDS = new Set(["color", "composition"]);
 
-    // We fetch ALL styles here so the frontend can filter the ENTIRE dataset perfectly.
-    // The frontend will handle the pagination to prevent rendering lag.
-    const styles = await prisma.styleRequirement.findMany({
-        where: whereClause,
-        orderBy: { id: "asc" },
-        take:40,
-        select: {
-            salesContact: true,
-            styleNo: true,
-            buyerName: true,
-            jobNo: true,
-            processLoss: true,
-            poNo: true,
-            id: true,
-            rows: {
-                select: {
-                    id: true,
-                    color: true,
-                    composition: true,
-                    finishDia: true,
-                    orderQty: true,
-                    finishRequiredQty: true,
-                    additional: true,
-                }
-            },
-            sizes: {
-                select: {
-                    id: true,
-                    sizeName: true,
-                }
-            },
-            workOrders: {
-                select: {
-                    orderType: true,
-                    compositions: {
-                        select: {
-                            color: true,
-                            composition: true,
-                            workOrderQty: true,
-                            additional: true,
-                            deliveries: {
-                                select: {
-                                    deliveryType: true,
-                                    deliveryQty: true,
-                                }
-                            },
-                        }
-                    },
-                }
-            }
+type StyleFilters = Record<string, string[]>;
+
+const buildWhereClause = (
+    jobNo: string | undefined,
+    filters: StyleFilters | undefined
+): Prisma.StyleRequirementWhereInput => {
+    const where: any = jobNo ? { jobNo } : {};
+
+    if (!filters) return where;
+
+    const rowsConditions: any[] = [];
+
+    for (const [columnName, values] of Object.entries(filters)) {
+        if (!values || values.length === 0) continue;
+
+        if (DIRECT_FIELDS.has(columnName)) {
+            where[columnName] = { in: values };
+        } else if (ROWS_RELATION_FIELDS.has(columnName)) {
+            rowsConditions.push({ [columnName]: { in: values } });
         }
-    });
-
-    if (styles.length === 0) {
-        return res.status(404).send({ message: "No style requirements found", type: "error" });
     }
 
-    const summaryData = calculateOrdersForStyleSummary(styles);
+    if (rowsConditions.length > 0) {
+        where.AND = [
+            ...(where.AND ?? []),
+            ...rowsConditions.map((cond) => ({ rows: { some: cond } })),
+        ];
+    }
 
-    res.status(200).send({
-        data: summaryData,
-        type: "success"
-    });
+    return where;
+};
+
+export const styleRequirements = async (req: Request, res: Response) => {
+    try {
+        const { jobNo } = req.params as { jobNo: string | undefined };
+        const {
+            page: pageParam,
+            limit: limitParam,
+            filters: filtersParam,
+        } = req.query as { page?: string; limit?: string; filters?: string };
+
+        const page = Math.max(1, Number(pageParam) || 1);
+        const limit = Math.max(1, Number(limitParam) || 20);
+
+        let filters: StyleFilters | undefined;
+        if (filtersParam) {
+            try {
+                filters = JSON.parse(filtersParam);
+            } catch {
+                return res.status(400).json({
+                    type: "error",
+                    message: "Invalid filters JSON",
+                });
+            }
+        }
+
+        const whereClause = buildWhereClause(jobNo, filters);
+
+        const [styles, total] = await Promise.all([
+            prisma.styleRequirement.findMany({
+                where: whereClause,
+                orderBy: { id: "asc" },
+                skip: (page - 1) * limit,
+                take: 40,
+                select: {
+                    salesContact: true,
+                    styleNo: true,
+                    buyerName: true,
+                    jobNo: true,
+                    processLoss: true,
+                    poNo: true,
+                    id: true,
+                    rows: {
+                        select: {
+                            id: true,
+                            color: true,
+                            composition: true,
+                            finishDia: true,
+                            orderQty: true,
+                            finishRequiredQty: true,
+                            additional: true,
+                        },
+                    },
+                    sizes: {
+                        select: {
+                            id: true,
+                            sizeName: true,
+                        },
+                    },
+                    workOrders: {
+                        select: {
+                            orderType: true,
+                            compositions: {
+                                select: {
+                                    color: true,
+                                    composition: true,
+                                    workOrderQty: true,
+                                    additional: true,
+                                    deliveries: {
+                                        select: {
+                                            deliveryType: true,
+                                            deliveryQty: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            }),
+            prisma.styleRequirement.count({
+                where: whereClause,
+            }),
+        ]);
+
+        const summaryData = calculateOrdersForStyleSummary(styles);
+
+        return res.status(200).send({
+            data: summaryData,
+            type: "success",
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.max(1, Math.ceil(total / limit)),
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            type: "error",
+            message: "Internal server error",
+        });
+    }
+};
+
+export const getGlanceFilterOptions = async (req: Request, res: Response) => {
+    try {
+        const { columnName } = req.params as { columnName: string };
+        const { filters: filtersParam } = req.query as { filters?: string };
+
+        let otherFilters: StyleFilters | undefined;
+        if (filtersParam) {
+            try {
+                otherFilters = JSON.parse(filtersParam);
+            } catch {
+                return res.status(400).json({
+                    type: "error",
+                    message: "Invalid filters JSON",
+                });
+            }
+        }
+
+        if (
+            !DIRECT_FIELDS.has(columnName) &&
+            !ROWS_RELATION_FIELDS.has(columnName)
+        ) {
+            return res.status(400).json({
+                type: "error",
+                message: `Column "${columnName}" is not filterable`,
+            });
+        }
+
+        const scopingWhere = buildWhereClause(undefined, otherFilters);
+
+        let values: string[] = [];
+
+        if (DIRECT_FIELDS.has(columnName)) {
+            // FIX: Removed `[columnName]: { not: null }` to prevent Prisma validation errors.
+            // We filter out nulls in JS below anyway.
+            const rows = await prisma.styleRequirement.findMany({
+                where: scopingWhere, 
+                distinct: [columnName as any],
+                select: {
+                    [columnName]: true,
+                } as any,
+            });
+
+            values = rows
+                .map((row: any) => row[columnName])
+                .filter(
+                    (value: unknown): value is string =>
+                        typeof value === "string" && value.length > 0
+                );
+        } else {
+            // FIX: Removed `[columnName]: { not: null }` here as well.
+            const rows = await prisma.styleRequirementRow.findMany({
+                where: {
+                    styleRequirement: scopingWhere,
+                } as any,
+                distinct: [columnName as any],
+                select: {
+                    [columnName]: true,
+                } as any,
+            });
+
+            values = rows
+                .map((row: any) => row[columnName])
+                .filter(
+                    (value: unknown): value is string =>
+                        typeof value === "string" && value.length > 0
+                );
+        }
+
+        values.sort((a, b) => a.localeCompare(b));
+
+        return res.status(200).json({
+            data: values,
+            type: "success",
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            type: "error",
+            message: "Internal server error",
+        });
+    }
 };

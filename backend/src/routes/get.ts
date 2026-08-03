@@ -4,7 +4,7 @@ import { dashboardController } from "../controllers/dashboard/dashboard";
 import { getOrderSummaryByStyle } from "../controllers/orders/styleWiseOrder";
 import { allAudits } from "../controllers/audit/allAudits";
 import { getAllJobs } from "../controllers/jobs/allJobs";
-import { styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
+import { getGlanceFilterOptions, styleRequirements } from "../controllers/newStyleRequirements/styleReqs";
 import { deliveryDetail } from "../controllers/deliveries/fetchDeliveries";
 import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
@@ -49,5 +49,9 @@ getRouters.get("/management-view", partyData);
 getRouters.get("/challan-movement/:orderType", challanMovement);
 
 getRouters.get("/work-order/:orderType/filter-options/:column", getFilterOptions);
+
+getRouters.get("/glance/filter-options/:columnName", getGlanceFilterOptions);
+
+getRouters.get("/glance/:jobNo", styleRequirements);
 
 export default getRouters;
