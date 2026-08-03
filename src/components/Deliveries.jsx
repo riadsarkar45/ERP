@@ -7,19 +7,18 @@ const formatKg = (num) => {
   return `${Number(num).toLocaleString()} kg`;
 };
 
-// ✅ 1. EXPANDED: Added all "Receiving" types across all order types so the logic works for Dyeing/Knitting too
-const RECEIVE_DELIVERY_TYPES = [
-  "Received from AOP",
-  "Grey Received",
-  "Aop Grey Received",
-  "Yarn Received",
-  "Grey Received From Dyeing",
-  "Finish Fabric Received",
-  "Received From Compacting",
-  "Yarn Received From Yarn Dye",
-  "Finish Received",
-  "AOP Finish Fabric Rcvd"
-];
+// Delivery types where THIS work order's factory is the SOURCE of the
+// movement (fromFactory) — i.e. it's receiving something back or returning
+// something, so the goods are coming FROM elsewhere INTO this factory, or
+// FROM this factory back OUT. Match is on the words "Received"/"Return"
+// appearing in the type name, per business rule: receive/return types ->
+// this factory goes in "From". All other (sending) types -> this factory
+// goes in "To".
+const isReceiveOrReturnType = (deliveryType) => {
+  if (!deliveryType) return false;
+  const t = deliveryType.toLowerCase();
+  return t.includes("received") || t.includes("return");
+};
 
 const flattenDeliveries = (workOrders) => {
   return (workOrders || []).flatMap((wo) =>
@@ -74,7 +73,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
   const deliveryTypes = [];
   if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Received");
   if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return Received", "Grey Received From Dyeing", "Finish Fabric Received", "Sent For Compacting", "Received From Compacting");
-  if (orderType === "aopOrder") deliveryTypes.push("Sent for AOP", "Received from AOP", "Aop Grey Received");
+  if (orderType === "aopOrder") deliveryTypes.push("Sent for AOP","Return From Aop", "Received From Aop");
   if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
 
   const aggregateDeliveries = (deliveriesArr) => {
@@ -100,7 +99,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
 
     for (const row of rowsToSubmit) {
       const rowChangedField = changedField?.[row.yarnId] || {};
-      const isReceiveType = RECEIVE_DELIVERY_TYPES.includes(rowChangedField.deliveryType);
 
       if (!rowChangedField.deliveryType) {
         alert(`Please select a Delivery Type for ${row.composition}`);
@@ -130,14 +128,15 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
         ];
       }
 
-      // ✅ 2 & 3. FIXED LOGIC & EMPTY STRING BUG:
-      // - If receiving, this factory is the destination (toFactory).
-      // - If sending (!receiving), this factory is the source (fromFactory).
-      // - Using `||` ensures that if the user leaves it blank (""), it correctly falls back to the work order factory instead of sending a blank string to the backend.
+      // Receive/return types -> this work order's factory is the SOURCE
+      // (fromFactory). All other (sending) types -> it's the DESTINATION
+      // (toFactory). The other side is left for the user to fill in.
+      const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
+
       const fullPayload = {
         ...rowChangedField,
-        toFactory: rowChangedField.toFactory || (isReceiveType ? row.factoryName : ""),
-        fromFactory: rowChangedField.fromFactory || (!isReceiveType ? row.factoryName : ""),
+        toFactory: rowChangedField.toFactory || (!isReturnOrReceive ? row.factoryName : ""),
+        fromFactory: rowChangedField.fromFactory || (isReturnOrReceive ? row.factoryName : ""),
         date: rowChangedField.date || new Date().toISOString().split("T")[0],
         challanNo: rowChangedField.challanNo || "",
         deliveryType: rowChangedField.deliveryType,
@@ -145,6 +144,15 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
         finishReceivedQty: parsedFinishQty,
         deliveries: finalDeliveries
       };
+
+      if (!fullPayload.toFactory) {
+        alert(`Please enter a To Factory for ${row.composition}`);
+        return;
+      }
+      if (!fullPayload.fromFactory) {
+        alert(`Please enter a From Factory for ${row.composition}`);
+        return;
+      }
 
       await handleSubmit(row.yarnId, row.workOrderId, fullPayload);
     }
@@ -225,7 +233,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
 
                 const isOpen = openYarnIds.has(row.yarnId);
                 const rowChangedField = changedField?.[row.yarnId] || {};
-                const isReceiveType = RECEIVE_DELIVERY_TYPES.includes(rowChangedField.deliveryType);
+                const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
 
                 return (
                   <div key={row.id} className={`${isOpen && "bg-green-300 bg-opacity-30 p-2"} flex flex-col px-5 py-4 gap-3`}>
@@ -279,7 +287,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                           />
                         </div>
 
-                        {((rowChangedField.deliveryType === "Grey Received" && (orderType === "dyeingOrder" || orderType === "aopOrder")) || rowChangedField.deliveryType === "Aop Grey Received") && (
+                        {((rowChangedField.deliveryType === "Grey Received" && (orderType === "dyeingOrder" || orderType === "aopOrder")) || rowChangedField.deliveryType === "Received From Aop") && (
                           <div className="flex flex-col gap-1">
                             <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
                             <input
@@ -314,7 +322,11 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                           />
                         </div>
 
-                        {/* ✅ FIXED INVERTED LOGIC IN UI INPUTS */}
+                        {/* Receive/return types -> this factory is the SOURCE, so it
+                            belongs in "From". Sending types -> it's the DESTINATION,
+                            so it belongs in "To". The `key` includes isReturnOrReceive
+                            so the input remounts (and resets its defaultValue) whenever
+                            the delivery type flips between the two groups. */}
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] uppercase tracking-wider text-gray-400">
                             {orderType === "aopOrder" && "Aop Factory"}
@@ -322,13 +334,12 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                             {orderType === "knittingOrder" && "Knitting Factory"}
                           </span>
                           <input
-                            key={`to-${row.yarnId}-${isReceiveType}`}
+                            key={`to-${row.yarnId}-${isReturnOrReceive}`}
                             onChange={(e) => handleEditOnChange(row.yarnId, e)}
                             name="toFactory"
                             className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
                             type="text"
-                            // If receiving, this factory is the destination (To)
-                            defaultValue={isReceiveType ? group.factoryName : ""}
+                            defaultValue={!isReturnOrReceive ? group.factoryName : ""}
                             placeholder="To Factory"
                           />
                         </div>
@@ -336,13 +347,12 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] uppercase tracking-wider text-gray-400">From</span>
                           <input
-                            key={`from-${row.yarnId}-${isReceiveType}`}
+                            key={`from-${row.yarnId}-${isReturnOrReceive}`}
                             onChange={(e) => handleEditOnChange(row.yarnId, e)}
                             name="fromFactory"
                             className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
                             type="text"
-                            // If sending (!receiving), this factory is the source (From)
-                            defaultValue={!isReceiveType ? group.factoryName : ""}
+                            defaultValue={isReturnOrReceive ? group.factoryName : ""}
                             placeholder="From Factory"
                           />
                         </div>
