@@ -136,8 +136,8 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                             </td>
 
                             {/* COL 1 — JOB NO */}
-                            <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
-                                <div className={`${innerItem} cursor-pointer hover:text-blue-600`}>{job.jobNo || "NO JOB FOUND"}</div>
+                            <td style={stickyTd(1, isHovered)}>
+                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
 
                             {/* COL 2 — WORK ORDER NO */}
@@ -177,7 +177,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                             {/* COL 10 — WORK ORDER QTY */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
+                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                         ) : wrk.workOrderQty?.toFixed(2) || "-"}
@@ -235,7 +235,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                             {/* COL 9 — UNIT PRICE */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                         ) : unt.unitePrice?.toFixed(2) || "-"}

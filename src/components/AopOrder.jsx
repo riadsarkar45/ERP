@@ -129,7 +129,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                     wo.factoryName === "NULL" ? (
                                         <div key={i} className={`${innerItem} text-gray-500`}>-</div>
                                     ) : (
-                                        <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                             ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
@@ -195,7 +195,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             {/* WORK ORDER QTY */}
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
+                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                         ) : wrk.workOrderQty?.toFixed(2) || "-"}
@@ -277,7 +277,7 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                             {/* UNIT PRICE */}
                             <td style={{ border: "1px solid #e2e8f0", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
+                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
                                         {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
                                             <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                         ) : unt.unitePrice?.toFixed(2) || "-"}
