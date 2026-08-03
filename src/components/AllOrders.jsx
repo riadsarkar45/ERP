@@ -70,7 +70,7 @@ const AllOrders = ({ orderType }) => {
 
     const [duplicateChallan, setDuplicateChallan] = useState([]);
     const [challanIssue, setChallanIssue] = useState([]);
-
+    const [deliveryIssue, setDeliveryIssue] = useState([]);
     // Pagination state, driven by getAllOrders' { pagination: { page, limit, total, totalPages } }
     const [page, setPage] = useState(1);
     const [limit] = useState(10);
@@ -338,7 +338,7 @@ const AllOrders = ({ orderType }) => {
         setChallanIssue([]);
 
         fetchData(`/api/deliveries/${orderType}`, {
-            params: { workOrderIds: workOrderIds.join(',') }
+            params: { workOrderIds: workOrderIds }
         })
             .then(data => {
                 if (data) {
@@ -386,34 +386,38 @@ const AllOrders = ({ orderType }) => {
         });
     };
 
-    const handleSubmit = async (yarnId, workOrderId) => {
+    // Inside AllOrders.jsx
+    const handleSubmit = async (yarnId, workOrderId, overridePayload = null) => {
         setIsLoading(true);
-        setChallanIssue([])
-        const payload = changedField[yarnId] || {};
+        setChallanIssue([]);
+        setDeliveryIssue([]);
+        // Use overridePayload if provided (from Deliveries.jsx), otherwise fall back to changedField
+        const payload = overridePayload || changedField[yarnId] || {};
+
         try {
             const update = await axiosPublic.patch(
                 `/api/update-order`,
                 payload,
                 { params: { yarnId, workOrderId } }
             );
+
             if (update.status === 200) {
-                setChallanIssue([{ message: "Delivery Added", type: "success" }])
+                setChallanIssue([{ message: "Delivery Added", type: "success" }]);
 
                 fetchData(`/api/work-order/${orderType}`, { params: { page, limit, filters: filtersParam } })
                     .then((res) => {
                         if (res) {
-                            console.log(res.data, "work orders");
                             setOrders(res.data ?? []);
                             if (res.pagination) setPagination(res.pagination);
+                            setIsEditing(false);
                         }
                     });
 
-                // Fixed: was previously calling setOrders with delivery data.
+                // FIX: jobId might be a number or an array. Safely handle both to prevent .join() crashes.
                 fetchData(`/api/deliveries/${orderType}`, {
-                    params: { workOrderIds: jobId.join(',') }
+                    params: { workOrderIds: Array.isArray(jobId) ? jobId.join(',') : jobId }
                 })
                     .then((dev) => {
-                        console.log(dev);
                         setDeliveries(dev);
                     });
 
@@ -424,17 +428,9 @@ const AllOrders = ({ orderType }) => {
                 });
             }
         } catch (e) {
-            if (e.response?.status === 409) {
-                setChallanIssue(prev => [
-                    ...prev,
-                    e.response.data ?? { message: "PLEASE TRY AGAIN WITH CORRECT FACTORY NAME", type: "error" }
-                ]);
-            } else {
-                setChallanIssue(prev => [
-                    ...prev,
-                    { message: e.response?.data?.message ?? "Something went wrong, please try again", type: "error" }
-                ]);
-            }
+            // ... your existing error handling
+            console.log(e.response.data);
+            setDeliveryIssue(e.response.data)
         } finally {
             setIsLoading(false);
         }
@@ -494,6 +490,7 @@ const AllOrders = ({ orderType }) => {
                             orderType={orderType}
                             changedField={changedField}
                             challanIssue={challanIssue}
+                            deliveryIssue={deliveryIssue}
                         />
                     )}
 

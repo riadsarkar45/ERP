@@ -4,38 +4,42 @@ import prisma from "../../database/prismaClient/prisma";
 export const deliveryDetail = async (req: Request, res: Response) => {
     const { orderType } = req.params;
     const { workOrderIds } = req.query;
-    const ids = String(workOrderIds).split(',').map(Number);
-    const deliveries = await prisma.composition.findMany({
+    // const ids = String(workOrderIds).split(',').map(Number);
+    const deliveries = await prisma.workOrder.findMany({
         where: {
-            workOrderId: { in: ids },
-            workOrder: { orderType: orderType as string }
+            id: Number(workOrderIds) as number,
+            orderType: orderType as string
         },
         select: {
             id: true,
-            composition: true,
-            workOrderQty: true,
-            orderQty: true,
-            workOrderId: true,
-            deliveries: {
+            orderType: true,
+            factoryName: true,
+            compositions: {
                 select: {
-                    deliveryType: true,
-                    deliveryQty: true,
-                    deliveryDate: true,
-                    challanNo: true,
-                    fromFactory: true,
-                    toFactory: true
-                }
-            },
-            workOrder: {
-                select: {
-                    
-                    styleRequirement: {
+                    id: true,
+                    composition: true,
+                    workOrderQty: true,
+                    styleRequirementRow:{
                         select: {
-                            processLoss: true,
-                            buyerName: true,
+                            id: true,
+                            styleRequirement: {
+                                select: {
+                                    jobNo: true,
+                                    buyerName: true,
+                                }
+                            }
+                        }
+                    },
+                    deliveries: {
+                        select: {
+                            id: true,
+                            deliveryType: true,
+                            deliveryQty: true,
                         }
                     }
                 }
+
+                
             }
         }
     })

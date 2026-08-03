@@ -132,12 +132,12 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                         <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : wo.factoryName}
+                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
                                         </div>
                                     )
                                 ))}
                             </td>
-                            <td style={stickyTd(1, isHovered)} onClick={() => handleEditRowData(workOrders.map(wo => wo.id))}>
+                            <td style={stickyTd(1, isHovered)}>
                                 <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
                             <td style={stickyTd(2, isHovered)}>

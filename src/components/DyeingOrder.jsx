@@ -119,7 +119,7 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                                         <div key={i} onClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} text-green-600 font-bold cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : wo.factoryName}
+                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
                                         </div>
                                     )
                                 ))}
