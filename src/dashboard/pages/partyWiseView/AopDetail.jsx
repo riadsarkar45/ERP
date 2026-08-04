@@ -9,6 +9,7 @@ const cellStyle = {
     verticalAlign: "top",
     fontSize: "13px",
     boxSizing: "border-box",
+    textAlign: "center"
 };
 
 const centeredCellStyle = {
@@ -22,7 +23,7 @@ const footerCellStyle = {
     position: "sticky",
     bottom: 0,
     zIndex: 5,
-    backgroundColor: "#f3f4f6",
+    // backgroundColor: "#f3f4f6",
     fontWeight: 700,
 };
 
@@ -121,11 +122,11 @@ const AopDetail = ({ detailView }) => {
                 acc.receivedFromAop += getDeliverySum(up.deliveries, "ReceivedFromAop");
                 acc.aopFinishFabricRcvd += getDeliverySum(up.deliveries, "AOPFinishFabricRcvd");
                 acc.returnFromAop += getDeliverySum(up.deliveries, "ReturnFromAop");
-                acc.totalReceivedFromAop += getDeliverySum(up.deliveries, "ReceivedFromAop");
+                // acc.totalReceivedFromAop += getDeliverySum(up.deliveries, "ReceivedFromAop");
 
-                // const price = Number(up.unitePrice) || 0;
-                // // const qty = Number(totals.) || 0;
-                // acc.payableAmount  = qty;
+                const price = Number(up.unitePrice) || 0;
+                const qty = Number(acc.receivedFromAop) || 0;
+                acc.payableAmount  = price * qty;
             });
         });
 
@@ -179,7 +180,7 @@ const AopDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "SentForAop")), `sent-${i}`)}
                             </td>
-                            <td style={cellStyle}>
+                            <td className="bg-yellow-100" style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => {
                                     const AOP_sentForAop = getDeliverySum(up.deliveries, "SentForAop");
                                     const AOP_workOrderQty = getDeliverySum(up.deliveries, "workOrderQty");
@@ -196,7 +197,7 @@ const AopDetail = ({ detailView }) => {
                                 {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "AOPFinishFabricRcvd")), `finish-${i}`)}
                             </td>
 
-                            <td style={cellStyle}>
+                            <td className="bg-yellow-100" style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => {
                                     const receivedFromAop = getDeliverySum(up.deliveries, "ReceivedFromAop");
                                     const AopSentForAop = getDeliverySum(up.deliveries, "SentForAop");
@@ -222,33 +223,29 @@ const AopDetail = ({ detailView }) => {
             <tfoot>
                 <tr>
                     {/* 1. FACTORY NAME */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
                     {/* 2. JOB NO. */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 3. COMPOSITION */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 4. WORK ORDER QTY */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div></td>
                     {/* 5. SENT FOR AOP */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.sentForAop)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.sentForAop)}</div></td>
                     {/* Del. Short & Excess */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.sentForAop - totals.workOrderQty)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.sentForAop - totals.workOrderQty)}</div></td>
                     {/* 8. RETURN FROM AOP */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.returnFromAop)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.returnFromAop)}</div></td>
                     {/* 6. RECEIVE FROM AOP */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.receivedFromAop)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.receivedFromAop)}</div></td>
                     {/* 7. FINISH RECEIVED FROM AOP */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.aopFinishFabricRcvd)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.aopFinishFabricRcvd)}</div></td>
                     {/* 9. SHORT & EXCESS */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.receivedFromAop + totals.returnFromAop - totals.sentForAop)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.receivedFromAop + totals.returnFromAop - totals.sentForAop)}</div></td>
                     {/* 10. PRICE PER KG */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>-</div></td>
                     {/* 11. PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>
-                        {
-                            
-                        }
-                    </div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount)}</div></td>
                 </tr>
             </tfoot>
         </>
