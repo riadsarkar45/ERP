@@ -59,7 +59,7 @@ const Sidebar = () => {
         { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
-        { path: "/dashboard/management-view", label: "Management View", icon: UserRoundPlus },
+        // { path: "/dashboard/management-view", label: "Management View", icon: UserRoundPlus },
     ];
 
     // Auto-open dropdown if current route is an order/movement/mis sub-route

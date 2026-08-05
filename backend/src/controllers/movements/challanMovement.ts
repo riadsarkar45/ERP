@@ -8,91 +8,45 @@ export const challanMovement = async (req: Request, res: Response) => {
         return res.status(400).send({ msg: "No order type found", type: "error" });
     }
 
-    // Pagination params — default to page 1, 10 compositions per page.
-    // Query looks like: /api/challan-movement/dyeingOrder?page=2&limit=10
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10)); // cap to avoid abuse
-    const skip = (page - 1) * limit;
+    console.log(orderType);
+    // const where = { orderType };
 
-    const where = { orderType };
+    const deliveries = await prisma.deliveries.findMany({
+        where: {
+            composition: {
+                orderType: orderType,
+            },
+        },
+        select: {
+            challanNo: true,
+            deliveryType: true,
+            fromFactory: true,
+            toFactory: true,
+            deliveryQty: true,
+        },
+    });
 
-    // Run the page query and the total count in parallel.
-    const [movementChallan, totalCount] = await Promise.all([
-        prisma.composition.findMany({
-            where,
-            skip,
-            take: limit,
-            select: {
-                id: true,
-                composition: true,
-                unitePrice: true,
-                color: true,
-                workOrder: {
-                    select: {
-                        jobId: true,
-                        jobNo: true,
-                    }
-                },
-                challans: {
-                    select: {
-                        id: true,
-                        challanNo: true,
-                        challanDate: true,
-                        toFactory: true,
-                        fromFactory: true,
-                        deliveries: {
-                            select: {                          
-                                id: true,
-                                challanNo: true,
-                                deliveryDate: true,
-                                deliveryQty: true,
-                                deliveryType: true
-                            }
-                        }
-                    }
-                }
-            }
-        }),
-        prisma.composition.count({ where })
-    ]);
-
-    if (!movementChallan || movementChallan.length === 0) {
-        return res.status(400).send({ msg: "No challan found", type: "error" });
+    if (!deliveries || deliveries.length === 0) {
+        return res.status(404).send({ msg: "No deliveries found for the given order type", type: "error" });
     }
 
-    // --- DATA TRANSFORMATION ---
-    const transformedData = movementChallan.map(composition => {
-        const transformedChallans = composition.challans.map(challan => {
-            const deliverySums = challan.deliveries.reduce((acc, delivery) => {
-                const type = delivery.deliveryType;
-                acc[type] = (acc[type] || 0) + delivery.deliveryQty;
-                return acc;
-            }, {} as Record<string, number>);
+    // group by challanNo, sum deliveryQty
+    const grouped = Object.values(
+        deliveries.reduce((acc, d) => {
+            const key = d.challanNo;
+            if (!acc[key]) {
+                acc[key] = {
+                    challanNo: d.challanNo,
+                    deliveryType: d.deliveryType,
+                    fromFactory: d.fromFactory,
+                    toFactory: d.toFactory,
+                    deliveryQty: 0,
+                };
+            }
+            acc[key].deliveryQty += d.deliveryQty;
+            return acc;
+        }, {} as Record<number, { challanNo: number; deliveryType: string; fromFactory: string; toFactory: string; deliveryQty: number }>)
+    );
 
-            const summedDeliveries = Object.keys(deliverySums).map(type => ({
-                deliveryType: type.replace(/\s+/g, ""),
-                totalQty: deliverySums[type]
-            }));
-
-            return {
-                ...challan,
-                deliveries: summedDeliveries
-            };
-        });
-
-        return {
-            ...composition,
-            challans: transformedChallans
-        };
-    });
-
-    return res.status(200).send({
-        data: transformedData,
-        pagination: {
-            page,
-            limit,
-            totalCount,
-            totalPages: Math.max(1, Math.ceil(totalCount / limit)),
-        }
-    });
+    return res.status(200).send({ msg: "Deliveries found", type: "success", data: grouped });
 };

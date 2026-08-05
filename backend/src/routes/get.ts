@@ -13,6 +13,7 @@ import { GlanceReport } from "../controllers/Glance/atGlanceReport";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 import { challanMovement } from "../controllers/movements/challanMovement";
+import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 
 const getRouters = express.Router();
 
@@ -39,6 +40,10 @@ getRouters.delete("/delete-delivery/:deliveryId", authenticate, authorize("SUPER
 getRouters.get("/glance-report", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), GlanceReport);
 
 getRouters.get("/party-view-report/:factoryName", partyViewData);
+
+getRouters.get("/management-view/job-numbers", getJobNumbers); 
+    // specific route FIRST
+getRouters.get("/management-view/:orderType", managementReport);   // dynamic route AFTER
 
 getRouters.get("/detail-party-report/:factoryName/:orderType", partyData);
 
