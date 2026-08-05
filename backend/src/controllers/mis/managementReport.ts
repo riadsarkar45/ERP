@@ -12,6 +12,7 @@ export const managementReport = async (req: Request, res: Response) => {
         jobNo?: string; // comma-separated list of selected job numbers
     };
 
+    
     if (!orderType) {
         return res.status(400).send({ message: "Order Type is missing" });
     }
