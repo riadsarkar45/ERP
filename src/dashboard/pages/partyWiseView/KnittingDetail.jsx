@@ -9,6 +9,7 @@ const cellStyle = {
     verticalAlign: "top",
     fontSize: "13px",
     boxSizing: "border-box",
+    textAlign: "center",
 };
 
 const centeredCellStyle = {
@@ -22,7 +23,7 @@ const footerCellStyle = {
     position: "sticky",
     bottom: 0,
     zIndex: 5,
-    backgroundColor: "#f3f4f6",
+    // backgroundColor: "#f3f4f6",
     fontWeight: 700,
 };
 
@@ -53,7 +54,7 @@ const renderColoredShortExcess = (diff) => {
 const getDeliverySum = (deliveries, targetType) => {
     if (!Array.isArray(deliveries)) return 0;
     const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "");
-    
+
     return deliveries.reduce((acc, d) => {
         const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "");
         if (normalizedType === normalizedTarget) {
@@ -102,7 +103,7 @@ const KnittingDetail = ({ detailView }) => {
         const acc = {
             workOrderQty: 0,
             yarnDelivery: 0,
-            greyReceived: 0,
+            greyFabricReceived: 0,
             yarnReturn: 0,
             payableAmount: 0,
         };
@@ -114,9 +115,9 @@ const KnittingDetail = ({ detailView }) => {
             compositions.forEach((up) => {
                 acc.workOrderQty += Number(up.workOrderQty) || 0;
                 acc.yarnDelivery += getDeliverySum(up.deliveries, "YarnDelivery");
-                acc.greyReceived += getDeliverySum(up.deliveries, "GreyFabricReceived");
+                acc.greyFabricReceived += getDeliverySum(up.deliveries, "GreyFabricReceived");
                 acc.yarnReturn += getDeliverySum(up.deliveries, "YarnReturn");
-                
+
                 const price = Number(up.unitePrice) || 0;
                 const qty = Number(up.workOrderQty) || 0;
                 acc.payableAmount += price * qty;
@@ -171,9 +172,9 @@ const KnittingDetail = ({ detailView }) => {
                                 {renderBreakdownCell(compositions, (up) => formatNumber(up.workOrderQty), `qty-${i}`)}
                             </td>
                             <td style={cellStyle}>
-                                {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "YarnDelivery")), `yd-${i}`)}                                
+                                {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "YarnDelivery")), `yd-${i}`)}
                             </td>
-                            <td style={cellStyle}>
+                            <td className="bg-yellow-100" style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => {
                                     const yarnDelivery = getDeliverySum(up.deliveries, "YarnDelivery");
                                     const workOrderQty = Number(up.workOrderQty) || 0;
@@ -186,13 +187,14 @@ const KnittingDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "YarnReturn")), `return-${i}`)}
                             </td>
-                            <td style={cellStyle}>
+                            <td className="bg-yellow-100" style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => {
                                     const yarnDelivery = getDeliverySum(up.deliveries, "YarnDelivery");
-                                    const GreyFabricReceived = Number(up.GreyFabricReceived) || 0;
-                                    const YarnReturn = Number(up.yarnReturn) || 0;
-                                    return renderColoredShortExcess(GreyFabricReceived+YarnReturn - yarnDelivery);
+                                    const yarnReturn = getDeliverySum(up.deliveries, "YarnReturn");
+                                    const greyFabricReceived = getDeliverySum(up.deliveries, "GreyFabricReceived");                                    
+                                    return renderColoredShortExcess(greyFabricReceived + yarnReturn - yarnDelivery);                                    
                                 }, `short-${i}`)}
+                            
                             </td>
                             <td style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => formatMoney(up.unitePrice), `price-${i}`)}
@@ -212,27 +214,27 @@ const KnittingDetail = ({ detailView }) => {
             <tfoot>
                 <tr>
                     {/* 1. KNITTING FACTORY NAME */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
                     {/* 2. JOB NO. */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 3. COMPOSITION */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 4. KNITTING WORK ORDER QTY */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty.toFixed(2))}</div></td>
                     {/* 5. YARN DELIVERY */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnDelivery)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnDelivery.toFixed(2))}</div></td>
                     {/* 8. SHORT & EXCESS */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.yarnDelivery - totals.workOrderQty)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.yarnDelivery.toFixed(2) - totals.workOrderQty.toFixed(2))}</div></td>
                     {/* 6. GREY RECEIVED */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReceived)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyFabricReceived)}</div></td>
                     {/* 7. YARN RETURN */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnReturn)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnReturn.toFixed(2))}</div></td>
                     {/* 8. SHORT & EXCESS */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyReceived+totals.yarnReturn - totals.yarnDelivery)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyFabricReceived + totals.yarnReturn - totals.yarnDelivery)}</div></td>
                     {/* 9. PRICE PER KG */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 10. PAYABLE AMOUNT */}
-                    <td style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount)}</div></td>
+                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount.toFixed(2))}</div></td>
                 </tr>
             </tfoot>
         </>

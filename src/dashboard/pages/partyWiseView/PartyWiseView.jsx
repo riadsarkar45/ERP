@@ -256,7 +256,7 @@ const PartyWiseView = () => {
             { header: "DEL. SHORT & EXCESS", width: 140 },
             { header: "GREY RECEIVED", width: 140 },
             { header: "YARN RETURN", width: 140 },
-            { header: "SHORT & EXCESS", width: 140 },
+            { header: "party stock", width: 140 },
             { header: "PRICE PER KG", width: 120 },
             { header: "PAYABLE AMOUNT", width: 180 },
         );
