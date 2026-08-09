@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { RefreshCcw, X, WrapText, AlignJustify, ListFilter } from 'lucide-react';
 import useAxiosPrivate from '../hooks/UseAxiosPrivate';
 
@@ -15,19 +15,24 @@ const ShortExcess = ({ value }) => {
 
 const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
     const axiosPrivate = useAxiosPrivate();
-    
+
     const [isWrapped, setIsWrapped] = useState(false);
-    
+
     // Backend Filter States
-    const [activeFilters, setActiveFilters] = useState({}); 
+    const [activeFilters, setActiveFilters] = useState({});
     const [reportData, setReportData] = useState(glanceReport?.reportData || []);
     const [isDataLoading, setIsDataLoading] = useState(false);
-    
+
     // Dropdown UI States
     const [openFilterCol, setOpenFilterCol] = useState(null);
     const [dropdownOptions, setDropdownOptions] = useState([]);
     const [tempSelected, setTempSelected] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState("");
+
+    // ── Editable trailing-input states ──────────
+    const [editingJobIndex, setEditingJobIndex] = useState(null);
+    const [editValues, setEditValues] = useState({}); 
+    const [savingJob, setSavingJob] = useState(false);
 
     const WRAPPED_COL_WIDTH = 110;
     const wrapClass = isWrapped ? "whitespace-normal break-words" : "whitespace-nowrap";
@@ -40,13 +45,14 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
         "GREY DELIVERY FOR DYEING", "GREY RET. RCVD FROM DYEING", "GREY RECEIVED FROM DYEING",
         "FINISH RECEIVED FROM DYEING", "PROCESS LOSS %", "SHORT & EXCESS", "SENT FOR AOP",
         "RETURN RECEIVED FROM AOP", "GREY WEIGHT RECEIVED FROM AOP", "FINISH RECEIVED FROM AOP",
-        "PROCESS LOSS", "SHORT & EXCESS", "FABRIC ISSUE CUTTING DEPT.", "FABRIC ISSUED SHORT EXCESS",
-         "CAD CONSUMPTION", "PLANNED CUTTING QTY", "ACTUAL CUTTING QTY", "SHORT & EXCESS CUTTING",
-        "SHORT/EXCESS %",  "CUTTING TO SEWING INPUT BALANCE", "PHYSICAL FOUND", "EXCESS QTY",
-        "SWING INPUT QTY", "INPUT SHORT/EXCESS",  "OUTPUT QTY", "OUTPUT SHORT/EXCESS",
-         "FINISH INPUT QTY", "FINISH OUTPUT QTY", "SHORT EXCESS", 
-        "PACKING INPUT QTY", "PACKING OUTPUT QTY", "SHIPPED QTY", "EXCESS SHORT", "PLANNED LEFTOVER",
-        "PHYSICAL FOUND LEFTOVER", "%PHYSICAL FOUND LEFTOVER", "LEFT OVER SHORT EXCESS", 
+        "PROCESS LOSS", "SHORT & EXCESS", 
+        "FABRIC ISSUE CUTTING DEPT.", "FABRIC ISSUED SHORT EXCESS", "CAD CONSUMPTION", 
+        "PLANNED CUTTING QTY", "ACTUAL CUTTING QTY", "SHORT & EXCESS CUTTING", "SHORT/EXCESS %", 
+        "CUTTING TO SEWING INPUT", "PHYSICAL FOUND", 
+        "SEWING INPUT QTY", "INPUT SHORT/EXCESS", "SEWING OUTPUT QTY", "OUTPUT SHORT/EXCESS",
+        "FINISH INPUT QTY", "FINISH OUTPUT QTY", "SHORT EXCESS",
+        "PACKING INPUT QTY", "PACKING OUTPUT QTY", "SHIPPED QTY", "EXCESS SHORT", 
+        "PLANNED LEFTOVER", "PHYSICAL FOUND LEFTOVER", "%PHYSICAL FOUND LEFTOVER", "LEFT OVER SHORT EXCESS"
     ];
 
     const FILTERABLE_COLS = {
@@ -55,66 +61,77 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
         2: { key: "composition", label: "COMPOSITION" },
     };
 
-    const TRAILING_CELL_TYPES = [
-        "input", "input", "input", "input", "input", "input", "input", "FORMULA", "FORMULA",
-        "input", "input", "input", "FORMULA", "input", "FORMULA", "input", "input", "input",
-        "FORMULA", "input", "input", "FORMULA", "input", "input", "input"
+    const TRAILING_FIELDS = [
+        { key: "fabricIssueCuttingDept", type: "input" },
+        { key: "fabricIssuedShortExcess", type: "FORMULA" },
+        { key: "cadConsumption", type: "input" },
+        { key: "plannedCuttingQty", type: "input" },
+        { key: "actualCuttingQty", type: "input" },
+        { key: "shortExcessCutting", type: "FORMULA" },
+        { key: "shortExcessPercentCutting", type: "FORMULA" },
+        { key: "cuttingToSewingInput", type: "input" },
+        { key: "physicalFound", type: "input" },
+        { key: "sewingInputQty", type: "input" },
+        { key: "inputShortExcess", type: "FORMULA" },
+        { key: "sewingOutputQty", type: "input" },
+        { key: "outputShortExcess", type: "FORMULA" },
+        { key: "finishInputQty", type: "input" },
+        { key: "finishOutputQty", type: "input" },
+        { key: "shortExcessFinish", type: "FORMULA" },
+        { key: "packingInputQty", type: "input" },
+        { key: "packingOutputQty", type: "input" },
+        { key: "shippedQty", type: "input" },
+        { key: "excessShort", type: "FORMULA" },
+        { key: "plannedLeftOverQty", type: "input" },
+        { key: "physicalFoundLeftOver", type: "input" },
+        { key: "percentPhysicalFoundLeftover", type: "FORMULA" },
+        { key: "leftOverShortExcess", type: "FORMULA" },
     ];
 
-    // ── 1. Fetch Data from Backend when filters change ───────────────────────
-    useEffect(() => {
-        const fetchFilteredData = async () => {
-            setIsDataLoading(true);
-            try {
-                const params = { page: 1, limit: 10000 }; 
-                if (Object.keys(activeFilters).length > 0) {
-                    params.filters = JSON.stringify(activeFilters);
-                }
-                
-                // ✅ FIX: Changed from '/api/glance' to '/api/styles' 
-                // because styleRequirements is already mounted at /api/styles in your routes!
-                const res = await axiosPrivate.get('/api/styles', { params });
-                
-                if (res.data && res.data.data) {
-                    setReportData(res.data.data);
-                }
-            } catch (err) {
-                console.error("Failed to fetch filtered data:", err);
-            } finally {
-                setIsDataLoading(false);
+    // ── 1. Fetch Data ───────────────────────
+    const fetchFilteredData = useCallback(async () => {
+        setIsDataLoading(true);
+        try {
+            const params = { page: 1, limit: 10000 };
+            if (Object.keys(activeFilters).length > 0) {
+                params.filters = JSON.stringify(activeFilters);
             }
-        };
-
-        fetchFilteredData();
+            const res = await axiosPrivate.get('/api/styles', { params });
+            if (res.data && res.data.data) {
+                setReportData(res.data.data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch filtered data:", err);
+        } finally {
+            setIsDataLoading(false);
+        }
     }, [activeFilters, axiosPrivate]);
 
-    // ── 2. Fetch Filter Options from Backend when dropdown opens ─────────────
+    useEffect(() => {
+        fetchFilteredData();
+    }, [fetchFilteredData]);
+
+    // ── 2. Filter Options Logic ─────────────
     const openFilterDropdown = async (colIndex) => {
         if (openFilterCol === colIndex) {
             setOpenFilterCol(null);
             return;
         }
-        
         setOpenFilterCol(colIndex);
         setSearchTerm("");
-        
         const colKey = FILTERABLE_COLS[colIndex]?.key;
         if (!colKey) return;
 
         try {
             const otherFilters = { ...activeFilters };
             delete otherFilters[colKey];
-            
             const params = {};
             if (Object.keys(otherFilters).length > 0) {
                 params.filters = JSON.stringify(otherFilters);
             }
-
-            // This endpoint works because you have it in your routes
             const res = await axiosPrivate.get(`/api/glance/filter-options/${colKey}`, { params });
             const options = res.data?.data || [];
             setDropdownOptions(options);
-            
             const currentActive = activeFilters[colKey] || [];
             setTempSelected(new Set(currentActive.length > 0 ? currentActive : options));
         } catch (err) {
@@ -123,8 +140,7 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
         }
     };
 
-    // ── Dropdown UI Logic ────────────────────────────────────────────────────
-    const visibleOptions = dropdownOptions.filter(v => 
+    const visibleOptions = dropdownOptions.filter(v =>
         String(v).toLowerCase().includes(String(searchTerm).toLowerCase())
     );
     const allChecked = visibleOptions.length > 0 && visibleOptions.every(v => tempSelected.has(v));
@@ -145,18 +161,108 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
     const applyFilter = () => {
         const colKey = FILTERABLE_COLS[openFilterCol]?.key;
         if (!colKey) return;
-
         const selectedArray = Array.from(tempSelected);
         const allOptionsSelected = selectedArray.length === dropdownOptions.length && dropdownOptions.length > 0;
 
         setActiveFilters(prev => {
             const next = { ...prev };
-            if (selectedArray.length === 0 || allOptionsSelected) delete next[colKey]; 
+            if (selectedArray.length === 0 || allOptionsSelected) delete next[colKey];
             else next[colKey] = selectedArray;
             return next;
         });
-        
         setOpenFilterCol(null);
+    };
+
+    // ── Editable trailing-input logic ─────────────────
+    const getSubRowCount = (job) => {
+        const comps = job?.rows || [];
+        const compBreakDown = job?.compBreakdown || [];
+        return Math.max(comps.length, compBreakDown.length, 1);
+    };
+
+    const handleInputChange = (jobIdx, subRowIdx, fieldKey, value) => {
+        setEditValues(prev => ({
+            ...prev,
+            [`${jobIdx}-${subRowIdx}-${fieldKey}`]: value,
+        }));
+    };
+
+    const handleStartEdit = (jobIndex) => {
+        if (editingJobIndex !== null) return; 
+        const job = reportData[jobIndex];
+        const comps = job?.rows || []; 
+        const subRowCount = getSubRowCount(job);
+
+        const initialValues = {};
+        for (let i = 0; i < subRowCount; i++) {
+            const com = comps[i]; 
+            const reconciliation = com?.reconciliation || {};
+
+            TRAILING_FIELDS.forEach(field => {
+                if (field.type !== "FORMULA") {
+                    if (com) {
+                        const existing = reconciliation[field.key];
+                        initialValues[`${jobIndex}-${i}-${field.key}`] = existing != null ? String(existing) : "";
+                    } else {
+                        initialValues[`${jobIndex}-${i}-${field.key}`] = "";
+                    }
+                }
+            });
+        }
+        setEditValues(prev => ({ ...prev, ...initialValues }));
+        setEditingJobIndex(jobIndex);
+    };
+
+    const handleCancelEdit = (jobIndex) => {
+        setEditValues(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(k => {
+                if (k.startsWith(`${jobIndex}-`)) delete next[k];
+            });
+            return next;
+        });
+        setEditingJobIndex(null);
+    };
+
+    const buildJobPayload = (jobIndex, job) => {
+        const comps = job?.rows || [];
+        const rows = [];
+        
+        for (let i = 0; i < comps.length; i++) {
+            const com = comps[i];
+            if (!com || !com.id) continue;
+
+            const rowPayload = { styleRequirementRowId: com.id };
+            
+            TRAILING_FIELDS.forEach(field => {
+                if (field.type !== "FORMULA") {
+                    const raw = editValues[`${jobIndex}-${i}-${field.key}`];
+                    const num = raw === "" || raw == null ? 0 : Math.round(Number(raw));
+                    rowPayload[field.key] = isNaN(num) ? 0 : num;
+                }
+            });
+            rows.push(rowPayload);
+        }
+        return { jobNo: job.jobNo, rows };
+    };
+
+    const handleSaveJob = async (jobIndex, job) => {
+        setSavingJob(true);
+        try {
+            const payload = buildJobPayload(jobIndex, job);
+            if (!payload || payload.rows.length === 0) {
+                alert("No valid rows to save.");
+                return;
+            }
+            await axiosPrivate.patch(`/api/styles/${encodeURIComponent(job.jobNo)}/reconciliation`, payload);
+            setEditingJobIndex(null);
+            await fetchFilteredData();
+        } catch (err) {
+            console.error("Failed to save job data:", err);
+            alert("Failed to save. Please try again.");
+        } finally {
+            setSavingJob(false);
+        }
     };
 
     const closeModal = () => setGlanceReport(prev => ({ ...prev, showGlanceModal: false }));
@@ -167,7 +273,7 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
             <div className="fixed inset-0 bg-black bg-opacity-50 z-50 animate-fade-in" />
             <div className="fixed inset-0 z-50 flex justify-center p-4 pointer-events-none">
                 <div className="bg-white rounded-md border border-gray-300 w-full max-w-full max-h-[90vh] overflow-hidden pointer-events-auto animate-slide-in shadow-xl" onClick={(e) => e.stopPropagation()}>
-                    
+
                     <div className="flex items-center justify-between p-6 border-b-2 border-gray-300 bg-gray-50">
                         <h2 className="text-xl font-semibold uppercase text-gray-800">RECONCILIATION</h2>
                         <div className="flex items-center gap-2">
@@ -207,14 +313,12 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                                 <div className="p-2 border-b border-gray-200">
                                                                     <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 outline-none focus:border-indigo-400" autoFocus />
                                                                 </div>
-                                                                
                                                                 <div className="px-3 py-1.5 border-b border-gray-100">
                                                                     <label className="flex items-center gap-2 cursor-pointer">
                                                                         <input type="checkbox" checked={allChecked} onChange={toggleAll} className="accent-indigo-500" />
                                                                         <span className="text-xs font-medium text-gray-600">Select All</span>
                                                                     </label>
                                                                 </div>
-
                                                                 <div className="max-h-40 overflow-y-auto py-1">
                                                                     {visibleOptions.length === 0 ? (
                                                                         <div className="px-3 py-4 text-xs text-gray-400 text-center">No matches</div>
@@ -227,7 +331,6 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                                         ))
                                                                     )}
                                                                 </div>
-
                                                                 <div className="flex items-center justify-end gap-2 p-2 border-t border-gray-200">
                                                                     <button type="button" onClick={() => setOpenFilterCol(null)} className="text-xs px-3 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-100">Cancel</button>
                                                                     <button type="button" onClick={applyFilter} className="text-xs px-3 py-1 rounded bg-indigo-500 text-white hover:bg-indigo-600">OK</button>
@@ -242,17 +345,18 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                 </thead>
                                 <tbody>
                                     {isLoading && (
-                                        <tr><td colSpan={54} className="px-4 py-10 text-center text-sm text-gray-500">Loading filtered data...</td></tr>
+                                        <tr><td colSpan={47} className="px-4 py-10 text-center text-sm text-gray-500">Loading filtered data...</td></tr>
                                     )}
-                                    
+
                                     {!isLoading && reportData.length === 0 && (
-                                        <tr><td colSpan={54} className="px-4 py-10 text-center text-sm text-gray-500">No rows match the active filters.</td></tr>
+                                        <tr><td colSpan={47} className="px-4 py-10 text-center text-sm text-gray-500">No rows match the active filters.</td></tr>
                                     )}
 
                                     {!isLoading && reportData.map((job, jobIndex) => {
                                         const comps = job?.rows || [];
                                         const compBreakDown = job.compBreakdown || [];
-                                        const subRowCount = Math.max(comps.length, compBreakDown.length, 1);
+                                        const subRowCount = getSubRowCount(job);
+                                        const isEditingThisJob = editingJobIndex === jobIndex;
 
                                         return Array.from({ length: subRowCount }).map((_, i) => {
                                             const com = comps[i];
@@ -286,7 +390,23 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                 <tr key={`${jobIndex}-${i}`} className={`hover:bg-gray-50 ${isLastSubRow ? 'border-b border-gray-300' : ''}`}>
                                                     {i === 0 && (
                                                         <td rowSpan={subRowCount} className={`px-4 py-3 text-sm font-semibold text-gray-900 border border-gray-400 bg-white align-top left-0 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)] ${wrapClass}`} style={cellStyle}>
-                                                            {job.jobNo || "-"}
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                <span>{job.jobNo || "-"}</span>
+                                                                {isEditingThisJob ? (
+                                                                    <div className="flex gap-1">
+                                                                        <button type="button" onClick={() => handleSaveJob(jobIndex, job)} disabled={savingJob} className="text-[10px] px-2 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-50">
+                                                                            {savingJob ? "Saving…" : "Save"}
+                                                                        </button>
+                                                                        <button type="button" onClick={() => handleCancelEdit(jobIndex)} disabled={savingJob} className="text-[10px] px-2 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50">
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button type="button" onClick={() => handleStartEdit(jobIndex)} disabled={editingJobIndex !== null} className="text-[10px] px-2 py-1 border border-indigo-300 text-indigo-600 rounded hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                                                                        Edit
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     )}
                                                     <td className={cellClass} style={cellStyle}>{com?.color || "-"}</td>
@@ -311,12 +431,44 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
                                                     <td className={cellClass} style={cellStyle}>{comp?.aopOrder_AOP_Finish_Fabric_Rcvd ?? "-"}</td>
                                                     <td className={cellClass} style={cellStyle}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
                                                     <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
-                                                    
-                                                    {TRAILING_CELL_TYPES.map((cellType, idx) => (
-                                                        <td key={`trail-${idx}`} className={cellClass} style={cellStyle}>
-                                                            {cellType === "FORMULA" ? "FORMULA" : <input className="border rounded-md p-2 w-full" placeholder="Editable" type="text" />}
-                                                        </td>
-                                                    ))}
+
+                                                    {/* UPDATED UI LOGIC FOR TRAILING FIELDS */}
+                                                    {TRAILING_FIELDS.map((field, idx) => {
+                                                        const isFormula = field.type === "FORMULA";
+                                                        const savedValue = com?.reconciliation?.[field.key];
+
+                                                        if (isFormula) {
+                                                            return (
+                                                                <td key={`trail-${idx}`} className={cellClass} style={cellStyle}>
+                                                                    <span className="text-gray-400 italic text-xs">FORMULA</span>
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        // EDIT MODE: Render Input Field
+                                                        if (isEditingThisJob) {
+                                                            return (
+                                                                <td key={`trail-${idx}`} className={cellClass} style={cellStyle}>
+                                                                    <input
+                                                                        className="border rounded-md p-2 w-full text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                                                        type="number"
+                                                                        step="1"
+                                                                        placeholder="—"
+                                                                        disabled={savingJob}
+                                                                        value={editValues[`${jobIndex}-${i}-${field.key}`] ?? ""}
+                                                                        onChange={(e) => handleInputChange(jobIndex, i, field.key, e.target.value)}
+                                                                    />
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        // VIEW MODE: Render Saved Database Value cleanly
+                                                        return (
+                                                            <td key={`trail-${idx}`} className={cellClass} style={cellStyle}>
+                                                                {savedValue != null && savedValue !== 0 ? savedValue : (savedValue === 0 ? "0" : "-")}
+                                                            </td>
+                                                        );
+                                                    })}
                                                 </tr>
                                             );
                                         });

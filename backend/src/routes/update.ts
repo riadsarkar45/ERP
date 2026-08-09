@@ -5,6 +5,7 @@ import { updateJobs } from "../controllers/deliveries/newDelivery";
 import { updateStyleReq } from "../controllers/newStyleRequirements/updateStyleRequires/updateStyleReq";
 import { updateWorkOrder } from "../controllers/orders/update/updateWorkOrder";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
+import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 
 const updateRouters = express.Router();
 
@@ -18,4 +19,6 @@ updateRouters.patch("/update-style-req/:jobId", authenticate, authorize("SUPER A
 
 updateRouters.patch("/update-work-order/:workOrderId", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateWorkOrder); 
 
+// ✅ CORRECT: No trailing space
+updateRouters.patch("/styles/:jobNo/reconciliation", styleReconciliation);
 export default updateRouters;

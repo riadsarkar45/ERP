@@ -94,6 +94,27 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             orderQty: true,
                             finishRequiredQty: true,
                             additional: true,
+                            reconciliation:{
+                                select: {
+                                    id: true,
+                                    actualCuttingQty: true,
+                                    cadConsumption: true,
+                                    cuttingToSewingInput: true,
+                                    fabricIssueCuttingDept: true,
+                                    finishInputQty: true,
+                                    finishOutputQty: true,
+                                    note: true,
+                                    packingInputQty: true,
+                                    packingOutputQty: true,
+                                    physicalFound: true,
+                                    physicalFoundLeftOver: true,
+                                    plannedCuttingQty: true,
+                                    plannedLeftOverQty: true,
+                                    sewingInputQty: true,
+                                    sewingOutputQty: true,
+                                    shippedQty: true,
+                                }
+                            }
                         },
                     },
                     sizes: {
@@ -111,6 +132,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                                     composition: true,
                                     workOrderQty: true,
                                     additional: true,
+                                    id: true,
                                     deliveries: {
                                         select: {
                                             deliveryType: true,

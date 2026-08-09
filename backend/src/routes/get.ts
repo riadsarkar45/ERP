@@ -15,6 +15,7 @@ import { partyData, partyViewData } from "../controllers/partyViewData/partyView
 import { challanMovement } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 import { misDetailView } from "../controllers/mis/misDetail";
+import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 
 const getRouters = express.Router();
 
@@ -61,5 +62,7 @@ getRouters.get("/glance/filter-options/:columnName", getGlanceFilterOptions);
 getRouters.get("/glance/:jobNo", styleRequirements);
 
 getRouters.get("/mis/glance/detail/:columnName/:jobNo", misDetailView);
+
+getRouters.get("/glance/:jobNo/trailing-data", styleReconciliation);
 
 export default getRouters;

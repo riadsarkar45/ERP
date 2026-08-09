@@ -3,7 +3,7 @@ import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDo
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useFetchData } from "../../../hooks/fetch";
 import * as XLSX from "xlsx";
 import GlanceModal from "../../../components/GlanceModal";
@@ -177,7 +177,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                 minWidth: 220,
                 maxWidth: 280,
-            
+
             }}
             className="filter-dropdown"
         >
@@ -634,10 +634,14 @@ export default function Summary() {
                             <button className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="See MAKE YOUR RECONCIALATION">
                                 <span className="animate-spin"><RefreshCcw size={18} className="text-gray-600" /></span>
                             </button> :
-                            <button onClick={() => handleGlanceReport()} className="flex font-semibold items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="RECONCIALATION">
-                                <Pen size={20} className="text-gray-600" />
-                                MAKE YOUR RECONCIALATION
-                            </button>
+                            <Link to={"/dashboard/style/reconciliation"}>
+                                <button className="flex font-semibold items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="RECONCIALATION">
+                                    <Pen size={20} className="text-gray-600" />
+                                    MAKE YOUR RECONCIALATION
+                                </button>
+                            </Link>
+
+                            
                     }
                 </div>
 

@@ -74,8 +74,7 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
         const rows = s.rows ?? [];
 
         // Create an array that maps 1-to-1 with your table rows
-        const compBreakdown = rows.map(() => ({}));
-
+        const compBreakdown = rows.map((row: any) => ({ styleRequirementRowId: row.id }));
         // Build a lookup once per style instead of scanning `rows` with
         // findIndex for every composition (O(rows + compositions) instead
         // of O(rows * compositions)). Also removes the risk of a silent
@@ -189,11 +188,11 @@ export const getJobWiseGlanceTotals = (styles: any[]) => {
 
         workOrders.forEach((w: any) => {
             const compositions = w.compositions ?? [];
-            
+
             compositions.forEach((c: any) => {
                 const qty = Number(c.workOrderQty) || 0;
                 const price = Number(c.unitePrice) || 0;
-                
+
                 // 1. Calculate Job-level Qty and Payable Amount
                 totalWorkOrderQty += qty;
                 totalPayableAmount += qty * price;
@@ -251,7 +250,7 @@ export const getDeliveryBreakdownByType = (styles: any[]) => {
 export const getDeliverySum = (deliveries: any[], targetType: string): number => {
     if (!Array.isArray(deliveries)) return 0;
     const normalizedTarget = (targetType || "").trim().replace(/\s+/g, "");
-    
+
     return deliveries.reduce((acc, d) => {
         const normalizedType = (d.deliveryType || "").trim().replace(/\s+/g, "");
         if (normalizedType === normalizedTarget) {

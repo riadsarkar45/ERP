@@ -50,7 +50,7 @@ model yarnDyeingJobs {
   createdAt   DateTime   @default(now())
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
   workOrderId Int?
-  unitePrice Float @default(0.0)
+  unitePrice  Float      @default(0.0)
   // yarnDeliveries yarnDeliveries[]
 }
 
@@ -76,23 +76,21 @@ model Composition {
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
   challans              Challan[]
-
   @@index([workOrderId])
   @@index([color])
   @@index([styleRequirementRowId])
 }
-
 model StyleRequirement {
-  id           Int                   @id @default(autoincrement())
-  salesContact String
-  buyerName    String
-  jobNo        String                @unique
-  poNo         String
-  styleNo      String
-  processLoss  Float
-  rows         StyleRequirementRow[]
-  sizes        sizes[]
-  workOrders   WorkOrder[]
+  id             Int                   @id @default(autoincrement())
+  salesContact   String
+  buyerName      String
+  jobNo          String                @unique
+  poNo           String
+  styleNo        String
+  processLoss    Float
+  rows           StyleRequirementRow[]
+  sizes          sizes[]
+  workOrders     WorkOrder[]
 }
 
 model StyleRequirementRow {
@@ -105,9 +103,8 @@ model StyleRequirementRow {
   orderQty           Int
   finishRequiredQty  Float
   additional         Int              @default(0)
-
-  // NEW: back-relation so a row can see all Composition records derived from it
-  compositions Composition[]
+  compositions        Composition[]
+  reconciliation      reconciliationData?
 
   @@index([styleRequirementId])
 }
@@ -223,4 +220,28 @@ model refreshToken {
   user user @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model reconciliationData {
+  id                     Int                  @id @default(autoincrement())
+  fabricIssueCuttingDept Int
+  cadConsumption         Int
+  plannedCuttingQty      Int
+  actualCuttingQty       Int
+  cuttingToSewingInput   Int
+  physicalFound          Int
+  sewingInputQty         Int
+  sewingOutputQty        Int
+  finishInputQty         Int
+  finishOutputQty        Int
+  packingInputQty        Int
+  packingOutputQty       Int
+  shippedQty             Int
+  plannedLeftOverQty     Int
+  physicalFoundLeftOver  Int
+  submittedBy            String
+  submittedDate          DateTime             @default(now())
+  styleRequirementRow    StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
+  styleRequirementRowId  Int?                 @unique
+  note                   String?
 }

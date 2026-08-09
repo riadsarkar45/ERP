@@ -25,6 +25,7 @@ import Aop from "../dashboard/pages/movement/Aop";
 import Dyeing from "../dashboard/pages/movement/Dyeing";
 import Knitting from "../dashboard/pages/movement/Knitting";
 import GlanceReport from "../dashboard/pages/MIS/GlanceReport";
+import Reconciliation from "../dashboard/pages/reconciliation/Reconciliation";
 
 const routers = createBrowserRouter([
     {
@@ -133,10 +134,14 @@ const routers = createBrowserRouter([
                         path: "challan/knitting",
                         element: <Knitting />
                     },
-                    
+
                     {
                         path: "mis/glance",
                         element: <GlanceReport />
+                    },
+                    {
+                        path: "style/reconciliation",
+                        element: <Reconciliation />
                     }
                 ]
             }
