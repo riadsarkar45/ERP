@@ -33,7 +33,7 @@ const dv = (dt, key) => {
     return found ? Number(dt[found]) || 0 : 0;
 };
 
-const KnittingGlance = ({ detailView }) => {
+const KnittingGlance = ({ detailView, handleGetMisDetail }) => {
     const rows = useMemo(() => (detailView || []).map((job) => {
         const wo = Number(job.totalWorkOrderQty) || 0;
         const dt = job.deliveryTypeTotals || {};
@@ -70,13 +70,15 @@ const KnittingGlance = ({ detailView }) => {
                     return (
                         <tr key={i}>
                             <td style={cellStyle}>{r.jobNo}</td>
-                            <td style={cellStyle}>{fmt(r.wo)}</td>
-                            <td style={cellStyle}>{fmt(r.yarnDelivery)}</td>
-                            <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(r.yarnDelivery - r.wo)}</td>
+                            <td onClick={() => handleGetMisDetail("knittingWorkOrder", r.jobNo)} style={cellStyle}>{fmt(r.wo)}</td>
+                            <td onClick={() => handleGetMisDetail("knittingYarnDelivery", r.jobNo)} style={cellStyle}>{fmt(r.yarnDelivery)}</td>
+                            <td onClick={() => handleGetMisDetail("yarnDeliveryShortExcess", r.jobNo)}  className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(r.yarnDelivery - r.wo)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.yarnDelivery, r.wo))}</td>
-                            <td style={cellStyle}>{fmt(r.greyReceived)}</td>
-                            <td style={cellStyle}>{fmt(r.yarnReturn)}</td>
-                            <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.wo)}</td>
+                            <td onClick={() => handleGetMisDetail("knittingGreyReceived", r.jobNo)} style={cellStyle}>{fmt(r.greyReceived)}</td>
+                            <td onClick={() => handleGetMisDetail("knittingYarnReturn", r.jobNo)}  style={cellStyle}>{fmt(r.yarnReturn)}</td>
+                            <td onClick={() => handleGetMisDetail("knittingPartyStock", r.jobNo)}
+                                className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.wo)}
+                            </td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(recv, r.wo))}</td>
                         </tr>
                     );

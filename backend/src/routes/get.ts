@@ -14,6 +14,7 @@ import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 import { challanMovement } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
+import { misDetailView } from "../controllers/mis/misDetail";
 
 const getRouters = express.Router();
 
@@ -58,5 +59,7 @@ getRouters.get("/work-order/:orderType/filter-options/:column", getFilterOptions
 getRouters.get("/glance/filter-options/:columnName", getGlanceFilterOptions);
 
 getRouters.get("/glance/:jobNo", styleRequirements);
+
+getRouters.get("/mis/glance/detail/:columnName/:jobNo", misDetailView);
 
 export default getRouters;

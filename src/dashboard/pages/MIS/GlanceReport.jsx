@@ -4,6 +4,7 @@ import { useFetchData } from "../../../hooks/fetch";
 import AopGlance from "./AopGlance";
 import DyeingGlance from "./DyeingGlance";
 import KnittingGlance from "./KnittingGlance";
+import MISGlanceReport from "../../../components/MISGlanceReport";
 
 const BORDER_COLOR = "#aeb7c2";
 const PAGE_SIZE = 30;
@@ -149,6 +150,7 @@ const GlanceReport = () => {
 
     const [allJobNumbers, setAllJobNumbers] = useState([]);
     const [selectedJobNos, setSelectedJobNos] = useState([]);
+    const [isLoading, setIsLoading] = useState({ isLoading: false, isShowGlanceModal: false })
 
     const partyViews = ["knittingOrder", "dyeingOrder", "aopOrder"];
 
@@ -237,6 +239,10 @@ const GlanceReport = () => {
         setPage(1);
     };
 
+    const handleGetMisDetail = (detailColumn, jobNo) => {
+        console.log(detailColumn, jobNo);
+    }
+
     return (
         <div>
             {/* Tabs */}
@@ -264,6 +270,12 @@ const GlanceReport = () => {
                     </span>
                 )}
             </div>
+
+            {/* {
+                <MISGlanceReport
+                    isLoading={isLoading}
+                />
+            } */}
 
             {/* ERP Table */}
             <div style={{ border: `2px solid ${BORDER_COLOR}`, background: "#fff", borderRadius: "4px" }}>
@@ -304,9 +316,18 @@ const GlanceReport = () => {
                             </tr>
                         </thead>
 
-                        {selectOrderType === "knittingOrder" && <KnittingGlance detailView={data} />}
-                        {selectOrderType === "dyeingOrder" && <DyeingGlance detailView={data} />}
-                        {selectOrderType === "aopOrder" && <AopGlance detailView={data} />}
+                        {selectOrderType === "knittingOrder" && <KnittingGlance
+                            detailView={data}
+                            handleGetMisDetail={handleGetMisDetail}
+                        />}
+                        {selectOrderType === "dyeingOrder" && <DyeingGlance
+                            detailView={data}
+                            handleGetMisDetail={handleGetMisDetail}
+                        />}
+                        {selectOrderType === "aopOrder" && <AopGlance
+                            detailView={data}
+                            handleGetMisDetail={handleGetMisDetail}
+                        />}
                     </table>
                 </div>
             </div>

@@ -33,7 +33,7 @@ const dv = (dt, key) => {
     return found ? Number(dt[found]) || 0 : 0;
 };
 
-const DyeingGlance = ({ detailView }) => {
+const DyeingGlance = ({ detailView, handleGetMisDetail }) => {
     const rows = useMemo(() => (detailView || []).map((job) => {
         const wo = Number(job.totalWorkOrderQty) || 0;
         const dt = job.deliveryTypeTotals || {};
@@ -72,12 +72,12 @@ const DyeingGlance = ({ detailView }) => {
                     return (
                         <tr key={i}>
                             <td style={cellStyle}>{r.jobNo}</td>
-                            <td style={cellStyle}>{fmt(r.wo)}</td>
-                            <td style={cellStyle}>{fmt(r.greyDelivery)}</td>
+                            <td onClick={() => handleGetMisDetail("dyeingWorkOrder", r.jobNo)}  style={cellStyle}>{fmt(r.wo)}</td>
+                            <td onClick={() => handleGetMisDetail("dyeingGreyDelivery", r.jobNo)}  style={cellStyle}>{fmt(r.greyDelivery)}</td>
                             <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(r.greyDelivery - r.wo)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.greyDelivery, r.wo))}</td>
-                            <td style={cellStyle}>{fmt(r.greyReturn)}</td>
-                            <td style={cellStyle}>{fmt(r.greyReceived)}</td>
+                            <td onClick={() => handleGetMisDetail("dyeingGreyReturn", r.jobNo)}  style={cellStyle}>{fmt(r.greyReturn)}</td>
+                            <td onClick={() => handleGetMisDetail("dyeingGreyReceived", r.jobNo)}  style={cellStyle}>{fmt(r.greyReceived)}</td>
                             <td style={cellStyle}>{fmt(r.finishReceived)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.greyReceived - r.finishReceived, r.greyReceived))}</td>
                             <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.greyDelivery)}</td>
