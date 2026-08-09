@@ -1,4 +1,4 @@
-import { Loader2, Filter, Search } from "lucide-react";
+import { Loader2, Filter, Search, FunnelX } from "lucide-react";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useFetchData } from "../../../hooks/fetch";
 import AopGlance from "./AopGlance";
@@ -73,9 +73,8 @@ const ExcelFilterDropdown = ({ allValues, selectedValues, onApply }) => {
                 className={`ml-1 p-0.5 rounded hover:bg-gray-300 ${isActive ? "text-blue-600" : "text-gray-500"}`}
                 title="Filter"
             >
-                <Filter size={13} fill={isActive ? "currentColor" : "none"} />
+                {isActive ? <span onClick={handleClear}><FunnelX /></span> : <Filter size={13} fill={isActive ? "currentColor" : "none"} />}
             </button>
-
             {open && (
                 <div
                     className="absolute z-50 top-full left-0 mt-1 w-56 bg-white border border-gray-300 rounded shadow-lg text-left"

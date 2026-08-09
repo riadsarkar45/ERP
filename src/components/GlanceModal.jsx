@@ -58,8 +58,7 @@ const GlanceModal = ({ glanceReport, setGlanceReport, handleGlanceReport }) => {
     const TRAILING_CELL_TYPES = [
         "input", "input", "input", "input", "input", "input", "input", "FORMULA", "FORMULA",
         "input", "input", "input", "FORMULA", "input", "FORMULA", "input", "input", "input",
-        "FORMULA", "input", "input", "FORMULA", "input", "input", "input", "input", "FORMULA",
-        "FORMULA", "input", "FORMULA", "input",
+        "FORMULA", "input", "input", "FORMULA", "input", "input", "input"
     ];
 
     // ── 1. Fetch Data from Backend when filters change ───────────────────────

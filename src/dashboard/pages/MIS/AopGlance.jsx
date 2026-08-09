@@ -80,7 +80,7 @@ const AopGlance = ({ detailView, handleGetMisDetail }) => {
                             <td onClick={() => handleGetMisDetail("aopFinishFabricRcvd", r.jobNo)}  style={cellStyle}>{fmt(r.aopFinishFabricRcvd)}</td>
                             <td onClick={() => handleGetMisDetail("returnFromAop", r.jobNo)}  style={cellStyle}>{fmt(r.returnFromAop)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.receivedFromAop - r.aopFinishFabricRcvd, r.receivedFromAop))}</td>
-                            <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.aopFinishFabricRcvd)}</td>
+                            <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.sentForAop)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(recv, r.sentForAop))}</td>
                         </tr>
                     );
@@ -97,7 +97,7 @@ const AopGlance = ({ detailView, handleGetMisDetail }) => {
                     <td className="bg-yellow-100" style={footerCellStyle}>{fmt(t.aopFinishFabricRcvd)}</td>
                     <td className="bg-yellow-100" style={footerCellStyle}>{fmt(t.returnFromAop)}</td>
                     <td className="bg-yellow-100" style={footerCellStyle}>{pctCell(pct(t.receivedFromAop - t.aopFinishFabricRcvd, t.receivedFromAop))}</td>
-                    <td className="bg-yellow-100" style={footerCellStyle}>{shortExcess(t.receivedFromAop + t.returnFromAop - t.aopFinishFabricRcvd)}</td>
+                    <td className="bg-yellow-100" style={footerCellStyle}>{shortExcess(t.receivedFromAop + t.returnFromAop - t.sentForAop)}</td>
                     <td className="bg-yellow-100" style={footerCellStyle}>{pctCell(pct(t.receivedFromAop + t.returnFromAop, t.sentForAop))}</td>
                 </tr>
             </tfoot>
