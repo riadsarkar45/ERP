@@ -77,9 +77,9 @@ const KnittingGlance = ({ detailView, handleGetMisDetail }) => {
                             <td onClick={() => handleGetMisDetail("knittingGreyReceived", r.jobNo)} style={cellStyle}>{fmt(r.greyReceived)}</td>
                             <td onClick={() => handleGetMisDetail("knittingYarnReturn", r.jobNo)}  style={cellStyle}>{fmt(r.yarnReturn)}</td>
                             <td onClick={() => handleGetMisDetail("knittingPartyStock", r.jobNo)}
-                                className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.wo)}
+                                className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.yarnDelivery)}
                             </td>
-                            <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(recv, r.wo))}</td>
+                            <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(recv, r.yarnDelivery))}</td>
                         </tr>
                     );
                 })}
@@ -93,8 +93,8 @@ const KnittingGlance = ({ detailView, handleGetMisDetail }) => {
                     <td className="bg-yellow-100" style={footerCellStyle}>{pctCell(pct(t.yarnDelivery, t.wo))}</td>
                     <td className="bg-yellow-100" style={footerCellStyle}>{fmt(t.greyReceived)}</td>
                     <td className="bg-yellow-100" style={footerCellStyle}>{fmt(t.yarnReturn)}</td>
-                    <td className="bg-yellow-100" style={footerCellStyle}>{shortExcess(t.greyReceived + t.yarnReturn - t.wo)}</td>
-                    <td className="bg-yellow-100" style={footerCellStyle}>{pctCell(pct(t.greyReceived + t.yarnReturn, t.wo))}</td>
+                    <td className="bg-yellow-100" style={footerCellStyle}>{shortExcess(t.greyReceived + t.yarnReturn - t.yarnDelivery)}</td>
+                    <td className="bg-yellow-100" style={footerCellStyle}>{pctCell(pct(t.greyReceived + t.yarnReturn, t.yarnDelivery))}</td>
                 </tr>
             </tfoot>
         </>
