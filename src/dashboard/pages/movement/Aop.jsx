@@ -1,12 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
-import useAxiosPublic from '../../../hooks/Axios';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
+import useAxiosPublic from '../../../hooks/Axios';
 
-// Note: borderCollapse is "separate" (not "collapse") on the <table> so the
-// sticky header keeps its border while scrolling — collapsed borders and
-// position:sticky don't render reliably together across browsers. Each cell
-// draws its own border instead.
 const cellStyle = {
     border: "1px solid #999",
     padding: "6px 8px",
@@ -15,8 +11,6 @@ const cellStyle = {
     verticalAlign: "top",
 };
 
-// Frozen/sticky header cell — stays pinned to the top of the scroll
-// container while the body scrolls underneath it, Excel-style.
 const thStickyStyle = {
     ...cellStyle,
     position: "sticky",
@@ -24,8 +18,6 @@ const thStickyStyle = {
     zIndex: 10,
     background: "#f3f4f6",
 };
-
-const PAGE_SIZE = 10;
 
 const pageButtonStyle = (active) => ({
     border: "1px solid #999",
@@ -39,10 +31,10 @@ const pageButtonStyle = (active) => ({
 });
 
 const tableHeader = [
-    { header: "", width: "40px", key: "select", noFilter: true }, // Checkbox column
+    { header: "", width: "40px", key: "select", noFilter: true },
     { header: "Date", width: "10%", key: "challanDate" },
     { header: "Challan No", width: "9%", key: "challanNo" },
-    { header: "Work Order", width: "9%", key: "workOrder" },
+    { header: "WO Qty", width: "9%", key: "workOrderQty" },
     { header: "Composition", width: "10%", key: "composition" },
     { header: "Color", width: "10%", key: "color" },
     { header: "To Factory", width: "9%", key: "toFactory" },
@@ -56,8 +48,6 @@ const tableHeader = [
     { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount" },
 ];
 
-
-
 const Aop = () => {
     const [movements, setMovements] = useState([]);
     const [page, setPage] = useState(1);
@@ -65,21 +55,34 @@ const Aop = () => {
     const [openFilterKey, setOpenFilterKey] = useState(null);
     const [draftSelected, setDraftSelected] = useState(new Set());
     const [filterSearch, setFilterSearch] = useState("");
-    const [selectedRows, setSelectedRows] = useState(new Set()); // Track selected checkboxes
+    const [selectedRows, setSelectedRows] = useState(new Set());
     const dropdownRef = useRef(null);
     const [totalPages, setTotalPages] = useState(1);
-    const [challanIds, setChallanIds] = useState([]); // Track selected challan IDs
+    const [challanIds, setChallanIds] = useState([]);
+
+    // Search States
+    const [search, setSearch] = useState("");
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [searchError, setSearchError] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
+
+    // FIX: Added refreshKey and search to dependencies. 
+    // Added `if (search) return;` so pagination doesn't overwrite active search results.
     useEffect(() => {
+        if (search) return; 
+
         fetchData(`/api/challan-movement/aopOrder?page=${page}&limit=10`)
             .then(data => {
-                if (data) setMovements(data.data);
-                console.log(data);
-                setTotalPages(data.pagination?.totalPages || 1);
+                if (data) {
+                    const payload = Array.isArray(data) ? data : (data.data || []);
+                    setMovements(payload);
+                    setTotalPages(data.pagination?.totalPages || 1);
+                }
             });
-    }, [fetchData, page]); // Added 'page' to dependency array
+    }, [fetchData, page, refreshKey, search]);
 
     useEffect(() => {
         if (!openFilterKey) return;
@@ -92,69 +95,72 @@ const Aop = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
-    // Flatten and PIVOT the data: 1 row per challan, with delivery types as columns
     const allRows = useMemo(() => {
-        const flat = [];
-        movements?.forEach((mv, mvIdx) => {
-            const mvId = mv?.id ?? mvIdx;
-            const challans = mv?.challans || [];
+        if (!movements || !Array.isArray(movements)) return [];
 
-            challans.forEach((ch) => {
-                const chId = ch.id;
+        const grouped = {};
 
-                let sentForAop = 0;
-                let receiveFromAop = 0;
-                let finishReceiveFromAop = 0;
-                let totalDeliveryQty = 0;
+        movements.forEach((item) => {
+            if (!item || item.challanNo === undefined) return;
 
-                ch?.deliveries?.forEach((dv) => {
-                    if (!dv) return;
-                    const qty = Number(dv.totalQty) || 0;
-                    totalDeliveryQty += qty;
+            const challanNo = item.challanNo;
+            if (!grouped[challanNo]) {
+                grouped[challanNo] = {
+                    rowKey: String(challanNo),
+                    chId: item.id || challanNo,
+                    challanNo: challanNo,
+                    challanDate: item.challanDate || item.deliveryDate || "",
+                    toFactory: item.toFactory || "",
+                    fromFactory: item.fromFactory || "",
+                    sentForAop: 0,
+                    receiveFromAop: 0,
+                    finishReceiveFromAop: 0,
+                    deliveryQty: 0,
+                    unitePrice: Number(item.unitePrice) || 0,
+                    paidBillingAmount: Number(item.paidBillingAmount) || 0,
+                    compositionsSet: new Set(),
+                    colorsSet: new Set(),
+                    workOrderQtySet: new Set(),
+                };
+            }
 
-                    if (dv.deliveryType === "SentForAop") {
-                        sentForAop += qty;
-                    } else if (dv.deliveryType === "ReceivedFromAop") {
-                        receiveFromAop += qty;
-                    } else if (dv.deliveryType === "AOPFinishFabricRcvd") {
-                        finishReceiveFromAop += qty;
-                    }
+            const row = grouped[challanNo];
+            const qty = Number(item.deliveryQty || item.totalQty) || 0;
+            row.deliveryQty += qty;
+
+            const type = String(item.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
+            if (type.includes("sentforaop")) row.sentForAop += qty;
+            else if (type.includes("receivedfromaop") || type.includes("receivefromaop")) row.receiveFromAop += qty;
+            else if (type.includes("finishfabric") || type.includes("finishreceive") || type.includes("aopfinishfabricrcvd")) row.finishReceiveFromAop += qty;
+
+            if (Array.isArray(item.compositions)) {
+                item.compositions.forEach((comp) => {
+                    if (comp.composition) row.compositionsSet.add(comp.composition);
+                    if (comp.color) row.colorsSet.add(comp.color);
+                    if (comp.workOrderQty !== undefined && comp.workOrderQty !== null) row.workOrderQtySet.add(comp.workOrderQty);
                 });
+            } else {
+                if (item.composition) row.compositionsSet.add(item.composition);
+                if (item.color) row.colorsSet.add(item.color);
+                if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
+            }
 
-                const price = Number(mv.unitePrice) || 0;
-
-                flat.push({
-                    rowKey: `${chId}`,
-                    mvId,
-                    chId,
-                    challanNo: ch.challanNo,
-                    // challanDate: formatToErpDate(ch.challanDate),
-                    challanDate: formatToErpDate(ch.challanDate),
-                    composition: mv.composition,
-                    workOrder: mv.workOrder?.jobNo ?? "",
-                    toFactory: ch.toFactory,
-                    fromFactory: ch.fromFactory,
-                    sentForAop,
-                    receiveFromAop,
-                    finishReceiveFromAop,
-                    deliveryQty: totalDeliveryQty,
-                    unitePrice: price,
-                    billingAmount: totalDeliveryQty * price,
-                    paidBillingAmount: price, // Kept consistent with original logic
-                    color: mv.color ?? "-",
-                });
-            });
+            if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
         });
-        return flat;
+
+        return Object.values(grouped).map(row => ({
+            ...row,
+            composition: Array.from(row.compositionsSet).join(", ") || "-",
+            color: Array.from(row.colorsSet).join(", ") || "-",
+            workOrderQty: Array.from(row.workOrderQtySet).join(", ") || "-",
+            billingAmount: row.deliveryQty * row.unitePrice,
+        }));
     }, [movements]);
-
-
-    // Example usage:
 
     const filterOptions = useMemo(() => {
         const opts = {};
         tableHeader.forEach((col) => {
-            if (col.noFilter) return; // Skip checkbox column
+            if (col.noFilter) return;
             const set = new Set();
             allRows.forEach((row) => set.add(String(row[col.key] ?? "")));
             opts[col.key] = Array.from(set).sort((a, b) =>
@@ -244,7 +250,6 @@ const Aop = () => {
             setChallanIds((prev) => prev.filter(id => id !== challanId));
         } else {
             setChallanIds((prev) => [...prev, challanId])
-
         }
     }
 
@@ -258,7 +263,7 @@ const Aop = () => {
             const response = await axiosPublic.post(
                 "/api/generate-bill",
                 { challanIds },
-                { responseType: "blob" }   // tell axios to expect binary (PDF) data
+                { responseType: "blob" }
             );
 
             const blob = new Blob([response.data], { type: "application/pdf" });
@@ -277,17 +282,83 @@ const Aop = () => {
             alert("Failed to generate bill. Please try again.");
         }
     };
-    console.log(challanIds);
 
-    if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
+    const handleChallanSearch = async () => {
+        if (!search.trim()) {
+            alert("Please enter at least one challan number.");
+            return;
+        }
+        setSearchLoading(true);
+        setSearchError(null);
+        setPage(1); 
+        const challanArray = search.split(",").map(item => item.trim()).filter(Boolean);
+
+        try {
+            const res = await axiosPublic.get("/api/challan/search", {
+                params: { challans: challanArray.join(","), context: 'aop' } // Context set to aop
+            });
+            if (res.data && (res.data.type === "success" || res.data.data)) {
+                const searchData = res.data.data || res.data;
+                setMovements(Array.isArray(searchData) ? searchData : []);
+                setTotalPages(1); 
+            } else {
+                setSearchError(res.data?.msg || "No challans found.");
+                setMovements([]);
+            }
+        } catch (err) {
+            setSearchError("Failed to search challans.");
+            setMovements([]);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    if (loading && movements.length === 0 && !searchLoading) return <div style={{ padding: 20 }}>Loading...</div>;
 
     return (
         <div style={{ width: "100%" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
+                <input
+                    style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }}
+                    placeholder="Search by Challan Nos (e.g. 101, 102)"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }}
+                />
+                <button
+                    style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: searchLoading ? "not-allowed" : "pointer", fontWeight: 600, opacity: searchLoading ? 0.7 : 1 }}
+                    onClick={handleChallanSearch}
+                    disabled={searchLoading}
+                >
+                    {searchLoading ? "Searching..." : "Search"}
+                </button>
+                {search && (
+                    <button
+                        style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: 600 }}
+                        onClick={() => { 
+                            setSearch(""); 
+                            setSearchError(null); 
+                            setPage(1); 
+                            setRefreshKey(prev => prev + 1); 
+                        }}
+                    >
+                        Clear Search
+                    </button>
+                )}
+            </div>
+
+            {searchError && (
+                <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>
+                    {searchError}
+                </div>
+            )}
+
             {
-                challanIds.length > 0 && <div>
-                    <button onClick={() => handleGenerateBill()} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md mb-5 border border-blue-500">Generate Bill</button>
+                challanIds.length > 0 && <div style={{ marginBottom: "16px" }}>
+                    <button onClick={handleGenerateBill} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md border border-blue-500">Generate Bill ({challanIds.length})</button>
                 </div>
             }
+
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
@@ -313,7 +384,6 @@ const Aop = () => {
                                                         setSelectedRows(new Set());
                                                     }
                                                 }}
-                                            // onClick={() => handleBillPreparation(th.id)}
                                             />
                                         </th>
                                     );
@@ -328,7 +398,7 @@ const Aop = () => {
                                         style={{
                                             ...thStickyStyle,
                                             width: th.width,
-                                            overflow: "visible", // don't clip the absolutely-positioned filter dropdown below
+                                            overflow: "visible",
                                         }}
                                     >
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
@@ -429,7 +499,6 @@ const Aop = () => {
                     </thead>
                     <tbody>
                         {filteredRows.map((row) => {
-                            // console.log(row, "rows to identify");
                             return (
                                 <tr key={row.rowKey}>
                                     <td style={{ ...cellStyle, textAlign: "center" }}>
@@ -450,20 +519,20 @@ const Aop = () => {
                                             onClick={() => handleBillPreparation(row.chId)}
                                         />
                                     </td>
-                                    <td style={cellStyle}>{formatToErpDate(row.challanDate)}</td>
-                                    <td style={cellStyle}>{row.challanNo} {"=>"} {row.chId}</td>
-                                    <td style={cellStyle}>{row.workOrder}</td>
+                                    <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
+                                    <td style={cellStyle}>{row.challanNo}</td>
+                                    <td style={cellStyle}>{row.workOrderQty}</td>
                                     <td style={cellStyle}>{row.composition}</td>
                                     <td style={cellStyle}>{row.color}</td>
-                                    <td style={cellStyle}>{row.toFactory}</td>
-                                    <td style={cellStyle}>{row.fromFactory}</td>
+                                    <td style={cellStyle}>{row.toFactory || "-"}</td>
+                                    <td style={cellStyle}>{row.fromFactory || "-"}</td>
                                     <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
                                     <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
                                     <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
                                     <td style={cellStyle}>{row.deliveryQty}</td>
-                                    <td style={cellStyle}>{row.unitePrice}</td>
-                                    <td style={cellStyle}>{row.billingAmount}</td>
-                                    <td style={cellStyle}>{row.paidBillingAmount}</td>
+                                    <td style={cellStyle}>{row.unitePrice > 0 ? row.unitePrice : "-"}</td>
+                                    <td style={cellStyle}>{row.billingAmount > 0 ? row.billingAmount : "-"}</td>
+                                    <td style={cellStyle}>{row.paidBillingAmount > 0 ? row.paidBillingAmount : "-"}</td>
                                 </tr>
                             )
                         })}
@@ -478,25 +547,6 @@ const Aop = () => {
                 </table>
             </div>
 
-            {totalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-                    <button style={pageButtonStyle(false)} onClick={() => goToPage(page - 1)} disabled={page === 1}>
-                        Prev
-                    </button>
-                    {pageNumbers.map((p, i) =>
-                        p === "..." ? (
-                            <span key={`ellipsis-${i}`} style={{ margin: "0 4px" }}>...</span>
-                        ) : (
-                            <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>
-                                {p}
-                            </button>
-                        )
-                    )}
-                    <button style={pageButtonStyle(false)} onClick={() => goToPage(page + 1)} disabled={page === totalPages}>
-                        Next
-                    </button>
-                </div>
-            )}
         </div>
     );
 };

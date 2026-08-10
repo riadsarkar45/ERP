@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
+import useAxiosPublic from '../../../hooks/Axios';
 
-// Note: borderCollapse is "separate" (not "collapse") on the <table> so the
-// sticky header keeps its border while scrolling — collapsed borders and
-// position:sticky don't render reliably together across browsers. Each cell
-// draws its own border instead.
 const cellStyle = {
     border: "1px solid #999",
     padding: "6px 8px",
@@ -14,8 +11,6 @@ const cellStyle = {
     verticalAlign: "top",
 };
 
-// Frozen/sticky header cell — stays pinned to the top of the scroll
-// container while the body scrolls underneath it, Excel-style.
 const thStickyStyle = {
     ...cellStyle,
     position: "sticky",
@@ -35,22 +30,11 @@ const pageButtonStyle = (active) => ({
     fontSize: "0.9rem",
 });
 
-// Maps the raw `deliveryType` strings coming from the API onto the flattened
-// row fields used below. Adjust the right-hand keys if the API ever uses
-// different literal type names.
-const DELIVERY_TYPE_MAP = {
-    GreyDelivery: "greyDelivery",
-    GreyReceived: "greyReceive",
-    GreyReturn: "greyReturn",
-    FinishReceived: "finishReceive",
-};
-
-// Column definitions. Added a "select" column at the start.
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true },
     { header: "Date", width: "10%", key: "challanDate" },
-    { header: "Challan No", width: "9%", key: "challanNo" },  
-    { header: "Work Order", width: "9%", key: "workOrder" },
+    { header: "Challan No", width: "9%", key: "challanNo" },
+    { header: "WO Qty", width: "9%", key: "workOrderQty" },
     { header: "Composition", width: "10%", key: "composition" },
     { header: "To Factory", width: "9%", key: "toFactory" },
     { header: "From Factory", width: "9%", key: "fromFactory" },
@@ -69,21 +53,32 @@ const Dyeing = () => {
     const [filters, setFilters] = useState({});
     const [openFilterKey, setOpenFilterKey] = useState(null);
     const [draftSelected, setDraftSelected] = useState(new Set());
-    const [selectedRows, setSelectedRows] = useState(new Set()); // Track selected checkboxes
+    const [selectedRows, setSelectedRows] = useState(new Set());
     const [totalPages, setTotalPages] = useState(1);
     const [filterSearch, setFilterSearch] = useState("");
-    
+    const [search, setSearch] = useState("");
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [searchError, setSearchError] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+
     const dropdownRef = useRef(null);
     const { fetchData } = useFetchData();
+    const axiosPublic = useAxiosPublic();
 
+    // FIX: Added refreshKey and search to dependencies. 
+    // Added `if (search) return;` so pagination doesn't overwrite active search results.
     useEffect(() => {
-        fetchData(`/api/challan-movement/dyeingOrder?page=${page}&limit=10`).then(data => {
-            if (data) setMovements(data.data);
-            setTotalPages(data.pagination?.totalPages || 1);
-        });
-    }, [fetchData, page]); // Added 'page' to dependency array
+        if (search) return; 
 
-    // Close an open filter dropdown when clicking outside it.
+        fetchData(`/api/challan-movement/dyeingOrder?page=${page}&limit=10`).then(data => {
+            if (data) {
+                const payload = Array.isArray(data) ? data : (data.data || []);
+                setMovements(payload);
+                setTotalPages(data.pagination?.totalPages || 1);
+            }
+        });
+    }, [fetchData, page, refreshKey, search]);
+
     useEffect(() => {
         if (!openFilterKey) return;
         const handleClick = (e) => {
@@ -96,56 +91,69 @@ const Dyeing = () => {
     }, [openFilterKey]);
 
     const allRows = useMemo(() => {
-        const flat = [];
-        movements?.forEach((mv, mvIdx) => {
-            const mvId = mv?.id ?? mvIdx;
-            const challans = mv?.challans || [];
-            
-            challans.forEach((ch) => {
-                const qtyByType = {
+        if (!movements || !Array.isArray(movements)) return [];
+
+        const grouped = {};
+
+        movements.forEach((item) => {
+            if (!item || item.challanNo === undefined) return;
+
+            const challanNo = item.challanNo;
+            if (!grouped[challanNo]) {
+                grouped[challanNo] = {
+                    rowKey: String(challanNo),
+                    chId: item.id || challanNo,
+                    challanNo: challanNo,
+                    challanDate: item.challanDate || item.deliveryDate || "",
+                    toFactory: item.toFactory || "",
+                    fromFactory: item.fromFactory || "",
                     greyDelivery: 0,
                     greyReceive: 0,
                     greyReturn: 0,
                     finishReceive: 0,
+                    deliveryQty: 0,
+                    unitePrice: Number(item.unitePrice) || 0,
+                    paidBillingAmount: Number(item.paidBillingAmount) || 0,
+                    compositionsSet: new Set(),
+                    workOrderQtySet: new Set(),
                 };
-                
-                (ch?.deliveries || []).forEach((dv) => {
-                    const field = DELIVERY_TYPE_MAP[dv?.deliveryType];
-                    if (field) {
-                        qtyByType[field] += Number(dv?.totalQty) || 0;
-                    }
-                });
+            }
 
-                const unitePrice = Number(mv.unitePrice) || 0;
-                const billingAmount = qtyByType.finishReceive * unitePrice;
+            const row = grouped[challanNo];
+            const qty = Number(item.deliveryQty || item.totalQty) || 0;
+            row.deliveryQty += qty;
 
-                flat.push({
-                    rowKey: `${ch.id}`,
-                    mvId,
-                    chId: ch.id,
-                    challanNo: ch.challanNo,
-                    // challanDate: ch.challanDate ? new Date(ch.challanDate).toLocaleDateString() : "",
-                    challanDate: formatToErpDate(ch.challanDate),
-                    // challanDate: formatToErpDate(ch.challanDate),
-                    composition: mv.composition,
-                    workOrder: mv.workOrder?.jobNo ?? "",
-                    toFactory: ch.toFactory,
-                    fromFactory: ch.fromFactory,
-                    ...qtyByType,
-                    unitePrice,
-                    billingAmount,
-                    paidBillingAmount: mv.paidBillingAmount ?? 0,
+            const type = String(item.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
+            if (type.includes("greydelivery")) row.greyDelivery += qty;
+            else if (type.includes("greyreceived") || type.includes("greyreceive") || type.includes("greyfabricreceived")) row.greyReceive += qty;
+            else if (type.includes("greyreturn")) row.greyReturn += qty;
+            else if (type.includes("finishreceived") || type.includes("finishreceive")) row.finishReceive += qty;
+
+            if (Array.isArray(item.compositions)) {
+                item.compositions.forEach((comp) => {
+                    if (comp.composition) row.compositionsSet.add(comp.composition);
+                    if (comp.workOrderQty !== undefined && comp.workOrderQty !== null) row.workOrderQtySet.add(comp.workOrderQty);
                 });
-            });
+            } else if (item.composition) {
+                row.compositionsSet.add(item.composition);
+                if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
+            }
+
+            if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
         });
-        return flat;
+
+        return Object.values(grouped).map(row => ({
+            ...row,
+            composition: Array.from(row.compositionsSet).join(", ") || "-",
+            workOrderQty: Array.from(row.workOrderQtySet).join(", ") || "-",
+            billingAmount: row.finishReceive * row.unitePrice,
+        }));
     }, [movements]);
 
-    // Unique values per column, for the filter dropdowns.
     const filterOptions = useMemo(() => {
         const opts = {};
         tableHeader.forEach((col) => {
-            if (col.noFilter) return; // Skip checkbox column
+            if (col.noFilter) return;
             const set = new Set();
             allRows.forEach((row) => set.add(String(row[col.key] ?? "")));
             opts[col.key] = Array.from(set).sort((a, b) =>
@@ -155,7 +163,6 @@ const Dyeing = () => {
         return opts;
     }, [allRows]);
 
-    // Rows that pass every active column filter.
     const filteredRows = useMemo(() => {
         return allRows.filter((row) =>
             tableHeader.every((col) => {
@@ -184,7 +191,6 @@ const Dyeing = () => {
         return nums;
     }, [totalPages, page]);
 
-    // --- filter dropdown handlers ---
     const openFilter = (key) => {
         if (openFilterKey === key) {
             setOpenFilterKey(null);
@@ -232,8 +238,73 @@ const Dyeing = () => {
         setOpenFilterKey(null);
     };
 
+    const handleChallanSearch = async () => {
+        if (!search.trim()) {
+            alert("Please enter at least one challan number.");
+            return;
+        }
+        setSearchLoading(true);
+        setSearchError(null);
+        setPage(1); // Reset to page 1 on new search
+        const challanArray = search.split(",").map(item => item.trim()).filter(Boolean);
+
+        try {
+            const res = await axiosPublic.get("/api/challan/search", {
+                params: { challans: challanArray.join(","), context: 'dyeing' } // Fixed context typo
+            });
+            if (res.data && (res.data.type === "success" || res.data.data)) {
+                const searchData = res.data.data || res.data;
+                setMovements(Array.isArray(searchData) ? searchData : []);
+                setTotalPages(1); // Search results don't use backend pagination
+            } else {
+                setSearchError(res.data?.msg || "No challans found.");
+                setMovements([]);
+            }
+        } catch (err) {
+            setSearchError("Failed to search challans.");
+            setMovements([]);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
     return (
         <div style={{ width: "100%" }}>
+             <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
+                <input
+                    style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }}
+                    placeholder="Search by Challan Nos (e.g. 101, 102)"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }}
+                />
+                <button
+                    style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: searchLoading ? "not-allowed" : "pointer", fontWeight: 600, opacity: searchLoading ? 0.7 : 1 }}
+                    onClick={handleChallanSearch}
+                    disabled={searchLoading}
+                >
+                    {searchLoading ? "Searching..." : "Search"}
+                </button>
+                {search && (
+                    <button
+                        style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: 600 }}
+                        onClick={() => { 
+                            setSearch(""); 
+                            setSearchError(null); 
+                            setPage(1); // Reset page
+                            setRefreshKey(prev => prev + 1); // Triggers the default fetch useEffect
+                        }}
+                    >
+                        Clear Search
+                    </button>
+                )}
+            </div>
+
+            {searchError && (
+                <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>
+                    {searchError}
+                </div>
+            )}
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
@@ -267,7 +338,7 @@ const Dyeing = () => {
                                 const options = filterOptions[th.key] || [];
                                 const isActive = !!filters[th.key];
                                 const isOpen = openFilterKey === th.key;
-                                
+
                                 return (
                                     <th
                                         key={th.key}
@@ -392,20 +463,20 @@ const Dyeing = () => {
                                             });
                                         }}
                                     />
-                                </td>                                
-                                <td style={cellStyle}>{row.challanDate}</td>
+                                </td>
+                                <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
                                 <td style={cellStyle}>{row.challanNo}</td>
-                                <td style={cellStyle}>{row.workOrder}</td>
+                                <td style={cellStyle}>{row.workOrderQty}</td>
                                 <td style={cellStyle}>{row.composition}</td>
-                                <td style={cellStyle}>{row.toFactory}</td>
-                                <td style={cellStyle}>{row.fromFactory}</td>
+                                <td style={cellStyle}>{row.toFactory || "-"}</td>
+                                <td style={cellStyle}>{row.fromFactory || "-"}</td>
                                 <td style={cellStyle}>{row.greyDelivery > 0 ? row.greyDelivery : "-"}</td>
                                 <td style={cellStyle}>{row.greyReceive > 0 ? row.greyReceive : "-"}</td>
                                 <td style={cellStyle}>{row.greyReturn > 0 ? row.greyReturn : "-"}</td>
                                 <td style={cellStyle}>{row.finishReceive > 0 ? row.finishReceive : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice}</td>
-                                <td style={cellStyle}>{row.billingAmount}</td>
-                                <td style={cellStyle}>{row.paidBillingAmount}</td>
+                                <td style={cellStyle}>{row.unitePrice > 0 ? row.unitePrice : "-"}</td>
+                                <td style={cellStyle}>{row.billingAmount > 0 ? row.billingAmount : "-"}</td>
+                                <td style={cellStyle}>{row.paidBillingAmount > 0 ? row.paidBillingAmount : "-"}</td>
                             </tr>
                         ))}
                         {filteredRows.length === 0 && (
@@ -419,7 +490,8 @@ const Dyeing = () => {
                 </table>
             </div>
 
-            {totalPages > 1 && (
+            {/* Only show pagination if we are NOT actively searching */}
+            {!search && totalPages > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
                     <button style={pageButtonStyle(false)} onClick={() => goToPage(page - 1)} disabled={page === 1}>
                         Prev

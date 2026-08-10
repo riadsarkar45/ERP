@@ -16,6 +16,7 @@ import { challanMovement } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 import { misDetailView } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
+import { searchChallans } from "../controllers/movements/searchChallan";
 
 const getRouters = express.Router();
 
@@ -64,5 +65,7 @@ getRouters.get("/glance/:jobNo", styleRequirements);
 getRouters.get("/mis/glance/detail/:columnName/:jobNo", misDetailView);
 
 getRouters.get("/glance/:jobNo/trailing-data", styleReconciliation);
+
+getRouters.get("/challan/search", searchChallans);
 
 export default getRouters;
