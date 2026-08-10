@@ -42,7 +42,7 @@ const tableHeader = [
     { header: "Sent For Aop", width: "10%", key: "sentForAop" },
     { header: "Receive From Aop", width: "10%", key: "receiveFromAop" },
     { header: "Finish Receive From Aop", width: "10%", key: "finishReceiveFromAop" },
-    { header: "Delivery Qty", width: "8%", key: "deliveryQty" },
+    // { header: "Delivery Qty", width: "8%", key: "deliveryQty" },
     { header: "Price Per KG", width: "9%", key: "unitePrice" },
     { header: "Billing Amount", width: "9%", key: "billingAmount" },
     { header: "Paid Billing Amount", width: "8%", key: "paidBillingAmount" },
@@ -69,10 +69,8 @@ const Aop = () => {
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
 
-    // FIX: Added refreshKey and search to dependencies. 
-    // Added `if (search) return;` so pagination doesn't overwrite active search results.
     useEffect(() => {
-        if (search) return; 
+        if (search) return;
 
         fetchData(`/api/challan-movement/aopOrder?page=${page}&limit=10`)
             .then(data => {
@@ -95,57 +93,92 @@ const Aop = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
+    // FIX: Handles BOTH nested (movement -> deliveries[]) AND flat delivery records
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
 
         const grouped = {};
 
-        movements.forEach((item) => {
-            if (!item || item.challanNo === undefined) return;
-
-            const challanNo = item.challanNo;
+        const ensureRow = (challanNo, source) => {
             if (!grouped[challanNo]) {
                 grouped[challanNo] = {
                     rowKey: String(challanNo),
-                    chId: item.id || challanNo,
+                    chId: source?.id || challanNo,
                     challanNo: challanNo,
-                    challanDate: item.challanDate || item.deliveryDate || "",
-                    toFactory: item.toFactory || "",
-                    fromFactory: item.fromFactory || "",
+                    challanDate: source?.deliveryDate || source?.challanDate || "",
+                    toFactory: source?.toFactory || "",
+                    fromFactory: source?.fromFactory || "",
                     sentForAop: 0,
                     receiveFromAop: 0,
                     finishReceiveFromAop: 0,
                     deliveryQty: 0,
-                    unitePrice: Number(item.unitePrice) || 0,
-                    paidBillingAmount: Number(item.paidBillingAmount) || 0,
+                    unitePrice: Number(source?.unitePrice) || 0,
+                    paidBillingAmount: Number(source?.paidBillingAmount) || 0,
                     compositionsSet: new Set(),
                     colorsSet: new Set(),
                     workOrderQtySet: new Set(),
                 };
             }
+            return grouped[challanNo];
+        };
 
-            const row = grouped[challanNo];
-            const qty = Number(item.deliveryQty || item.totalQty) || 0;
+        const applyDelivery = (row, dv, source) => {
+            const qty = Number(dv?.deliveryQty ?? dv?.totalQty) || 0;
             row.deliveryQty += qty;
 
-            const type = String(item.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
+            const type = String(dv?.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
+            // NOTE: finish branch MUST be checked before "receivedfromaop",
+            // because "finishreceivedfromaop" contains "receivedfromaop" as a substring.
             if (type.includes("sentforaop")) row.sentForAop += qty;
+            else if (
+                type.includes("aopfinishfabricrcvd") ||
+                type.includes("finishfabric") ||
+                type.includes("finishreceive") ||
+                type.includes("finishreceived")
+            ) row.finishReceiveFromAop += qty;
             else if (type.includes("receivedfromaop") || type.includes("receivefromaop")) row.receiveFromAop += qty;
-            else if (type.includes("finishfabric") || type.includes("finishreceive") || type.includes("aopfinishfabricrcvd")) row.finishReceiveFromAop += qty;
 
-            if (Array.isArray(item.compositions)) {
-                item.compositions.forEach((comp) => {
-                    if (comp.composition) row.compositionsSet.add(comp.composition);
-                    if (comp.color) row.colorsSet.add(comp.color);
-                    if (comp.workOrderQty !== undefined && comp.workOrderQty !== null) row.workOrderQtySet.add(comp.workOrderQty);
+            const comps = Array.isArray(dv?.compositions)
+                ? dv.compositions
+                : (Array.isArray(source?.compositions) ? source.compositions : []);
+
+            comps.forEach((comp) => {
+                if (comp?.composition) row.compositionsSet.add(comp.composition);
+                if (comp?.color) row.colorsSet.add(comp.color);
+                if (comp?.workOrderQty !== undefined && comp?.workOrderQty !== null) row.workOrderQtySet.add(comp.workOrderQty);
+            });
+
+            const price = Number(dv?.unitePrice || source?.unitePrice) || 0;
+            if (price && !row.unitePrice) row.unitePrice = price;
+            if (!row.toFactory && dv?.toFactory) row.toFactory = dv.toFactory;
+            if (!row.fromFactory && dv?.fromFactory) row.fromFactory = dv.fromFactory;
+            if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
+        };
+
+        movements.forEach((item) => {
+            if (!item) return;
+
+            if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
+                // NESTED shape: movement -> deliveries[]
+                item.deliveries.forEach((dv) => {
+                    const challanNo = dv?.challanNo;
+                    if (challanNo === undefined || challanNo === null) return;
+
+                    const row = ensureRow(challanNo, dv);
+
+                    // movement-level fields
+                    if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
+                    if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
+                    if (item.composition) row.compositionsSet.add(item.composition);
+
+                    applyDelivery(row, dv, item);
                 });
-            } else {
-                if (item.composition) row.compositionsSet.add(item.composition);
-                if (item.color) row.colorsSet.add(item.color);
-                if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
+            } else if (item.challanNo !== undefined && item.challanNo !== null) {
+                // FLAT shape: the item itself is a delivery record
+                const row = ensureRow(item.challanNo, item);
+                applyDelivery(row, item, item);
             }
-
-            if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
+            // movements with empty deliveries[] are skipped (no challan to show)
         });
 
         return Object.values(grouped).map(row => ({
@@ -288,24 +321,33 @@ const Aop = () => {
             alert("Please enter at least one challan number.");
             return;
         }
+
         setSearchLoading(true);
         setSearchError(null);
-        setPage(1); 
-        const challanArray = search.split(",").map(item => item.trim()).filter(Boolean);
+        setPage(1);
+
+        const challanArray = search
+            .trim()
+            .split(/[\s,]+/)
+            .filter(Boolean);
 
         try {
             const res = await axiosPublic.get("/api/challan/search", {
-                params: { challans: challanArray.join(","), context: 'aop' } // Context set to aop
+                params: {
+                    challans: challanArray.join(","),
+                    context: "aop",
+                },
             });
-            if (res.data && (res.data.type === "success" || res.data.data)) {
-                const searchData = res.data.data || res.data;
-                setMovements(Array.isArray(searchData) ? searchData : []);
-                setTotalPages(1); 
-            } else {
-                setSearchError(res.data?.msg || "No challans found.");
-                setMovements([]);
-            }
+
+            let searchData = [];
+            if (Array.isArray(res.data)) searchData = res.data;
+            else if (Array.isArray(res.data?.data)) searchData = res.data.data;
+            else if (Array.isArray(res.data?.data?.data)) searchData = res.data.data.data;
+
+            setMovements(searchData);
+            setTotalPages(1);
         } catch (err) {
+            console.error(err);
             setSearchError("Failed to search challans.");
             setMovements([]);
         } finally {
@@ -314,6 +356,8 @@ const Aop = () => {
     };
 
     if (loading && movements.length === 0 && !searchLoading) return <div style={{ padding: 20 }}>Loading...</div>;
+
+    const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
     return (
         <div style={{ width: "100%" }}>
@@ -335,11 +379,11 @@ const Aop = () => {
                 {search && (
                     <button
                         style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: 600 }}
-                        onClick={() => { 
-                            setSearch(""); 
-                            setSearchError(null); 
-                            setPage(1); 
-                            setRefreshKey(prev => prev + 1); 
+                        onClick={() => {
+                            setSearch("");
+                            setSearchError(null);
+                            setPage(1);
+                            setRefreshKey(prev => prev + 1);
                         }}
                     >
                         Clear Search
@@ -376,7 +420,7 @@ const Aop = () => {
                                         >
                                             <input
                                                 type="checkbox"
-                                                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey))}
+                                                checked={allVisibleSelected}
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
                                                         setSelectedRows(new Set(filteredRows.map(r => r.rowKey)));
@@ -529,7 +573,7 @@ const Aop = () => {
                                     <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
                                     <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
                                     <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
-                                    <td style={cellStyle}>{row.deliveryQty}</td>
+                                    {/* <td style={cellStyle}>{row.deliveryQty}</td> */}
                                     <td style={cellStyle}>{row.unitePrice > 0 ? row.unitePrice : "-"}</td>
                                     <td style={cellStyle}>{row.billingAmount > 0 ? row.billingAmount : "-"}</td>
                                     <td style={cellStyle}>{row.paidBillingAmount > 0 ? row.paidBillingAmount : "-"}</td>
@@ -539,7 +583,7 @@ const Aop = () => {
                         {filteredRows.length === 0 && (
                             <tr>
                                 <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>
-                                    No rows match the current filters.
+                                    {movements.length === 0 && !loading && !searchLoading ? "No records found." : "No rows match the current filters."}
                                 </td>
                             </tr>
                         )}
@@ -547,6 +591,25 @@ const Aop = () => {
                 </table>
             </div>
 
+            {totalPages > 1 && !search && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+                    <button style={pageButtonStyle(false)} onClick={() => goToPage(page - 1)} disabled={page === 1}>
+                        Prev
+                    </button>
+                    {pageNumbers.map((p, i) =>
+                        p === "..." ? (
+                            <span key={`ellipsis-${i}`} style={{ margin: "0 4px" }}>...</span>
+                        ) : (
+                            <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>
+                                {p}
+                            </button>
+                        )
+                    )}
+                    <button style={pageButtonStyle(false)} onClick={() => goToPage(page + 1)} disabled={page === totalPages}>
+                        Next
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

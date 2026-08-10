@@ -65,10 +65,8 @@ const Dyeing = () => {
     const { fetchData } = useFetchData();
     const axiosPublic = useAxiosPublic();
 
-    // FIX: Added refreshKey and search to dependencies. 
-    // Added `if (search) return;` so pagination doesn't overwrite active search results.
     useEffect(() => {
-        if (search) return; 
+        if (search) return;
 
         fetchData(`/api/challan-movement/dyeingOrder?page=${page}&limit=10`).then(data => {
             if (data) {
@@ -90,64 +88,97 @@ const Dyeing = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
+    // FIX: Dual-shape parser to handle the nested structure (composition -> deliveries[])
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
 
         const grouped = {};
+        const order = [];
 
-        movements.forEach((item) => {
-            if (!item || item.challanNo === undefined) return;
-
-            const challanNo = item.challanNo;
+        const ensureRow = (challanNo, source, mvId) => {
             if (!grouped[challanNo]) {
                 grouped[challanNo] = {
                     rowKey: String(challanNo),
-                    chId: item.id || challanNo,
+                    mvId: mvId ?? challanNo,
+                    chId: source?.id || challanNo,
                     challanNo: challanNo,
-                    challanDate: item.challanDate || item.deliveryDate || "",
-                    toFactory: item.toFactory || "",
-                    fromFactory: item.fromFactory || "",
+                    challanDate: source?.deliveryDate || source?.challanDate || "",
+                    toFactory: source?.toFactory || "",
+                    fromFactory: source?.fromFactory || "",
                     greyDelivery: 0,
                     greyReceive: 0,
                     greyReturn: 0,
                     finishReceive: 0,
                     deliveryQty: 0,
-                    unitePrice: Number(item.unitePrice) || 0,
-                    paidBillingAmount: Number(item.paidBillingAmount) || 0,
+                    unitePrice: Number(source?.unitePrice) || 0,
+                    paidBillingAmount: Number(source?.paidBillingAmount) || 0,
                     compositionsSet: new Set(),
+                    colorsSet: new Set(),
                     workOrderQtySet: new Set(),
                 };
+                order.push(challanNo);
             }
+            return grouped[challanNo];
+        };
 
-            const row = grouped[challanNo];
-            const qty = Number(item.deliveryQty || item.totalQty) || 0;
+        const applyDelivery = (row, dv, source) => {
+            const qty = Number(dv?.deliveryQty ?? dv?.totalQty) || 0;
             row.deliveryQty += qty;
 
-            const type = String(item.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
+            const type = String(dv?.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
             if (type.includes("greydelivery")) row.greyDelivery += qty;
             else if (type.includes("greyreceived") || type.includes("greyreceive") || type.includes("greyfabricreceived")) row.greyReceive += qty;
             else if (type.includes("greyreturn")) row.greyReturn += qty;
             else if (type.includes("finishreceived") || type.includes("finishreceive")) row.finishReceive += qty;
 
-            if (Array.isArray(item.compositions)) {
-                item.compositions.forEach((comp) => {
-                    if (comp.composition) row.compositionsSet.add(comp.composition);
-                    if (comp.workOrderQty !== undefined && comp.workOrderQty !== null) row.workOrderQtySet.add(comp.workOrderQty);
-                });
-            } else if (item.composition) {
-                row.compositionsSet.add(item.composition);
-                if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
-            }
+            const price = Number(dv?.unitePrice || source?.unitePrice) || 0;
+            if (price && !row.unitePrice) row.unitePrice = price;
+            if (!row.toFactory && dv?.toFactory) row.toFactory = dv.toFactory;
+            if (!row.fromFactory && dv?.fromFactory) row.fromFactory = dv.fromFactory;
+            if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
+        };
 
-            if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
+        movements.forEach((item) => {
+            if (!item) return;
+
+            if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
+                // NESTED shape: movement -> deliveries[]
+                item.deliveries.forEach((dv) => {
+                    const challanNo = dv?.challanNo;
+                    if (challanNo === undefined || challanNo === null) return;
+
+                    const row = ensureRow(challanNo, dv, item.id);
+
+                    // movement-level fields
+                    if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
+                    if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
+                    if (item.composition) row.compositionsSet.add(item.composition);
+                    if (item.color) row.colorsSet.add(item.color);
+
+                    applyDelivery(row, dv, item);
+                });
+            } else if (item.challanNo !== undefined && item.challanNo !== null) {
+                // FLAT shape fallback
+                const row = ensureRow(item.challanNo, item, item.challanNo);
+
+                if (item.composition) row.compositionsSet.add(item.composition);
+                if (item.color) row.colorsSet.add(item.color);
+                if (item.workOrderQty !== undefined && item.workOrderQty !== null) row.workOrderQtySet.add(item.workOrderQty);
+
+                applyDelivery(row, item, item);
+            }
         });
 
-        return Object.values(grouped).map(row => ({
-            ...row,
-            composition: Array.from(row.compositionsSet).join(", ") || "-",
-            workOrderQty: Array.from(row.workOrderQtySet).join(", ") || "-",
-            billingAmount: row.finishReceive * row.unitePrice,
-        }));
+        return order.map((cn) => {
+            const row = grouped[cn];
+            return {
+                ...row,
+                composition: Array.from(row.compositionsSet).join(", ") || "-",
+                color: Array.from(row.colorsSet).join(", ") || "-",
+                workOrderQty: Array.from(row.workOrderQtySet).join(", ") || "-",
+                billingAmount: row.finishReceive * row.unitePrice,
+            };
+        });
     }, [movements]);
 
     const filterOptions = useMemo(() => {
@@ -243,24 +274,28 @@ const Dyeing = () => {
             alert("Please enter at least one challan number.");
             return;
         }
+
         setSearchLoading(true);
         setSearchError(null);
-        setPage(1); // Reset to page 1 on new search
-        const challanArray = search.split(",").map(item => item.trim()).filter(Boolean);
+
+        const challanArray = search.split(/[\s,]+/).filter(Boolean);
 
         try {
-            const res = await axiosPublic.get("/api/challan/search", {
-                params: { challans: challanArray.join(","), context: 'dyeing' } // Fixed context typo
+            const res = await axiosPublic.get("/api/dyeingOrder/challan/search", {
+                params: {
+                    challans: challanArray.join(","),
+                    context: "dyeingOrder",
+                },
             });
-            if (res.data && (res.data.type === "success" || res.data.data)) {
-                const searchData = res.data.data || res.data;
-                setMovements(Array.isArray(searchData) ? searchData : []);
-                setTotalPages(1); // Search results don't use backend pagination
-            } else {
-                setSearchError(res.data?.msg || "No challans found.");
-                setMovements([]);
-            }
+
+            let searchData = [];
+            if (Array.isArray(res.data)) searchData = res.data;
+            else if (Array.isArray(res.data?.data)) searchData = res.data.data;
+            else if (Array.isArray(res.data?.data?.data)) searchData = res.data.data.data;
+
+            setMovements(searchData);
         } catch (err) {
+            console.error(err);
             setSearchError("Failed to search challans.");
             setMovements([]);
         } finally {
@@ -268,9 +303,11 @@ const Dyeing = () => {
         }
     };
 
+    const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
+
     return (
         <div style={{ width: "100%" }}>
-             <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
                 <input
                     style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }}
                     placeholder="Search by Challan Nos (e.g. 101, 102)"
@@ -288,11 +325,11 @@ const Dyeing = () => {
                 {search && (
                     <button
                         style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: 600 }}
-                        onClick={() => { 
-                            setSearch(""); 
-                            setSearchError(null); 
-                            setPage(1); // Reset page
-                            setRefreshKey(prev => prev + 1); // Triggers the default fetch useEffect
+                        onClick={() => {
+                            setSearch("");
+                            setSearchError(null);
+                            setPage(1);
+                            setRefreshKey(prev => prev + 1);
                         }}
                     >
                         Clear Search
@@ -305,6 +342,7 @@ const Dyeing = () => {
                     {searchError}
                 </div>
             )}
+
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
@@ -322,7 +360,7 @@ const Dyeing = () => {
                                         >
                                             <input
                                                 type="checkbox"
-                                                checked={filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey))}
+                                                checked={allVisibleSelected}
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
                                                         setSelectedRows(new Set(filteredRows.map(r => r.rowKey)));
@@ -482,7 +520,7 @@ const Dyeing = () => {
                         {filteredRows.length === 0 && (
                             <tr>
                                 <td style={{ ...cellStyle, textAlign: "center" }} colSpan={tableHeader.length}>
-                                    No rows match the current filters.
+                                    {movements.length === 0 ? "No records found." : "No rows match the current filters."}
                                 </td>
                             </tr>
                         )}
@@ -490,7 +528,6 @@ const Dyeing = () => {
                 </table>
             </div>
 
-            {/* Only show pagination if we are NOT actively searching */}
             {!search && totalPages > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
                     <button style={pageButtonStyle(false)} onClick={() => goToPage(page - 1)} disabled={page === 1}>
