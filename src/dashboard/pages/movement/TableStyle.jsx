@@ -3,13 +3,16 @@
 // a broken debug style (70px black borders, red header). Import from here so
 // the three pages can never visually diverge again.
 
+import { TextAlignCenter } from "lucide-react";
+
 export const cellStyle = {
-    border: "1px solid #d1d5db",
+    border: "1px solid black",
     padding: "8px 10px",
     overflow: "hidden",
     textOverflow: "ellipsis",
-    verticalAlign: "top",
-    fontSize: "0.85rem",
+    verticalAlign: "middle",
+    fontSize: "0.95rem",
+    textAlign: "center",
 };
 
 // For cells merged across rows with rowSpan (e.g. Knitting's Work
@@ -36,7 +39,7 @@ export const thStickyStyle = {
 };
 
 export const pageButtonStyle = (active) => ({
-    border: "1px solid #d1d5db",
+    border: "1px solid black",
     background: active ? "#1f2937" : "#fff",
     color: active ? "#fff" : "#374151",
     padding: "4px 10px",

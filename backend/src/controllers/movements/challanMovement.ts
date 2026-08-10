@@ -32,6 +32,7 @@ export const challanMovement = async (req: Request, res: Response) => {
                     id: true,
                     composition: true,
                     workOrderQty: true,
+                    unitePrice: true,
                 }
             }
         },

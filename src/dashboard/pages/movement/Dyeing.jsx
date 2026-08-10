@@ -8,7 +8,8 @@ const cellStyle = {
     padding: "6px 8px",
     overflow: "hidden",
     textOverflow: "ellipsis",
-    verticalAlign: "top",
+    verticalAlign: "middle",
+    textAlign: "center",
 };
 
 const thStickyStyle = {
@@ -36,8 +37,8 @@ const tableHeader = [
     { header: "Challan No", width: "9%", key: "challanNo" },
     { header: "WO Qty", width: "9%", key: "workOrderQty" },
     { header: "Composition", width: "10%", key: "composition" },
-    { header: "To Factory", width: "9%", key: "toFactory" },
-    { header: "From Factory", width: "9%", key: "fromFactory" },
+    { header: "From Factory", width: "9%", key: "toFactory" },
+    { header: "To Factory", width: "9%", key: "fromFactory" },
     { header: "Grey Delivery", width: "10%", key: "greyDelivery" },
     { header: "Grey Receive", width: "8%", key: "greyReceive" },
     { header: "Grey Return", width: "8%", key: "greyReturn" },
@@ -467,9 +468,9 @@ const Dyeing = () => {
                                 <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
                                 <td style={cellStyle}>{row.challanNo}</td>
                                 <td style={cellStyle}>{row.workOrderQty}</td>
-                                <td style={cellStyle}>{row.composition}</td>
-                                <td style={cellStyle}>{row.toFactory || "-"}</td>
+                                <td style={cellStyle}>{row.composition}</td>                               
                                 <td style={cellStyle}>{row.fromFactory || "-"}</td>
+                                 <td style={cellStyle}>{row.toFactory || "-"}</td>
                                 <td style={cellStyle}>{row.greyDelivery > 0 ? row.greyDelivery : "-"}</td>
                                 <td style={cellStyle}>{row.greyReceive > 0 ? row.greyReceive : "-"}</td>
                                 <td style={cellStyle}>{row.greyReturn > 0 ? row.greyReturn : "-"}</td>

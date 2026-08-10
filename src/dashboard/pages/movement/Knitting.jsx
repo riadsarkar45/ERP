@@ -13,8 +13,8 @@ const tableHeader = [
     { header: "Work Order Qty", width: "9%", key: "workOrderQty" }, // Changed from Work Order
     { header: "Composition", width: "10%", key: "composition" },
     { header: "Color", width: "10%", key: "color" },
-    { header: "To Factory", width: "9%", key: "toFactory" },
-    { header: "From Factory", width: "9%", key: "fromFactory" },
+    { header: "From Factory", width: "9%", key: "toFactory" },
+    { header: "To Factory", width: "9%", key: "fromFactory" },
     { header: "Yarn Delivery", width: "10%", key: "yarnDelivery" },
     { header: "Yarn Return", width: "10%", key: "yarnReturn" },
     { header: "Greige Received", width: "10%", key: "greyFabricReceived" }, 
@@ -306,9 +306,9 @@ const Knitting = () => {
                                 {row.isFirstOfMovement && (
                                     <td style={mergedCellStyle} rowSpan={row.movementRowSpan}>{row.color}</td>
                                 )}
-
-                                <td style={cellStyle}>{row.toFactory || "-"}</td>
                                 <td style={cellStyle}>{row.fromFactory || "-"}</td>
+                                <td style={cellStyle}>{row.toFactory || "-"}</td>
+                                
 
                                 <td style={cellStyle}>{fmtNumber(row.yarnDelivery)}</td>
                                 <td style={cellStyle}>{fmtNumber(row.yarnReturn)}</td>
