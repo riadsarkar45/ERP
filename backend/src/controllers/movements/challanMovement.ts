@@ -10,86 +10,51 @@ export const challanMovement = async (req: Request, res: Response) => {
 
     console.log(orderType);
     // const where = { orderType };
-
-    const deliveries = await prisma.deliveries.findMany({
+    const deliveryTypes: string[] = [];
+    if (orderType === "knittingOrder") {
+        deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Received", "Grey Fabric Received", "Finish Received")
+    } else if (orderType === "dyeingOrder") {
+        deliveryTypes.push("Grey Delivery", "Grey Return", "Grey Received", "Finish Received")
+    }else if(orderType === "aopOrder"){
+        deliveryTypes.push("Sent For Aop", "Received From Aop", "AOP Finish Fabric Rcvd", "Return From Aop");
+    }
+    const deliveries = await prisma.composition.findMany({
         where: {
-            composition: {
-                orderType: orderType,
+            orderType: orderType,
+            deliveries: {
+                some: {
+                    deliveryType: { in: deliveryTypes },
+                    // challanNo: { in: challans },
+                },
             },
         },
         take: 30,
         select: {
-            challanNo: true,
-            deliveryType: true,
-            fromFactory: true,
-            toFactory: true,
-            deliveryQty: true,
+            composition: true,
+            unitePrice: true,
             id: true,
-            deliveryDate: true,
-            composition: {
+            workOrderQty: true,
+            color: true,
+            workOrder: {
                 select: {
-                    color: true,
+                    jobNo: true,
+                }
+            },
+            deliveries: {
+                where: { deliveryType: { in: deliveryTypes } },
+                select: {
+                    deliveryQty: true,
+                    deliveryDate: true,
+                    deliveryType: true,
                     id: true,
-                    composition: true,
-                    workOrderQty: true,
+                    challanNo: true,
+                    toFactory: true,
+                    fromFactory: true,
                 }
             }
         },
     });
 
-    if (!deliveries || deliveries.length === 0) {
-        return res.status(404).send({ msg: "No deliveries found for the given order type", type: "error" });
-    }
 
-    // group by challanNo, sum deliveryQty
-    const grouped = Object.values(
-        deliveries.reduce((acc, d) => {
-            if (!d.composition) {
-                return acc;
-            }
-
-            const key = d.challanNo;
-
-            if (!acc[key]) {
-                acc[key] = {
-                    challanNo: d.challanNo,
-                    deliveryType: d.deliveryType,
-                    fromFactory: d.fromFactory,
-                    toFactory: d.toFactory,
-                    deliveryDate: d.deliveryDate,
-                    deliveryQty: 0,
-                    compositions: [],
-                };
-            }
-
-            acc[key].deliveryQty += d.deliveryQty;
-
-            acc[key].compositions.push({
-                id: d.composition.id,
-                color: d.composition.color,
-                composition: d.composition.composition,
-                workOrderQty: d.composition.workOrderQty,
-            });
-
-            return acc;
-        }, {} as Record<
-            number,
-            {
-                challanNo: number;
-                deliveryType: string;
-                fromFactory: string;
-                toFactory: string;
-                deliveryQty: number;
-                deliveryDate: Date;
-                compositions: {
-                    id: number;
-                    color: string;
-                    composition: string;
-                    workOrderQty: number;
-                }[];
-            }
-        >)
-    );
-
-    return res.status(200).send({ msg: "Deliveries found", type: "success", data: grouped });
+    return res.status(200).send({ msg: "Deliveries found", type: "success", data: deliveries });
 };
