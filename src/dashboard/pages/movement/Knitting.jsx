@@ -26,7 +26,6 @@ const tableHeader = [
     { header: "Billing", width: "7%", key: "billingAmount" },
 ];
 
-const safeDate = (val) => { if (!val) return "-"; try { return formatToErpDate(val); } catch (e) { return "-"; } };
 
 const Knitting = () => {
     const [movements, setMovements] = useState([]);
@@ -224,7 +223,7 @@ const Knitting = () => {
                 {search && <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setRefreshKey(prev => prev + 1); }}>Clear Search</button>}
             </div>
             {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
-            
+
             {isFetchingAll && pendingFilterKey && (
                 <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(255, 255, 255, 0.70)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
                     <div style={{ background: "#ffffff", border: "1px solid #93c5fd", borderRadius: 8, padding: "16px 24px", color: "#1d4ed8", fontWeight: 700, boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)" }}>Loading all challans for filtering...</div>
