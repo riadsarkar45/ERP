@@ -5,9 +5,13 @@ import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileD
 import { uploadKWODataFromFile } from "../../helpers/uploadStyleReqData/uploadWorkOrder";
 import { uploadAOWDataFromFile } from "../../helpers/uploadStyleReqData/uploadawoOrder";
 import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploadDyeingOrder";
-import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres"; // ⚠️ Ensure file name matches
+import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
 import { uploadYarnGreyRcvdDataFromFile, type YarnGreyRcvdParsedRow } from "../../helpers/uploadStyleReqData/uploadYarnDevData";
 import { uploadDyeingGreyDeliveryDataFromFile, type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
+// import { uploadDyeing type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
+
+// ⚠️ Adjust this path to match where you saved the helper file provided earlier
+// import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
 
 // ── Type Definitions ──────────────────────────────────────────────
 interface MulterFile {
@@ -85,7 +89,7 @@ interface AWOParsedRow {
     awoFactoryName: string;
     awoWorkOrderQty: number;
     awoPricePerKg: number;
-    fabricReturnFromAop: number;
+    fabricReturnFromAop: number
 }
 
 interface AWOColumnIndices {
@@ -102,7 +106,7 @@ interface AWOColumnIndices {
     awoFactoryName: number;
     awoWorkOrderQty: number;
     awoPricePerKg: number;
-    fabricReturnFromAop: number;
+    fabricReturnFromAop: number
 }
 
 interface DWOColumnIndices {
@@ -167,10 +171,11 @@ interface AOPDeliveryColumnIndices {
     composition: number;
     deliveryForAop: number;
     afterAopFabricRcvd: number;
-    aopFinishFabricRcvd: number; // ✅ FIXED TYPO (was Rcvp)
+    aopFinishFabricRcvp: number;
     aopReceivedFromFactoryName: number;
     aopFabricDeliveryFactoryNameSM: number;
-    fabricReturnFromAop: number;
+    aopFinishFabricRcvd: number;
+    fabricReturnFromAop: number
 }
 
 const parseDateValue = (val: unknown): Date | null => {
@@ -198,10 +203,13 @@ const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices 
     composition: findPartialCol(headers, "composition"),
     deliveryForAop: findPartialCol(headers, "delivery for aop"),
     afterAopFabricRcvd: findPartialCol(headers, "after aop fabric rcvd"),
-    aopFinishFabricRcvd: findPartialCol(headers, "aop finish fabric rcvd"), // ✅ FIXED
+    aopFinishFabricRcvd: findPartialCol(headers, "aop finish fabric rcvd"), // 👈 ADD THIS
     aopReceivedFromFactoryName: findPartialCol(headers, "aop received from factory"),
     aopFabricDeliveryFactoryNameSM: findPartialCol(headers, "aop fabric delivery factory"),
+    // aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
+    aopFinishFabricRcvp: findPartialCol(headers, "aop finish fabric rcvd"),
     fabricReturnFromAop: findPartialCol(headers, "fabric return from aop")
+
 });
 
 const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices): AOPDeliveryParsedRow => ({
@@ -302,6 +310,7 @@ const isValidAOPDeliveryRow = (row: AOPDeliveryParsedRow): boolean => {
 async function processAOPDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
+    // Clean keywords: the scanner will automatically strip spaces and match them perfectly
     const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd", "fabric return from aop"];
     const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
@@ -370,6 +379,7 @@ const toNumber = (val: unknown): number => {
     return isNaN(num) ? 0 : num;
 };
 
+// ✅ ROBUST: Ignores random extra spaces in Excel headers (e.g., "CHALLAN          NO")
 const findPartialCol = (headers: unknown[], keyword: string): number => {
     const normalizedKeyword = keyword.toLowerCase().replace(/\s+/g, "");
     return headers.findIndex((h: unknown) => {
@@ -402,12 +412,14 @@ async function readAllRowsAndFindHeader(
 ): Promise<{ allRows: unknown[][]; headerRowIndex: number }> {
     const allRows: unknown[][] = [];
 
+    // Normalize keywords by removing all spaces to handle erratic Excel spacing
     const normalizedKeywords = keywords.map((kw) => kw.toLowerCase().replace(/\s+/g, ""));
 
     const scoreRow = (row: unknown[]): number => {
         if (!Array.isArray(row)) return 0;
         return normalizedKeywords.filter((kw) =>
             row.some((cell) => {
+                // Normalize the cell content by removing all spaces before checking
                 const normalizedCell = asString(cell).toLowerCase().replace(/\s+/g, "");
                 return normalizedCell.includes(kw);
             })
@@ -446,7 +458,7 @@ interface DyeingGreyDeliveryColumnIndices {
     composition: number;
     greyDeliveryQty: number;
     greyReceivedQty: number;
-    finishReceivedQty: number; 
+    finishReceivedQty: number; // ✅ ADDED
     dyeingFactoryName: number;
     toFactory: number;
     fromFactory: number;
@@ -459,13 +471,16 @@ const buildDyeingGreyDeliveryColIndex = (headers: unknown[]): DyeingGreyDelivery
     jobNo: findPartialCol(headers, "job no"),
     color: findPartialCol(headers, "color"),
     composition: findPartialCol(headers, "composition"),
-    greyDeliveryQty: findPartialCol(headers, "grey fabric del"),       
-    greyReceivedQty: findPartialCol(headers, "grey fabric rcvd"),      
-    finishReceivedQty: findPartialCol(headers, "finish fabric rcvd"),  
-    dyeingFactoryName: findPartialCol(headers, "dyeing factory name"), 
-    toFactory: findPartialCol(headers, "finished fabric delivery"),    
+    
+    // ✅ UPDATED: Keywords now perfectly match the actual Excel headers (spaces are ignored)
+    greyDeliveryQty: findPartialCol(headers, "grey fabric del"),       // Matches "GREY FABRIC DEL. FOR DYEING"
+    greyReceivedQty: findPartialCol(headers, "grey fabric rcvd"),      // Matches "GREY FABRIC RCVD FROM DYEING"
+    finishReceivedQty: findPartialCol(headers, "finish fabric rcvd"),  // Matches "FINISH FABRIC RCVD FROM DYEING"
+    
+    dyeingFactoryName: findPartialCol(headers, "dyeing factory name"), // Matches "GREY DEL & RECVED FROM DYEING FACTORY NAME"
+    toFactory: findPartialCol(headers, "finished fabric delivery"),    // Matches "FINISHED FABRIC DELIVERY FACTORY NAME"
     greyReturnFromFactory: findPartialCol(headers, "grey return from dyeing"),
-    fromFactory: findPartialCol(headers, "remarks"), // ⚠️ Ensure 'remarks' actually contains the source factory name
+    fromFactory: findPartialCol(headers, "remarks"),                   // Remarks often contains "FROM [Factory Name]"
 });
 
 const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDeliveryColumnIndices): DyeingGreyDeliveryParsedRow => ({
@@ -476,7 +491,7 @@ const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDelivery
     composition: asString(getCellValue(row, colIndex.composition)),
     greyDeliveryQty: toNumber(getCellValue(row, colIndex.greyDeliveryQty)),
     greyReceivedQty: toNumber(getCellValue(row, colIndex.greyReceivedQty)),
-    finishReceivedQty: toNumber(getCellValue(row, colIndex.finishReceivedQty)), 
+    finishReceivedQty: toNumber(getCellValue(row, colIndex.finishReceivedQty)), // ✅ ADDED
     dyeingFactoryName: asString(getCellValue(row, colIndex.dyeingFactoryName)),
     toFactory: asString(getCellValue(row, colIndex.toFactory)),
     fromFactory: asString(getCellValue(row, colIndex.fromFactory)),
@@ -484,15 +499,16 @@ const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDelivery
 });
 
 const isValidDyeingGreyDeliveryRow = (row: DyeingGreyDeliveryParsedRow): boolean => {
+    // ✅ UPDATED: Now checks for finishReceivedQty as well
     return !!(row.jobNo && (row.greyDeliveryQty > 0 || row.greyReceivedQty > 0 || row.finishReceivedQty > 0 || row.greyReturnFromFactory > 0));
 };
+
 
 async function processDyeingGreyDeliverySheet(
     worksheetReader: WorksheetReader
 ): Promise<{ parsedRows: DyeingGreyDeliveryParsedRow[]; headerFound: boolean }> {
-    // ✅ FIXED: Updated keywords to match actual column headers so the scanner finds the row!
-    const DYEING_GREY_DELIVERY_KEYWORDS = ["challan no", "job no", "grey fabric del", "grey fabric rcvd", "finish fabric rcvd", "dyeing factory name"];
-    const MIN_SCORE = 3; // Increased slightly since we have more exact keywords now
+    const DYEING_GREY_DELIVERY_KEYWORDS = ["challan no", "job no", "dyeing delivery", "dyeing received", "grey return from dyeing"];
+    const MIN_SCORE = 2;
     const SCAN_LIMIT = 15;
 
     const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, DYEING_GREY_DELIVERY_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
@@ -746,6 +762,7 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         let dwoHeaderFound = false;
         let dwoSheetName = "";
 
+        // ✅ NEW: AOP Delivery variables
         let parsedRowsAOPDel: AOPDeliveryParsedRow[] = [];
         let aopDelHeaderFound = false;
         let aopDelSheetName = "";
@@ -782,6 +799,7 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 dwoHeaderFound = result.headerFound;
                 dwoSheetName = sheetName;
             } else if (sheetName === "AOP DEL. & RCVD" || sheetName === "AOP DEL & RCVD") {
+                // ✅ NEW: Process AOP Delivery sheet
                 const result = await processAOPDeliverySheet(worksheetReader as WorksheetReader);
                 parsedRowsAOPDel = result.parsedRows;
                 aopDelHeaderFound = result.headerFound;
@@ -801,6 +819,7 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
             }
         }
 
+        // ✅ UPDATED: Include aopDelHeaderFound in validation
         if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && !aopDelHeaderFound && !yarnGreyRcvdHeaderFound && !dyeingGreyDeliveryHeaderFound) {
             res.status(400).json({ error: "Could not locate a valid header row in the Excel file." });
             return;
@@ -818,6 +837,7 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
             kwo: { sheetName: kwoSheetName, found: kwoHeaderFound, totalRows: parsedRowsKWO.length },
             awo: { sheetName: awoSheetName, found: awoHeaderFound, totalRows: parsedRowsAWO.length },
             dwo: { sheetName: dwoSheetName, found: dwoHeaderFound, totalRows: parsedRowsDWO.length },
+            // ✅ NEW: Return AOP Delivery parsing summary
             aopDel: { sheetName: aopDelSheetName, found: aopDelHeaderFound, totalRows: parsedRowsAOPDel.length },
             yarnGreyRcvd: { sheetName: yarnGreyRcvdSheetName, found: yarnGreyRcvdHeaderFound, totalRows: parsedRowsYarnGreyRcvd.length },
             dyeingGreyDelivery: { sheetName: dyeingGreyDeliverySheetName, found: dyeingGreyDeliveryHeaderFound, totalRows: parsedRowsDyeingGreyDelivery.length },
@@ -840,16 +860,21 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 if (dwoHeaderFound && parsedRowsDWO.length > 0) {
                     uploadPromises.push(uploadDYEINGDataFromFile(parsedRowsDWO, jobId).then(() => console.log(`✅ [${jobId}] D.W.O done.`)));
                 }
+                // ✅ NEW: Trigger AOP Delivery background processing
                 if (aopDelHeaderFound && parsedRowsAOPDel.length > 0) {
                     uploadPromises.push(
                         uploadAopDeliveryDataFromFile(parsedRowsAOPDel, jobId).then(() => console.log(`✅ [${jobId}] AOP DEL. & RCVD done.`))
                     );
+
+                    // uploadYarnGreyRcvdDataFromFile
                 }
+
                 if (yarnGreyRcvdHeaderFound && parsedRowsYarnGreyRcvd.length > 0) {
                     uploadPromises.push(
                         uploadYarnGreyRcvdDataFromFile(parsedRowsYarnGreyRcvd, jobId).then(() => console.log(`✅ [${jobId}] YARN & GREY RCVD done.`))
                     );
                 }
+
                 if (dyeingGreyDeliveryHeaderFound && parsedRowsDyeingGreyDelivery.length > 0) {
                     uploadPromises.push(
                         uploadDyeingGreyDeliveryDataFromFile(parsedRowsDyeingGreyDelivery, jobId).then(() => console.log(`✅ [${jobId}] DYEING GREY DEL. & RCVD done.`))
