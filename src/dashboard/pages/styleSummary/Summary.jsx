@@ -1054,7 +1054,7 @@ export default function Summary() {
                                     {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Delivery', 22)}
 
                                     {/* 24. GREY RETURN FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return_Received', 23)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return', 23)}
 
                                     {/* 25. GREY RECEIVED FROM DYEING */}
                                     {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 24)}
