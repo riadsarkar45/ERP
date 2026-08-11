@@ -57,6 +57,20 @@ const normalizeJobNo = (jobNo: string): string => {
     return jobNo.trim().replace(/[\\/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 };
 
+// ✅ HELPER: Breaks large arrays into smaller batches to prevent Postgres parameter limits & RAM crashes
+const chunkArray = <T>(array: T[], chunkSize: number): T[][] => {
+    const results = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+        results.push(array.slice(i, i + chunkSize));
+    }
+    return results;
+};
+
+// ✅ HELPER: Safely generates matching keys to prevent silent skipping due to whitespace/nulls
+const getChallanKey = (challanNo: number, toFactory: string | null | undefined, fromFactory: string | null | undefined) => {
+    return `${challanNo}|${(toFactory || '').trim()}|${(fromFactory || '').trim()}`;
+};
+
 export const uploadDyeingGreyDeliveryDataFromFile = async (
     rows: DyeingGreyDeliveryParsedRow[],
     jobId: string
@@ -105,23 +119,28 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
     emitProgress("dyeing-grey-delivery-progress", { jobId, phase: "bulk_processing", current: 0, total: events.length });
 
     // ═══════════════════════════════════════════════════════════════════
-    // 1. BULK FETCH: Get all Compositions in ONE query
+    // 1. BULK FETCH: Compositions (CHUNKED to prevent RAM/Postgres crash)
     // ═══════════════════════════════════════════════════════════════════
     const uniqueJobNos = [...new Set(events.map(e => e.jobNo))];
-    const allCandidateCompositions = await prisma.composition.findMany({
-        where: {
-            orderType: "dyeingOrder",
-            workOrder: { jobNo: { in: uniqueJobNos }, orderType: "dyeingOrder" },
-        },
-        select: {
-            id: true,
-            color: true,
-            composition: true,
-            workOrder: { select: { factoryName: true, jobNo: true } },
-        },
-    });
+    const jobNoChunks = chunkArray(uniqueJobNos, 500);
+    const allCandidateCompositions: any[] = [];
+    
+    for (const chunk of jobNoChunks) {
+        const comps = await prisma.composition.findMany({
+            where: {
+                orderType: "dyeingOrder",
+                workOrder: { jobNo: { in: chunk }, orderType: "dyeingOrder" },
+            },
+            select: {
+                id: true,
+                color: true,
+                composition: true,
+                workOrder: { select: { factoryName: true, jobNo: true } },
+            },
+        });
+        allCandidateCompositions.push(...comps);
+    }
 
-    // Map for O(1) lookups: `jobNo|normalizedColor|normalizedComposition`
     const compMap = new Map<string, typeof allCandidateCompositions>();
     for (const comp of allCandidateCompositions) {
         const key = `${comp.workOrder.jobNo}|${normalizeMatchText(comp.color)}|${normalizeMatchText(comp.composition)}`;
@@ -157,74 +176,121 @@ export const uploadDyeingGreyDeliveryDataFromFile = async (
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 3. BULK FETCH & CREATE: Challans
+    // 3. BULK FETCH & CREATE: Challans (CHUNKED & SAFE KEYS)
     // ═══════════════════════════════════════════════════════════════════
     const uniqueChallanNos = [...new Set(enrichedEvents.map(e => e.challanNo))];
-    const existingChallans = await prisma.challan.findMany({
-        where: { challanNo: { in: uniqueChallanNos } }
-    });
+    const challanNoChunks = chunkArray(uniqueChallanNos, 500);
+    const existingChallans: any[] = [];
+    
+    for (const chunk of challanNoChunks) {
+        const challans = await prisma.challan.findMany({
+            where: { challanNo: { in: chunk } }
+        });
+        existingChallans.push(...challans);
+    }
 
     const challanMap = new Map<string, any>();
     for (const c of existingChallans) {
-        challanMap.set(`${c.challanNo}_${c.toFactory}_${c.fromFactory}`, c);
+        challanMap.set(getChallanKey(c.challanNo, c.toFactory, c.fromFactory), c);
     }
-    summary.existingChallansFound = existingChallans.length;
 
-    const challansToCreate = [];
+    const challansToCreate: any[] = [];
     const processedChallanKeys = new Set<string>();
+    const reusedChallanNumbers = new Set<number>();
 
     for (const event of enrichedEvents) {
-        const key = `${event.challanNo}_${event.toFactory}_${event.fromFactory}`;
-        if (!challanMap.has(key) && !processedChallanKeys.has(key)) {
+        const key = getChallanKey(event.challanNo, event.toFactory, event.fromFactory);
+        
+        if (challanMap.has(key)) {
+            reusedChallanNumbers.add(event.challanNo);
+        } else if (!processedChallanKeys.has(key)) {
             challansToCreate.push({
                 challanNo: event.challanNo,
                 challanDate: event.challanDate ?? new Date(),
-                toFactory: event.toFactory,
-                fromFactory: event.fromFactory,
+                toFactory: (event.toFactory || '').trim(),
+                fromFactory: (event.fromFactory || '').trim(),
                 yarnCompId: event.compositionId,
             });
             processedChallanKeys.add(key);
         }
     }
 
+    if (reusedChallanNumbers.size > 0) {
+        console.log(`ℹ️ [Dyeing] Reusing ${reusedChallanNumbers.size} existing challans: ${Array.from(reusedChallanNumbers).join(', ')}`);
+    }
+
     if (challansToCreate.length > 0) {
-        await prisma.challan.createMany({ data: challansToCreate, skipDuplicates: true });
+        const challanChunks = chunkArray(challansToCreate, 500);
+        for (const chunk of challanChunks) {
+            // skipDuplicates: true is CRITICAL to prevent P2002 crashes
+            await prisma.challan.createMany({ data: chunk, skipDuplicates: true }); 
+        }
         summary.challansCreated = challansToCreate.length;
         
-        // Re-fetch to get IDs for newly created challans
+        // Re-fetch to get IDs for newly created challans (Chunked)
         const allRelevantChallanNos = [...new Set([...existingChallans.map(c => c.challanNo), ...challansToCreate.map(c => c.challanNo)])];
-        const allChallans = await prisma.challan.findMany({ where: { challanNo: { in: allRelevantChallanNos } } });
+        const reFetchChunks = chunkArray(allRelevantChallanNos, 500);
+        const allChallans: any[] = [];
+        for (const chunk of reFetchChunks) {
+            const challans = await prisma.challan.findMany({ where: { challanNo: { in: chunk } } });
+            allChallans.push(...challans);
+        }
+        challanMap.clear();
         for (const c of allChallans) {
-            challanMap.set(`${c.challanNo}_${c.toFactory}_${c.fromFactory}`, c);
+            challanMap.set(getChallanKey(c.challanNo, c.toFactory, c.fromFactory), c);
         }
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 4. BULK INSERT: Deliveries
+    // 4. BULK INSERT: Deliveries (TRACKING SKIPPED CHALLANS)
     // ═══════════════════════════════════════════════════════════════════
-    const deliveriesToCreate = enrichedEvents.map(event => {
-        const key = `${event.challanNo}_${event.toFactory}_${event.fromFactory}`;
+    const deliveriesToCreate: any[] = [];
+    const skippedDeliveries: { challanNo: number; deliveryType: string; key: string }[] = [];
+
+    for (const event of enrichedEvents) {
+        const key = getChallanKey(event.challanNo, event.toFactory, event.fromFactory);
         const challan = challanMap.get(key);
-        
-        return {
+
+        if (!challan) {
+            skippedDeliveries.push({ challanNo: event.challanNo, deliveryType: event.deliveryType, key });
+            continue;
+        }
+
+        deliveriesToCreate.push({
             deliveryDate: event.challanDate ?? new Date(),
             challanNo: event.challanNo,
             deliveryQty: event.deliveryQty,
             deliveryType: event.deliveryType,
             yarnId: event.compositionId,
             yarnCompId: event.compositionId,
-            fromFactory: event.fromFactory,
-            toFactory: event.toFactory,
-            challanId: challan ? challan.id : null,
-        };
-    }).filter(d => d.challanId !== null);
+            fromFactory: (event.fromFactory || '').trim(),
+            toFactory: (event.toFactory || '').trim(),
+            challanId: challan.id,
+        });
+    }
+
+    if (skippedDeliveries.length > 0) {
+        const skippedChallanNos = [...new Set(skippedDeliveries.map(s => s.challanNo))];
+        console.warn(`⚠️ [Dyeing] Skipped ${skippedDeliveries.length} deliveries. Missing Challans: ${skippedChallanNos.join(', ')}`);
+        summary.errors.push({
+            challanNo: 0,
+            deliveryType: "Skipped Deliveries",
+            message: `Dropped ${skippedDeliveries.length} deliveries because challan wasn't found. Challan Numbers: ${skippedChallanNos.join(', ')}`
+        });
+    }
 
     if (deliveriesToCreate.length > 0) {
-        const result = await prisma.deliveries.createMany({ 
-            data: deliveriesToCreate,
-            skipDuplicates: true 
-        });
-        summary.deliveriesCreated = result.count;
+        const deliveryChunks = chunkArray(deliveriesToCreate, 500);
+        let totalCreated = 0;
+        
+        for (const chunk of deliveryChunks) {
+            const result = await prisma.deliveries.createMany({ 
+                data: chunk, 
+                skipDuplicates: true 
+            });
+            totalCreated += result.count;
+        }
+        summary.deliveriesCreated = totalCreated;
     }
 
     emitProgress("dyeing-grey-delivery-complete", { jobId, summary });
