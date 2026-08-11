@@ -1,17 +1,13 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
-// Robust fuzzy matcher to ensure quantities sum correctly regardless of spaces/casing in DB
-function matchDeliveryType(type: string | null | undefined): string | null {
-    if (!type) return null;
-    return null;
-}
 
 export const searchChallans = async (req: Request, res: Response) => {
     const challansQuery = req.query.challans;
     // "context" is sent as a query param by the frontend (?context=knitting),
     // not a route param — this used to read req.params.orderType, which was
     // always undefined once the route no longer has a :orderType segment.
+    console.log("route hit");
     const orderType = String(req.query.context || req.query.orderType || "")
     if (!challansQuery) {
         console.log("challan required");

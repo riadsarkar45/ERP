@@ -66,6 +66,6 @@ getRouters.get("/mis/glance/detail/:columnName/:jobNo", misDetailView);
 
 getRouters.get("/glance/:jobNo/trailing-data", styleReconciliation);
 
-getRouters.get("/:knittingOrder/challan/search", searchChallans);
+getRouters.get("/:orderType/challan/search", searchChallans);
 
 export default getRouters;

@@ -30,6 +30,7 @@ export const challanMovement = async (req: Request, res: Response) => {
         },
         take: 30,
         select: {
+            
             composition: true,
             unitePrice: true,
             id: true,
