@@ -378,7 +378,7 @@ const AllOrders = ({ orderType }) => {
                 delete updatedRow.fromFactory;
             }
 
-            const isAopGreyReceived = updatedRow.deliveryType === "Aop Grey Received";
+            const isAopGreyReceived = updatedRow.deliveryType === "Received From Aop";
 
             const deliveries = [
                 { deliveryType: updatedRow.deliveryType, qty: updatedRow.deliveryQty },

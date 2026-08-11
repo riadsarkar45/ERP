@@ -39,11 +39,6 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
         cursor: "pointer",
     });
 
-    // Non-frozen td (kept for reference, but we apply inline styles below for consistency)
-    const plainTd = (isHovered) => ({
-        ...baseTd,
-        backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
-    });
 
     // ── TOTALS: flatten every composition across all orders/workOrders and sum the numeric fields ──
     const totals = useMemo(() => {
