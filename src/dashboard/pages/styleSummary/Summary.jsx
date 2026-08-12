@@ -26,7 +26,8 @@ const COLUMNS = [
     "RE-PROCESS FAB. BALANCE (+/-)", "RE-PROCESS PROCESS LOSS (%)",
 ];
 
-// ── Filterable columns config ─────────────────────────────────────────────────
+// ── Filterable columns config (colIndex -> { key, type }) ────────────────────
+// `key` is the field name the backend expects for filtering / filter-options lookups.
 const FILTERABLE_COLS = {
     0: { key: "salesContact", type: "row" },
     1: { key: "buyerName", type: "row" },
@@ -37,6 +38,12 @@ const FILTERABLE_COLS = {
     6: { key: "composition", type: "subrow" },
 };
 
+// Reverse lookup: colKey -> colIndex (used to render labels for active filter chips)
+const KEY_TO_INDEX = Object.entries(FILTERABLE_COLS).reduce((acc, [idx, col]) => {
+    acc[col.key] = Number(idx);
+    return acc;
+}, {});
+
 // ── Frozen column widths ─────────────────────────────────────────────────────
 const FROZEN_WIDTHS = [150, 120, 180, 100, 120, 250, 280];
 const FROZEN_COUNT = FROZEN_WIDTHS.length;
@@ -46,80 +53,6 @@ const FROZEN_LEFTS = FROZEN_WIDTHS.reduce((acc, width, idx) => {
     return acc;
 }, []);
 
-// ── Helper: Deep filter function (Excel-like) ────────────────────────────────
-const applyDeepFiltersSummary = (data, activeFilters) => {
-    if (!data || Object.keys(activeFilters).length === 0) return data;
-
-    return data.reduce((acc, row) => {
-        // 1. Check top-level (row) filters (e.g., Job No, Buyer)
-        for (const [ci, selectedSet] of Object.entries(activeFilters)) {
-            if (!selectedSet || selectedSet.size === 0) continue;
-            const col = FILTERABLE_COLS[Number(ci)];
-            if (!col || col.type !== "row") continue;
-
-            if (!selectedSet.has(String(row[col.key] ?? ""))) {
-                return acc; // Skip this entire row if it doesn't match
-            }
-        }
-
-        // 2. Clone row and filter sub-rows (e.g., Color, Composition)
-        const clonedRow = { ...row };
-        const subRows = clonedRow.rows || [];
-        const breakdowns = clonedRow.compBreakdown || [];
-
-        const hasSubFilters = Object.entries(activeFilters).some(([ci, selectedSet]) => {
-            if (!selectedSet || selectedSet.size === 0) return false;
-            const col = FILTERABLE_COLS[Number(ci)];
-            return col && col.type === "subrow";
-        });
-
-        if (hasSubFilters) {
-            const filteredSubRows = [];
-            const filteredBreakdowns = [];
-
-            for (let j = 0; j < subRows.length; j++) {
-                const sr = subRows[j];
-                let srValid = true;
-
-                for (const [ci, selectedSet] of Object.entries(activeFilters)) {
-                    if (!selectedSet || selectedSet.size === 0) continue;
-                    const col = FILTERABLE_COLS[Number(ci)];
-                    if (!col || col.type !== "subrow") continue;
-
-                    if (!selectedSet.has(String(sr[col.key] ?? ""))) {
-                        srValid = false;
-                        break;
-                    }
-                }
-
-                if (srValid) {
-                    filteredSubRows.push(sr);
-                    // Keep the breakdown data perfectly aligned with the sub-rows!
-                    if (j < breakdowns.length) {
-                        filteredBreakdowns.push(breakdowns[j]);
-                    } else {
-                        filteredBreakdowns.push({});
-                    }
-                }
-            }
-
-            clonedRow.rows = filteredSubRows;
-            clonedRow.compBreakdown = filteredBreakdowns;
-        } else {
-            if (!clonedRow.compBreakdown && subRows.length > 0) {
-                clonedRow.compBreakdown = subRows.map(() => ({}));
-            }
-        }
-
-        // 3. Only keep the row if it still has valid sub-rows left
-        if (clonedRow.rows.length > 0) {
-            acc.push(clonedRow);
-        }
-
-        return acc;
-    }, []);
-};
-
 // ── Helper ───────────────────────────────────────────────────────────────────
 const getBreakdownValue = (item, key) => {
     if (!item) return 0;
@@ -128,12 +61,18 @@ const getBreakdownValue = (item, key) => {
 };
 
 // ── Filter Dropdown Component ─────────────────────────────────────────────────
-function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, onClear, onClose, anchorRef }) {
+function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading, onApply, onClear, onClose, anchorRef }) {
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState(
         activeValues !== null ? new Set(activeValues) : new Set(allValues)
     );
     const dropRef = useRef(null);
+
+    // Re-sync selection whenever fresh options arrive (options are fetched async on open)
+    useEffect(() => {
+        setSelected(activeValues !== null ? new Set(activeValues) : new Set(allValues));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allValues]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -215,6 +154,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                         type="checkbox"
                         checked={allChecked}
                         onChange={toggleAll}
+                        disabled={isLoading}
                         className="rounded text-blue-500"
                     />
                     <span className="text-xs font-medium text-gray-600">Select All</span>
@@ -224,7 +164,11 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
 
             {/* Values list */}
             <div style={{ maxHeight: 200, overflowY: "auto" }} className="py-1">
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                    <div className="px-3 py-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+                        <RefreshCcw size={12} className="animate-spin" /> Loading options...
+                    </div>
+                ) : filtered.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-gray-400 text-center">No matches</div>
                 ) : (
                     filtered.map(val => (
@@ -245,7 +189,8 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
             <div className="flex gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50">
                 <button
                     onClick={() => { onApply(selected); onClose(); }}
-                    className="flex-1 text-xs bg-blue-500 text-white rounded px-3 py-1.5 font-medium hover:bg-blue-600 transition-colors"
+                    disabled={isLoading}
+                    className="flex-1 text-xs bg-blue-500 text-white rounded px-3 py-1.5 font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
                 >
                     Apply
                 </button>
@@ -268,8 +213,13 @@ export default function Summary() {
     const navigate = useNavigate();
     const scrollContainerRef = useRef(null);
 
+    // activeFilters is keyed by colKey (e.g. "jobNo") -> array of selected values,
+    // mirroring Reconciliation.jsx so both pages talk to the backend the same way.
     const [activeFilters, setActiveFilters] = useState({});
     const [openFilter, setOpenFilter] = useState(null);
+    const [filterOptions, setFilterOptions] = useState([]);
+    const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
+
     const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
     const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
@@ -283,12 +233,24 @@ export default function Summary() {
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
+    // ── Server-side filtered fetch (same pattern as Reconciliation.jsx) ───────
+    const fetchFilteredData = useCallback(async () => {
+        setIsLoading(prev => ({ ...prev, refreshLoading: true }));
+        try {
+            const params = { page: 1, limit: 10000 };
+            if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
+            const res = await axiosPrivate.get('/api/styles', { params });
+            if (res.data && res.data.data) setRawData(res.data.data);
+        } catch (err) {
+            console.error("Failed to fetch filtered data:", err);
+        } finally {
+            setIsLoading(prev => ({ ...prev, refreshLoading: false }));
+        }
+    }, [activeFilters, axiosPrivate]);
+
     useEffect(() => {
-        fetchData(`/api/styles`).then(data => {
-            setRawData(data.data);
-            console.log(data.data, "style requirements");
-        }).catch(e => console.error(e));
-    }, [fetchData]);
+        fetchFilteredData();
+    }, [fetchFilteredData]);
 
     // Reset to page 1 whenever filters change
     useEffect(() => {
@@ -297,35 +259,8 @@ export default function Summary() {
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
-    // ── Get unique values for a column filtered by all OTHER active filters ───
-    const getColValues = useCallback((colIndex) => {
-        const col = FILTERABLE_COLS[colIndex];
-        if (!col) return [];
-
-        // Create a temporary filter set that excludes the current column's filter
-        const tempFilters = { ...activeFilters };
-        delete tempFilters[colIndex];
-
-        // Apply deep filters with the temporary set to get cascading options
-        const tempFilteredData = applyDeepFiltersSummary(rawData, tempFilters);
-
-        if (col.type === "row") {
-            const set = new Set(tempFilteredData.map(row => String(row[col.key] ?? "")));
-            return Array.from(set).sort();
-        }
-
-        // For sub-rows, extract unique values from the filtered sub-rows
-        const set = new Set();
-        tempFilteredData.forEach(row => {
-            (row.rows || []).forEach(sr => set.add(String(sr[col.key] ?? "")));
-        });
-        return Array.from(set).sort();
-    }, [rawData, activeFilters]);
-
-    // ── Filtered data (Deeply filtered like Excel) ────────────────────────────
-    const filteredData = useMemo(() => {
-        return applyDeepFiltersSummary(rawData, activeFilters);
-    }, [rawData, activeFilters]);
+    // Backend already applied activeFilters, so rawData IS the filtered set.
+    const filteredData = rawData;
 
     // ── Paginate the filtered data ────────────────────────────────────────────
     const paginatedData = useMemo(() => {
@@ -353,9 +288,11 @@ export default function Summary() {
         return pages;
     };
 
-    const openFilterDropdown = (colIndex, e) => {
+    // ── Open a column's filter dropdown and fetch its cascading options ───────
+    const openFilterDropdown = async (colIndex, e) => {
         e.stopPropagation();
         if (openFilter === colIndex) { setOpenFilter(null); return; }
+
         const btn = filterBtnRefs.current[colIndex];
         if (btn) {
             const rect = btn.getBoundingClientRect();
@@ -365,24 +302,49 @@ export default function Summary() {
             });
         }
         setOpenFilter(colIndex);
+        setFilterOptions([]);
+
+        const col = FILTERABLE_COLS[colIndex];
+        if (!col) return;
+
+        setFilterOptionsLoading(true);
+        try {
+            // Exclude this column's own filter so its option list cascades off the others,
+            // same as Reconciliation.jsx's openFilterDropdown.
+            const otherFilters = { ...activeFilters };
+            delete otherFilters[col.key];
+            const params = Object.keys(otherFilters).length > 0 ? { filters: JSON.stringify(otherFilters) } : {};
+
+            const res = await axiosPrivate.get(`/api/glance/filter-options/${col.key}`, { params });
+            setFilterOptions(res.data?.data || []);
+        } catch (err) {
+            console.error("Failed to fetch filter options:", err);
+            setFilterOptions([]);
+        } finally {
+            setFilterOptionsLoading(false);
+        }
     };
 
     const applyFilter = (colIndex, selectedSet) => {
+        const col = FILTERABLE_COLS[colIndex];
+        if (!col) return;
+        const selectedArray = Array.from(selectedSet);
+        const allOptionsSelected = selectedArray.length === filterOptions.length && filterOptions.length > 0;
+
         setActiveFilters(prev => {
             const next = { ...prev };
-            if (selectedSet.size === 0) {
-                delete next[colIndex];
-            } else {
-                next[colIndex] = selectedSet;
-            }
+            if (selectedArray.length === 0 || allOptionsSelected) delete next[col.key];
+            else next[col.key] = selectedArray;
             return next;
         });
     };
 
     const clearFilter = (colIndex) => {
+        const col = FILTERABLE_COLS[colIndex];
+        if (!col) return;
         setActiveFilters(prev => {
             const next = { ...prev };
-            delete next[colIndex];
+            delete next[col.key];
             return next;
         });
     };
@@ -461,8 +423,7 @@ export default function Summary() {
         const sendDataToUpdate = await axiosPrivate.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
         console.log(sendDataToUpdate.data.type);
         if (sendDataToUpdate.data.type === "success") {
-            const getUpdatedStyles = await axiosPrivate.get("/api/styles")
-            setRawData(getUpdatedStyles.data.data);
+            await fetchFilteredData();
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
             setIsEditing({ isEdit: false, rowId: 0, editingField: "", changedRow: "" });
         } else {
@@ -471,11 +432,7 @@ export default function Summary() {
     }
 
     const handleRefresh = () => {
-        setIsLoading(prev => ({ ...prev, refreshLoading: true }));
-        fetchData(`/api/styles`).then(data => {
-            if (data) setRawData(data.data);
-            setIsLoading(prev => ({ ...prev, refreshLoading: false }));
-        });
+        fetchFilteredData();
     }
 
     const handleExportExcel = () => {
@@ -641,7 +598,7 @@ export default function Summary() {
                                 </button>
                             </Link>
 
-                            
+
                     }
                 </div>
 
@@ -650,18 +607,21 @@ export default function Summary() {
                         <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <Filter size={14} className="text-blue-500" />
-                            {Object.entries(activeFilters).map(([colIndex, valSet]) => (
-                                <span
-                                    key={colIndex}
-                                    className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium"
-                                >
-                                    {COLUMNS[Number(colIndex)]}
-                                    <span className="bg-blue-200 text-blue-800 rounded-full px-1 text-xs">{valSet.size}</span>
-                                    <button onClick={() => clearFilter(Number(colIndex))} className="ml-0.5 text-blue-400 hover:text-blue-700">
-                                        <X size={11} />
-                                    </button>
-                                </span>
-                            ))}
+                            {Object.entries(activeFilters).map(([colKey, values]) => {
+                                const colIndex = KEY_TO_INDEX[colKey];
+                                return (
+                                    <span
+                                        key={colKey}
+                                        className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium"
+                                    >
+                                        {colIndex !== undefined ? COLUMNS[colIndex] : colKey}
+                                        <span className="bg-blue-200 text-blue-800 rounded-full px-1 text-xs">{values.length}</span>
+                                        <button onClick={() => colIndex !== undefined && clearFilter(colIndex)} className="ml-0.5 text-blue-400 hover:text-blue-700">
+                                            <X size={11} />
+                                        </button>
+                                    </span>
+                                );
+                            })}
                             <button
                                 onClick={clearAllFilters}
                                 className="text-xs text-gray-500 hover:text-red-500 underline ml-1"
@@ -673,7 +633,7 @@ export default function Summary() {
                 )}
 
                 <span className="ml-auto text-xs text-gray-400">
-                    {filteredData.length} / {rawData.length} rows
+                    {filteredData.length} rows
                 </span>
             </div>
 
@@ -683,8 +643,9 @@ export default function Summary() {
                 <FilterDropdown
                     colIndex={openFilter}
                     colLabel={COLUMNS[openFilter]}
-                    allValues={getColValues(openFilter)}
-                    activeValues={activeFilters[openFilter] ? Array.from(activeFilters[openFilter]) : null}
+                    allValues={filterOptions}
+                    isLoading={filterOptionsLoading}
+                    activeValues={activeFilters[FILTERABLE_COLS[openFilter]?.key] ? Array.from(activeFilters[FILTERABLE_COLS[openFilter]?.key]) : null}
                     onApply={(set) => applyFilter(openFilter, set)}
                     onClear={() => clearFilter(openFilter)}
                     onClose={() => setOpenFilter(null)}
@@ -714,7 +675,7 @@ export default function Summary() {
                         <tr>
                             {COLUMNS.map((col, index) => {
                                 const isFilterable = index in FILTERABLE_COLS;
-                                const hasFilter = !!activeFilters[index];
+                                const hasFilter = isFilterable && !!activeFilters[FILTERABLE_COLS[index].key];
 
                                 return (
                                     <th
@@ -758,7 +719,18 @@ export default function Summary() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((row, i) => {
+                        {isLoading.refreshLoading && paginatedData.length === 0 && (
+                            <tr>
+                                <td colSpan={COLUMNS.length} className="px-4 py-20 text-center align-middle">
+                                    <div className="flex flex-col items-center justify-center gap-3">
+                                        <RefreshCcw size={24} className="animate-spin text-blue-500" />
+                                        <span className="text-sm font-medium text-gray-500">Loading summary data...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+
+                        {!isLoading.refreshLoading && paginatedData.map((row, i) => {
                             const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
 
                             return (
@@ -1168,7 +1140,7 @@ export default function Summary() {
                             );
                         })}
 
-                        {paginatedData.length === 0 && (
+                        {!isLoading.refreshLoading && paginatedData.length === 0 && (
                             <tr>
                                 <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-400 text-sm">
                                     No rows match the active filters.
