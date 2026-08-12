@@ -44,6 +44,7 @@ const Knitting = () => {
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
 
+    // ── Group movements into rows — ONE ROW PER (challan + job + composition + COLOR) ──
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
         const grouped = {};
@@ -85,37 +86,78 @@ const Knitting = () => {
             if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
         };
 
+        // Build per-color "facets" so each color becomes its own row
+        const getFacets = (item) => {
+            const facets = [];
+
+            // 1) Backend provides a compositions array (composition + color pairs, optional qty)
+            if (Array.isArray(item?.compositions) && item.compositions.length > 0) {
+                item.compositions.forEach((c) => {
+                    if (!c) return;
+                    const qtyRaw = c?.qty ?? c?.quantity ?? c?.deliveryQty ?? c?.totalQty ?? c?.weight ?? c?.kg ?? null;
+                    const qtyNum = (qtyRaw !== null && qtyRaw !== "" && !isNaN(Number(qtyRaw))) ? Number(qtyRaw) : null;
+                    facets.push({
+                        comp: c?.composition || item?.composition || "-",
+                        color: c?.color || item?.color || "-",
+                        qty: qtyNum,
+                    });
+                });
+            }
+            // 2) Backend provides a merged color string ("color A, color B") — split it
+            else if (typeof item?.color === "string" && item.color.includes(", ")) {
+                item.color.split(", ").map((s) => s.trim()).filter(Boolean).forEach((colorPart) => {
+                    facets.push({ comp: item?.composition || "-", color: colorPart, qty: null });
+                });
+            }
+
+            // 3) Fallback: single color row
+            if (facets.length === 0) {
+                facets.push({ comp: item?.composition || "-", color: item?.color || "-", qty: null });
+            }
+            return facets;
+        };
+
         movements.forEach((item) => {
             if (!item) return;
+            const jobNo = extractJobNo(item) || "-";
+
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                const jobNo = extractJobNo(item) || "-";
-                const comp = item.composition || "-";
+                // ── Deliveries branch: color/comp taken from delivery first, then item ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
-                    const key = `${challanNo}|${jobNo}|${comp}`;
+
+                    const comp = dv?.composition || item?.composition || "-";
+                    const color = dv?.color || item?.color || "-";
+                    const key = `${challanNo}|${jobNo}|${comp}|${color}`; // ← COLOR now part of the key
                     const row = ensureRow(key, challanNo, dv, item.id);
                     if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
                     row.compositionsSet.add(comp);
-                    if (item.color) row.colorsSet.add(item.color);
+                    row.colorsSet.add(color);
                     row.jobNoSet.add(jobNo);
                     applyDelivery(row, dv, item);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                const jobNo = extractJobNo(item) || "-";
-                const comp = item.composition || "-";
-                const key = `${item.challanNo}|${jobNo}|${comp}`;
-                const row = ensureRow(key, item.challanNo, item, item.challanNo);
-                row.compositionsSet.add(comp);
-                if (item.color) row.colorsSet.add(item.color);
-                row.jobNoSet.add(jobNo);
-                if (Array.isArray(item.compositions)) {
-                    item.compositions.forEach((c) => {
-                        if (c?.composition) row.compositionsSet.add(c.composition);
-                        if (c?.color) row.colorsSet.add(c.color);
-                    });
-                }
-                applyDelivery(row, item, item);
+                // ── Flat branch: expand each color facet into its own row ──
+                const facets = getFacets(item);
+                const hasFacetQty = facets.some((f) => f.qty !== null);
+
+                facets.forEach((f) => {
+                    const key = `${item.challanNo}|${jobNo}|${f.comp}|${f.color}`; // ← COLOR now part of the key
+                    const row = ensureRow(key, item.challanNo, item, item.challanNo);
+                    row.compositionsSet.add(f.comp);
+                    row.colorsSet.add(f.color);
+                    row.jobNoSet.add(jobNo);
+
+                    if (hasFacetQty) {
+                        // per-color quantities exist → apply only this color's qty
+                        if (f.qty !== null) applyDelivery(row, { ...item, deliveryQty: f.qty }, item);
+                    } else if (facets.length === 1) {
+                        // single color → behave exactly like before
+                        applyDelivery(row, item, item);
+                    }
+                    // (multiple colors without per-color qty → qty stays "-" to avoid duplicating totals)
+                });
             }
         });
 

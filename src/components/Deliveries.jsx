@@ -212,7 +212,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
 
   const deliveryTypes = [];
   if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Fabric Received");
-  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return", "Sent For Compacting", "Received From Compacting");
+  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return", "Sent For Compacting", "Received From Compacting", "Sent For Reprocess", "Received From Reprocess");
   if (orderType === "aopOrder") deliveryTypes.push("Sent For Aop", "Return From Aop", "Received From Aop");
   if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
 

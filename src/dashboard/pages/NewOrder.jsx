@@ -4,7 +4,7 @@ import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
 import useAxiosPublic from "../../hooks/Axios";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 
 const defaultRow = () => ({
@@ -20,6 +20,7 @@ const NewOrder = () => {
     const [toastType, setToastType] = useState('success');
     const [isClicked, setIsClicked] = useState(false);
     const { jobNumber } = useParams();
+    const navigate = useNavigate();
     const [styleData, setStyleData] = useState([]);
     const [yarnDyeColorRows, setYarnDyeColorRows] = useState([defaultRow()]);
     const [rows, setRows] = useState([]);
@@ -147,6 +148,7 @@ const NewOrder = () => {
             const res = await axios.post("/api/create-job", payload);
             if (res.data.type === "success") {
                 showNotification("Order created", "success");
+                navigate("/dashboard/style-requirement");
             }
         } catch (error) {
             console.log(error);
