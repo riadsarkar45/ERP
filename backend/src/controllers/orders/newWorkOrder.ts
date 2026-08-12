@@ -38,6 +38,25 @@ type CreateJobBody = {
     compositions: CompositionInput[];
 };
 
+// FIX: same shape/values as ORDER_TYPE_RULES in NewOrder.jsx. This is the
+// single source of truth for "which WorkOrder-level field is required for
+// which order type" — previously the backend had its own hand-written
+// combination of `orderType !== "yarnDyeingOrder"`, `orderType === "knittingOrder"`,
+// and `orderType === "knittingOrder" || orderType === "dyeingOrder"` checks
+// that didn't match what the frontend showed/required (e.g. stichLength was
+// required here for dyeingOrder, but the frontend didn't require it for
+// dyeingOrder — so a blank Stich Length passed the frontend and 400'd here).
+// Keep this object identical to the frontend's ORDER_TYPE_RULES.
+const ORDER_TYPE_RULES: Record<string, { lotNo: boolean; yarnCount: boolean; stichLength: boolean; machineDia: boolean }> = {
+    knittingOrder: { lotNo: true, yarnCount: true, stichLength: true, machineDia: true },
+    aopOrder: { lotNo: true, yarnCount: true, stichLength: false, machineDia: false },
+    dyeingOrder: { lotNo: true, yarnCount: true, stichLength: true, machineDia: false },
+    yarnDyeingOrder: { lotNo: false, yarnCount: false, stichLength: false, machineDia: false },
+};
+
+const getRules = (orderType: string) =>
+    ORDER_TYPE_RULES[orderType] ?? { lotNo: false, yarnCount: false, stichLength: false, machineDia: false };
+
 const isInvalid = (v: unknown) =>
     v === "" || v === null || v === undefined || (typeof v === "string" && !v.trim());
 
@@ -61,6 +80,12 @@ export const createNewJob = async (req: Request, res: Response) => {
         // ── Basic required validation ─────────────────────────────────────
         if (!jobNo) return res.status(400).send({ message: "Job number is required", type: "error" });
         if (!orderType) return res.status(400).send({ message: "Order type is required", type: "error" });
+        // FIX: reject unknown order types up front instead of silently falling
+        // through with all-false rules (which would make every field optional
+        // for a typo'd/unsupported orderType).
+        if (!ORDER_TYPE_RULES[orderType]) {
+            return res.status(400).send({ message: `Unknown order type: ${orderType}`, type: "error" });
+        }
         if (!workOrderPlaceDate) return res.status(400).send({ message: "Work order place date is required", type: "error" });
         if (!workOrderNo) return res.status(400).send({ message: "Work order number is required", type: "error" });
         if (!month) return res.status(400).send({ message: "Month is required", type: "error" });
@@ -78,23 +103,29 @@ export const createNewJob = async (req: Request, res: Response) => {
         const stichLength = firstRow?.stichLength || "";
         const machineDia = firstRow?.machineDia || "";
 
-        // ── WorkOrder-level field validation (non yarn-dyeing) ────────────
-        if (orderType !== "yarnDyeingOrder") {
-            if (isInvalid(lotNo)) return res.status(400).send({ message: "Lot No is required", type: "error" });
-            if (isInvalid(yarnCount)) return res.status(400).send({ message: "Yarn Count is required", type: "error" });
-            if (orderType === "knittingOrder" && isInvalid(machineDia)) {
-                return res.status(400).send({ message: "Machine Dia is required for knitting order", type: "error" });
-            }
-            if ((orderType === "knittingOrder" || orderType === "dyeingOrder") && isInvalid(stichLength)) {
-                return res.status(400).send({ message: "Stich Length is required", type: "error" });
-            }
+        // ── WorkOrder-level field validation ──────────────────────────────
+        // FIX: driven by the shared rules table instead of a bespoke
+        // `orderType !== "yarnDyeingOrder"` + per-field `orderType === "x"` checks.
+        const rules = getRules(orderType);
+        if (rules.lotNo && isInvalid(lotNo)) {
+            return res.status(400).send({ message: "Lot No is required", type: "error" });
+        }
+        if (rules.yarnCount && isInvalid(yarnCount)) {
+            return res.status(400).send({ message: "Yarn Count is required", type: "error" });
+        }
+        if (rules.machineDia && isInvalid(machineDia)) {
+            return res.status(400).send({ message: "Machine Dia is required for knitting order", type: "error" });
+        }
+        if (rules.stichLength && isInvalid(stichLength)) {
+            return res.status(400).send({ message: "Stich Length is required", type: "error" });
         }
 
         // ── Per-composition validation ────────────────────────────────────
         for (let i = 0; i < compositions.length; i++) {
             const comp = compositions[i];
 
-            // orderQty is IGNORED — only composition and color are required here
+            // orderQty is intentionally not required — it's not collected per
+            // work order (see orderQty: 0 in the create() call below).
             if (!comp?.composition || !comp?.color) {
                 return res.status(400).send({
                     message: `Composition ${i + 1}: composition and color are required`,
@@ -119,7 +150,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                     }
                 }
             } else {
-                // workOrderQty is the quantity that matters
+                // workOrderQty is the quantity that matters for non-yarn-dyeing orders
                 if (isInvalidNumber(comp?.workOrderQty)) {
                     return res.status(400).send({
                         message: `Composition ${i + 1}: valid work order quantity is required`,
@@ -174,7 +205,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                         create: compositions.map((c) => ({
                             composition: c.composition,
                             color: c.color,
-                            orderQty: 0, // ← ignored, hardcoded to 0
+                            orderQty: 0, // not collected per work order — intentional
                             workOrderQty: c.workOrderQty ? Number(c.workOrderQty) : 0,
                             unitePrice: c.unitPrice ? Number(c.unitPrice) : 0,
                             orderType,
