@@ -41,6 +41,7 @@ const flattenDeliveries = (workOrders) => {
         orderType: wo.orderType,
         factoryName: wo.factoryName,
         composition: comp.composition || "—",
+        color: comp.color || "—",
         workOrderQty: comp.workOrderQty || 0,
         deliveries: comp.deliveries || [],
         // buyerName/processLoss follow the same fallback pattern Modal.jsx
@@ -395,6 +396,11 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                       >
                         {row.composition}
                       </span>
+                      <span
+                        className="inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-800 cursor-pointer"
+                      >
+                        {row.color}
+                      </span>
                       <span className="text-[10px] text-gray-400">
                         {row.workOrderQty > 0 ? formatKg(row.workOrderQty) : "No Qty"} work order qty
                       </span>
@@ -408,9 +414,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                         </span>
                       )}
 
-                      {row.jobNo && (
-                        <span className="text-[18px] text-gray-900">· {row.jobNo}</span>
-                      )}
+                     
 
                       {!group.factoryName && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200">

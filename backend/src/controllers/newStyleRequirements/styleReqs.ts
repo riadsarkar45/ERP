@@ -49,13 +49,9 @@ export const styleRequirements = async (req: Request, res: Response) => {
     try {
         const { jobNo } = req.params as { jobNo: string | undefined };
         const {
-            page: pageParam,
-            limit: limitParam,
             filters: filtersParam,
-        } = req.query as { page?: string; limit?: string; filters?: string };
+        } = req.query as { filters?: string };
 
-        const page = Math.max(1, Number(pageParam) || 1);
-        const limit = Math.max(1, Number(limitParam) || 20);
 
         let filters: StyleFilters | undefined;
         if (filtersParam) {
@@ -75,7 +71,6 @@ export const styleRequirements = async (req: Request, res: Response) => {
             prisma.styleRequirement.findMany({
                 where: whereClause,
                 orderBy: { id: "asc" },
-                skip: (page - 1) * limit,
                 take: 40,
                 select: {
                     salesContact: true,
@@ -155,12 +150,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
         return res.status(200).send({
             data: summaryData,
             type: "success",
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.max(1, Math.ceil(total / limit)),
-            },
+            
         });
     } catch (error) {
         console.error(error);

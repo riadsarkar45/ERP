@@ -18,6 +18,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                 select: {
                     id: true,
                     composition: true,
+                    color: true,
                     workOrderQty: true,
                     styleRequirementRow:{
                         select: {
