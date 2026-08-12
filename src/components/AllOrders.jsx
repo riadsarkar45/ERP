@@ -366,8 +366,16 @@ const AllOrders = ({ orderType }) => {
             const updatedRow = {
                 ...rowPrev,
                 [name]: value,
-                date: rowPrev.date ?? new Date().toISOString().split("T")[0],
             };
+
+            // Only backfill a default date when the field being edited ISN'T
+            // "date" itself. Previously this ran unconditionally AFTER
+            // `[name]: value`, so when name === "date" it re-set date back to
+            // rowPrev.date (or today), overwriting the value the user just
+            // picked. That's what made the date field look "stuck".
+            if (name !== "date" && updatedRow.date === undefined) {
+                updatedRow.date = new Date().toISOString().split("T")[0];
+            }
 
             // The delivery type flip changes which side ("to"/"from") should be
             // this work order's own factory. Any previously typed toFactory/
