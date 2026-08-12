@@ -8,6 +8,24 @@ import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 
 const defaultYarnColor = () => ({ color: "", qty: "", price: "" });
 
+// FIX: single source of truth for which fields are required per order type.
+// This mirrors the backend's validation in newWorkOrder.ts exactly, so the
+// frontend can never accept something the backend will reject (and vice versa).
+// Previously "which field is shown" (JSX conditionals) and "which field is
+// required" (validateForm conditionals) were two separate, hand-written sets
+// of conditions that had drifted apart — e.g. Stich Length was shown for
+// dyeingOrder but not required, while the backend DID require it for
+// dyeingOrder, so a blank Stich Length on a dyeing order passed the frontend
+// and then failed on submit.
+const ORDER_TYPE_RULES = {
+    knittingOrder: { lotNo: true, yarnCount: true, stichLength: true, machineDia: true },
+    aopOrder: { lotNo: true, yarnCount: true, stichLength: false, machineDia: false },
+    dyeingOrder: { lotNo: true, yarnCount: true, stichLength: true, machineDia: false },
+    yarnDyeingOrder: { lotNo: false, yarnCount: false, stichLength: false, machineDia: false },
+};
+
+const getRules = (orderType) => ORDER_TYPE_RULES[orderType] || {};
+
 const NewOrder = () => {
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
@@ -209,8 +227,22 @@ const NewOrder = () => {
             return false;
         }
 
+        // FIX: pull the rules for the current order type once, instead of
+        // repeating ad-hoc `orderType === "x" || orderType === "y"` checks
+        // that can silently drift out of sync with the backend and with the
+        // JSX show/hide conditions below.
+        const rules = getRules(orderType);
+
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
+
+            // Composition/color always come from style data, but guard anyway
+            // in case a style has an incomplete row.
+            if (!row.composition || !row.color) {
+                showNotification(`Composition and Color are required for Composition ${i + 1}`, "error");
+                return false;
+            }
+
             if (orderType !== "yarnDyeingOrder") {
                 if (!row.unitPrice) {
                     showNotification(`Price Per Kg is required for Composition ${i + 1}`, "error");
@@ -220,19 +252,25 @@ const NewOrder = () => {
                     showNotification(`Work Order Qty is required for Composition ${i + 1}`, "error");
                     return false;
                 }
-                if (!row.yarnCount) {
+                if (rules.yarnCount && !row.yarnCount) {
                     showNotification(`Yarn Count is required for Composition ${i + 1}`, "error");
                     return false;
                 }
-                if (!row.lotNo) {
+                if (rules.lotNo && !row.lotNo) {
                     showNotification(`Lot No is required for Composition ${i + 1}`, "error");
                     return false;
                 }
-                if (orderType === "knittingOrder" && !row.machineDia) {
+                // FIX: was `orderType === "knittingOrder" && !row.machineDia` — same result,
+                // now driven by the shared rules table so it can't drift from the JSX below.
+                if (rules.machineDia && !row.machineDia) {
                     showNotification(`Machine Dia is required for Composition ${i + 1}`, "error");
                     return false;
                 }
-                if (orderType !== "aopOrder" && orderType !== "dyeingOrder" && !row.stichLength) {
+                // FIX: was `orderType !== "aopOrder" && orderType !== "dyeingOrder" && !row.stichLength`
+                // — that excluded dyeingOrder from the requirement even though the field is
+                // shown for dyeingOrder and the backend requires it for dyeingOrder. Now
+                // matches the backend exactly: required for knittingOrder and dyeingOrder.
+                if (rules.stichLength && !row.stichLength) {
                     showNotification(`Stich Length is required for Composition ${i + 1}`, "error");
                     return false;
                 }
@@ -349,6 +387,10 @@ const NewOrder = () => {
         );
     }
 
+    // FIX: rules for the currently selected order type, reused by the JSX below
+    // so "is this field shown" always matches "is this field required".
+    const currentRules = getRules(orderType);
+
     return (
         <DashboardLayout title="Add New Order">
             {showToast && (
@@ -460,35 +502,47 @@ const NewOrder = () => {
                                             placeholder="Work Order Qty"
                                         />
                                     )}
-                                    {orderType === "yarnDyeingOrder" || orderType === "aopOrder" ? null : (
+                                    {/*
+                                        FIX: show/hide now driven by the same `currentRules.stichLength`
+                                        flag used in validateForm — previously this JSX used its own
+                                        independent condition (`!== "yarnDyeingOrder" && !== "aopOrder"`)
+                                        which happened to show the field for dyeingOrder, while the
+                                        validation condition happened to NOT require it for dyeingOrder.
+                                        Single source of truth now.
+                                    */}
+                                    {currentRules.stichLength && (
                                         <Input
                                             label={`Stich Length ${index + 1}`}
                                             value={styleRow.stichLength}
                                             onChange={(e) => handleRowChange(index, "stichLength", e.target.value)}
+                                            required
                                             placeholder="Stich Length"
                                         />
                                     )}
-                                    {orderType === "yarnDyeingOrder" || orderType === "aopOrder" || orderType === "dyeingOrder" ? null : (
+                                    {currentRules.machineDia && (
                                         <Input
                                             label={`Machine Dia ${index + 1}`}
                                             value={styleRow.machineDia}
                                             onChange={(e) => handleRowChange(index, "machineDia", e.target.value)}
+                                            required
                                             placeholder="Machine Dia"
                                         />
                                     )}
-                                    {orderType === "yarnDyeingOrder" ? null : (
+                                    {currentRules.lotNo && (
                                         <Input
                                             label={`Lot No ${index + 1}`}
                                             value={styleRow.lotNo}
                                             onChange={(e) => handleRowChange(index, "lotNo", e.target.value)}
+                                            required
                                             placeholder="Lot No"
                                         />
                                     )}
-                                    {orderType === "yarnDyeingOrder" ? null : (
+                                    {currentRules.yarnCount && (
                                         <Input
                                             label={`Yarn Count ${index + 1}`}
                                             value={styleRow.yarnCount}
                                             onChange={(e) => handleRowChange(index, "yarnCount", e.target.value)}
+                                            required
                                             placeholder="Yarn Count"
                                         />
                                     )}
