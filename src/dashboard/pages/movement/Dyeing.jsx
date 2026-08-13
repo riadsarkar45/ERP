@@ -60,29 +60,33 @@ const Dyeing = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
-    // ── Group movements into rows — ONE ROW PER (challan + job + composition + COLOR) ──
+    // ── Build rows — ONE ROW PER SOURCE RECORD (delivery, or item/color-facet) ──
+    // IMPORTANT: rows are NEVER looked up/reused by a shared key and merged.
+    // Every delivery / facet produces its own independent row with its own
+    // qty, even if it shares the same challan + job + composition + color
+    // as another row. That "same key -> merge qty" behavior was the bug.
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
-        const grouped = {};
-        const order = [];
+        const rows = [];
+        let rowCounter = 0;
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
 
-        const ensureRow = (key, challanNo, source) => {
-            if (!grouped[key]) {
-                grouped[key] = {
-                    rowKey: key,
-                    chId: source?.id || challanNo,
-                    challanNo: challanNo,
-                    challanDate: source?.deliveryDate || source?.challanDate || "",
-                    toFactory: source?.toFactory || "",
-                    fromFactory: source?.fromFactory || "",
-                    greyDelivery: 0, greyReceive: 0, greyReturn: 0, finishReceive: 0, deliveryQty: 0,
-                    unitePrice: Number(source?.unitePrice) || 0,
-                    compositionsSet: new Set(), colorsSet: new Set(), jobNoSet: new Set(),
-                };
-                order.push(key);
-            }
-            return grouped[key];
+        const makeRow = (challanNo, jobNo, comp, color, source) => {
+            rowCounter += 1;
+            return {
+                // rowCounter guarantees uniqueness even when challan/job/comp/color repeat
+                rowKey: `${challanNo}|${jobNo}|${comp}|${color}|${rowCounter}`,
+                chId: source?.id || challanNo,
+                challanNo,
+                jobNo,
+                composition: comp || "-",
+                color: color || "-",
+                challanDate: source?.deliveryDate || source?.challanDate || "",
+                toFactory: source?.toFactory || "",
+                fromFactory: source?.fromFactory || "",
+                greyDelivery: 0, greyReceive: 0, greyReturn: 0, finishReceive: 0, deliveryQty: 0,
+                unitePrice: Number(source?.unitePrice) || 0,
+            };
         };
 
         const applyDelivery = (row, dv, source) => {
@@ -137,32 +141,25 @@ const Dyeing = () => {
             const jobNo = extractJobNo(item) || "-";
 
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                // ── Deliveries branch: color/comp taken from delivery first, then item ──
+                // ── Deliveries branch: one row PER delivery, never merged with another delivery ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
 
                     const comp = dv?.composition || item?.composition || "-";
                     const color = dv?.color || item?.color || "-";
-                    const key = `${challanNo}|${jobNo}|${comp}|${color}`; // ← COLOR now part of the key
-                    const row = ensureRow(key, challanNo, dv);
+                    const row = makeRow(challanNo, jobNo, comp, color, dv);
                     if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
-                    row.compositionsSet.add(comp);
-                    row.colorsSet.add(color);
-                    row.jobNoSet.add(jobNo);
                     applyDelivery(row, dv, item);
+                    rows.push(row);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                // ── Flat branch: expand each color facet into its own row ──
+                // ── Flat branch: expand each color facet into its own row, never merged across items ──
                 const facets = getFacets(item);
                 const hasFacetQty = facets.some((f) => f.qty !== null);
 
                 facets.forEach((f) => {
-                    const key = `${item.challanNo}|${jobNo}|${f.comp}|${f.color}`; // ← COLOR now part of the key
-                    const row = ensureRow(key, item.challanNo, item);
-                    row.compositionsSet.add(f.comp);
-                    row.colorsSet.add(f.color);
-                    row.jobNoSet.add(jobNo);
+                    const row = makeRow(item.challanNo, jobNo, f.comp, f.color, item);
 
                     if (hasFacetQty) {
                         // per-color quantities exist → apply only this color's qty
@@ -171,21 +168,16 @@ const Dyeing = () => {
                         // single color → behave exactly like before
                         applyDelivery(row, item, item);
                     }
-                    // (multiple colors without per-color qty → qty stays "-" to avoid duplicating totals)
+                    // (multiple colors without per-color qty → qty stays 0/"-" to avoid guessing a split)
+                    rows.push(row);
                 });
             }
         });
 
-        return order.map((k) => {
-            const row = grouped[k];
-            return {
-                ...row,
-                composition: Array.from(row.compositionsSet).join(", ") || "-",
-                color: Array.from(row.colorsSet).join(", ") || "-",
-                jobNo: Array.from(row.jobNoSet).join(", ") || "-",
-                billingAmount: row.finishReceive * row.unitePrice,
-            };
-        });
+        return rows.map((row) => ({
+            ...row,
+            billingAmount: row.finishReceive * row.unitePrice,
+        }));
     }, [movements]);
 
     const filterOptions = useMemo(() => {
