@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen } from "lucide-react";
+import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen, PencilOff } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
@@ -27,7 +27,6 @@ const COLUMNS = [
 ];
 
 // ── Filterable columns config (colIndex -> { key, type }) ────────────────────
-// `key` is the field name the backend expects for filtering / filter-options lookups.
 const FILTERABLE_COLS = {
     0: { key: "salesContact", type: "row" },
     1: { key: "buyerName", type: "row" },
@@ -38,7 +37,6 @@ const FILTERABLE_COLS = {
     6: { key: "composition", type: "subrow" },
 };
 
-// Reverse lookup: colKey -> colIndex (used to render labels for active filter chips)
 const KEY_TO_INDEX = Object.entries(FILTERABLE_COLS).reduce((acc, [idx, col]) => {
     acc[col.key] = Number(idx);
     return acc;
@@ -68,10 +66,8 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
     );
     const dropRef = useRef(null);
 
-    // Re-sync selection whenever fresh options arrive (options are fetched async on open)
     useEffect(() => {
         setSelected(activeValues !== null ? new Set(activeValues) : new Set(allValues));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allValues]);
 
     useEffect(() => {
@@ -116,11 +112,9 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                 minWidth: 220,
                 maxWidth: 280,
-
             }}
             className="filter-dropdown"
         >
-            {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide truncate">{colLabel}</span>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0">
@@ -128,7 +122,6 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 </button>
             </div>
 
-            {/* Search */}
             <div className="px-2 py-2 border-b border-gray-100">
                 <div className="flex items-center gap-1.5 bg-gray-100 rounded px-2 py-1">
                     <Search size={12} className="text-gray-400 flex-shrink-0" />
@@ -147,7 +140,6 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 </div>
             </div>
 
-            {/* Select All */}
             <div className="px-3 py-1.5 border-b border-gray-100">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
@@ -162,7 +154,6 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 </label>
             </div>
 
-            {/* Values list */}
             <div style={{ maxHeight: 200, overflowY: "auto" }} className="py-1">
                 {isLoading ? (
                     <div className="px-3 py-6 flex items-center justify-center gap-2 text-xs text-gray-400">
@@ -185,7 +176,6 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 )}
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50">
                 <button
                     onClick={() => { onApply(selected); onClose(); }}
@@ -207,14 +197,12 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
 
 // ── Summary Page ─────────────────────────────────────────────────────────────
 export default function Summary() {
-    const axiosPublic = useAxiosPublic();
+    // const axiosPublic = useAxiosPublic();
     const [rawData, setRawData] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
     const scrollContainerRef = useRef(null);
 
-    // activeFilters is keyed by colKey (e.g. "jobNo") -> array of selected values,
-    // mirroring Reconciliation.jsx so both pages talk to the backend the same way.
     const FILTER_STORAGE_KEY = "summary_active_filters";
 
     const [activeFilters, setActiveFilters] = useState(() => {
@@ -229,20 +217,19 @@ export default function Summary() {
     const [filterOptions, setFilterOptions] = useState([]);
     const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
 
-    const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
-    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
+    // --- Multi-Cell Editing State ---
+    const [editingCells, setEditingCells] = useState({});
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
-    const { fetchData, error, loading } = useFetchData();
+    const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
-    // ── Client-Side Pagination State ──────────────────────────────────────────
+    
     const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
 
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
-    // ── Server-side filtered fetch (same pattern as Reconciliation.jsx) ───────
     const fetchFilteredData = useCallback(async () => {
         setIsLoading(prev => ({ ...prev, refreshLoading: true }));
         try {
@@ -261,23 +248,22 @@ export default function Summary() {
         fetchFilteredData();
     }, [fetchFilteredData]);
 
-    // Reset to page 1 whenever filters change
     useEffect(() => {
         setCurrentPage(1);
     }, [activeFilters]);
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
+    
     useEffect(() => {
         try {
             sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(activeFilters));
-        } catch {
-            // storage might be full/blocked — fail silently
+        } catch (e){
+            console.log(e);
         }
     }, [activeFilters]);
-    // Backend already applied activeFilters, so rawData IS the filtered set.
+
     const filteredData = rawData;
 
-    // ── Paginate the filtered data ────────────────────────────────────────────
     const paginatedData = useMemo(() => {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
         return filteredData.slice(start, start + ITEMS_PER_PAGE);
@@ -303,7 +289,6 @@ export default function Summary() {
         return pages;
     };
 
-    // ── Open a column's filter dropdown and fetch its cascading options ───────
     const openFilterDropdown = async (colIndex, e) => {
         e.stopPropagation();
         if (openFilter === colIndex) { setOpenFilter(null); return; }
@@ -324,8 +309,6 @@ export default function Summary() {
 
         setFilterOptionsLoading(true);
         try {
-            // Exclude this column's own filter so its option list cascades off the others,
-            // same as Reconciliation.jsx's openFilterDropdown.
             const otherFilters = { ...activeFilters };
             delete otherFilters[col.key];
             const params = Object.keys(otherFilters).length > 0 ? { filters: JSON.stringify(otherFilters) } : {};
@@ -367,7 +350,6 @@ export default function Summary() {
     const clearAllFilters = () => setActiveFilters({});
     const hasActiveFilters = Object.keys(activeFilters).length > 0;
 
-    // ── Cell renderers ────────────────────────────────────────────────────────
     const renderBreakdownCell = (compBreakdown, key, colIndex) => (
         <td
             className="p-0 align-top"
@@ -407,44 +389,75 @@ export default function Summary() {
         borderBottom: '1px solid #000000',
     });
 
+    // --- Handlers for Multiple Inline Editing ---
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
-        console.log(rowId, editingField, currentValue, changedTable);
-        setIsEditing({ rowId, isEdit: false, editingField, changedRow: changedTable });
-        setChangedField({ editingRow: editingField, editingValue: currentValue, changedRow: changedTable });
-    }
+        const cellKey = `${rowId}-${editingField}`;
+        setEditingCells(prev => {
+            if (prev[cellKey]) return prev;
+            return {
+                ...prev,
+                [cellKey]: {
+                    rowId,
+                    fieldName: editingField,
+                    value: currentValue !== undefined && currentValue !== null ? String(currentValue) : "",
+                    changedTable: changedTable || "",
+                    isDirty: false
+                }
+            };
+        });
+    };
 
-    const handleOnChange = (e) => {
-        const { name, value } = e.target;
-        if (name !== changedField.editingRow) {
-            setChangedField({ editingRow: name, editingValue: value });
-            return;
-        }
-        setChangedField({ editingValue: value, editingRow: name })
-        setIsEditing(prev => ({ ...prev, isEdit: true }));
+    const handleOnChange = (e, cellKey) => {
+        const { value } = e.target;
+        setEditingCells(prev => ({
+            ...prev,
+            [cellKey]: {
+                ...prev[cellKey],
+                value,
+                isDirty: true
+            }
+        }));
+    };
 
-        console.log(value, name);
-    }
-
+    // Submits parallel requests to your EXACT existing backend controller
     const handleSubmit = async () => {
         setIsLoading(prev => ({ ...prev, loadAfterUpdate: true }));
-        console.log(isEditing, "isEditing");
-        console.log(changedField, "changedField");
-        const updatedData = {
-            [isEditing.editingField]: changedField.editingValue,
-            changedTable: isEditing.changedRow,
-            rowId: isEditing.rowId
-        }
-        console.log(updatedData, "data to insert");
-        const sendDataToUpdate = await axiosPrivate.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
-        console.log(sendDataToUpdate.data.type);
-        if (sendDataToUpdate.data.type === "success") {
-            await fetchFilteredData();
+        
+        // Extract only the cells that were actually modified
+        const cellsToSave = Object.values(editingCells).filter(c => c.isDirty);
+        
+        if (cellsToSave.length === 0) {
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
-            setIsEditing({ isEdit: false, rowId: 0, editingField: "", changedRow: "" });
-        } else {
+            setEditingCells({});
+            return;
+        }
+
+        try {
+            // Fire parallel requests to your EXISTING backend endpoint
+            const promises = cellsToSave.map(async (cell) => {
+                const updatedData = {
+                    [cell.fieldName]: cell.value,
+                    changedTable: cell.changedTable,
+                    rowId: cell.rowId
+                };
+                // Using rowId as the URL param, exactly matching your original code
+                return axiosPrivate.patch(`/api/update-style-req/${cell.rowId}`, updatedData);
+            });
+
+            // Wait for all of them to finish
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.data?.type === "success");
+
+            if (allSuccess) {
+                await fetchFilteredData();
+                setEditingCells({}); // Clear state on success
+            }
+        } catch (err) {
+            console.error("Failed to save updates:", err);
+        } finally {
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
         }
-    }
+    };
 
     const handleRefresh = () => {
         fetchFilteredData();
@@ -545,15 +558,12 @@ export default function Summary() {
     const handleGlanceReport = () => {
         setGlanceReport({ isGlanceLoading: true });
         fetchData(`/api/styles`).then(data => {
-            console.log(data, "-------------->>>>>>>");
             if (data) setGlanceReport({ showGlanceModal: true, isGlanceLoading: false, reportData: data.data });
-
         });
     }
 
     return (
         <DashboardLayout>
-            {/* ── Action Bar ─────────────────────────────────────────────────── */}
             <div className="flex gap-2 mb-4 items-center flex-wrap">
                 <button
                     onClick={() => setShowModal(true)}
@@ -572,7 +582,8 @@ export default function Summary() {
                 }
 
                 {
-                    isEditing.isEdit && (
+                    // Show Save button if ANY cell has been modified
+                    Object.values(editingCells).some(c => c.isDirty) && (
                         isLoading.loadAfterUpdate ?
                             <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
                                 <Loader size={18} />
@@ -580,6 +591,15 @@ export default function Summary() {
                             <button onClick={() => handleSubmit()} className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
                                 <Save size={18} />
                             </button>
+                    )
+                }
+                
+                {
+                    // Added Cancel button to clear edits without saving
+                    Object.keys(editingCells).length > 0 && !isLoading.loadAfterUpdate && (
+                        <button onClick={() => setEditingCells({})} className="flex items-center gap-2 px-6 py-2.5 bg-red-200 text-red-700 font-medium rounded-md hover:bg-red-300 transition-colors border border-red-300">
+                            <PencilOff size={18} /> Cancel
+                        </button>
                     )
                 }
 
@@ -592,7 +612,6 @@ export default function Summary() {
                         />
                     )
                 }
-
 
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
@@ -612,8 +631,6 @@ export default function Summary() {
                                     MAKE YOUR RECONCIALATION
                                 </button>
                             </Link>
-
-
                     }
                 </div>
 
@@ -676,7 +693,6 @@ export default function Summary() {
                 }
             `}</style>
 
-            {/* ── Scrollable Table Container ─────────────────────────────────── */}
             <div
                 ref={scrollContainerRef}
                 className="relative overflow-auto shadow-xs rounded-t-base border border-default"
@@ -753,89 +769,95 @@ export default function Summary() {
 
                                     {/* 1. SALES CONTACT */}
                                     <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>
-                                        {
-                                            isEditing.editingField === "salesContact" && isEditing.rowId === row.id ?
-                                                <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                    name="salesContract"
-                                                    className=" bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : row.salesContact
-                                        }
+                                        {editingCells[`${row.id}-salesContact`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-salesContact`].value}
+                                                onChange={(e) => handleOnChange(e, `${row.id}-salesContact`)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                type="text"
+                                            />
+                                        ) : row.salesContact}
                                     </td>
 
                                     {/* 2. BUYER */}
                                     <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>
-                                        {
-                                            isEditing.editingField === "buyerName" && isEditing.rowId === row.id ?
-                                                <input
-                                                    onChange={(e) => handleOnChange(e)}
-                                                    name="buyerName"
-                                                    value={changedField.editingValue}
-                                                    className="border outline-none w-full p-2 rounded-md bg-yellow-300 bg-opacity-25"
-                                                    type="text" /> : row.buyerName
-                                        }
+                                        {editingCells[`${row.id}-buyerName`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-buyerName`].value}
+                                                onChange={(e) => handleOnChange(e, `${row.id}-buyerName`)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="border outline-none w-full p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                            />
+                                        ) : row.buyerName}
                                     </td>
 
                                     {/* 3. JOB NO */}
                                     <td onDoubleClick={() => handleRedirect(row.jobNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center cursor-pointer hover:text-blue-600 group-hover:bg-gray-50" style={getFrozenStyle(2)}>
-                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)} >
-                                            {
-                                                isEditing.editingField === "jobNo" && isEditing.rowId === row.id ?
-                                                    <input
-                                                        onChange={(e) => handleOnChange(e)}
-                                                        value={changedField.editingValue}
-                                                        name="jobNo"
-                                                        className=" bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md"
-                                                        type="text" /> : row.jobNo
-                                            }
+                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)}>
+                                            {editingCells[`${row.id}-jobNo`] ? (
+                                                <input
+                                                    value={editingCells[`${row.id}-jobNo`].value}
+                                                    onChange={(e) => handleOnChange(e, `${row.id}-jobNo`)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md"
+                                                    type="text"
+                                                />
+                                            ) : row.jobNo}
                                         </span>
                                     </td>
 
                                     {/* 4. STYLE */}
                                     <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>
-                                        {
-                                            isEditing.editingField === "styleNo" && isEditing.rowId === row.id ?
-                                                <input
-                                                    value={changedField.editingValue}
-                                                    name="styleNo"
-                                                    className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
-                                                    type="text"
-                                                    style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
-                                                    onChange={(e) => {
-                                                        e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
-                                                        handleOnChange(e)
-                                                    }}
-                                                /> : row.styleNo
-                                        }
+                                        {editingCells[`${row.id}-styleNo`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-styleNo`].value}
+                                                onChange={(e) => {
+                                                    e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
+                                                    handleOnChange(e, `${row.id}-styleNo`);
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
+                                            />
+                                        ) : row.styleNo}
                                     </td>
 
                                     {/* 5. PO NO */}
                                     <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>
-                                        {
-                                            isEditing.editingField === "poNo" && isEditing.rowId === row.id ? <input
-                                                name="poNo"
-                                                value={changedField.editingValue}
-                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
-                                                type="text"
-                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
+                                        {editingCells[`${row.id}-poNo`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-poNo`].value}
                                                 onChange={(e) => {
                                                     e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
-                                                    handleOnChange(e)
+                                                    handleOnChange(e, `${row.id}-poNo`);
                                                 }}
-                                            /> : row.poNo
-                                        }
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                                style={{ width: `${Math.max(row.poNo?.length || 1, 5)}ch` }}
+                                            />
+                                        ) : row.poNo}
                                     </td>
 
                                     {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                {
-                                                    isEditing.editingField === "color" && isEditing.rowId === cell.id ?
-                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                            name="color"
+                                            {row.rows.map((cell, j) => (
+                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {editingCells[`${cell.id}-color`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-color`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-color`)}
+                                                            onClick={(e) => e.stopPropagation()}
                                                             className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                            type="text" /> : cell.color
-                                                }
-                                            </div>)}
+                                                            type="text"
+                                                        />
+                                                    ) : cell.color}
+                                                </div>
+                                            ))}
                                         </div>
                                     </td>
 
@@ -844,14 +866,15 @@ export default function Summary() {
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>
-                                                    {
-                                                        isEditing.editingField === "composition" && isEditing.rowId === cell.id ?
-                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                                name="composition"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text"
-                                                            />
-                                                            : cell.composition
-                                                    }
+                                                    {editingCells[`${cell.id}-composition`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-composition`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-composition`)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text"
+                                                        />
+                                                    ) : cell.composition}
                                                 </div>
                                             ))}
                                         </div>
@@ -860,32 +883,38 @@ export default function Summary() {
                                     {/* 8. FINISH DIA */}
                                     <td className="p-0 align-top" style={getCellStyle(7)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((cell, j) =>
+                                            {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {
-                                                        isEditing.editingField === "finishDia" && isEditing.rowId === cell.id ?
-                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                                name="finishDia"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                                type="text" /> : cell.finishDia
-                                                    }
+                                                    {editingCells[`${cell.id}-finishDia`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-finishDia`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-finishDia`)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text"
+                                                        />
+                                                    ) : cell.finishDia}
                                                 </div>
-                                            )}
+                                            ))}
                                         </div>
                                     </td>
 
                                     {/* 9. ORDER QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                {
-                                                    isEditing.editingField === "orderQty" && isEditing.rowId === cell.id ?
-                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                            name="orderQty"
+                                            {row.rows.map((cell, j) => (
+                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {editingCells[`${cell.id}-orderQty`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-orderQty`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-orderQty`)}
+                                                            onClick={(e) => e.stopPropagation()}
                                                             className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                            type="text" /> : cell.orderQty
-                                                }
-                                            </div>)}
+                                                            type="text"
+                                                        />
+                                                    ) : cell.orderQty}
+                                                </div>
+                                            ))}
                                         </div>
                                     </td>
 
@@ -908,7 +937,6 @@ export default function Summary() {
                                     </td>
 
                                     {/* 11. FINISH REQUIRED QTY */}
-                                    {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
@@ -921,11 +949,11 @@ export default function Summary() {
                                                         onClick={() => handleEdit(cell.id, "finishRequiredQty", cell.finishRequiredQty, "styleRequirementRows")}
                                                         className="px-3 py-2 whitespace-nowrap"
                                                     >
-                                                        {isEditing.editingField === "finishRequiredQty" && isEditing.rowId === cell.id ? (
+                                                        {editingCells[`${cell.id}-finishRequiredQty`] ? (
                                                             <input
-                                                                value={changedField.editingValue}
-                                                                onChange={(e) => handleOnChange(e)}
-                                                                name="finishRequiredQty"
+                                                                value={editingCells[`${cell.id}-finishRequiredQty`].value}
+                                                                onChange={(e) => handleOnChange(e, `${cell.id}-finishRequiredQty`)}
+                                                                onClick={(e) => e.stopPropagation()}
                                                                 className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
                                                                 type="text"
                                                             />
@@ -943,15 +971,17 @@ export default function Summary() {
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {
-                                                        isEditing.editingField === "additional" && isEditing.rowId === cell.id ?
-                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                                name="additional"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                                type="text" />
-                                                            :
-                                                            cell.additional || "-"
-                                                    }
+                                                    {editingCells[`${cell.id}-additional`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-additional`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-additional`)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text"
+                                                        />
+                                                    ) : (
+                                                        cell.additional || "-"
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -1181,7 +1211,6 @@ export default function Summary() {
                 </table>
             </div>
 
-            {/* ── Button-Based Pagination Controls ─────────────────────────────── */}
             {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 border-gray-200 rounded-b-base shadow-xs">
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
@@ -1224,7 +1253,6 @@ export default function Summary() {
                         </div>
                     </div>
 
-                    {/* Mobile Pagination */}
                     <div className="flex justify-between sm:hidden w-full">
                         <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
