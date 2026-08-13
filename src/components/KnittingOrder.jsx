@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
-const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFields, handleOnChange, isEdit, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInlineEdit, updatedFields, handleOnChange, isEdit, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
     // const { handleInlineEdit, updatedFields, handleOnChange, isEdit, } = InlineEdit();
 
@@ -129,7 +129,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                                         <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem}  cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
+                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
                                         </div>
                                     )
                                 ))}
@@ -137,7 +137,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
 
                             {/* COL 1 — JOB NO */}
                             <td style={stickyTd(1, isHovered)}>
-                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
 
                             {/* COL 2 — WORK ORDER NO */}

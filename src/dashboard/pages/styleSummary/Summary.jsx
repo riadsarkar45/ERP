@@ -215,7 +215,16 @@ export default function Summary() {
 
     // activeFilters is keyed by colKey (e.g. "jobNo") -> array of selected values,
     // mirroring Reconciliation.jsx so both pages talk to the backend the same way.
-    const [activeFilters, setActiveFilters] = useState({});
+    const FILTER_STORAGE_KEY = "summary_active_filters";
+
+    const [activeFilters, setActiveFilters] = useState(() => {
+        try {
+            const saved = sessionStorage.getItem(FILTER_STORAGE_KEY);
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
     const [openFilter, setOpenFilter] = useState(null);
     const [filterOptions, setFilterOptions] = useState([]);
     const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
@@ -258,7 +267,13 @@ export default function Summary() {
     }, [activeFilters]);
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
-
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(activeFilters));
+        } catch {
+            // storage might be full/blocked — fail silently
+        }
+    }, [activeFilters]);
     // Backend already applied activeFilters, so rawData IS the filtered set.
     const filteredData = rawData;
 

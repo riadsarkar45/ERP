@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 
-const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const DyeingOrder = ({ orders, handleInlineEdit,handleRedirect, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex] = useState(null);
 
 
@@ -125,7 +125,7 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                                 ))}
                             </td>
                             <td style={stickyTd(1, isHovered)}>
-                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
                             <td style={stickyTd(2, isHovered)}>
                                 {workOrders?.map((wo, i) => (
