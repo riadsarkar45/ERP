@@ -434,7 +434,7 @@ export default function Summary() {
             changedTable: isEditing.changedRow,
             rowId: isEditing.rowId
         }
-        console.log(isEditing.rowId, "row id");
+        console.log(updatedData, "data to insert");
         const sendDataToUpdate = await axiosPrivate.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
         console.log(sendDataToUpdate.data.type);
         if (sendDataToUpdate.data.type === "success") {
@@ -908,6 +908,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 11. FINISH REQUIRED QTY */}
+                                    {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
@@ -915,10 +916,24 @@ export default function Summary() {
                                                 const netAdditional = Number(cell.additional) - lossQty;
                                                 const inCreaseFinishQty = (Number(cell.finishRequiredQty) + netAdditional).toFixed(2);
                                                 return (
-                                                    <div key={j} className="px-3 py-2 whitespace-nowrap">
-                                                        {inCreaseFinishQty}
+                                                    <div
+                                                        key={j}
+                                                        onClick={() => handleEdit(cell.id, "finishRequiredQty", cell.finishRequiredQty, "styleRequirementRows")}
+                                                        className="px-3 py-2 whitespace-nowrap"
+                                                    >
+                                                        {isEditing.editingField === "finishRequiredQty" && isEditing.rowId === cell.id ? (
+                                                            <input
+                                                                value={changedField.editingValue}
+                                                                onChange={(e) => handleOnChange(e)}
+                                                                name="finishRequiredQty"
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                                type="text"
+                                                            />
+                                                        ) : (
+                                                            inCreaseFinishQty
+                                                        )}
                                                     </div>
-                                                )
+                                                );
                                             })}
                                         </div>
                                     </td>
