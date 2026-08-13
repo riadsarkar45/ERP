@@ -43,7 +43,9 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                         ...(finishDia !== undefined && { finishDia }),
                         ...(orderQty !== undefined && { orderQty: Number(orderQty) }),
                         ...(color !== undefined && { color: color }),
-                        ...(Number(finishRequiredQty.toFixed(2)) !== undefined && { finishRequiredQty: Number(finishRequiredQty.toFixed(2)) })
+                        ...(finishRequiredQty !== undefined && finishRequiredQty !== null && !isNaN(Number(finishRequiredQty)) && {
+                            finishRequiredQty: Number(Number(finishRequiredQty).toFixed(2))
+                        })
                     },
                 }),
             ];
