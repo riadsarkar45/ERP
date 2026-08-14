@@ -6,19 +6,20 @@ import { updateStyleReq } from "../controllers/newStyleRequirements/updateStyleR
 import { updateWorkOrder } from "../controllers/orders/update/updateWorkOrder";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
+import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 
 const updateRouters = express.Router();
 
-updateRouters.patch("/update-order", authenticate,  updateJobs);
+updateRouters.patch("/update-order",responseTimeMonitor, authenticate,  updateJobs);
 
-updateRouters.patch("/update-audit/:auditId/:status", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateAuditStatus);
+updateRouters.patch("/update-audit/:auditId/:status", responseTimeMonitor,authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateAuditStatus);
 
-updateRouters.patch("/job-status/:status/:jobId", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateJobStatus);
+updateRouters.patch("/job-status/:status/:jobId",responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateJobStatus);
 
-updateRouters.patch("/update-style-req/:jobId", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateStyleReq);
+updateRouters.patch("/update-style-req/:jobId",responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateStyleReq);
 
-updateRouters.patch("/update-work-order/:workOrderId", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateWorkOrder); 
+updateRouters.patch("/update-work-order/:workOrderId",responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateWorkOrder); 
 
 // ✅ CORRECT: No trailing space
-updateRouters.patch("/styles/:jobNo/reconciliation", styleReconciliation);
+updateRouters.patch("/styles/:jobNo/reconciliation",responseTimeMonitor, styleReconciliation);
 export default updateRouters;

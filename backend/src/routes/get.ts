@@ -23,7 +23,7 @@ const getRouters = express.Router();
 
 console.log("getRouters loaded");
 
-getRouters.get("/work-order/:orderType", apiLimiter, getAllOrders);
+getRouters.get("/work-order/:orderType", responseTimeMonitor, apiLimiter, getAllOrders);
 
 getRouters.get("/dashboard-detail", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), dashboardController);
 
