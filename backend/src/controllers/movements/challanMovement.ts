@@ -51,6 +51,7 @@ export const challanMovement = async (req: Request, res: Response) => {
                     challanNo: true,
                     toFactory: true,
                     fromFactory: true,
+                    createdAt: true,
                 }
             }
         },

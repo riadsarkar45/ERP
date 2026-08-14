@@ -185,17 +185,20 @@ model deliveries {
   challanId Int? // NULL for legacy/manual entries
   createdBy Int      @default(1)
   userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@index([yarnCompId])
   @@index([createdBy])
   // @@index([userId])
   @@index([deliveryDate])
   @@index([challanNo])
-  @@index([yarnId])
   @@index([challanId])
+  @@index([yarnId])
+  @@index([id])
   @@index([deliveryType])
   @@index([toFactory])
   @@index([fromFactory])
+  @@index([createdAt])
 }
 
 model audit {

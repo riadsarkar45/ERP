@@ -16,11 +16,6 @@ export const responseTimeMonitor = (req: Request, res: Response, next: NextFunct
             timestamp: new Date().toISOString(),
         };
 
-        // Log to console (or swap for a real logger like winston/pino)
-        console.log(
-            `[${payload.method}] ${payload.route} → ${payload.statusCode} (${payload.durationMs}ms)`
-        );
-
         // Broadcast to any connected monitoring dashboards
         try {
             const io = getIO();

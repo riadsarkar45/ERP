@@ -18,6 +18,8 @@ import { misDetailView } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 import { searchChallans } from "../controllers/movements/searchChallan";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
+import { hourlyChallanReport } from "../controllers/users/hrlyChallanReport";
+import { hourlyDeliveryMovement } from "../controllers/users/hrlyDeliveryReport";
 
 const getRouters = express.Router();
 
@@ -68,5 +70,9 @@ getRouters.get("/mis/glance/detail/:columnName/:jobNo", responseTimeMonitor, mis
 getRouters.get("/glance/:jobNo/trailing-data", responseTimeMonitor, styleReconciliation);
 
 getRouters.get("/:orderType/challan/search", responseTimeMonitor, searchChallans);
+
+getRouters.get("/reports/hourly-challan", responseTimeMonitor, hourlyChallanReport);
+
+getRouters.get("/reports/daily-delivery", responseTimeMonitor, hourlyDeliveryMovement);
 
 export default getRouters;
