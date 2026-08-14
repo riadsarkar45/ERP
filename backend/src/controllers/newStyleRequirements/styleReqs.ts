@@ -47,6 +47,8 @@ const buildWhereClause = (
 
 export const styleRequirements = async (req: Request, res: Response) => {
     try {
+        const requestStart = process.hrtime.bigint();
+
         const { jobNo } = req.params as { jobNo: string | undefined };
         const {
             filters: filtersParam,
@@ -89,7 +91,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             orderQty: true,
                             finishRequiredQty: true,
                             additional: true,
-                            reconciliation:{
+                            reconciliation: {
                                 select: {
                                     id: true,
                                     actualCuttingQty: true,
@@ -146,12 +148,14 @@ export const styleRequirements = async (req: Request, res: Response) => {
         ]);
 
         const summaryData = calculateOrdersForStyleSummary(styles);
+        const totalMs = Number(process.hrtime.bigint() - requestStart) / 1_000_000;
 
         return res.status(200).send({
             data: summaryData,
             type: "success",
-            
+            totalMs: totalMs
         });
+
     } catch (error) {
         console.error(error);
         return res.status(500).json({
@@ -196,7 +200,7 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
             // FIX: Removed `[columnName]: { not: null }` to prevent Prisma validation errors.
             // We filter out nulls in JS below anyway.
             const rows = await prisma.styleRequirement.findMany({
-                where: scopingWhere, 
+                where: scopingWhere,
                 distinct: [columnName as any],
                 select: {
                     [columnName]: true,

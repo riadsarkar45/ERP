@@ -1,4 +1,4 @@
-import React, { useEffect, useState, } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSocket } from '../../../hooks/socket.io/socketContext';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
@@ -12,6 +12,10 @@ const ApiMonitoring = () => {
 
     // ── NEW: delivery write-performance feed ──
     const [deliveryEvents, setDeliveryEvents] = useState([]);
+
+    // ── NEW: all-API response-time feed ──
+    const [responseTimes, setResponseTimes] = useState([]);
+    const [methodFilter, setMethodFilter] = useState('ALL');
 
     useEffect(() => {
         if (!socket) return;
@@ -41,6 +45,21 @@ const ApiMonitoring = () => {
 
         socket.on('delivery:created', handleDeliveryCreated);
         return () => socket.off('delivery:created', handleDeliveryCreated);
+    }, [socket]);
+
+    // ── NEW: separate effect for all-API response-time events ──
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleResponseTime = (data) => {
+            setResponseTimes(prev => [
+                { ...data, receivedAt: Date.now() },
+                ...prev,
+            ].slice(0, 60));
+        };
+
+        socket.on('api-response-time', handleResponseTime);
+        return () => socket.off('api-response-time', handleResponseTime);
     }, [socket]);
 
     const total = counts.allowed + counts.blocked;
@@ -82,6 +101,54 @@ const ApiMonitoring = () => {
         if (ms < 400) return 'bg-amber-500/10 border-amber-500';
         return 'bg-red-500/10 border-red-500';
     };
+
+    // ── NEW: helpers for status code + method styling ──
+    const statusColor = (code) => {
+        if (code == null) return 'text-gray-500';
+        if (code < 300) return 'text-green-700';
+        if (code < 400) return 'text-blue-700';
+        if (code < 500) return 'text-amber-700';
+        return 'text-red-700';
+    };
+
+    const methodBadge = (method) => {
+        const map = {
+            GET: 'bg-blue-100 text-blue-700 border-blue-300',
+            POST: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+            PATCH: 'bg-amber-100 text-amber-700 border-amber-300',
+            PUT: 'bg-amber-100 text-amber-700 border-amber-300',
+            DELETE: 'bg-red-100 text-red-700 border-red-300',
+        };
+        return map[method] || 'bg-gray-100 text-gray-700 border-gray-300';
+    };
+
+    // ── NEW: derived stats for the response-time panel ──
+    const filteredResponseTimes = useMemo(() => {
+        if (methodFilter === 'ALL') return responseTimes;
+        return responseTimes.filter(r => r.method === methodFilter);
+    }, [responseTimes, methodFilter]);
+
+    const availableMethods = useMemo(() => {
+        const set = new Set(responseTimes.map(r => r.method).filter(Boolean));
+        return ['ALL', ...Array.from(set)];
+    }, [responseTimes]);
+
+    const avgResponseMs = useMemo(() => {
+        if (filteredResponseTimes.length === 0) return 0;
+        return Math.round(
+            filteredResponseTimes.reduce((sum, r) => sum + (r.durationMs ?? 0), 0) / filteredResponseTimes.length
+        );
+    }, [filteredResponseTimes]);
+
+    const slowestResponse = useMemo(() => {
+        if (filteredResponseTimes.length === 0) return null;
+        return filteredResponseTimes.reduce((max, r) => (r.durationMs > (max?.durationMs ?? 0) ? r : max), null);
+    }, [filteredResponseTimes]);
+
+    const errorCount = useMemo(
+        () => filteredResponseTimes.filter(r => r.statusCode >= 400).length,
+        [filteredResponseTimes]
+    );
 
     return (
         <div className="space-y-4">
@@ -224,6 +291,90 @@ const ApiMonitoring = () => {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* ── NEW: All API response-time panel ── */}
+            <div className="bg-white border border-blue-500 rounded-md p-2">
+                <div className="bg-blue-200 p-1 rounded-md mb-2 flex items-center justify-between px-2">
+                    <h2 className="font-bold">API Response Times</h2>
+                    <span className="text-xs text-blue-900/60 font-medium">
+                        {filteredResponseTimes.length} recent {filteredResponseTimes.length === 1 ? 'request' : 'requests'}
+                    </span>
+                </div>
+
+                {responseTimes.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">Waiting for API traffic...</p>
+                ) : (
+                    <>
+                        {/* Summary badges */}
+                        <div className="grid grid-cols-3 gap-3 mb-3">
+                            <div className="text-center bg-cyan-500/10 border border-cyan-400 rounded-md p-2">
+                                <p className="text-xs text-cyan-700 font-semibold uppercase">Avg Response</p>
+                                <p className="text-xl font-bold text-cyan-800">{avgResponseMs} ms</p>
+                            </div>
+                            <div className="text-center bg-orange-500/10 border border-orange-400 rounded-md p-2">
+                                <p className="text-xs text-orange-700 font-semibold uppercase">Slowest</p>
+                                <p className="text-xl font-bold text-orange-800">
+                                    {slowestResponse?.durationMs != null ? `${slowestResponse.durationMs} ms` : '—'}
+                                </p>
+                                {slowestResponse?.route && (
+                                    <p className="text-[10px] text-orange-600/70 truncate">{slowestResponse.route}</p>
+                                )}
+                            </div>
+                            <div className="text-center bg-red-500/10 border border-red-400 rounded-md p-2">
+                                <p className="text-xs text-red-700 font-semibold uppercase">Errors (4xx/5xx)</p>
+                                <p className="text-xl font-bold text-red-800">{errorCount}</p>
+                            </div>
+                        </div>
+
+                        {/* Method filter */}
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                            {availableMethods.map((method) => (
+                                <button
+                                    key={method}
+                                    onClick={() => setMethodFilter(method)}
+                                    className={`text-[11px] font-semibold px-2 py-1 rounded-full border transition ${
+                                        methodFilter === method
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                                    }`}
+                                >
+                                    {method}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Request list */}
+                        <div className="max-h-96 overflow-y-auto space-y-1.5 pr-1">
+                            {filteredResponseTimes.length === 0 ? (
+                                <p className="text-gray-400 text-center py-4 text-sm">No requests match this filter</p>
+                            ) : (
+                                filteredResponseTimes.map((event, index) => (
+                                    <div
+                                        key={index}
+                                        className={`flex items-center gap-3 border p-2 rounded-md ${latencyBg(event.durationMs)}`}
+                                    >
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${methodBadge(event.method)}`}>
+                                            {event.method}
+                                        </span>
+
+                                        <span className="flex-1 text-sm text-gray-800 truncate font-medium">
+                                            {event.route}
+                                        </span>
+
+                                        <span className={`text-xs font-bold shrink-0 ${statusColor(event.statusCode)}`}>
+                                            {event.statusCode}
+                                        </span>
+
+                                        <span className={`text-sm font-bold shrink-0 w-16 text-right ${latencyColor(event.durationMs)}`}>
+                                            {event.durationMs != null ? `${event.durationMs} ms` : 'N/A'}
+                                        </span>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </>
                 )}
