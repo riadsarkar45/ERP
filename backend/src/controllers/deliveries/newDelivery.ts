@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../../database/prismaClient/prisma";
 import { challanValidation } from "../../helpers/challanValidation/challanValidation";
 import { getIO } from "../../middleware/socket.io/socket";
@@ -131,22 +132,24 @@ export const updateJobs = async (req: Request, res: Response) => {
         const dbWriteStart = process.hrtime.bigint();
 
         const insert = await prisma.$transaction(
-            delivers.map((delivery) =>
-                prisma.deliveries.create({
-                    data: {
-                        deliveryDate,
-                        challanNo: challanNoNum,
-                        challanId,
-                        deliveryQty: Number(delivery.qty),
-                        deliveryType: delivery.deliveryType,
-                        yarnId: checkYarnIfExist.id,
-                        fromFactory,
-                        toFactory,
-                        yarnCompId: checkYarnIfExist.id,
-                        createdBy: userId,
-                    },
-                })
-            )
+            delivers.map((delivery) => {
+                // Explicitly typed as the "unchecked" variant so Prisma resolves
+                // challanId / yarnCompId / createdBy as raw scalar FK columns,
+                // not as nested `connect` relation objects.
+                const data: Prisma.deliveriesUncheckedCreateInput = {
+                    deliveryDate,
+                    challanNo: challanNoNum,
+                    challanId,
+                    deliveryQty: Number(delivery.qty),
+                    deliveryType: delivery.deliveryType,
+                    yarnId: checkYarnIfExist.id,
+                    fromFactory,
+                    toFactory,
+                    yarnCompId: checkYarnIfExist.id,
+                    createdBy: userId,
+                };
+                return prisma.deliveries.create({ data });
+            })
         );
 
         const dbWriteEnd = process.hrtime.bigint();
@@ -177,8 +180,8 @@ export const updateJobs = async (req: Request, res: Response) => {
             data: insert,
             meta: {
                 recordsCreated: insert.length,
-                dbWriteMs: Math.round(dbWriteMs * 100) / 100,   // time spent purely on the transaction
-                totalMs: Math.round(totalMs * 100) / 100,       // total time incl. validation, challan lookup, etc.
+                dbWriteMs: Math.round(dbWriteMs * 100) / 100,
+                totalMs: Math.round(totalMs * 100) / 100,
             },
         });
     } catch (error) {
