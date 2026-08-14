@@ -1,26 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
-import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    ArcElement,
-    Tooltip,
-    Legend,
-} from "chart.js";
-import { Bar, Pie } from "react-chartjs-2";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
-
-const TYPE_COLORS = [
-    { bg: "#378ADD", border: "#185FA5" },
-    { bg: "#1D9E75", border: "#0F6E56" },
-    { bg: "#D85A30", border: "#993C1D" },
-    { bg: "#7F77DD", border: "#534AB7" },
-    { bg: "#BA7517", border: "#854F0B" },
-];
 
 const AVATAR_STYLES = [
     "bg-blue-50 text-blue-700",
@@ -38,7 +18,7 @@ const DELIVERY_TYPES = {
         "Sent For Compacting", "Received From Compacting",
         "Sent For Reprocess", "Received From Reprocess",
     ],
-    aopOrder: ["Sent For Aop", "Return From Aop", "Received From Aop"],
+    aopOrder: ["Sent For Aop", "Return From Aop", "Received From Aop", "AOP Finish Fabric Rcvd"], // ✅ 4 types
     yarnDyeingOrder: [
         "Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye",
         "Yarn Received From Yarn Dye", "Finish Received", "Finish Return",
@@ -52,11 +32,10 @@ const ORDER_LABELS = {
     yarnDyeingOrder: "Yarn Dyeing",
 };
 
-// sent = blue, received = green, return = orange
 const CATEGORY_STYLES = {
-    sent: { rgb: "55, 138, 221", dot: "#378ADD", label: "Delivery / Sent", text: "text-blue-700" },
-    received: { rgb: "29, 158, 117", dot: "#1D9E75", label: "Received", text: "text-emerald-700" },
-    return: { rgb: "216, 90, 48", dot: "#D85A30", label: "Return", text: "text-orange-700" },
+    sent: { rgb: "55, 138, 221", dot: "#378ADD", label: "Delivery / Sent" },
+    received: { rgb: "29, 158, 117", dot: "#1D9E75", label: "Received" },
+    return: { rgb: "216, 90, 48", dot: "#D85A30", label: "Return" },
 };
 
 const CATEGORY_OF = {
@@ -65,6 +44,7 @@ const CATEGORY_OF = {
     "Sent For Compacting": "sent", "Received From Compacting": "received",
     "Sent For Reprocess": "sent", "Received From Reprocess": "received",
     "Sent For Aop": "sent", "Return From Aop": "return", "Received From Aop": "received",
+    "AOP Finish Fabric Rcvd": "received", // ✅ new AOP type
     "Yarn Delivery For Yarn Dye": "sent", "Yarn Return From Yarn Dye": "return",
     "Yarn Received From Yarn Dye": "received", "Finish Received": "received", "Finish Return": "return",
 };
@@ -72,7 +52,7 @@ const CATEGORY_OF = {
 const guessCategory = (name = "") => {
     const n = name.toLowerCase();
     if (n.includes("return")) return "return";
-    if (n.includes("receiv")) return "received";
+    if (n.includes("receiv") || n.includes("rcvd")) return "received"; // ✅ handles "Rcvd"
     return "sent";
 };
 
@@ -80,6 +60,7 @@ const guessCategory = (name = "") => {
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const BDT_OFFSET = 6;
 const hourOf = (iso) => (new Date(iso).getUTCHours() + BDT_OFFSET) % 24;
+const todayBST = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
 const fmtHour = (h) => {
     const period = h < 12 ? "AM" : "PM";
     const hr = h % 12 === 0 ? 12 : h % 12;
@@ -96,15 +77,8 @@ const heatColor = (value, max) => {
     const t = Math.sqrt(value / max);
     return `rgba(55, 138, 221, ${0.15 + 0.85 * t})`;
 };
-const formatTick = (label) => {
-    if (/^\d{4}-\d{2}$/.test(label))
-        return new Date(label).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-    if (/^\d{4}-\d{2}-\d{2}/.test(label))
-        return new Date(label).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-    return label;
-};
 
-/* ─────────── Hourly Challan board (light / ERP style) ─────────── */
+/* ─────────── Hourly Challan board ─────────── */
 const HourlyChallanBoard = ({ payload, loading }) => {
     const rows = payload?.data ?? [];
 
@@ -136,7 +110,7 @@ const HourlyChallanBoard = ({ payload, loading }) => {
 
     if (!rows.length)
         return (
-            <div className=" bg-white border border-slate-100 rounded-xl p-5">
+            <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
                 <p className="text-sm font-medium text-slate-700 mb-4">Hourly challan activity</p>
                 <div className="h-32 flex items-center justify-center text-slate-400 text-sm">No data yet</div>
             </div>
@@ -220,10 +194,11 @@ const HourlyChallanBoard = ({ payload, loading }) => {
     );
 };
 
-/* ─────────── Daily Delivery board (light / ERP style) ─────────── */
-/* ─────────── Daily Delivery board (light / ERP style) ─────────── */
-const DailyDeliveryBoard = ({ payload, loading }) => {
+/* ─────────── Daily Delivery board (date picker, daily-only) ─────────── */
+const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) => {
     const raw = payload?.data;
+    const today = todayBST();
+
     const rows = useMemo(() => {
         if (Array.isArray(raw)) return raw;
         if (raw && typeof raw === "object")
@@ -250,27 +225,25 @@ const DailyDeliveryBoard = ({ payload, loading }) => {
         let grandTotal = 0, totalEntries = 0, maxCell = 1;
         const orderRows = [];
 
-        // ✅ fix: always show ALL order types, even if empty today
+        // always render ALL 4 order types (3 + 7 + 4 + 5 = 19 cells)
         const orderKeys = [
-            ...Object.keys(DELIVERY_TYPES),                                    // all 4 canonical types
-            ...[...byOrder.keys()].filter((k) => !DELIVERY_TYPES[k]),          // + any unknown ones
+            ...Object.keys(DELIVERY_TYPES),
+            ...[...byOrder.keys()].filter((k) => !DELIVERY_TYPES[k]),
         ];
 
         orderKeys.forEach((orderType) => {
-            // ✅ fix: empty Map if this order type had no data today
             const qtyMap = byOrder.get(orderType) || new Map();
             const known = DELIVERY_TYPES[orderType] || [];
             const types = [...known, ...[...qtyMap.keys()].filter((t) => !known.includes(t))];
 
             const cells = types.map((type) => {
-                const data = qtyMap.get(type) || { quantity: 0, entries: 0 };
-                const { quantity, entries } = data;
+                const d = qtyMap.get(type) || { quantity: 0, entries: 0 };
                 const category = CATEGORY_OF[type] || guessCategory(type);
-                catTotals[category] += quantity;
-                grandTotal += quantity;
-                totalEntries += entries;
-                if (quantity > maxCell) maxCell = quantity;
-                return { type, quantity, entries, category };
+                catTotals[category] += d.quantity;
+                grandTotal += d.quantity;
+                totalEntries += d.entries;
+                if (d.quantity > maxCell) maxCell = d.quantity;
+                return { type, quantity: d.quantity, entries: d.entries, category };
             });
 
             orderRows.push({
@@ -291,9 +264,6 @@ const DailyDeliveryBoard = ({ payload, loading }) => {
 
     if (loading) return <div className="mt-6 h-44 rounded-xl bg-slate-100 animate-pulse" />;
 
-    // ✅ still show board even with 0 data — so users see the empty grid
-    // only hide if we genuinely have nothing to render
-
     return (
         <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
             {/* header */}
@@ -301,10 +271,28 @@ const DailyDeliveryBoard = ({ payload, loading }) => {
                 <div>
                     <p className="text-sm font-medium text-slate-700">Daily delivery summary</p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                        {payload?.date ? fmtDate(payload.date) : ""} · quantity by movement type
+                        {payload?.date ? fmtDate(payload.date) : ""} ·{" "}
+                        {payload?.groupedBy === "deliveryDate" ? "by delivery date" : "by entry date"} · BST (UTC+6)
                     </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <input
+                        type="date"
+                        value={selectedDate}
+                        max={today}
+                        onChange={(e) => e.target.value && onDateChange(e.target.value)}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    {selectedDate !== today && (
+                        <button
+                            onClick={() => onDateChange(today)}
+                            className="rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                            Today
+                        </button>
+                    )}
+
                     <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
                         Total qty: <b className="text-slate-800 tabular-nums">{grandTotal.toLocaleString()}</b>
                     </span>
@@ -391,22 +379,13 @@ const DailyDeliveryBoard = ({ payload, loading }) => {
 /* ───────────────────────── Home ───────────────────────── */
 const Home = () => {
     const axiosPrivate = useAxiosPrivate();
-    const [data, setData] = useState({});
-    const [loading, setLoading] = useState(true);
     const [challan, setChallan] = useState(null);
     const [challanLoading, setChallanLoading] = useState(true);
     const [delivery, setDelivery] = useState(null);
     const [deliveryLoading, setDeliveryLoading] = useState(true);
+    const [deliveryDate, setDeliveryDate] = useState(todayBST);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const res = await axiosPrivate.get("api/dashboard-detail");
-                setData(res.data);
-            } finally {
-                setLoading(false);
-            }
-        };
         const fetchChallanData = async () => {
             try {
                 const res = await axiosPrivate.get("/api/reports/hourly-challan");
@@ -415,29 +394,33 @@ const Home = () => {
                 setChallanLoading(false);
             }
         };
+        fetchChallanData();
+    }, [axiosPrivate]);
+
+    // re-fetch on date change — backend returns ONLY that one day
+    useEffect(() => {
         const fetchDeliveryData = async () => {
+            setDeliveryLoading(true);
             try {
-                const res = await axiosPrivate.get("/api/reports/daily-delivery");
+                const res = await axiosPrivate.get(`/api/reports/daily-delivery?date=${deliveryDate}`);
                 setDelivery(res.data);
             } finally {
                 setDeliveryLoading(false);
             }
         };
-        fetchData();
-        fetchChallanData();
         fetchDeliveryData();
-    }, [axiosPrivate]);
-
-
-  
-
-
+    }, [axiosPrivate, deliveryDate]);
 
     return (
         <DashboardLayout title="Dashboard">
             <div className="p-6">
                 <HourlyChallanBoard payload={challan} loading={challanLoading} />
-                <DailyDeliveryBoard payload={delivery} loading={deliveryLoading} />
+                <DailyDeliveryBoard
+                    payload={delivery}
+                    loading={deliveryLoading}
+                    selectedDate={deliveryDate}
+                    onDateChange={setDeliveryDate}
+                />
             </div>
         </DashboardLayout>
     );
