@@ -39,6 +39,7 @@ model WorkOrder {
   yarnCount          String            @default("NULL")
   stichLength        String            @default("NULL")
   machineDia         String            @default("NULL")
+
   @@index([yarnCount])
   @@index([machineDia])
   @@index([stichLength])
@@ -182,8 +183,12 @@ model deliveries {
   // ── Link to universal Challan ──
   challan   Challan? @relation(fields: [challanId], references: [id])
   challanId Int? // NULL for legacy/manual entries
+  createdBy Int      @default(1)
+  userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
 
   @@index([yarnCompId])
+  @@index([createdBy])
+  // @@index([userId])
   @@index([deliveryDate])
   @@index([challanNo])
   @@index([yarnId])
@@ -218,6 +223,7 @@ model user {
   userRole       String
   workingStation String?        @default("NULL")
   refreshTokens  refreshToken[] // <-- ADD THIS LINE to your existing model
+  deliveries     deliveries[]
 }
 
 model refreshToken {

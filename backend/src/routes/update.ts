@@ -9,7 +9,7 @@ import { styleReconciliation } from "../controllers/newStyleRequirements/styleRe
 
 const updateRouters = express.Router();
 
-updateRouters.patch("/update-order",  updateJobs);
+updateRouters.patch("/update-order", authenticate,  updateJobs);
 
 updateRouters.patch("/update-audit/:auditId/:status", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"),  updateAuditStatus);
 

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 import { challanValidation } from "../../helpers/challanValidation/challanValidation";
+import { getIO } from "../../middleware/socket.io/socket";
 
 interface DeliveryItem {
     deliveryType: string;
@@ -15,7 +16,15 @@ interface UpdateJobsBody {
     deliveries: DeliveryItem[];
 }
 
+const emitProgress = (event: string, payload: Record<string, unknown>) => {
+    const io = getIO();
+    if (!io) return;
+    io.emit(event, payload);
+};
+
 export const updateJobs = async (req: Request, res: Response) => {
+    const requestStart = process.hrtime.bigint();
+
     try {
         const { yarnId, workOrderId } = req.query as { yarnId: string; workOrderId: string };
         const { toFactory, fromFactory, date, challanNo, deliveries } = req.body as UpdateJobsBody;
@@ -43,7 +52,11 @@ export const updateJobs = async (req: Request, res: Response) => {
             return res.status(400).json({ type: "error", message: "Invalid date" });
         }
 
-        // Composition must exist. (Don't require a Challan yet — it may not exist on first delivery.)
+        const userId = Number(req.user?.userId);
+        if (!req.user || Number.isNaN(userId)) {
+            return res.status(401).json({ type: "error", message: "Unauthorized" });
+        }
+
         const checkYarnIfExist = await prisma.composition.findUnique({
             where: { id: yarnIdNum },
             select: { id: true },
@@ -53,7 +66,15 @@ export const updateJobs = async (req: Request, res: Response) => {
             return res.status(404).json({ type: "error", message: "Yarn not found" });
         }
 
-        // Find the Challan by its compound unique key; create it if it doesn't exist yet.
+        const delivers = deliveries.filter(
+            (d): d is DeliveryItem =>
+                d.deliveryType !== undefined && d.qty !== undefined && !Number.isNaN(Number(d.qty)) && Number(d.qty) > 0
+        );
+
+        if (delivers.length === 0) {
+            return res.status(400).json({ type: "error", message: "No valid delivery entries provided" });
+        }
+
         let challan = await prisma.challan.findUnique({
             where: {
                 challanNo_toFactory_fromFactory: {
@@ -75,15 +96,6 @@ export const updateJobs = async (req: Request, res: Response) => {
                 },
                 select: { id: true },
             });
-        }
-
-        const delivers = deliveries.filter(
-            (d): d is DeliveryItem =>
-                d.deliveryType !== undefined && d.qty !== undefined && !Number.isNaN(Number(d.qty))
-        );
-
-        if (delivers.length === 0) {
-            return res.status(400).json({ type: "error", message: "No valid delivery entries provided" });
         }
 
         const validations = await Promise.all(
@@ -115,7 +127,10 @@ export const updateJobs = async (req: Request, res: Response) => {
 
         const challanId = challan.id;
 
-        await prisma.$transaction(
+        // ── Time only the actual DB write ──
+        const dbWriteStart = process.hrtime.bigint();
+
+        const insert = await prisma.$transaction(
             delivers.map((delivery) =>
                 prisma.deliveries.create({
                     data: {
@@ -128,12 +143,44 @@ export const updateJobs = async (req: Request, res: Response) => {
                         fromFactory,
                         toFactory,
                         yarnCompId: checkYarnIfExist.id,
+                        createdBy: userId,
                     },
                 })
             )
         );
 
-        return res.status(200).json({ type: "success", message: "Delivery quantity updated successfully" });
+        const dbWriteEnd = process.hrtime.bigint();
+        const dbWriteMs = Number(dbWriteEnd - dbWriteStart) / 1_000_000;
+
+        if (!insert || insert.length !== delivers.length) {
+            return res.status(500).json({ type: "error", message: "Failed to create deliveries" });
+        }
+
+        try {
+            emitProgress("delivery:created", {
+                challanId,
+                workOrderId,
+                yarnId: yarnIdNum,
+                count: insert.length,
+                deliveries: insert,
+                dbWriteMs,
+            });
+        } catch (socketErr) {
+            console.error("emitProgress failed:", socketErr);
+        }
+
+        const totalMs = Number(process.hrtime.bigint() - requestStart) / 1_000_000;
+
+        return res.status(200).json({
+            type: "success",
+            message: "Delivery quantity updated successfully",
+            data: insert,
+            meta: {
+                recordsCreated: insert.length,
+                dbWriteMs: Math.round(dbWriteMs * 100) / 100,   // time spent purely on the transaction
+                totalMs: Math.round(totalMs * 100) / 100,       // total time incl. validation, challan lookup, etc.
+            },
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ type: "error", message: "Internal server error" });

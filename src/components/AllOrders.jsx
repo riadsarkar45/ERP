@@ -442,7 +442,7 @@ const AllOrders = ({ orderType }) => {
         const payload = overridePayload || changedField[yarnId] || {};
 
         try {
-            const update = await axiosPublic.patch(
+            const update = await axiosPrivate.patch(
                 `/api/update-order`,
                 payload,
                 { params: { yarnId, workOrderId } }
@@ -451,22 +451,41 @@ const AllOrders = ({ orderType }) => {
             if (update.status === 200) {
                 setChallanIssue([{ message: "Delivery Added", type: "success" }]);
 
-                fetchData(`/api/work-order/${orderType}`, { params: { page, limit, filters: filtersParam } })
-                    .then((res) => {
-                        if (res) {
-                            setOrders(res.data ?? []);
-                            if (res.pagination) setPagination(res.pagination);
-                            setIsEditing(false);
-                        }
-                    });
+                // Wait for both refetches to finish before releasing the loading state,
+                // and catch failures individually so one bad refetch doesn't kill the other.
+                await Promise.all([
+                    fetchData(`/api/work-order/${orderType}`, {
+                        params: { page, limit, filters: filtersParam }
+                    })
+                        .then((res) => {
+                            if (res) {
+                                setOrders(res.data ?? []);
+                                if (res.pagination) setPagination(res.pagination);
+                                setIsEditing(false);
+                            }
+                        })
+                        .catch((err) => {
+                            console.log("Failed to refresh orders:", err);
+                            setChallanIssue(prev => [
+                                ...prev,
+                                { message: "Order list refresh failed", type: "error" }
+                            ]);
+                        }),
 
-                // FIX: jobId might be a number or an array. Safely handle both to prevent .join() crashes.
-                fetchData(`/api/deliveries/${orderType}`, {
-                    params: { workOrderIds: Array.isArray(jobId) ? jobId.join(',') : jobId }
-                })
-                    .then((dev) => {
-                        setDeliveries(dev);
-                    });
+                    fetchData(`/api/deliveries/${orderType}`, {
+                        params: { workOrderIds: Array.isArray(jobId) ? jobId.join(',') : jobId }
+                    })
+                        .then((dev) => {
+                            setDeliveries(dev);
+                        })
+                        .catch((err) => {
+                            console.log("Failed to refresh deliveries:", err);
+                            setChallanIssue(prev => [
+                                ...prev,
+                                { message: "Deliveries refresh failed", type: "error" }
+                            ]);
+                        }),
+                ]);
 
                 setChangedField(prev => {
                     const next = { ...prev };
@@ -475,9 +494,18 @@ const AllOrders = ({ orderType }) => {
                 });
             }
         } catch (e) {
-            // ... your existing error handling
-            console.log(e.response.data);
-            setDeliveryIssue(e.response.data)
+            // Guard against network errors / cancelled requests where e.response is undefined
+            console.log(e.response?.data ?? e.message ?? e);
+
+            const errorPayload = e.response?.data;
+            setDeliveryIssue(
+                Array.isArray(errorPayload)
+                    ? errorPayload
+                    : [{
+                        message: errorPayload?.message ?? "Something went wrong. Please try again.",
+                        type: "error"
+                    }]
+            );
         } finally {
             setIsLoading(false);
         }

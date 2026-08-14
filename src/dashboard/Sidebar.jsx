@@ -56,7 +56,7 @@ const Sidebar = () => {
     const navItems = [
         { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
-        { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
+        // { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
         // { path: "/dashboard/management-view", label: "Management View", icon: UserRoundPlus },
