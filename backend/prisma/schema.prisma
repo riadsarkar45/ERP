@@ -243,25 +243,28 @@ model refreshToken {
 }
 
 model reconciliationData {
-  id                     Int                  @id @default(autoincrement())
-  fabricIssueCuttingDept Int
-  cadConsumption         Int
-  plannedCuttingQty      Int
-  actualCuttingQty       Int
-  cuttingToSewingInput   Int
-  physicalFound          Int
-  sewingInputQty         Int
-  sewingOutputQty        Int
-  finishInputQty         Int
-  finishOutputQty        Int
-  packingInputQty        Int
-  packingOutputQty       Int
-  shippedQty             Int
-  plannedLeftOverQty     Int
-  physicalFoundLeftOver  Int
-  submittedBy            String
-  submittedDate          DateTime             @default(now())
-  styleRequirementRow    StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
-  styleRequirementRowId  Int?                 @unique
-  note                   String?
+  id                        Int                  @id @default(autoincrement())
+  fabricIssueCuttingDept    Int
+  cadConsumption            Int
+  plannedCuttingQty         Int
+  actualCuttingQty          Int
+  cuttingToSewingInput      Int
+  physicalFound             Int
+  sewingInputQty            Int
+  sewingOutputQty           Int
+  finishInputQty            Int
+  finishOutputQty           Int
+  packingInputQty           Int
+  packingOutputQty          Int
+  shippedQty                Int
+  plannedLeftOverQty        Int
+  physicalFoundLeftOver     Int
+  submittedBy               String
+  submittedDate             DateTime             @default(now())
+  manufacturingUnite        String               @default("NULL")
+  sentForEmbellishment      Int                  @default(0)
+  receivedFromEmbellishment Int                  @default(0)
+  styleRequirementRow       StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
+  styleRequirementRowId     Int?                 @unique
+  note                      String?
 }
