@@ -13,7 +13,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
         borderBottom: "1px solid #000000",
         padding: 0,
         textAlign: "center",
-        verticalAlign: "middle",
+        verticalAlign: "center",
     };
 
     const formatNumber = (value) => {
@@ -195,12 +195,14 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
                                     const workOrderQty = Number(wrk.workOrderQty?.toFixed(2)) || 0;
-                                    const totalYarnDelivery = Number(wrk.totalYarnDelivery?.toFixed(2)) || 0;
+                                    const totalYarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery?.toFixed(2)) || 0;
                                     const diff = workOrderQty - totalYarnDelivery;
                                     const exceeded = diff?.toFixed(2) > 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
                                             {exceeded ? `(${Math.abs(diff?.toFixed(2))})` : Math.abs(diff?.toFixed(2))}
+                                            {/* {workOrderQty} */}
+                                            {/* {totalYarnDelivery} */}
                                         </div>
                                     );
                                 }))}
@@ -224,7 +226,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
                                     const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
                                     const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
                                     const diff2 = grey + ret - del;
-                                    const exceed = diff2 < 0;
+                                    const exceed = diff2.toFixed(2) < 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceed ? "red" : "green" }}>
                                             {exceed ? `(${Math.abs(diff2?.toFixed(2))})` : diff2?.toFixed(2)}

@@ -21,11 +21,11 @@ const thStickyStyle = {
 };
 
 const pageButtonStyle = (active) => ({
-    border: "1px solid #999",
+    border: "2px solid #999",
     background: active ? "#333" : "#fff",
     color: active ? "#fff" : "#333",
     padding: "4px 10px",
-    margin: "0 2px",
+    margin: "0 px",
     borderRadius: 4,
     cursor: "pointer",
     fontSize: "0.9rem",
