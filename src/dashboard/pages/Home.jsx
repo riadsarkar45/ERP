@@ -10,18 +10,18 @@ const AVATAR_STYLES = [
     "bg-amber-50 text-amber-700",
 ];
 
-/* ─────────────── delivery metadata ─────────────── */
 const DELIVERY_TYPES = {
     knittingOrder: ["Yarn Delivery", "Yarn Return", "Grey Fabric Received"],
     dyeingOrder: [
         "Grey Received", "Grey Delivery", "Grey Return",
         "Sent For Compacting", "Received From Compacting",
         "Sent For Reprocess", "Received From Reprocess",
+        "Finish Received", "Finish Return",
     ],
-    aopOrder: ["Sent For Aop", "Return From Aop", "Received From Aop", "AOP Finish Fabric Rcvd"], // ✅ 4 types
+    aopOrder: ["Sent For Aop", "Return From Aop", "Received From Aop", "AOP Finish Fabric Rcvd"],
     yarnDyeingOrder: [
         "Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye",
-        "Yarn Received From Yarn Dye", "Finish Received", "Finish Return",
+        "Yarn Received From Yarn Dye",
     ],
 };
 
@@ -43,20 +43,20 @@ const CATEGORY_OF = {
     "Grey Received": "received", "Grey Delivery": "sent", "Grey Return": "return",
     "Sent For Compacting": "sent", "Received From Compacting": "received",
     "Sent For Reprocess": "sent", "Received From Reprocess": "received",
-    "Sent For Aop": "sent", "Return From Aop": "return", "Received From Aop": "received",
-    "AOP Finish Fabric Rcvd": "received", // ✅ new AOP type
+    "Finish Received": "received", "Finish Return": "return",
+    "Sent For Aop": "sent", "Return From Aop": "return",
+    "Received From Aop": "received", "AOP Finish Fabric Rcvd": "received",
     "Yarn Delivery For Yarn Dye": "sent", "Yarn Return From Yarn Dye": "return",
-    "Yarn Received From Yarn Dye": "received", "Finish Received": "received", "Finish Return": "return",
+    "Yarn Received From Yarn Dye": "received",
 };
 
 const guessCategory = (name = "") => {
     const n = name.toLowerCase();
     if (n.includes("return")) return "return";
-    if (n.includes("receiv") || n.includes("rcvd")) return "received"; // ✅ handles "Rcvd"
+    if (n.includes("receiv") || n.includes("rcvd")) return "received";
     return "sent";
 };
 
-/* ───────────────────────── helpers ───────────────────────── */
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const BDT_OFFSET = 6;
 const hourOf = (iso) => (new Date(iso).getUTCHours() + BDT_OFFSET) % 24;
@@ -78,7 +78,6 @@ const heatColor = (value, max) => {
     return `rgba(55, 138, 221, ${0.15 + 0.85 * t})`;
 };
 
-/* ─────────── Hourly Challan board ─────────── */
 const HourlyChallanBoard = ({ payload, loading }) => {
     const rows = payload?.data ?? [];
 
@@ -194,7 +193,6 @@ const HourlyChallanBoard = ({ payload, loading }) => {
     );
 };
 
-/* ─────────── Daily Delivery board (date picker, daily-only) ─────────── */
 const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) => {
     const raw = payload?.data;
     const today = todayBST();
@@ -225,7 +223,6 @@ const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) =>
         let grandTotal = 0, totalEntries = 0, maxCell = 1;
         const orderRows = [];
 
-        // always render ALL 4 order types (3 + 7 + 4 + 5 = 19 cells)
         const orderKeys = [
             ...Object.keys(DELIVERY_TYPES),
             ...[...byOrder.keys()].filter((k) => !DELIVERY_TYPES[k]),
@@ -266,7 +263,6 @@ const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) =>
 
     return (
         <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
-            {/* header */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <div>
                     <p className="text-sm font-medium text-slate-700">Daily delivery summary</p>
@@ -311,7 +307,6 @@ const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) =>
                 </div>
             </div>
 
-            {/* per order-type rows */}
             <div className="space-y-3">
                 {orderRows.map(({ orderType, cells, total, entries }) => (
                     <div key={orderType} className="flex items-center gap-4">
@@ -360,7 +355,6 @@ const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) =>
                 ))}
             </div>
 
-            {/* footer / legend */}
             <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
                 <p className="text-[11px] text-slate-400">Hover a cell for details</p>
                 <div className="flex items-center gap-4 text-[11px] text-slate-500">
@@ -376,7 +370,6 @@ const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) =>
     );
 };
 
-/* ───────────────────────── Home ───────────────────────── */
 const Home = () => {
     const axiosPrivate = useAxiosPrivate();
     const [challan, setChallan] = useState(null);
@@ -397,7 +390,6 @@ const Home = () => {
         fetchChallanData();
     }, [axiosPrivate]);
 
-    // re-fetch on date change — backend returns ONLY that one day
     useEffect(() => {
         const fetchDeliveryData = async () => {
             setDeliveryLoading(true);

@@ -357,6 +357,11 @@ const Sidebar = () => {
                                         <h2>{user?.name?.[0] || "UNK"}</h2>
                                     )
                                 }
+                                {/* {
+                                    user && (
+                                        <h2>{user?.userRole || "UNK"}</h2>
+                                    )
+                                } */}
                                 {/* Or use image */}
                                 {/* <img src={user?.photoURL} className="w-full h-full rounded-full object-cover" /> */}
                             </div>

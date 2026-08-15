@@ -7,18 +7,22 @@ const DELIVERY_TYPES: Record<string, string[]> = {
         "Grey Received", "Grey Delivery", "Grey Return",
         "Sent For Compacting", "Received From Compacting",
         "Sent For Reprocess", "Received From Reprocess",
+        "Finish Received", "Finish Return",
     ],
-    aopOrder: ["Sent For Aop", "Return From Aop", "Received From Aop", "AOP Finish Fabric Rcvd"], // ✅ 4 types
+    aopOrder: [
+        "Sent For Aop", "Return From Aop", "Received From Aop", "AOP Finish Fabric Rcvd",
+    ],
     yarnDyeingOrder: [
         "Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye",
-        "Yarn Received From Yarn Dye", "Finish Received", "Finish Return",
+        "Yarn Received From Yarn Dye",
     ],
 };
 
-// case-insensitive, trimmed lookup
+const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
 const ORDER_TYPE_BY_DELIVERY_TYPE_LC: Record<string, string> = Object.fromEntries(
     Object.entries(DELIVERY_TYPES).flatMap(([orderType, types]) =>
-        types.map((t): [string, string] => [t.toLowerCase().trim(), orderType])
+        types.map((t): [string, string] => [normalize(t), orderType])
     )
 );
 
@@ -34,18 +38,14 @@ export const hourlyDeliveryMovement = async (
     res: Response
 ): Promise<Response> => {
     try {
-        // ?date=YYYY-MM-DD — defaults to today in Bangladesh time (UTC+6)
         const day: string =
             (req.query.date as string | undefined) ??
             new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
 
-        // BST day window: 00:00 Dhaka → 00:00 Dhaka next day (STRICTLY one day)
         const start = new Date(`${day}T00:00:00+06:00`);
         const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
         const range = { gte: start, lt: end };
 
-        // default: day the delivery was ENTERED (createdAt)
-        // pass ?by=deliveryDate for business-date view
         const useDeliveryDate = req.query.by === "deliveryDate";
 
         const grouped = await prisma.deliveries.groupBy({
@@ -63,8 +63,7 @@ export const hourlyDeliveryMovement = async (
                 typeof count === "object" && count !== null ? (count.id ?? 0) : 0;
 
             return {
-                orderType:
-                    ORDER_TYPE_BY_DELIVERY_TYPE_LC[rawType.toLowerCase().trim()] ?? "other",
+                orderType: ORDER_TYPE_BY_DELIVERY_TYPE_LC[normalize(rawType)] ?? "other",
                 deliveryType: rawType,
                 quantity,
                 entries,

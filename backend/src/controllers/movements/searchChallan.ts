@@ -25,7 +25,7 @@ export const searchChallans = async (req: Request, res: Response) => {
             "Finish Received"
         );
     } else if (orderType === "dyeingOrder") {
-        deliveryTypes.push("Grey Delivery", "Grey Return", "Grey Received", "Finish Received", "Received From Compacting")
+        deliveryTypes.push("Grey Delivery", "Grey Return", "Grey Received", "Finish Received", "Received From Compacting", "Received From Reprocess")
     } else if (orderType === "aopOrder") {
         deliveryTypes.push("Sent For Aop", "Received From Aop", "AOP Finish Fabric Rcvd", "Return From Aop");
     }
