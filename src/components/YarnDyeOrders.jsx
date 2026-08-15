@@ -1,4 +1,4 @@
-const YarnDyeOrders = ({ orders, handleEditRowData }) => {
+const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleInlineEdit, handleEditRowData }) => {
 
     const cellClass = " cursor-pointer px-3 py-1.5 border-b border-gray-200 last:border-b-0";
     const compCellClass = "hover:bg-red-500/10 hover:text-red-500 cursor-pointer px-3 py-1.5 border-gray-200 last:border-b-0";
@@ -19,14 +19,27 @@ const YarnDyeOrders = ({ orders, handleEditRowData }) => {
                     <tr key={jobIndex} className="border-b border-gray-200">
 
                         {/* FACTORY NAME */}
-                        <td className="border border-gray-200 align-top">
+                        {/* <td className="border border-gray-200 align-top">
                             {(job.workOrders || []).map((w, i) => (
                                 <div key={i} className={cellClass}>
-                                    {w.factoryName || w.workOrderPlaceDate || "-"}
+                                    {w.factoryName || "-"}
                                 </div>
                             ))}
+                        </td> */}
+                        {/* FACTORY NAME */}
+                        <td>
+                            {job.workOrders.map((wo, i) => (
+                                wo.factoryName === "NULL" ? (
+                                    <div key={i} className={`${compCellClass} text-gray-500`}>-</div>
+                                ) : (
+                                    <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`cursor-pointer`}>
+                                        {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
+                                            <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                        ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
+                                    </div>
+                                )
+                            ))}
                         </td>
-
                         {/* JOB NO */}
                         <td className="border border-gray-200 px-3 py-1.5 text-sm align-top">
                             {job.jobNo}
@@ -82,7 +95,7 @@ const YarnDyeOrders = ({ orders, handleEditRowData }) => {
                                                 <div onClick={() => handleEditRowData(c.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">{y.color} y id {"=>"} {y.id}  </div>
                                             ))
                                             : "-"}
-                                        
+
                                         booking color
                                     </div>
                                 );

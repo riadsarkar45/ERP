@@ -626,7 +626,18 @@ const AllOrders = ({ orderType }) => {
                             </tr>
                         </thead>
 
-                        {orderType === "yarnDyeingOrder" && <YarnDyeOrders orders={orders} handleEditRowData={handleEditRowData} FROZEN_COUNT={FROZEN_COUNT} currentFrozenWidths={currentFrozenWidths} currentFrozenLefts={currentFrozenLefts} />}
+                        {orderType === "yarnDyeingOrder" && <YarnDyeOrders
+                            orders={orders}
+                            handleEditRowData={handleEditRowData}
+                            FROZEN_COUNT={FROZEN_COUNT}
+                            currentFrozenWidths={currentFrozenWidths}
+                            currentFrozenLefts={currentFrozenLefts}
+                            isEdit={isEdit}
+                            updatedFields={updatedFields}
+                            handleOnChange={handleOnChange}
+                            handleInlineEdit={handleInlineEdit}
+                            handleRedirect={handleRedirect}
+                        />}
                         {orderType === "knittingOrder" && <KnittingOrder
                             orders={orders}
                             setJobId={setJobId}
