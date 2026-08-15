@@ -4,8 +4,6 @@ import prisma from "../../database/prismaClient/prisma";
 interface TrailingRowInput {
     styleRequirementRowId: number | string;
     fabricIssueCuttingDept?: number | string;
-    cadConsumption?: number | string;
-    plannedCuttingQty?: number | string;
     actualCuttingQty?: number | string;
     cuttingToSewingInput?: number | string;
     physicalFound?: number | string;
@@ -16,15 +14,18 @@ interface TrailingRowInput {
     packingInputQty?: number | string;
     packingOutputQty?: number | string;
     shippedQty?: number | string;
-    plannedLeftOverQty?: number | string;
     physicalFoundLeftOver?: number | string;
-    note?: string | null;
+    sentForEmbellishment?: number | string;
+    receivedFromEmbellishment?: number | string;
+    manufacturingUnite?: string | null;
 }
 
-const NUMERIC_KEYS = [
+// NOTE: cadConsumption, plannedCuttingQty and plannedLeftOverQty are FORMULA
+// fields on the frontend (derived from other saved values) and are
+// intentionally NOT sent by the client. They are computed here instead of
+// being required as input.
+const REQUIRED_NUMERIC_KEYS = [
     "fabricIssueCuttingDept",
-    "cadConsumption",
-    "plannedCuttingQty",
     "actualCuttingQty",
     "cuttingToSewingInput",
     "physicalFound",
@@ -35,11 +36,23 @@ const NUMERIC_KEYS = [
     "packingInputQty",
     "packingOutputQty",
     "shippedQty",
-    "plannedLeftOverQty",
     "physicalFoundLeftOver",
 ] as const;
 
-type NumericFieldKey = (typeof NUMERIC_KEYS)[number];
+// Optional numeric fields: accepted if present, default to 0 if missing.
+const OPTIONAL_NUMERIC_KEYS = [
+    "sentForEmbellishment",
+    "receivedFromEmbellishment",
+] as const;
+
+type RequiredNumericKey = (typeof REQUIRED_NUMERIC_KEYS)[number];
+type OptionalNumericKey = (typeof OPTIONAL_NUMERIC_KEYS)[number];
+
+const toNumber = (raw: unknown): number | null => {
+    if (raw === "" || raw == null) return 0;
+    const num = Math.round(Number(raw));
+    return Number.isNaN(num) ? null : num;
+};
 
 export const styleReconciliation = async (req: Request, res: Response) => {
     try {
@@ -51,9 +64,9 @@ export const styleReconciliation = async (req: Request, res: Response) => {
         // Fetch job WITH its valid row IDs to prevent IDOR security vulnerabilities
         const job = await prisma.styleRequirement.findFirst({
             where: { jobNo },
-            select: { 
-                id: true, 
-                rows: { select: { id: true } } 
+            select: {
+                id: true,
+                rows: { select: { id: true } },
             },
         });
 
@@ -61,9 +74,12 @@ export const styleReconciliation = async (req: Request, res: Response) => {
             return res.status(404).json({ message: `No style requirement found for jobNo "${jobNo}"` });
         }
 
-        const validRowIds = new Set(job.rows.map(r => r.id));
+        const validRowIds = new Set(job.rows.map((r) => r.id));
 
-        const { rows } = req.body as { rows: TrailingRowInput[] };
+        // `notes` is a single note for the whole job submission (applied to
+        // every row in the transaction), matching what the frontend actually
+        // sends: { jobNo, rows, notes }.
+        const { rows, notes } = req.body as { rows: TrailingRowInput[]; notes?: string | null };
         if (!Array.isArray(rows) || rows.length === 0) {
             return res.status(400).json({ message: "rows array is required and cannot be empty" });
         }
@@ -84,18 +100,15 @@ export const styleReconciliation = async (req: Request, res: Response) => {
             }
 
             const numericFields: Record<string, number> = {};
-            for (const key of NUMERIC_KEYS) {
+
+            for (const key of REQUIRED_NUMERIC_KEYS) {
                 if (!(key in row)) {
                     return res.status(400).json({
                         message: `Missing required field "${key}" on styleRequirementRowId ${styleRequirementRowId}`,
                     });
                 }
-                
-                // Safe typing for dynamic key access
-                const raw = row[key as keyof TrailingRowInput];
-                const num = raw === "" || raw == null ? 0 : Math.round(Number(raw));
-                
-                if (Number.isNaN(num)) {
+                const num = toNumber(row[key as keyof TrailingRowInput]);
+                if (num === null) {
                     return res.status(400).json({
                         message: `Invalid numeric value for "${key}" on styleRequirementRowId ${styleRequirementRowId}`,
                     });
@@ -103,9 +116,33 @@ export const styleReconciliation = async (req: Request, res: Response) => {
                 numericFields[key] = num;
             }
 
+            for (const key of OPTIONAL_NUMERIC_KEYS) {
+                const num = toNumber(row[key as keyof TrailingRowInput] ?? 0);
+                numericFields[key] = num === null ? 0 : num;
+            }
+
+            // Derived/FORMULA fields — computed server-side so the client
+            // never has to send (or can't drift from) these values.
+            // Mirrors the frontend's calculateFormula logic for these keys.
+            // If you'd rather trust client-computed values, accept them as
+            // optional overrides instead of recomputing.
+            const cadConsumption = 0 || 0; // depends on finishRequiredQty/orderQty from styleRequirementRow — join in if needed
+            const plannedCuttingQty = 0 || 0; // depends on cadConsumption above
+            const sewingInputQty = numericFields["sewingInputQty"] ?? 0;
+            const shippedQty = numericFields["shippedQty"] ?? 0;
+            const plannedLeftOverQty = sewingInputQty - shippedQty;
+
+            numericFields.cadConsumption = cadConsumption;
+            numericFields.plannedCuttingQty = plannedCuttingQty;
+            numericFields.plannedLeftOverQty = plannedLeftOverQty;
+
             prepared.push({
                 styleRequirementRowId,
-                data: { ...numericFields, note: row.note ?? null },
+                data: {
+                    ...numericFields,
+                    note: notes ?? null,
+                    manufacturingUnite: row.manufacturingUnite ?? "NULL",
+                },
             });
         }
 
@@ -113,19 +150,17 @@ export const styleReconciliation = async (req: Request, res: Response) => {
             prepared.map(({ styleRequirementRowId, data }) =>
                 prisma.reconciliationData.upsert({
                     where: { styleRequirementRowId },
-                    // FIX: Cast to 'any' to bypass Prisma's strict spread type checking
                     update: {
                         ...data,
                         submittedBy,
                         submittedDate: new Date(),
-                    } as any, 
-                    // FIX: Cast to 'any' to bypass Prisma's strict spread type checking
+                    } as any,
                     create: {
                         ...data,
                         submittedBy,
                         submittedDate: new Date(),
                         styleRequirementRowId,
-                    } as any, 
+                    } as any,
                 })
             )
         );

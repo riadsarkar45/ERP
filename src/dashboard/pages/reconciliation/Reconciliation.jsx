@@ -55,7 +55,6 @@ const Reconciliation = () => {
     const WRAPPED_COL_WIDTH = 120;
     const wrapClass = isWrapped ? "whitespace-normal break-words" : "whitespace-nowrap";
 
-    // FIX: right border now comes from inline cellStyle so it applies to ALL scrolling columns
     const cellClass = `px-3 py-2.5 text-sm text-slate-800 border-b border-black text-center align-middle ${wrapClass}`;
     const cellStyle = {
         borderRight: "1px solid #000000",
@@ -123,6 +122,8 @@ const Reconciliation = () => {
         2: { key: "composition", label: "COMPOSITION" },
     };
 
+    // `formula` fields are computed here for DISPLAY, but are now also sent
+    // to the backend (see buildJobPayload) since the schema stores them.
     const TRAILING_FIELDS = [
         { key: "fabricIssueCuttingDept", type: "input" }, { key: "fabricIssuedShortExcess", type: "FORMULA" },
         { key: "cadConsumption", type: "FORMULA" }, { key: "plannedCuttingQty", type: "FORMULA" },
@@ -139,6 +140,12 @@ const Reconciliation = () => {
         { key: "plannedLeftOverQty", type: "FORMULA" }, { key: "physicalFoundLeftOver", type: "input" },
         { key: "percentPhysicalFoundLeftover", type: "FORMULA" }, { key: "leftOverShortExcess", type: "FORMULA" },
     ];
+
+    // Subset of FORMULA keys that actually exist as columns in
+    // reconciliationData and therefore need to be included in the save
+    // payload (the rest — e.g. shortExcess percentages — are display-only
+    // and are NOT persisted, matching the Prisma schema).
+    const FORMULA_KEYS_TO_PERSIST = ["cadConsumption", "plannedCuttingQty", "plannedLeftOverQty"];
 
     const STICKY_EDITABLE_FIELDS = [
         { key: "manufacturingUnite", label: "MANUFACTURING UNITE" }
@@ -252,6 +259,85 @@ const Reconciliation = () => {
         setEditingJobIndex(null);
     };
 
+    // ✨ AUTO FORMULA CALCULATOR (EXACTLY AS NOTED IN THE IMAGE) ✨
+    // Declared before buildJobPayload so buildJobPayload can call it when
+    // assembling the fields the backend needs to persist.
+    const calculateFormula = (jobIndex, i, fieldKey) => {
+        const get = (key) => {
+            const valStr = editValues[`${jobIndex}-${i}-${key}`];
+            if (valStr !== undefined && valStr !== "") {
+                const num = Number(valStr);
+                return isNaN(num) ? 0 : num;
+            }
+            const row = reportData[jobIndex]?.rows?.[i];
+            const saved = row?.reconciliation?.[key];
+            if (saved != null) return Number(saved);
+            // Fallback to base row data (e.g. finishRequiredQty, orderQty)
+            return row?.[key] != null ? Number(row[key]) : 0;
+        };
+
+        switch (fieldKey) {
+            case "fabricIssuedShortExcess":
+                return get("fabricIssueCuttingDept") - get("finishRequiredQty");
+
+            case "cadConsumption":
+                return get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
+
+            case "plannedCuttingQty": {
+                const cadConsumption = get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
+                return get("fabricIssueCuttingDept") ? get("fabricIssueCuttingDept") / cadConsumption : 0;
+            }
+
+            case "cuttingShortExcess":
+                return get("actualCuttingQty") - get("orderQty");
+
+            case "shortExcessPercentCutting": {
+                const order = get("orderQty");
+                const shortEx = get("actualCuttingQty") - order;
+                return order > 0 ? (shortEx / order) * 100 : 0;
+            }
+
+            case "notPossibleToInput":
+                return get("cuttingToSewingInput") - get("actualCuttingQty");
+
+            case "inputShortExcess":
+                return get("sewingInputQty") - get("orderQty");
+
+            case "outputShortExcess":
+                return get("sewingOutputQty") - get("sewingInputQty");
+
+            case "shortExcessFinish":
+                return get("finishOutputQty") - get("finishInputQty");
+
+            case "excessShort":
+                return get("shippedQty") - get("orderQty");
+
+            case "plannedLeftOverQty":
+                return get("sewingInputQty") - get("shippedQty");
+
+            case "percentPhysicalFoundLeftover": {
+                const planned = get("sewingInputQty") - get("shippedQty");
+                const physical = get("physicalFoundLeftOver");
+                return planned > 0 ? (physical / planned) * 100 : 0;
+            }
+
+            case "leftOverShortExcess": {
+                const planned = get("sewingInputQty") - get("shippedQty");
+                return get("physicalFoundLeftOver") - planned;
+            }
+
+            case "receivedShortExcess": {
+                const sentForEmbellishment = get("sentForEmbellishment") || 0;
+                const receivedFromEmbellishment = get("receivedFromEmbellishment") || 0;
+                const total = receivedFromEmbellishment - sentForEmbellishment;
+                return total && total;
+            }
+
+            default:
+                return 0;
+        }
+    };
+
     const buildJobPayload = (jobIndex, job) => {
         const comps = job?.rows || [];
         const rows = [];
@@ -259,18 +345,27 @@ const Reconciliation = () => {
             const com = comps[i];
             if (!com || !com.id) continue;
             const rowPayload = { styleRequirementRowId: com.id };
+
             TRAILING_FIELDS.forEach(field => {
                 if (field.type !== "FORMULA") {
                     const raw = editValues[`${jobIndex}-${i}-${field.key}`];
                     const num = raw === "" || raw == null ? 0 : Math.round(Number(raw));
                     rowPayload[field.key] = isNaN(num) ? 0 : num;
+                } else if (FORMULA_KEYS_TO_PERSIST.includes(field.key)) {
+                    // These FORMULA fields exist as real columns in
+                    // reconciliationData, so compute and include them —
+                    // the backend requires them.
+                    const calculated = calculateFormula(jobIndex, i, field.key);
+                    rowPayload[field.key] = Number.isFinite(calculated) ? Math.round(calculated) : 0;
                 }
             });
-            // Add sticky editable fields
+
+            // Sticky editable fields (manufacturingUnite)
             STICKY_EDITABLE_FIELDS.forEach(field => {
                 const raw = editValues[`${jobIndex}-${i}-${field.key}`];
                 rowPayload[field.key] = raw != null && raw !== "" ? String(raw) : "";
             });
+
             rows.push(rowPayload);
         }
         return { jobNo: job.jobNo, rows };
@@ -295,8 +390,9 @@ const Reconciliation = () => {
                 return;
             }
             payload.notes = notes;
-            console.log(payload)
-            // await axiosPrivate.patch(`/api/styles/${encodeURIComponent(pendingSaveJob.jobNo)}/reconciliation`, payload);
+
+            await axiosPrivate.patch(`/api/styles/${encodeURIComponent(pendingSaveJob.jobNo)}/reconciliation`, payload);
+
             setEditingJobIndex(null);
             setShowNotesModal(false);
             setPendingSaveJobIndex(null);
@@ -316,96 +412,6 @@ const Reconciliation = () => {
         setPendingSaveJobIndex(null);
         setPendingSaveJob(null);
         setNotes("");
-    };
-
-    // ✨ AUTO FORMULA CALCULATOR (EXACTLY AS NOTED IN THE IMAGE) ✨
-    const calculateFormula = (jobIndex, i, fieldKey) => {
-        const get = (key) => {
-            const valStr = editValues[`${jobIndex}-${i}-${key}`];
-            if (valStr !== undefined && valStr !== "") {
-                const num = Number(valStr);
-                return isNaN(num) ? 0 : num;
-            }
-            const row = reportData[jobIndex]?.rows?.[i];
-            const saved = row?.reconciliation?.[key];
-            if (saved != null) return Number(saved);
-            // Fallback to base row data (e.g. finishRequiredQty, orderQty)
-            return row?.[key] != null ? Number(row[key]) : 0;
-        };
-
-        switch (fieldKey) {
-            // Fabric Issued Short/Ex = Fabric Issue Cutting - Finish Require Qty
-            case "fabricIssuedShortExcess":
-                return get("fabricIssueCuttingDept") - get("finishRequiredQty");
-
-            // CAD Consumption (not noted -> show saved value)
-            case "cadConsumption":
-                return get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
-
-            // Planned Cutting (not noted -> show saved value)
-            case "plannedCuttingQty":
-                // return get("plannedCuttingQty");
-                const cadConsumption = get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
-                return get("fabricIssueCuttingDept") ? get("fabricIssueCuttingDept") / cadConsumption : 0;
-
-            // * Cut. Short & Excess will calculate with ORDER Qty (Actual Cutting - Order Qty)
-            case "cuttingShortExcess":
-                return get("actualCuttingQty") - get("orderQty");
-
-            // * Short & Excess % will calculate with ORDER Qty VS Actual Cut
-            case "shortExcessPercentCutting": {
-                const order = get("orderQty");
-                const shortEx = get("actualCuttingQty") - order;
-                return order > 0 ? (shortEx / order) * 100 : 0;
-            }
-
-            // * NOT Possible to Input -> Calculate with Cut to Input - Actual Cutting
-            case "notPossibleToInput":
-                return get("cuttingToSewingInput") - get("actualCuttingQty");
-
-            // * Input Short & Excess will calculate with ORDER Qty - Input Qty
-            case "inputShortExcess":
-                return get("sewingInputQty") - get("orderQty");
-
-            // * Out Put Short Excess will calculate From Sewing Input
-            case "outputShortExcess":
-                return get("sewingOutputQty") - get("sewingInputQty");
-
-            // * Short & Excess will calculate with Finish Input - Finish Output
-            case "shortExcessFinish":
-                return get("finishOutputQty") - get("finishInputQty");
-
-            // * Shipment Excess/Short will calculate with ORDER Qty (Shipped Qty - Order Qty)
-            case "excessShort":
-                return get("shippedQty") - get("orderQty");
-
-            // * Planned Leftover calculate with Sewing Input (Sewing Input - Sewing Output)
-            case "plannedLeftOverQty":
-                return get("sewingInputQty") - get("shippedQty");
-
-            // * Physical Leftover % calculate with Physical Leftover found
-            case "percentPhysicalFoundLeftover": {
-                const planned = get("sewingInputQty") - get("shippedQty");
-                const physical = get("physicalFoundLeftOver");
-                return planned > 0 ? (physical / planned) * 100 : 0;
-            }
-
-            // Left Over Short/Ex = Physical Found Leftover - Planned Leftover
-            case "leftOverShortExcess": {
-                const planned = get("sewingInputQty") - get("shippedQty");
-                return get("physicalFoundLeftOver") - planned;
-            }
-            // Received Short/Ex 
-            case "receivedShortExcess": {
-                const sentForEmbellishment = get("sentForEmbellishment") || 0;
-                const receivedFromEmbellishment = get("receivedFromEmbellishment") || 0;
-                const total  = receivedFromEmbellishment - sentForEmbellishment;
-                return total && total;
-            }
-
-            default:
-                return 0;
-        }
     };
 
     const isLoading = isDataLoading;
@@ -612,7 +618,7 @@ const Reconciliation = () => {
                                             <td className={stickyBodyClass(3)} style={stickyCellStyle(3, stickyBg)}>
                                                 <div className="flex items-center justify-center h-full">{com?.orderQty ?? "-"}</div>
                                             </td>
-                                            {/* ── STICKY COL 4: MANUFACTURING UNITE (NOW EDITABLE) ── */}
+                                            {/* ── STICKY COL 4: MANUFACTURING UNITE (EDITABLE) ── */}
                                             <td className={stickyBodyClass(4)} style={stickyCellStyle(4, stickyBg, true)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
@@ -630,7 +636,7 @@ const Reconciliation = () => {
                                                 </div>
                                             </td>
 
-                                            {/* ── Scrolling columns (right border via inline cellStyle) ── */}
+                                            {/* ── Scrolling columns ── */}
                                             <td className={cellClass} style={cellStyle}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Yarn_Delivery ?? "-"}</td>
