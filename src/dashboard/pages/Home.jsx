@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
+import { AuthContext } from "../auth/AuthContext";
 
 const AVATAR_STYLES = [
     "bg-blue-50 text-blue-700",
@@ -377,6 +378,7 @@ const Home = () => {
     const [delivery, setDelivery] = useState(null);
     const [deliveryLoading, setDeliveryLoading] = useState(true);
     const [deliveryDate, setDeliveryDate] = useState(todayBST);
+    const { user } = useContext(AuthContext)
 
     useEffect(() => {
         const fetchChallanData = async () => {
@@ -406,7 +408,9 @@ const Home = () => {
     return (
         <DashboardLayout title="Dashboard">
             <div className="p-6">
-                <HourlyChallanBoard payload={challan} loading={challanLoading} />
+                {
+                    user?.userRole === "SUPER ADMIN" && <HourlyChallanBoard payload={challan} loading={challanLoading} />
+                }
                 <DailyDeliveryBoard
                     payload={delivery}
                     loading={deliveryLoading}
