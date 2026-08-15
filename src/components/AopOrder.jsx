@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isEdit, setJobId, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [getJobIndex, setJobIndex] = useState("");
     const [hoveredIndex, setHoveredIndex] = useState(null);
     // const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
@@ -39,11 +39,6 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
         cursor: "pointer",
     });
 
-    // Non-frozen td (kept for reference, but we apply inline styles below for consistency)
-    const plainTd = (isHovered) => ({
-        ...baseTd,
-        backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
-    });
 
     // ── TOTALS: flatten every composition across all orders/workOrders and sum the numeric fields ──
     const totals = useMemo(() => {
@@ -132,13 +127,13 @@ const AopOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isE
                                         <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
+                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
                                         </div>
                                     )
                                 ))}
                             </td>
                             <td style={stickyTd(1, isHovered)}>
-                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
                             <td style={stickyTd(2, isHovered)}>
                                 {workOrders?.map((wo, i) => (

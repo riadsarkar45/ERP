@@ -47,15 +47,13 @@ const buildWhereClause = (
 
 export const styleRequirements = async (req: Request, res: Response) => {
     try {
+        const requestStart = process.hrtime.bigint();
+
         const { jobNo } = req.params as { jobNo: string | undefined };
         const {
-            page: pageParam,
-            limit: limitParam,
             filters: filtersParam,
-        } = req.query as { page?: string; limit?: string; filters?: string };
+        } = req.query as { filters?: string };
 
-        const page = Math.max(1, Number(pageParam) || 1);
-        const limit = Math.max(1, Number(limitParam) || 20);
 
         let filters: StyleFilters | undefined;
         if (filtersParam) {
@@ -75,7 +73,6 @@ export const styleRequirements = async (req: Request, res: Response) => {
             prisma.styleRequirement.findMany({
                 where: whereClause,
                 orderBy: { id: "asc" },
-                skip: (page - 1) * limit,
                 take: 40,
                 select: {
                     salesContact: true,
@@ -94,7 +91,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             orderQty: true,
                             finishRequiredQty: true,
                             additional: true,
-                            reconciliation:{
+                            reconciliation: {
                                 select: {
                                     id: true,
                                     actualCuttingQty: true,
@@ -151,17 +148,14 @@ export const styleRequirements = async (req: Request, res: Response) => {
         ]);
 
         const summaryData = calculateOrdersForStyleSummary(styles);
+        const totalMs = Number(process.hrtime.bigint() - requestStart) / 1_000_000;
 
         return res.status(200).send({
             data: summaryData,
             type: "success",
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.max(1, Math.ceil(total / limit)),
-            },
+            totalMs: totalMs
         });
+
     } catch (error) {
         console.error(error);
         return res.status(500).json({
@@ -206,7 +200,7 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
             // FIX: Removed `[columnName]: { not: null }` to prevent Prisma validation errors.
             // We filter out nulls in JS below anyway.
             const rows = await prisma.styleRequirement.findMany({
-                where: scopingWhere, 
+                where: scopingWhere,
                 distinct: [columnName as any],
                 select: {
                     [columnName]: true,

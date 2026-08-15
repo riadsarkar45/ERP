@@ -8,6 +8,8 @@ import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploa
 import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
 import { uploadYarnGreyRcvdDataFromFile, type YarnGreyRcvdParsedRow } from "../../helpers/uploadStyleReqData/uploadYarnDevData";
 import { uploadDyeingGreyDeliveryDataFromFile, type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
+// import { uploadDyeing type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
+
 // ⚠️ Adjust this path to match where you saved the helper file provided earlier
 // import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
 
@@ -842,44 +844,58 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         });
 
         // ── Background: Parallel upload processing ─────────────────
+                // ── Background: SEQUENTIAL upload processing (Prevents RAM Crashes) ─────────────────
         (async () => {
             try {
-                const uploadPromises: Promise<void>[] = [];
-
+                // 1. Style Requirement
                 if (styleReqHeaderFound && parsedRows.length > 0) {
-                    uploadPromises.push(uploadDataFromFile(parsedRows, jobId).then(() => console.log(`✅ [${jobId}] Style Requirement done.`)));
+                    await uploadDataFromFile(parsedRows, jobId);
+                    console.log(`✅ [${jobId}] Style Requirement done.`);
+                    parsedRows = []; // 🧹 Free memory immediately
                 }
+
+                // 2. K.W.O
                 if (kwoHeaderFound && parsedRowsKWO.length > 0) {
-                    uploadPromises.push(uploadKWODataFromFile(parsedRowsKWO, jobId).then(() => console.log(`✅ [${jobId}] K.W.O done.`)));
+                    await uploadKWODataFromFile(parsedRowsKWO, jobId);
+                    console.log(`✅ [${jobId}] K.W.O done.`);
+                    parsedRowsKWO = []; // 🧹 Free memory immediately
                 }
+
+                // 3. A.W.O
                 if (awoHeaderFound && parsedRowsAWO.length > 0) {
-                    uploadPromises.push(uploadAOWDataFromFile(parsedRowsAWO, jobId).then(() => console.log(`✅ [${jobId}] A.W.O done.`)));
+                    await uploadAOWDataFromFile(parsedRowsAWO, jobId);
+                    console.log(`✅ [${jobId}] A.W.O done.`);
+                    parsedRowsAWO = []; // 🧹 Free memory immediately
                 }
+
+                // 4. D.W.O
                 if (dwoHeaderFound && parsedRowsDWO.length > 0) {
-                    uploadPromises.push(uploadDYEINGDataFromFile(parsedRowsDWO, jobId).then(() => console.log(`✅ [${jobId}] D.W.O done.`)));
+                    await uploadDYEINGDataFromFile(parsedRowsDWO, jobId);
+                    console.log(`✅ [${jobId}] D.W.O done.`);
+                    parsedRowsDWO = []; // 🧹 Free memory immediately
                 }
-                // ✅ NEW: Trigger AOP Delivery background processing
+
+                // 5. AOP Delivery
                 if (aopDelHeaderFound && parsedRowsAOPDel.length > 0) {
-                    uploadPromises.push(
-                        uploadAopDeliveryDataFromFile(parsedRowsAOPDel, jobId).then(() => console.log(`✅ [${jobId}] AOP DEL. & RCVD done.`))
-                    );
-
-                    // uploadYarnGreyRcvdDataFromFile
+                    await uploadAopDeliveryDataFromFile(parsedRowsAOPDel, jobId);
+                    console.log(`✅ [${jobId}] AOP DEL. & RCVD done.`);
+                    parsedRowsAOPDel = []; // 🧹 Free memory immediately
                 }
 
+                // 6. Yarn & Grey Rcvd
                 if (yarnGreyRcvdHeaderFound && parsedRowsYarnGreyRcvd.length > 0) {
-                    uploadPromises.push(
-                        uploadYarnGreyRcvdDataFromFile(parsedRowsYarnGreyRcvd, jobId).then(() => console.log(`✅ [${jobId}] YARN & GREY RCVD done.`))
-                    );
+                    await uploadYarnGreyRcvdDataFromFile(parsedRowsYarnGreyRcvd, jobId);
+                    console.log(`✅ [${jobId}] YARN & GREY RCVD done.`);
+                    parsedRowsYarnGreyRcvd = []; // 🧹 Free memory immediately
                 }
 
+                // 7. Dyeing Grey Delivery
                 if (dyeingGreyDeliveryHeaderFound && parsedRowsDyeingGreyDelivery.length > 0) {
-                    uploadPromises.push(
-                        uploadDyeingGreyDeliveryDataFromFile(parsedRowsDyeingGreyDelivery, jobId).then(() => console.log(`✅ [${jobId}] DYEING GREY DEL. & RCVD done.`))
-                    );
+                    await uploadDyeingGreyDeliveryDataFromFile(parsedRowsDyeingGreyDelivery, jobId);
+                    console.log(`✅ [${jobId}] DYEING GREY DEL. & RCVD done.`);
+                    parsedRowsDyeingGreyDelivery = []; // 🧹 Free memory immediately
                 }
 
-                await Promise.all(uploadPromises);
                 console.log(`🎉 [${jobId}] All background uploads completed.`);
             } catch (err: unknown) {
                 console.error("❌ Background upload processing failed:", err);

@@ -17,55 +17,62 @@ import { getJobNumbers, managementReport } from "../controllers/mis/managementRe
 import { misDetailView } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 import { searchChallans } from "../controllers/movements/searchChallan";
+import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
+import { hourlyChallanReport } from "../controllers/users/hrlyChallanReport";
+import { hourlyDeliveryMovement } from "../controllers/users/hrlyDeliveryReport";
 
 const getRouters = express.Router();
 
 console.log("getRouters loaded");
 
-getRouters.get("/work-order/:orderType", apiLimiter, getAllOrders);
+getRouters.get("/work-order/:orderType", responseTimeMonitor, apiLimiter, getAllOrders);
 
-getRouters.get("/dashboard-detail", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), dashboardController);
+getRouters.get("/dashboard-detail", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), dashboardController);
 
-getRouters.get("/style-requirement", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getOrderSummaryByStyle);
+getRouters.get("/style-requirement", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getOrderSummaryByStyle);
 
-getRouters.get("/audits", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), allAudits);
+getRouters.get("/audits", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), allAudits);
 
-getRouters.get("/jobs", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getAllJobs);
+getRouters.get("/jobs", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getAllJobs);
 
-getRouters.get("/styles", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
+getRouters.get("/styles", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
 
-getRouters.get("/styles/:jobNo", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
+getRouters.get("/styles/:jobNo", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
 
-getRouters.get("/deliveries/:orderType", apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deliveryDetail);
+getRouters.get("/deliveries/:orderType", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deliveryDetail);
 
-getRouters.delete("/delete-delivery/:deliveryId", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deleteChallanFromDelivery)
+getRouters.delete("/delete-delivery/:deliveryId", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deleteChallanFromDelivery)
 
-getRouters.get("/glance-report", authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), GlanceReport);
+getRouters.get("/glance-report", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), GlanceReport);
 
-getRouters.get("/party-view-report/:factoryName", partyViewData);
+getRouters.get("/party-view-report/:factoryName", responseTimeMonitor, apiLimiter, partyViewData);
 
-getRouters.get("/management-view/job-numbers", getJobNumbers); 
-    // specific route FIRST
-getRouters.get("/management-view/:orderType", managementReport);   // dynamic route AFTER
+getRouters.get("/management-view/job-numbers", responseTimeMonitor, apiLimiter, getJobNumbers);
+// specific route FIRST
+getRouters.get("/management-view/:orderType", responseTimeMonitor, apiLimiter, managementReport);   // dynamic route AFTER
 
-getRouters.get("/detail-party-report/:factoryName/:orderType", partyData);
+getRouters.get("/detail-party-report/:factoryName/:orderType", responseTimeMonitor, apiLimiter, partyData);
 
-getRouters.get("/glance-report/:factoryName/:orderType", partyData);
+getRouters.get("/glance-report/:factoryName/:orderType", responseTimeMonitor, partyData);
 
-getRouters.get("/management-view", partyData);
+getRouters.get("/management-view", responseTimeMonitor, partyData);
 
-getRouters.get("/challan-movement/:orderType", challanMovement);
+getRouters.get("/challan-movement/:orderType", responseTimeMonitor, challanMovement);
 
-getRouters.get("/work-order/:orderType/filter-options/:column", getFilterOptions);
+getRouters.get("/work-order/:orderType/filter-options/:column", responseTimeMonitor, getFilterOptions);
 
-getRouters.get("/glance/filter-options/:columnName", getGlanceFilterOptions);
+getRouters.get("/glance/filter-options/:columnName", responseTimeMonitor, getGlanceFilterOptions);
 
-getRouters.get("/glance/:jobNo", styleRequirements);
+getRouters.get("/glance/:jobNo", responseTimeMonitor, styleRequirements);
 
-getRouters.get("/mis/glance/detail/:columnName/:jobNo", misDetailView);
+getRouters.get("/mis/glance/detail/:columnName/:jobNo", responseTimeMonitor, misDetailView);
 
-getRouters.get("/glance/:jobNo/trailing-data", styleReconciliation);
+getRouters.get("/glance/:jobNo/trailing-data", responseTimeMonitor, styleReconciliation);
 
-getRouters.get("/challan/search", searchChallans);
+getRouters.get("/:orderType/challan/search", responseTimeMonitor, searchChallans);
+
+getRouters.get("/reports/hourly-challan", responseTimeMonitor, hourlyChallanReport);
+
+getRouters.get("/reports/daily-delivery", responseTimeMonitor, hourlyDeliveryMovement);
 
 export default getRouters;

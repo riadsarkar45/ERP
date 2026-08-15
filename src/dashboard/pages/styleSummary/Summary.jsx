@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen } from "lucide-react";
+import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen, PencilOff } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import useAxiosPublic from "../../../hooks/Axios";
@@ -26,7 +26,7 @@ const COLUMNS = [
     "RE-PROCESS FAB. BALANCE (+/-)", "RE-PROCESS PROCESS LOSS (%)",
 ];
 
-// ── Filterable columns config ─────────────────────────────────────────────────
+// ── Filterable columns config (colIndex -> { key, type }) ────────────────────
 const FILTERABLE_COLS = {
     0: { key: "salesContact", type: "row" },
     1: { key: "buyerName", type: "row" },
@@ -37,6 +37,11 @@ const FILTERABLE_COLS = {
     6: { key: "composition", type: "subrow" },
 };
 
+const KEY_TO_INDEX = Object.entries(FILTERABLE_COLS).reduce((acc, [idx, col]) => {
+    acc[col.key] = Number(idx);
+    return acc;
+}, {});
+
 // ── Frozen column widths ─────────────────────────────────────────────────────
 const FROZEN_WIDTHS = [150, 120, 180, 100, 120, 250, 280];
 const FROZEN_COUNT = FROZEN_WIDTHS.length;
@@ -46,80 +51,6 @@ const FROZEN_LEFTS = FROZEN_WIDTHS.reduce((acc, width, idx) => {
     return acc;
 }, []);
 
-// ── Helper: Deep filter function (Excel-like) ────────────────────────────────
-const applyDeepFiltersSummary = (data, activeFilters) => {
-    if (!data || Object.keys(activeFilters).length === 0) return data;
-
-    return data.reduce((acc, row) => {
-        // 1. Check top-level (row) filters (e.g., Job No, Buyer)
-        for (const [ci, selectedSet] of Object.entries(activeFilters)) {
-            if (!selectedSet || selectedSet.size === 0) continue;
-            const col = FILTERABLE_COLS[Number(ci)];
-            if (!col || col.type !== "row") continue;
-
-            if (!selectedSet.has(String(row[col.key] ?? ""))) {
-                return acc; // Skip this entire row if it doesn't match
-            }
-        }
-
-        // 2. Clone row and filter sub-rows (e.g., Color, Composition)
-        const clonedRow = { ...row };
-        const subRows = clonedRow.rows || [];
-        const breakdowns = clonedRow.compBreakdown || [];
-
-        const hasSubFilters = Object.entries(activeFilters).some(([ci, selectedSet]) => {
-            if (!selectedSet || selectedSet.size === 0) return false;
-            const col = FILTERABLE_COLS[Number(ci)];
-            return col && col.type === "subrow";
-        });
-
-        if (hasSubFilters) {
-            const filteredSubRows = [];
-            const filteredBreakdowns = [];
-
-            for (let j = 0; j < subRows.length; j++) {
-                const sr = subRows[j];
-                let srValid = true;
-
-                for (const [ci, selectedSet] of Object.entries(activeFilters)) {
-                    if (!selectedSet || selectedSet.size === 0) continue;
-                    const col = FILTERABLE_COLS[Number(ci)];
-                    if (!col || col.type !== "subrow") continue;
-
-                    if (!selectedSet.has(String(sr[col.key] ?? ""))) {
-                        srValid = false;
-                        break;
-                    }
-                }
-
-                if (srValid) {
-                    filteredSubRows.push(sr);
-                    // Keep the breakdown data perfectly aligned with the sub-rows!
-                    if (j < breakdowns.length) {
-                        filteredBreakdowns.push(breakdowns[j]);
-                    } else {
-                        filteredBreakdowns.push({});
-                    }
-                }
-            }
-
-            clonedRow.rows = filteredSubRows;
-            clonedRow.compBreakdown = filteredBreakdowns;
-        } else {
-            if (!clonedRow.compBreakdown && subRows.length > 0) {
-                clonedRow.compBreakdown = subRows.map(() => ({}));
-            }
-        }
-
-        // 3. Only keep the row if it still has valid sub-rows left
-        if (clonedRow.rows.length > 0) {
-            acc.push(clonedRow);
-        }
-
-        return acc;
-    }, []);
-};
-
 // ── Helper ───────────────────────────────────────────────────────────────────
 const getBreakdownValue = (item, key) => {
     if (!item) return 0;
@@ -128,12 +59,16 @@ const getBreakdownValue = (item, key) => {
 };
 
 // ── Filter Dropdown Component ─────────────────────────────────────────────────
-function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, onClear, onClose, anchorRef }) {
+function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading, onApply, onClear, onClose, anchorRef }) {
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState(
         activeValues !== null ? new Set(activeValues) : new Set(allValues)
     );
     const dropRef = useRef(null);
+
+    useEffect(() => {
+        setSelected(activeValues !== null ? new Set(activeValues) : new Set(allValues));
+    }, [allValues]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -177,11 +112,9 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                 minWidth: 220,
                 maxWidth: 280,
-
             }}
             className="filter-dropdown"
         >
-            {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide truncate">{colLabel}</span>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0">
@@ -189,7 +122,6 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 </button>
             </div>
 
-            {/* Search */}
             <div className="px-2 py-2 border-b border-gray-100">
                 <div className="flex items-center gap-1.5 bg-gray-100 rounded px-2 py-1">
                     <Search size={12} className="text-gray-400 flex-shrink-0" />
@@ -208,13 +140,13 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 </div>
             </div>
 
-            {/* Select All */}
             <div className="px-3 py-1.5 border-b border-gray-100">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
                         type="checkbox"
                         checked={allChecked}
                         onChange={toggleAll}
+                        disabled={isLoading}
                         className="rounded text-blue-500"
                     />
                     <span className="text-xs font-medium text-gray-600">Select All</span>
@@ -222,9 +154,12 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 </label>
             </div>
 
-            {/* Values list */}
             <div style={{ maxHeight: 200, overflowY: "auto" }} className="py-1">
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                    <div className="px-3 py-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+                        <RefreshCcw size={12} className="animate-spin" /> Loading options...
+                    </div>
+                ) : filtered.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-gray-400 text-center">No matches</div>
                 ) : (
                     filtered.map(val => (
@@ -241,11 +176,11 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
                 )}
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50">
                 <button
                     onClick={() => { onApply(selected); onClose(); }}
-                    className="flex-1 text-xs bg-blue-500 text-white rounded px-3 py-1.5 font-medium hover:bg-blue-600 transition-colors"
+                    disabled={isLoading}
+                    className="flex-1 text-xs bg-blue-500 text-white rounded px-3 py-1.5 font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
                 >
                     Apply
                 </button>
@@ -262,72 +197,73 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, onApply, 
 
 // ── Summary Page ─────────────────────────────────────────────────────────────
 export default function Summary() {
-    const axiosPublic = useAxiosPublic();
+    // const axiosPublic = useAxiosPublic();
     const [rawData, setRawData] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
     const scrollContainerRef = useRef(null);
 
-    const [activeFilters, setActiveFilters] = useState({});
+    const FILTER_STORAGE_KEY = "summary_active_filters";
+
+    const [activeFilters, setActiveFilters] = useState(() => {
+        try {
+            const saved = sessionStorage.getItem(FILTER_STORAGE_KEY);
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
     const [openFilter, setOpenFilter] = useState(null);
-    const [isEditing, setIsEditing] = useState({ isEdit: false, rowId: 0, editingField: "", changedRow: "", })
-    const [changedField, setChangedField] = useState({ editingRow: "", editingValue: "", changedRow: "" })
+    const [filterOptions, setFilterOptions] = useState([]);
+    const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
+
+    // --- Multi-Cell Editing State ---
+    const [editingCells, setEditingCells] = useState({});
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
-    const { fetchData, error, loading } = useFetchData();
+    const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
-    // ── Client-Side Pagination State ──────────────────────────────────────────
+    
     const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
 
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
-    useEffect(() => {
-        fetchData(`/api/styles`).then(data => {
-            setRawData(data.data);
-            console.log(data.data, "style requirements");
-        }).catch(e => console.error(e));
-    }, [fetchData]);
+    const fetchFilteredData = useCallback(async () => {
+        setIsLoading(prev => ({ ...prev, refreshLoading: true }));
+        try {
+            const params = { page: 1, limit: 10000 };
+            if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
+            const res = await axiosPrivate.get('/api/styles', { params });
+            if (res.data && res.data.data) setRawData(res.data.data);
+        } catch (err) {
+            console.error("Failed to fetch filtered data:", err);
+        } finally {
+            setIsLoading(prev => ({ ...prev, refreshLoading: false }));
+        }
+    }, [activeFilters, axiosPrivate]);
 
-    // Reset to page 1 whenever filters change
+    useEffect(() => {
+        fetchFilteredData();
+    }, [fetchFilteredData]);
+
     useEffect(() => {
         setCurrentPage(1);
     }, [activeFilters]);
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
-
-    // ── Get unique values for a column filtered by all OTHER active filters ───
-    const getColValues = useCallback((colIndex) => {
-        const col = FILTERABLE_COLS[colIndex];
-        if (!col) return [];
-
-        // Create a temporary filter set that excludes the current column's filter
-        const tempFilters = { ...activeFilters };
-        delete tempFilters[colIndex];
-
-        // Apply deep filters with the temporary set to get cascading options
-        const tempFilteredData = applyDeepFiltersSummary(rawData, tempFilters);
-
-        if (col.type === "row") {
-            const set = new Set(tempFilteredData.map(row => String(row[col.key] ?? "")));
-            return Array.from(set).sort();
+    
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(activeFilters));
+        } catch (e){
+            console.log(e);
         }
+    }, [activeFilters]);
 
-        // For sub-rows, extract unique values from the filtered sub-rows
-        const set = new Set();
-        tempFilteredData.forEach(row => {
-            (row.rows || []).forEach(sr => set.add(String(sr[col.key] ?? "")));
-        });
-        return Array.from(set).sort();
-    }, [rawData, activeFilters]);
+    const filteredData = rawData;
 
-    // ── Filtered data (Deeply filtered like Excel) ────────────────────────────
-    const filteredData = useMemo(() => {
-        return applyDeepFiltersSummary(rawData, activeFilters);
-    }, [rawData, activeFilters]);
-
-    // ── Paginate the filtered data ────────────────────────────────────────────
     const paginatedData = useMemo(() => {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
         return filteredData.slice(start, start + ITEMS_PER_PAGE);
@@ -353,9 +289,10 @@ export default function Summary() {
         return pages;
     };
 
-    const openFilterDropdown = (colIndex, e) => {
+    const openFilterDropdown = async (colIndex, e) => {
         e.stopPropagation();
         if (openFilter === colIndex) { setOpenFilter(null); return; }
+
         const btn = filterBtnRefs.current[colIndex];
         if (btn) {
             const rect = btn.getBoundingClientRect();
@@ -365,24 +302,47 @@ export default function Summary() {
             });
         }
         setOpenFilter(colIndex);
+        setFilterOptions([]);
+
+        const col = FILTERABLE_COLS[colIndex];
+        if (!col) return;
+
+        setFilterOptionsLoading(true);
+        try {
+            const otherFilters = { ...activeFilters };
+            delete otherFilters[col.key];
+            const params = Object.keys(otherFilters).length > 0 ? { filters: JSON.stringify(otherFilters) } : {};
+
+            const res = await axiosPrivate.get(`/api/glance/filter-options/${col.key}`, { params });
+            setFilterOptions(res.data?.data || []);
+        } catch (err) {
+            console.error("Failed to fetch filter options:", err);
+            setFilterOptions([]);
+        } finally {
+            setFilterOptionsLoading(false);
+        }
     };
 
     const applyFilter = (colIndex, selectedSet) => {
+        const col = FILTERABLE_COLS[colIndex];
+        if (!col) return;
+        const selectedArray = Array.from(selectedSet);
+        const allOptionsSelected = selectedArray.length === filterOptions.length && filterOptions.length > 0;
+
         setActiveFilters(prev => {
             const next = { ...prev };
-            if (selectedSet.size === 0) {
-                delete next[colIndex];
-            } else {
-                next[colIndex] = selectedSet;
-            }
+            if (selectedArray.length === 0 || allOptionsSelected) delete next[col.key];
+            else next[col.key] = selectedArray;
             return next;
         });
     };
 
     const clearFilter = (colIndex) => {
+        const col = FILTERABLE_COLS[colIndex];
+        if (!col) return;
         setActiveFilters(prev => {
             const next = { ...prev };
-            delete next[colIndex];
+            delete next[col.key];
             return next;
         });
     };
@@ -390,7 +350,6 @@ export default function Summary() {
     const clearAllFilters = () => setActiveFilters({});
     const hasActiveFilters = Object.keys(activeFilters).length > 0;
 
-    // ── Cell renderers ────────────────────────────────────────────────────────
     const renderBreakdownCell = (compBreakdown, key, colIndex) => (
         <td
             className="p-0 align-top"
@@ -430,52 +389,78 @@ export default function Summary() {
         borderBottom: '1px solid #000000',
     });
 
+    // --- Handlers for Multiple Inline Editing ---
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
-        console.log(rowId, editingField, currentValue, changedTable);
-        setIsEditing({ rowId, isEdit: false, editingField, changedRow: changedTable });
-        setChangedField({ editingRow: editingField, editingValue: currentValue, changedRow: changedTable });
-    }
+        const cellKey = `${rowId}-${editingField}`;
+        setEditingCells(prev => {
+            if (prev[cellKey]) return prev;
+            return {
+                ...prev,
+                [cellKey]: {
+                    rowId,
+                    fieldName: editingField,
+                    value: currentValue !== undefined && currentValue !== null ? String(currentValue) : "",
+                    changedTable: changedTable || "",
+                    isDirty: false
+                }
+            };
+        });
+    };
 
-    const handleOnChange = (e) => {
-        const { name, value } = e.target;
-        if (name !== changedField.editingRow) {
-            setChangedField({ editingRow: name, editingValue: value });
-            return;
-        }
-        setChangedField({ editingValue: value, editingRow: name })
-        setIsEditing(prev => ({ ...prev, isEdit: true }));
+    const handleOnChange = (e, cellKey) => {
+        const { value } = e.target;
+        setEditingCells(prev => ({
+            ...prev,
+            [cellKey]: {
+                ...prev[cellKey],
+                value,
+                isDirty: true
+            }
+        }));
+    };
 
-        console.log(value, name);
-    }
-
+    // Submits parallel requests to your EXACT existing backend controller
     const handleSubmit = async () => {
         setIsLoading(prev => ({ ...prev, loadAfterUpdate: true }));
-        console.log(isEditing, "isEditing");
-        console.log(changedField, "changedField");
-        const updatedData = {
-            [isEditing.editingField]: changedField.editingValue,
-            changedTable: isEditing.changedRow,
-            rowId: isEditing.rowId
-        }
-        console.log(isEditing.rowId, "row id");
-        const sendDataToUpdate = await axiosPrivate.patch(`/api/update-style-req/${isEditing.rowId}`, updatedData)
-        console.log(sendDataToUpdate.data.type);
-        if (sendDataToUpdate.data.type === "success") {
-            const getUpdatedStyles = await axiosPrivate.get("/api/styles")
-            setRawData(getUpdatedStyles.data.data);
+        
+        // Extract only the cells that were actually modified
+        const cellsToSave = Object.values(editingCells).filter(c => c.isDirty);
+        
+        if (cellsToSave.length === 0) {
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
-            setIsEditing({ isEdit: false, rowId: 0, editingField: "", changedRow: "" });
-        } else {
+            setEditingCells({});
+            return;
+        }
+
+        try {
+            // Fire parallel requests to your EXISTING backend endpoint
+            const promises = cellsToSave.map(async (cell) => {
+                const updatedData = {
+                    [cell.fieldName]: cell.value,
+                    changedTable: cell.changedTable,
+                    rowId: cell.rowId
+                };
+                // Using rowId as the URL param, exactly matching your original code
+                return axiosPrivate.patch(`/api/update-style-req/${cell.rowId}`, updatedData);
+            });
+
+            // Wait for all of them to finish
+            const results = await Promise.all(promises);
+            const allSuccess = results.every(res => res.data?.type === "success");
+
+            if (allSuccess) {
+                await fetchFilteredData();
+                setEditingCells({}); // Clear state on success
+            }
+        } catch (err) {
+            console.error("Failed to save updates:", err);
+        } finally {
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
         }
-    }
+    };
 
     const handleRefresh = () => {
-        setIsLoading(prev => ({ ...prev, refreshLoading: true }));
-        fetchData(`/api/styles`).then(data => {
-            if (data) setRawData(data.data);
-            setIsLoading(prev => ({ ...prev, refreshLoading: false }));
-        });
+        fetchFilteredData();
     }
 
     const handleExportExcel = () => {
@@ -573,15 +558,12 @@ export default function Summary() {
     const handleGlanceReport = () => {
         setGlanceReport({ isGlanceLoading: true });
         fetchData(`/api/styles`).then(data => {
-            console.log(data, "-------------->>>>>>>");
             if (data) setGlanceReport({ showGlanceModal: true, isGlanceLoading: false, reportData: data.data });
-
         });
     }
 
     return (
         <DashboardLayout>
-            {/* ── Action Bar ─────────────────────────────────────────────────── */}
             <div className="flex gap-2 mb-4 items-center flex-wrap">
                 <button
                     onClick={() => setShowModal(true)}
@@ -600,7 +582,8 @@ export default function Summary() {
                 }
 
                 {
-                    isEditing.isEdit && (
+                    // Show Save button if ANY cell has been modified
+                    Object.values(editingCells).some(c => c.isDirty) && (
                         isLoading.loadAfterUpdate ?
                             <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
                                 <Loader size={18} />
@@ -608,6 +591,15 @@ export default function Summary() {
                             <button onClick={() => handleSubmit()} className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
                                 <Save size={18} />
                             </button>
+                    )
+                }
+                
+                {
+                    // Added Cancel button to clear edits without saving
+                    Object.keys(editingCells).length > 0 && !isLoading.loadAfterUpdate && (
+                        <button onClick={() => setEditingCells({})} className="flex items-center gap-2 px-6 py-2.5 bg-red-200 text-red-700 font-medium rounded-md hover:bg-red-300 transition-colors border border-red-300">
+                            <PencilOff size={18} /> Cancel
+                        </button>
                     )
                 }
 
@@ -620,7 +612,6 @@ export default function Summary() {
                         />
                     )
                 }
-
 
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
@@ -640,8 +631,6 @@ export default function Summary() {
                                     MAKE YOUR RECONCIALATION
                                 </button>
                             </Link>
-
-                            
                     }
                 </div>
 
@@ -650,18 +639,21 @@ export default function Summary() {
                         <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <Filter size={14} className="text-blue-500" />
-                            {Object.entries(activeFilters).map(([colIndex, valSet]) => (
-                                <span
-                                    key={colIndex}
-                                    className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium"
-                                >
-                                    {COLUMNS[Number(colIndex)]}
-                                    <span className="bg-blue-200 text-blue-800 rounded-full px-1 text-xs">{valSet.size}</span>
-                                    <button onClick={() => clearFilter(Number(colIndex))} className="ml-0.5 text-blue-400 hover:text-blue-700">
-                                        <X size={11} />
-                                    </button>
-                                </span>
-                            ))}
+                            {Object.entries(activeFilters).map(([colKey, values]) => {
+                                const colIndex = KEY_TO_INDEX[colKey];
+                                return (
+                                    <span
+                                        key={colKey}
+                                        className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium"
+                                    >
+                                        {colIndex !== undefined ? COLUMNS[colIndex] : colKey}
+                                        <span className="bg-blue-200 text-blue-800 rounded-full px-1 text-xs">{values.length}</span>
+                                        <button onClick={() => colIndex !== undefined && clearFilter(colIndex)} className="ml-0.5 text-blue-400 hover:text-blue-700">
+                                            <X size={11} />
+                                        </button>
+                                    </span>
+                                );
+                            })}
                             <button
                                 onClick={clearAllFilters}
                                 className="text-xs text-gray-500 hover:text-red-500 underline ml-1"
@@ -673,7 +665,7 @@ export default function Summary() {
                 )}
 
                 <span className="ml-auto text-xs text-gray-400">
-                    {filteredData.length} / {rawData.length} rows
+                    {filteredData.length} rows
                 </span>
             </div>
 
@@ -683,8 +675,9 @@ export default function Summary() {
                 <FilterDropdown
                     colIndex={openFilter}
                     colLabel={COLUMNS[openFilter]}
-                    allValues={getColValues(openFilter)}
-                    activeValues={activeFilters[openFilter] ? Array.from(activeFilters[openFilter]) : null}
+                    allValues={filterOptions}
+                    isLoading={filterOptionsLoading}
+                    activeValues={activeFilters[FILTERABLE_COLS[openFilter]?.key] ? Array.from(activeFilters[FILTERABLE_COLS[openFilter]?.key]) : null}
                     onApply={(set) => applyFilter(openFilter, set)}
                     onClear={() => clearFilter(openFilter)}
                     onClose={() => setOpenFilter(null)}
@@ -700,7 +693,6 @@ export default function Summary() {
                 }
             `}</style>
 
-            {/* ── Scrollable Table Container ─────────────────────────────────── */}
             <div
                 ref={scrollContainerRef}
                 className="relative overflow-auto shadow-xs rounded-t-base border border-default"
@@ -714,7 +706,7 @@ export default function Summary() {
                         <tr>
                             {COLUMNS.map((col, index) => {
                                 const isFilterable = index in FILTERABLE_COLS;
-                                const hasFilter = !!activeFilters[index];
+                                const hasFilter = isFilterable && !!activeFilters[FILTERABLE_COLS[index].key];
 
                                 return (
                                     <th
@@ -758,7 +750,18 @@ export default function Summary() {
                     </thead>
 
                     <tbody>
-                        {paginatedData.map((row, i) => {
+                        {isLoading.refreshLoading && paginatedData.length === 0 && (
+                            <tr>
+                                <td colSpan={COLUMNS.length} className="px-4 py-20 text-center align-middle">
+                                    <div className="flex flex-col items-center justify-center gap-3">
+                                        <RefreshCcw size={24} className="animate-spin text-blue-500" />
+                                        <span className="text-sm font-medium text-gray-500">Loading summary data...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+
+                        {!isLoading.refreshLoading && paginatedData.map((row, i) => {
                             const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
 
                             return (
@@ -766,89 +769,95 @@ export default function Summary() {
 
                                     {/* 1. SALES CONTACT */}
                                     <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className="px-3 py-2 whitespace-nowrap align-middle group-hover:bg-gray-50" style={getFrozenStyle(0)}>
-                                        {
-                                            isEditing.editingField === "salesContact" && isEditing.rowId === row.id ?
-                                                <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                    name="salesContract"
-                                                    className=" bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text" /> : row.salesContact
-                                        }
+                                        {editingCells[`${row.id}-salesContact`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-salesContact`].value}
+                                                onChange={(e) => handleOnChange(e, `${row.id}-salesContact`)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                type="text"
+                                            />
+                                        ) : row.salesContact}
                                     </td>
 
                                     {/* 2. BUYER */}
                                     <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(1)}>
-                                        {
-                                            isEditing.editingField === "buyerName" && isEditing.rowId === row.id ?
-                                                <input
-                                                    onChange={(e) => handleOnChange(e)}
-                                                    name="buyerName"
-                                                    value={changedField.editingValue}
-                                                    className="border outline-none w-full p-2 rounded-md bg-yellow-300 bg-opacity-25"
-                                                    type="text" /> : row.buyerName
-                                        }
+                                        {editingCells[`${row.id}-buyerName`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-buyerName`].value}
+                                                onChange={(e) => handleOnChange(e, `${row.id}-buyerName`)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="border outline-none w-full p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                            />
+                                        ) : row.buyerName}
                                     </td>
 
                                     {/* 3. JOB NO */}
                                     <td onDoubleClick={() => handleRedirect(row.jobNo)} className="px-3 py-2 whitespace-nowrap align-middle text-center cursor-pointer hover:text-blue-600 group-hover:bg-gray-50" style={getFrozenStyle(2)}>
-                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)} >
-                                            {
-                                                isEditing.editingField === "jobNo" && isEditing.rowId === row.id ?
-                                                    <input
-                                                        onChange={(e) => handleOnChange(e)}
-                                                        value={changedField.editingValue}
-                                                        name="jobNo"
-                                                        className=" bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md"
-                                                        type="text" /> : row.jobNo
-                                            }
+                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)}>
+                                            {editingCells[`${row.id}-jobNo`] ? (
+                                                <input
+                                                    value={editingCells[`${row.id}-jobNo`].value}
+                                                    onChange={(e) => handleOnChange(e, `${row.id}-jobNo`)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="bg-yellow-300 bg-opacity-25 border outline-none w-full p-2 rounded-md"
+                                                    type="text"
+                                                />
+                                            ) : row.jobNo}
                                         </span>
                                     </td>
 
                                     {/* 4. STYLE */}
                                     <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(3)}>
-                                        {
-                                            isEditing.editingField === "styleNo" && isEditing.rowId === row.id ?
-                                                <input
-                                                    value={changedField.editingValue}
-                                                    name="styleNo"
-                                                    className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
-                                                    type="text"
-                                                    style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
-                                                    onChange={(e) => {
-                                                        e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
-                                                        handleOnChange(e)
-                                                    }}
-                                                /> : row.styleNo
-                                        }
+                                        {editingCells[`${row.id}-styleNo`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-styleNo`].value}
+                                                onChange={(e) => {
+                                                    e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
+                                                    handleOnChange(e, `${row.id}-styleNo`);
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
+                                            />
+                                        ) : row.styleNo}
                                     </td>
 
                                     {/* 5. PO NO */}
                                     <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className="px-3 py-2 whitespace-nowrap align-middle text-center group-hover:bg-gray-50" style={getFrozenStyle(4)}>
-                                        {
-                                            isEditing.editingField === "poNo" && isEditing.rowId === row.id ? <input
-                                                name="poNo"
-                                                value={changedField.editingValue}
-                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
-                                                type="text"
-                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
+                                        {editingCells[`${row.id}-poNo`] ? (
+                                            <input
+                                                value={editingCells[`${row.id}-poNo`].value}
                                                 onChange={(e) => {
                                                     e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
-                                                    handleOnChange(e)
+                                                    handleOnChange(e, `${row.id}-poNo`);
                                                 }}
-                                            /> : row.poNo
-                                        }
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="border outline-none p-2 rounded-md bg-yellow-300 bg-opacity-25"
+                                                type="text"
+                                                style={{ width: `${Math.max(row.poNo?.length || 1, 5)}ch` }}
+                                            />
+                                        ) : row.poNo}
                                     </td>
 
                                     {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                {
-                                                    isEditing.editingField === "color" && isEditing.rowId === cell.id ?
-                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                            name="color"
+                                            {row.rows.map((cell, j) => (
+                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {editingCells[`${cell.id}-color`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-color`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-color`)}
+                                                            onClick={(e) => e.stopPropagation()}
                                                             className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                            type="text" /> : cell.color
-                                                }
-                                            </div>)}
+                                                            type="text"
+                                                        />
+                                                    ) : cell.color}
+                                                </div>
+                                            ))}
                                         </div>
                                     </td>
 
@@ -857,14 +866,15 @@ export default function Summary() {
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis" title={cell.composition}>
-                                                    {
-                                                        isEditing.editingField === "composition" && isEditing.rowId === cell.id ?
-                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                                name="composition"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md" type="text"
-                                                            />
-                                                            : cell.composition
-                                                    }
+                                                    {editingCells[`${cell.id}-composition`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-composition`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-composition`)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text"
+                                                        />
+                                                    ) : cell.composition}
                                                 </div>
                                             ))}
                                         </div>
@@ -873,32 +883,38 @@ export default function Summary() {
                                     {/* 8. FINISH DIA */}
                                     <td className="p-0 align-top" style={getCellStyle(7)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((cell, j) =>
+                                            {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {
-                                                        isEditing.editingField === "finishDia" && isEditing.rowId === cell.id ?
-                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                                name="finishDia"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                                type="text" /> : cell.finishDia
-                                                    }
+                                                    {editingCells[`${cell.id}-finishDia`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-finishDia`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-finishDia`)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text"
+                                                        />
+                                                    ) : cell.finishDia}
                                                 </div>
-                                            )}
+                                            ))}
                                         </div>
                                     </td>
 
                                     {/* 9. ORDER QTY */}
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((cell, j) => <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                {
-                                                    isEditing.editingField === "orderQty" && isEditing.rowId === cell.id ?
-                                                        <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                            name="orderQty"
+                                            {row.rows.map((cell, j) => (
+                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className="px-3 py-2 whitespace-nowrap">
+                                                    {editingCells[`${cell.id}-orderQty`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-orderQty`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-orderQty`)}
+                                                            onClick={(e) => e.stopPropagation()}
                                                             className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                            type="text" /> : cell.orderQty
-                                                }
-                                            </div>)}
+                                                            type="text"
+                                                        />
+                                                    ) : cell.orderQty}
+                                                </div>
+                                            ))}
                                         </div>
                                     </td>
 
@@ -928,10 +944,24 @@ export default function Summary() {
                                                 const netAdditional = Number(cell.additional) - lossQty;
                                                 const inCreaseFinishQty = (Number(cell.finishRequiredQty) + netAdditional).toFixed(2);
                                                 return (
-                                                    <div key={j} className="px-3 py-2 whitespace-nowrap">
-                                                        {inCreaseFinishQty}
+                                                    <div
+                                                        key={j}
+                                                        onClick={() => handleEdit(cell.id, "finishRequiredQty", cell.finishRequiredQty, "styleRequirementRows")}
+                                                        className="px-3 py-2 whitespace-nowrap"
+                                                    >
+                                                        {editingCells[`${cell.id}-finishRequiredQty`] ? (
+                                                            <input
+                                                                value={editingCells[`${cell.id}-finishRequiredQty`].value}
+                                                                onChange={(e) => handleOnChange(e, `${cell.id}-finishRequiredQty`)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                                type="text"
+                                                            />
+                                                        ) : (
+                                                            inCreaseFinishQty
+                                                        )}
                                                     </div>
-                                                )
+                                                );
                                             })}
                                         </div>
                                     </td>
@@ -941,15 +971,17 @@ export default function Summary() {
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className="px-3 py-2 whitespace-nowrap">
-                                                    {
-                                                        isEditing.editingField === "additional" && isEditing.rowId === cell.id ?
-                                                            <input value={changedField.editingValue} onChange={(e) => handleOnChange(e)}
-                                                                name="additional"
-                                                                className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
-                                                                type="text" />
-                                                            :
-                                                            cell.additional || "-"
-                                                    }
+                                                    {editingCells[`${cell.id}-additional`] ? (
+                                                        <input
+                                                            value={editingCells[`${cell.id}-additional`].value}
+                                                            onChange={(e) => handleOnChange(e, `${cell.id}-additional`)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="border bg-yellow-300 bg-opacity-25 outline-none w-full p-2 rounded-md"
+                                                            type="text"
+                                                        />
+                                                    ) : (
+                                                        cell.additional || "-"
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -1054,7 +1086,7 @@ export default function Summary() {
                                     {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Delivery', 22)}
 
                                     {/* 24. GREY RETURN FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return_Received', 23)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return', 23)}
 
                                     {/* 25. GREY RECEIVED FROM DYEING */}
                                     {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 24)}
@@ -1168,7 +1200,7 @@ export default function Summary() {
                             );
                         })}
 
-                        {paginatedData.length === 0 && (
+                        {!isLoading.refreshLoading && paginatedData.length === 0 && (
                             <tr>
                                 <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-400 text-sm">
                                     No rows match the active filters.
@@ -1179,7 +1211,6 @@ export default function Summary() {
                 </table>
             </div>
 
-            {/* ── Button-Based Pagination Controls ─────────────────────────────── */}
             {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 border-gray-200 rounded-b-base shadow-xs">
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
@@ -1222,7 +1253,6 @@ export default function Summary() {
                         </div>
                     </div>
 
-                    {/* Mobile Pagination */}
                     <div className="flex justify-between sm:hidden w-full">
                         <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}

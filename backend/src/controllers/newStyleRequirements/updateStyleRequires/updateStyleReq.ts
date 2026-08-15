@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
 
 export const updateStyleReq = async (req: Request, res: Response) => {
-    const { salesContact, buyerName, styleNo, additional, rowId, poNo, jobNo, changedTable, composition, finishDia, orderQty, color, } = req.body as {
+    const { salesContact, buyerName, styleNo, additional, rowId, poNo, jobNo, changedTable, finishRequiredQty, composition, finishDia, orderQty, color, } = req.body as {
         salesContact?: string;
         buyerName?: string;
         styleNo?: string;
@@ -14,7 +14,8 @@ export const updateStyleReq = async (req: Request, res: Response) => {
         orderQty?: number;
         rowId?: number;
         color: string;
-        additional: string
+        additional: string;
+        finishRequiredQty: number;
     };
 
     const { jobId } = req.params as { jobId: string };
@@ -42,6 +43,9 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                         ...(finishDia !== undefined && { finishDia }),
                         ...(orderQty !== undefined && { orderQty: Number(orderQty) }),
                         ...(color !== undefined && { color: color }),
+                        ...(finishRequiredQty !== undefined && finishRequiredQty !== null && !isNaN(Number(finishRequiredQty)) && {
+                            finishRequiredQty: Number(Number(finishRequiredQty).toFixed(2))
+                        })
                     },
                 }),
             ];
@@ -98,7 +102,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                 }),
                 prisma.composition.updateMany({
                     where: { styleRequirementRowId: Number(rowId) },
-                    data: { additional: Number(additional)  },
+                    data: { additional: Number(additional) },
                 }),
                 prisma.composition.updateMany({
                     where: {

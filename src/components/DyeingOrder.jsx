@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 
-const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const DyeingOrder = ({ orders, handleInlineEdit,handleRedirect, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex] = useState(null);
 
 
@@ -90,7 +90,8 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
         fontWeight: 700,
         boxShadow: "2px 0 5px -1px rgba(0,0,0,0.18)",
         padding: "8px 12px",
-        textAlign: "left",
+        textAlign: "center",
+        
     };
 
     const footerTd = {
@@ -125,7 +126,7 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                                 ))}
                             </td>
                             <td style={stickyTd(1, isHovered)}>
-                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
                             <td style={stickyTd(2, isHovered)}>
                                 {workOrders?.map((wo, i) => (
@@ -192,11 +193,11 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
                             <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>
                                     wo.compositions?.map((wrk, j) => {
-                                        const diff = (wrk.yarnDeliveriesWithColor?.GreyDelivery || 0) - (wrk.workOrderQty || 0);
+                                        const diff = (wrk.yarnDeliveriesWithColor?.GreyDelivery?.toFixed(2) || 0) - (wrk.workOrderQty?.toFixed(2) || 0);
                                         const exceeded = diff?.toFixed(2) > 0;
                                         return (
                                             <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                                {exceeded ? diff : `(${Math.abs(diff?.toFixed(2))})`}
+                                                {exceeded ? diff?.toFixed(2) : `(${Math.abs(diff?.toFixed(2))})`}
                                             </div>
                                         );
                                     })
@@ -241,7 +242,6 @@ const DyeingOrder = ({ orders, handleInlineEdit, updatedFields, handleOnChange, 
 
                                         const diff = received + returned - delivered;
                                         const exceeded = diff?.toFixed(2) < 0;
-
                                         return (
                                             <div
                                                 key={`${i}-${j}`}

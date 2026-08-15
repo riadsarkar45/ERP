@@ -20,6 +20,16 @@ const isReceiveOrReturnType = (deliveryType) => {
   return t.includes("received") || t.includes("return");
 };
 
+// Single source of truth for what the To/From factory fields should
+// default to, given the current delivery type direction and the work
+// order's factory name. Used identically for what's DISPLAYED in the
+// inputs and what's SUBMITTED — so there's no way for the two to drift
+// apart, and no effect/timing dance needed to keep them in sync.
+const getDefaultFactories = (isReturnOrReceive, factoryName) => ({
+  toFactory: !isReturnOrReceive ? (factoryName || "") : "",
+  fromFactory: isReturnOrReceive ? (factoryName || "") : "",
+});
+
 const flattenDeliveries = (workOrders) => {
   return (workOrders || []).flatMap((wo) =>
     (wo.compositions || []).map((comp) => {
@@ -31,17 +41,148 @@ const flattenDeliveries = (workOrders) => {
         orderType: wo.orderType,
         factoryName: wo.factoryName,
         composition: comp.composition || "—",
+        color: comp.color || "—",
         workOrderQty: comp.workOrderQty || 0,
         deliveries: comp.deliveries || [],
-        buyerName: styleReq.buyerName,
-        jobNo: styleReq.jobNo,
-        processLoss: styleReq.processLoss,
+        // buyerName/processLoss follow the same fallback pattern Modal.jsx
+        // already uses successfully for jobNo: try the deeply nested path
+        // first (styleRequirementRow -> styleRequirement), then fall back
+        // to a flatter field directly on the composition or its row, in
+        // case that's actually where the API puts it for this record.
+        buyerName: styleReq.buyerName || comp.buyerName || comp.styleRequirementRow?.buyerName,
+        jobNo: styleReq.jobNo || comp.jobNo,
+        processLoss: styleReq.processLoss ?? comp.processLoss ?? comp.styleRequirementRow?.processLoss,
       };
     })
   );
 };
 
-const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplicateChallan, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
+const DeliveryRowInputs = ({
+  row,
+  group,
+  rowChangedField,
+  isReturnOrReceive,
+  orderType,
+  deliveryTypes,
+  handleEditOnChange,
+  handleRemove,
+}) => {
+  const defaults = getDefaultFactories(isReturnOrReceive, group.factoryName);
+
+  // Displayed value: whatever the user has typed (rowChangedField), or the
+  // computed default if they haven't touched the field yet. No state
+  // writes happen just from rendering — only real user input calls
+  // handleEditOnChange.
+  const toFactoryValue = rowChangedField.toFactory ?? defaults.toFactory;
+  const fromFactoryValue = rowChangedField.fromFactory ?? defaults.fromFactory;
+
+  return (
+    <div className="flex flex-wrap gap-2 items-end">
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-gray-400">Qty</span>
+        <input
+          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          name="deliveryQty"
+          value={rowChangedField.deliveryQty ?? ""}
+          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+          type="text"
+          placeholder="Qty"
+        />
+      </div>
+
+      {((rowChangedField.deliveryType === "Grey Received" && (orderType === "dyeingOrder" || orderType === "aopOrder")) || rowChangedField.deliveryType === "Received From Aop") && (
+        <div className="flex flex-col gap-1">
+          <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
+          <input
+            onChange={(e) => handleEditOnChange(row.yarnId, e)}
+            name="finishReceivedQty"
+            value={rowChangedField.finishReceivedQty ?? ""}
+            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+            type="text"
+            placeholder="Finish Qty"
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-gray-400">Challan</span>
+        <input
+          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          name="challanNo"
+          value={rowChangedField.challanNo ?? ""}
+          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+          type="text"
+          placeholder="Challan No"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-gray-400">Date</span>
+        <input
+          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          name="date"
+          value={rowChangedField.date ?? new Date().toISOString().split("T")[0]}
+          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+          type="date"
+        />
+      </div>
+
+      {/* Receive/return types -> this factory is the SOURCE, so it belongs
+          in "From". Sending types -> it's the DESTINATION, so it belongs
+          in "To". Value is user input if present, else the computed
+          default — same computation used at submit time in
+          handleGlobalSubmit, so display and payload can never disagree. */}
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-gray-400">
+          {orderType === "aopOrder" && "Aop Factory"}
+          {orderType === "dyeingOrder" && "Dyeing Factory"}
+          {orderType === "knittingOrder" && "Knitting Factory"}
+        </span>
+        <input
+          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          name="toFactory"
+          value={toFactoryValue}
+          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+          type="text"
+          placeholder="To Factory"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-gray-400">From</span>
+        <input
+          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          name="fromFactory"
+          value={fromFactoryValue}
+          className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
+          type="text"
+          placeholder="From Factory"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-gray-400">Type</span>
+        <Input
+          className="w-full"
+          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          name="deliveryType"
+          type="select"
+          value={rowChangedField.deliveryType ?? ""}
+          options={deliveryTypes}
+          required
+        />
+      </div>
+
+      <div className="flex gap-2 items-center pb-0.5">
+        <span onClick={() => handleRemove(row.id, row.yarnId)} className="cursor-pointer bg-red-500 bg-opacity-15 text-red-600 p-2 rounded-lg">
+          <X className="w-4 h-4" />
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
   const [openYarnIds, setOpenYarnIds] = useState(new Set());
 
   const baseRows = flattenDeliveries(deliveries);
@@ -71,9 +212,9 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
   };
 
   const deliveryTypes = [];
-  if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Received");
-  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return Received", "Grey Received From Dyeing", "Finish Fabric Received", "Sent For Compacting", "Received From Compacting");
-  if (orderType === "aopOrder") deliveryTypes.push("Sent for AOP","Return From Aop", "Received From Aop");
+  if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Fabric Received");
+  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return", "Sent For Compacting", "Received From Compacting", "Sent For Reprocess", "Received From Reprocess");
+  if (orderType === "aopOrder") deliveryTypes.push("Sent For Aop", "Return From Aop", "Received From Aop");
   if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
 
   const aggregateDeliveries = (deliveriesArr) => {
@@ -99,6 +240,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
 
     for (const row of rowsToSubmit) {
       const rowChangedField = changedField?.[row.yarnId] || {};
+      const group = groupedRows[row.workOrderId];
 
       if (!rowChangedField.deliveryType) {
         alert(`Please select a Delivery Type for ${row.composition}`);
@@ -128,15 +270,16 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
         ];
       }
 
-      // Receive/return types -> this work order's factory is the SOURCE
-      // (fromFactory). All other (sending) types -> it's the DESTINATION
-      // (toFactory). The other side is left for the user to fill in.
+      // Same computation as getDefaultFactories/DeliveryRowInputs — kept as
+      // one function so display and submit can never disagree.
       const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
+      const groupFactoryName = group?.factoryName || row.factoryName || "";
+      const defaults = getDefaultFactories(isReturnOrReceive, groupFactoryName);
 
       const fullPayload = {
         ...rowChangedField,
-        toFactory: rowChangedField.toFactory || (!isReturnOrReceive ? row.factoryName : ""),
-        fromFactory: rowChangedField.fromFactory || (isReturnOrReceive ? row.factoryName : ""),
+        toFactory: rowChangedField.toFactory ?? defaults.toFactory,
+        fromFactory: rowChangedField.fromFactory ?? defaults.fromFactory,
         date: rowChangedField.date || new Date().toISOString().split("T")[0],
         challanNo: rowChangedField.challanNo || "",
         deliveryType: rowChangedField.deliveryType,
@@ -146,11 +289,19 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
       };
 
       if (!fullPayload.toFactory) {
-        alert(`Please enter a To Factory for ${row.composition}`);
+        alert(
+          !groupFactoryName
+            ? `This work order has no factory name on record, so "To Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
+            : `Please enter a To Factory for ${row.composition}`
+        );
         return;
       }
       if (!fullPayload.fromFactory) {
-        alert(`Please enter a From Factory for ${row.composition}`);
+        alert(
+          !groupFactoryName
+            ? `This work order has no factory name on record, so "From Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
+            : `Please enter a From Factory for ${row.composition}`
+        );
         return;
       }
 
@@ -245,6 +396,11 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                       >
                         {row.composition}
                       </span>
+                      <span
+                        className="inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-800 cursor-pointer"
+                      >
+                        {row.color}
+                      </span>
                       <span className="text-[10px] text-gray-400">
                         {row.workOrderQty > 0 ? formatKg(row.workOrderQty) : "No Qty"} work order qty
                       </span>
@@ -258,8 +414,12 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                         </span>
                       )}
 
-                      {row.jobNo && (
-                        <span className="text-[18px] text-gray-900">· {row.jobNo}</span>
+                     
+
+                      {!group.factoryName && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200">
+                          ⚠ No factory set on this work order
+                        </span>
                       )}
                     </div>
 
@@ -275,106 +435,16 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, duplic
                     )}
 
                     {isOpen && (
-                      <div className="flex flex-wrap gap-2 items-end">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">Qty</span>
-                          <input
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="deliveryQty"
-                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                            type="text"
-                            placeholder="Qty"
-                          />
-                        </div>
-
-                        {((rowChangedField.deliveryType === "Grey Received" && (orderType === "dyeingOrder" || orderType === "aopOrder")) || rowChangedField.deliveryType === "Received From Aop") && (
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[9px] uppercase tracking-wider text-gray-400">Finish Qty</span>
-                            <input
-                              onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                              name="finishReceivedQty"
-                              className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                              type="text"
-                              placeholder="Finish Qty"
-                            />
-                          </div>
-                        )}
-
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">Challan</span>
-                          <input
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="challanNo"
-                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                            type="text"
-                            placeholder="Challan No"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">Date</span>
-                          <input
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="date"
-                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                            type="date"
-                            defaultValue={new Date().toISOString().split("T")[0]}
-                          />
-                        </div>
-
-                        {/* Receive/return types -> this factory is the SOURCE, so it
-                            belongs in "From". Sending types -> it's the DESTINATION,
-                            so it belongs in "To". The `key` includes isReturnOrReceive
-                            so the input remounts (and resets its defaultValue) whenever
-                            the delivery type flips between the two groups. */}
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">
-                            {orderType === "aopOrder" && "Aop Factory"}
-                            {orderType === "dyeingOrder" && "Dyeing Factory"}
-                            {orderType === "knittingOrder" && "Knitting Factory"}
-                          </span>
-                          <input
-                            key={`to-${row.yarnId}-${isReturnOrReceive}`}
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="toFactory"
-                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                            type="text"
-                            defaultValue={!isReturnOrReceive ? group.factoryName : ""}
-                            placeholder="To Factory"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">From</span>
-                          <input
-                            key={`from-${row.yarnId}-${isReturnOrReceive}`}
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="fromFactory"
-                            className="outline-none border border-gray-200 p-3 rounded-md w-[10rem] text-xs"
-                            type="text"
-                            defaultValue={isReturnOrReceive ? group.factoryName : ""}
-                            placeholder="From Factory"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[9px] uppercase tracking-wider text-gray-400">Type</span>
-                          <Input
-                            className="w-full"
-                            onChange={(e) => handleEditOnChange(row.yarnId, e)}
-                            name="deliveryType"
-                            type="select"
-                            options={deliveryTypes}
-                            required
-                          />
-                        </div>
-
-                        <div className="flex gap-2 items-center pb-0.5">
-                          <span onClick={() => handleRemove(row.id, row.yarnId)} className="cursor-pointer bg-red-500 bg-opacity-15 text-red-600 p-2 rounded-lg">
-                            <X className="w-4 h-4" />
-                          </span>
-                        </div>
-                      </div>
+                      <DeliveryRowInputs
+                        row={row}
+                        group={group}
+                        rowChangedField={rowChangedField}
+                        isReturnOrReceive={isReturnOrReceive}
+                        orderType={orderType}
+                        deliveryTypes={deliveryTypes}
+                        handleEditOnChange={handleEditOnChange}
+                        handleRemove={handleRemove}
+                      />
                     )}
 
                   </div>

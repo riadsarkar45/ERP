@@ -6,22 +6,23 @@ import { cuttingDataUpdate } from "../controllers/fabricCutting/fabricCuttingDat
 import { createNewJob } from "../controllers/orders/newWorkOrder";
 import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 import { generateBill } from "../controllers/generateBill/generatebill";
+import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 
 const router = express.Router();
 
 const upload = multer({ dest: "uploads/" });
 
-router.post("/upload", upload.single("file"), fileUpload as any);
+router.post("/upload", responseTimeMonitor, upload.single("file"), fileUpload as any);
 
-router.post("/create-job", createNewJob)
+router.post("/create-job", responseTimeMonitor, createNewJob)
 
-router.post("/create-new-audit", createNewAudit)
+router.post("/create-new-audit", responseTimeMonitor, createNewAudit)
 
-router.post("/new-style-requirements", createNewStyleRequirement)
+router.post("/new-style-requirements", responseTimeMonitor, createNewStyleRequirement)
 
-router.post("/cutting-production", cuttingDataUpdate)
+router.post("/cutting-production", responseTimeMonitor, cuttingDataUpdate)
 
-router.post("/generate-bill", generateBill);
+router.post("/generate-bill", responseTimeMonitor, generateBill);
 
 
 export default router;

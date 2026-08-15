@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
 // 1. Accept the NEW props from AllOrders
-const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFields, handleOnChange, isEdit, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInlineEdit, updatedFields, handleOnChange, isEdit, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
     // const { handleInlineEdit, updatedFields, handleOnChange, isEdit, } = InlineEdit();
 
@@ -13,7 +13,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
         borderBottom: "1px solid #000000",
         padding: 0,
         textAlign: "center",
-        verticalAlign: "middle",
+        verticalAlign: "center",
     };
 
     const formatNumber = (value) => {
@@ -129,7 +129,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                                         <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem}  cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span> }
+                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
                                         </div>
                                     )
                                 ))}
@@ -137,7 +137,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
 
                             {/* COL 1 — JOB NO */}
                             <td style={stickyTd(1, isHovered)}>
-                                <div className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
                             </td>
 
                             {/* COL 2 — WORK ORDER NO */}
@@ -195,12 +195,14 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
                                     const workOrderQty = Number(wrk.workOrderQty?.toFixed(2)) || 0;
-                                    const totalYarnDelivery = Number(wrk.totalYarnDelivery?.toFixed(2)) || 0;
+                                    const totalYarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery?.toFixed(2)) || 0;
                                     const diff = workOrderQty - totalYarnDelivery;
                                     const exceeded = diff?.toFixed(2) > 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
                                             {exceeded ? `(${Math.abs(diff?.toFixed(2))})` : Math.abs(diff?.toFixed(2))}
+                                            {/* {workOrderQty} */}
+                                            {/* {totalYarnDelivery} */}
                                         </div>
                                     );
                                 }))}
@@ -224,7 +226,7 @@ const KnittingOrder = ({ orders, handleEditRowData, handleInlineEdit, updatedFie
                                     const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
                                     const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
                                     const diff2 = grey + ret - del;
-                                    const exceed = diff2 < 0;
+                                    const exceed = diff2.toFixed(2) < 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceed ? "red" : "green" }}>
                                             {exceed ? `(${Math.abs(diff2?.toFixed(2))})` : diff2?.toFixed(2)}

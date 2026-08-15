@@ -11,6 +11,7 @@ import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 import FilterDropdown from "../helpers/filtering/FilterDropdown";
 import useAxiosPrivate from "../hooks/UseAxiosPrivate";
 import Toast from "./Toast";
+import { useNavigate } from "react-router-dom";
 
 export const FROZEN_COUNT = 7;
 
@@ -44,6 +45,21 @@ const getSavedWidths = (type, defaultWidths) => {
     return defaultWidths;
 };
 
+// Filters are persisted per orderType (tab) so switching between
+// Knitting/Dyeing/Yarn-Dye/AOP doesn't leak one tab's filters into another,
+// and returning to a tab (or navigating away and back) restores what was set.
+// sessionStorage clears when the tab closes — swap for localStorage below if
+// you want filters to survive closing the browser entirely.
+const getSavedFilters = (type) => {
+    try {
+        const saved = sessionStorage.getItem(`workOrderFilters_${type}`);
+        return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+        console.error("Error loading filters:", e);
+        return {};
+    }
+};
+
 const AllOrders = ({ orderType }) => {
     const axiosPublic = useAxiosPublic();
     const axiosPrivate = useAxiosPrivate();
@@ -63,7 +79,9 @@ const AllOrders = ({ orderType }) => {
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
     // Active filters: { [columnName]: string[] of selected values }
-    const [filters, setFilters] = useState({});
+    // Initialized from sessionStorage so a saved filter set for this
+    // orderType survives remounts (tab switches, navigating away and back).
+    const [filters, setFilters] = useState(() => getSavedFilters(orderType));
     // Cached dropdown options per column, fetched from /filter-options as dropdowns open.
     const [filterOptions, setFilterOptions] = useState({});
     const [filterOptionsLoading, setFilterOptionsLoading] = useState({});
@@ -82,7 +100,7 @@ const AllOrders = ({ orderType }) => {
     // is intentionally NOT wired into the top-level full-page loader below,
     // so opening a filter dropdown no longer blanks the whole table.
     const { fetchData: fetchFilterOptions } = useFetchData();
-
+    const navigate = useNavigate();
     const COLUMNS = useMemo(() => {
         const cols = [];
         const defaultWidths = [160, 80, 120, 180, 180, 100, 260];
@@ -186,16 +204,31 @@ const AllOrders = ({ orderType }) => {
         const defaultWidths = COLUMNS.map(c => c.width);
         return getSavedWidths(orderType, defaultWidths);
     });
+    const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
     useEffect(() => {
         try { localStorage.setItem(`tableColumnWidths_${orderType}`, JSON.stringify(columnWidths)); }
         catch (e) { console.error("Error saving column widths:", e); }
     }, [columnWidths, orderType]);
 
+    // Persist filters to sessionStorage any time they change (including the
+    // orderType they belong to, in case orderType changes in the same tick).
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(`workOrderFilters_${orderType}`, JSON.stringify(filters));
+        } catch (e) {
+            console.error("Error saving filters:", e);
+        }
+    }, [filters, orderType]);
+
     useEffect(() => {
         const defaultWidths = COLUMNS.map(c => c.width);
         setColumnWidths(getSavedWidths(orderType, defaultWidths));
-        setFilters({});
+        // Restore this tab's saved filters instead of wiping them — this
+        // effect fires on every orderType switch (COLUMNS depends on
+        // orderType), so without this, switching tabs and coming back used
+        // to reset filters to {} every time.
+        setFilters(getSavedFilters(orderType));
         setFilterOptions({});
     }, [COLUMNS]);
 
@@ -366,8 +399,16 @@ const AllOrders = ({ orderType }) => {
             const updatedRow = {
                 ...rowPrev,
                 [name]: value,
-                date: rowPrev.date ?? new Date().toISOString().split("T")[0],
             };
+
+            // Only backfill a default date when the field being edited ISN'T
+            // "date" itself. Previously this ran unconditionally AFTER
+            // `[name]: value`, so when name === "date" it re-set date back to
+            // rowPrev.date (or today), overwriting the value the user just
+            // picked. That's what made the date field look "stuck".
+            if (name !== "date" && updatedRow.date === undefined) {
+                updatedRow.date = new Date().toISOString().split("T")[0];
+            }
 
             // The delivery type flip changes which side ("to"/"from") should be
             // this work order's own factory. Any previously typed toFactory/
@@ -378,7 +419,7 @@ const AllOrders = ({ orderType }) => {
                 delete updatedRow.fromFactory;
             }
 
-            const isAopGreyReceived = updatedRow.deliveryType === "Aop Grey Received";
+            const isAopGreyReceived = updatedRow.deliveryType === "Received From Aop";
 
             const deliveries = [
                 { deliveryType: updatedRow.deliveryType, qty: updatedRow.deliveryQty },
@@ -401,7 +442,7 @@ const AllOrders = ({ orderType }) => {
         const payload = overridePayload || changedField[yarnId] || {};
 
         try {
-            const update = await axiosPublic.patch(
+            const update = await axiosPrivate.patch(
                 `/api/update-order`,
                 payload,
                 { params: { yarnId, workOrderId } }
@@ -410,22 +451,41 @@ const AllOrders = ({ orderType }) => {
             if (update.status === 200) {
                 setChallanIssue([{ message: "Delivery Added", type: "success" }]);
 
-                fetchData(`/api/work-order/${orderType}`, { params: { page, limit, filters: filtersParam } })
-                    .then((res) => {
-                        if (res) {
-                            setOrders(res.data ?? []);
-                            if (res.pagination) setPagination(res.pagination);
-                            setIsEditing(false);
-                        }
-                    });
+                // Wait for both refetches to finish before releasing the loading state,
+                // and catch failures individually so one bad refetch doesn't kill the other.
+                await Promise.all([
+                    fetchData(`/api/work-order/${orderType}`, {
+                        params: { page, limit, filters: filtersParam }
+                    })
+                        .then((res) => {
+                            if (res) {
+                                setOrders(res.data ?? []);
+                                if (res.pagination) setPagination(res.pagination);
+                                setIsEditing(false);
+                            }
+                        })
+                        .catch((err) => {
+                            console.log("Failed to refresh orders:", err);
+                            setChallanIssue(prev => [
+                                ...prev,
+                                { message: "Order list refresh failed", type: "error" }
+                            ]);
+                        }),
 
-                // FIX: jobId might be a number or an array. Safely handle both to prevent .join() crashes.
-                fetchData(`/api/deliveries/${orderType}`, {
-                    params: { workOrderIds: Array.isArray(jobId) ? jobId.join(',') : jobId }
-                })
-                    .then((dev) => {
-                        setDeliveries(dev);
-                    });
+                    fetchData(`/api/deliveries/${orderType}`, {
+                        params: { workOrderIds: Array.isArray(jobId) ? jobId.join(',') : jobId }
+                    })
+                        .then((dev) => {
+                            setDeliveries(dev);
+                        })
+                        .catch((err) => {
+                            console.log("Failed to refresh deliveries:", err);
+                            setChallanIssue(prev => [
+                                ...prev,
+                                { message: "Deliveries refresh failed", type: "error" }
+                            ]);
+                        }),
+                ]);
 
                 setChangedField(prev => {
                     const next = { ...prev };
@@ -434,9 +494,18 @@ const AllOrders = ({ orderType }) => {
                 });
             }
         } catch (e) {
-            // ... your existing error handling
-            console.log(e.response.data);
-            setDeliveryIssue(e.response.data)
+            // Guard against network errors / cancelled requests where e.response is undefined
+            console.log(e.response?.data ?? e.message ?? e);
+
+            const errorPayload = e.response?.data;
+            setDeliveryIssue(
+                Array.isArray(errorPayload)
+                    ? errorPayload
+                    : [{
+                        message: errorPayload?.message ?? "Something went wrong. Please try again.",
+                        type: "error"
+                    }]
+            );
         } finally {
             setIsLoading(false);
         }
@@ -568,6 +637,7 @@ const AllOrders = ({ orderType }) => {
                             updatedFields={updatedFields}
                             handleOnChange={handleOnChange}
                             handleInlineEdit={handleInlineEdit}
+                            handleRedirect={handleRedirect}
                             currentFrozenLefts={currentFrozenLefts} />}
                         {orderType === "dyeingOrder" && <DyeingOrder
                             orders={orders}
@@ -578,6 +648,7 @@ const AllOrders = ({ orderType }) => {
                             handleInlineEdit={handleInlineEdit}
                             FROZEN_COUNT={FROZEN_COUNT}
                             currentFrozenWidths={currentFrozenWidths}
+                            handleRedirect={handleRedirect}
                             currentFrozenLefts={currentFrozenLefts} />}
                         {orderType === "aopOrder" &&
                             <AopOrder orders={orders}
@@ -589,6 +660,7 @@ const AllOrders = ({ orderType }) => {
                                 handleOnChange={handleOnChange}
                                 isEdit={isEdit}
                                 handleInlineEdit={handleInlineEdit}
+                                handleRedirect={handleRedirect}
                                 currentFrozenLefts={currentFrozenLefts} />}
                     </table>
                 </div>

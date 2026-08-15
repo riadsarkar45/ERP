@@ -36,7 +36,14 @@ model WorkOrder {
   jobId              Int?
   yarnDyeingJobs     yarnDyeingJobs[]
   factoryName        String            @default("NULL")
+  yarnCount          String            @default("NULL")
+  stichLength        String            @default("NULL")
+  machineDia         String            @default("NULL")
 
+  @@index([yarnCount])
+  @@index([machineDia])
+  @@index([stichLength])
+  @@index([lotNo])
   @@index([styleRequirementId])
   @@index([styleNo])
   @@index([jobId])
@@ -76,35 +83,37 @@ model Composition {
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
   challans              Challan[]
+
   @@index([workOrderId])
   @@index([color])
   @@index([styleRequirementRowId])
 }
+
 model StyleRequirement {
-  id             Int                   @id @default(autoincrement())
-  salesContact   String
-  buyerName      String
-  jobNo          String                @unique
-  poNo           String
-  styleNo        String
-  processLoss    Float
-  rows           StyleRequirementRow[]
-  sizes          sizes[]
-  workOrders     WorkOrder[]
+  id           Int                   @id @default(autoincrement())
+  salesContact String
+  buyerName    String
+  jobNo        String                @unique
+  poNo         String
+  styleNo      String
+  processLoss  Float
+  rows         StyleRequirementRow[]
+  sizes        sizes[]
+  workOrders   WorkOrder[]
 }
 
 model StyleRequirementRow {
-  id                 Int              @id @default(autoincrement())
+  id                 Int                 @id @default(autoincrement())
   styleRequirementId Int
-  styleRequirement   StyleRequirement @relation(fields: [styleRequirementId], references: [id])
+  styleRequirement   StyleRequirement    @relation(fields: [styleRequirementId], references: [id])
   color              String
   composition        String
   finishDia          String
   orderQty           Int
   finishRequiredQty  Float
-  additional         Int              @default(0)
-  compositions        Composition[]
-  reconciliation      reconciliationData?
+  additional         Int                 @default(0)
+  compositions       Composition[]
+  reconciliation     reconciliationData?
 
   @@index([styleRequirementId])
 }
@@ -174,12 +183,22 @@ model deliveries {
   // ── Link to universal Challan ──
   challan   Challan? @relation(fields: [challanId], references: [id])
   challanId Int? // NULL for legacy/manual entries
+  createdBy Int      @default(1)
+  userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@index([yarnCompId])
+  @@index([createdBy])
+  // @@index([userId])
   @@index([deliveryDate])
   @@index([challanNo])
-  @@index([yarnId])
   @@index([challanId])
+  @@index([yarnId])
+  @@index([id])
+  @@index([deliveryType])
+  @@index([toFactory])
+  @@index([fromFactory])
+  @@index([createdAt])
 }
 
 model audit {
@@ -207,6 +226,7 @@ model user {
   userRole       String
   workingStation String?        @default("NULL")
   refreshTokens  refreshToken[] // <-- ADD THIS LINE to your existing model
+  deliveries     deliveries[]
 }
 
 model refreshToken {
