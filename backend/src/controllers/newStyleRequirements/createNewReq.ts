@@ -8,58 +8,45 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
     if (!orderInfo || !rows) {
         return res.status(400).send({ message: "No data provided", type: "error" })
     }
-    // console.log(orderInfo.jobNo, "job no");
+
     try {
 
         const checkIfExist = await checkDataExist(orderInfo.jobNo)
         console.log(checkIfExist);
-        if(!checkIfExist?.created){
+        if (!checkIfExist?.created) {
             return res.status(400).send({ message: "Job No already exist", type: "error" })
         }
 
         await prisma.$transaction(async (tx) => {
 
-            let styleId = null;
-            const findStyleName = await tx.styleRequirement.findFirst(
-                {
-                    where: { styleNo: orderInfo.styleNo }
+            // Always create a new styleRequirement, even if styleNo already exists
+            const createNewStyle = await tx.styleRequirement.create({
+                data: {
+                    styleNo: orderInfo.styleNo as string,
+                    buyerName: orderInfo.buyerName as string,
+                    jobNo: orderInfo.jobNo as string,
+                    processLoss: Number(orderInfo.processLoss) as number,
+                    poNo: orderInfo.poNo as string,
+                    salesContact: orderInfo.salesContact as string,
                 },
-
-            )
-
-            styleId = findStyleName ? findStyleName.id : null;
-
-            if (!findStyleName) {
-                const createNewStyle = await tx.styleRequirement.create(
-                    {
-                        data: {
-                            styleNo: orderInfo.styleNo as string,
-                            buyerName: orderInfo.buyerName as string,
-                            jobNo: orderInfo.jobNo as string,
-                            processLoss: Number(orderInfo.processLoss) as number,
-                            poNo: orderInfo.poNo as string,
-                            salesContact: orderInfo.salesContact as string,
-                        },
-                        select: {
-                            id: true,
-                        }
-                    }
-                )
-
-                styleId = createNewStyle.id;
-            }
-            await tx.styleRequirementRow.createMany(
-                {
-                    data: rows.map((row: any) => ({
-                        styleRequirementId: Number(styleId),  // foreign key
-                        color: row.color,
-                        composition: row.composition,
-                        finishDia: row.finishDia,
-                        orderQty: Number(row.orderQty),
-                        finishRequiredQty: Number(row.finishRequiredQty),
-                    }))
+                select: {
+                    id: true,
                 }
-            )
+            })
+
+            const styleId = createNewStyle.id;
+
+            await tx.styleRequirementRow.createMany({
+                data: rows.map((row: any) => ({
+                    styleRequirementId: Number(styleId), // foreign key
+                    color: row.color,
+                    composition: row.composition,
+                    finishDia: row.finishDia,
+                    orderQty: Number(row.orderQty),
+                    finishRequiredQty: Number(row.finishRequiredQty),
+                }))
+            })
+
         }, {
             timeout: 15000
         })
