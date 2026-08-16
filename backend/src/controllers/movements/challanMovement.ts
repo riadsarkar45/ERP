@@ -43,7 +43,7 @@ export const challanMovement = async (req: Request, res: Response) => {
                 },
             },
         },
-        // take: 30,
+        take: 30,
         select: {
             composition: true,
             // Only fetched for normal order-type movements — Others
