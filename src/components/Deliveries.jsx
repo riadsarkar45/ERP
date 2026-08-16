@@ -20,6 +20,18 @@ const isReceiveOrReturnType = (deliveryType) => {
   return t.includes("received") || t.includes("return");
 };
 
+// These delivery types are internal processing steps (compacting,
+// reprocess, heat set) rather than movements to/from another factory —
+// toFactory and fromFactory are not required for them.
+const FACTORY_OPTIONAL_DELIVERY_TYPES = new Set([
+  "Received From Compacting",
+  "Received From Reprocess",
+  "Received From HEAT Set",
+]);
+
+const isFactoryOptional = (deliveryType) =>
+  FACTORY_OPTIONAL_DELIVERY_TYPES.has(deliveryType);
+
 // Single source of truth for what the To/From factory fields should
 // default to, given the current delivery type direction and the work
 // order's factory name. Used identically for what's DISPLAYED in the
@@ -76,6 +88,8 @@ const DeliveryRowInputs = ({
   const toFactoryValue = rowChangedField.toFactory ?? defaults.toFactory;
   const fromFactoryValue = rowChangedField.fromFactory ?? defaults.fromFactory;
 
+  const factoryOptional = isFactoryOptional(rowChangedField.deliveryType);
+
   return (
     <div className="flex flex-wrap gap-2 items-end">
       <div className="flex flex-col gap-1">
@@ -131,12 +145,17 @@ const DeliveryRowInputs = ({
           in "From". Sending types -> it's the DESTINATION, so it belongs
           in "To". Value is user input if present, else the computed
           default — same computation used at submit time in
-          handleGlobalSubmit, so display and payload can never disagree. */}
+          handleGlobalSubmit, so display and payload can never disagree.
+          When the delivery type is one of the factory-optional internal
+          process types, the labels are dimmed and marked "(optional)" so
+          the UI doesn't imply these are required — matching the relaxed
+          validation in handleGlobalSubmit. */}
       <div className="flex flex-col gap-1">
-        <span className="text-[9px] uppercase tracking-wider text-gray-400">
+        <span className={`text-[9px] uppercase tracking-wider ${factoryOptional ? "text-gray-300" : "text-gray-400"}`}>
           {orderType === "aopOrder" && "Aop Factory"}
           {orderType === "dyeingOrder" && "Dyeing Factory"}
           {orderType === "knittingOrder" && "Knitting Factory"}
+          {factoryOptional && " (optional)"}
         </span>
         <input
           onChange={(e) => handleEditOnChange(row.yarnId, e)}
@@ -149,7 +168,9 @@ const DeliveryRowInputs = ({
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-[9px] uppercase tracking-wider text-gray-400">From</span>
+        <span className={`text-[9px] uppercase tracking-wider ${factoryOptional ? "text-gray-300" : "text-gray-400"}`}>
+          From{factoryOptional && " (optional)"}
+        </span>
         <input
           onChange={(e) => handleEditOnChange(row.yarnId, e)}
           name="fromFactory"
@@ -213,7 +234,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
 
   const deliveryTypes = [];
   if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Fabric Received");
-  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Received", "Grey Delivery", "Grey Return", "Sent For Compacting", "Received From Compacting", "Sent For Reprocess", "Received From Reprocess");
+  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Delivery", "Grey Received", "Grey Return", "Received From Compacting", "Received From Reprocess", "Received From HEAT Set");
   if (orderType === "aopOrder") deliveryTypes.push("Sent For Aop", "Return From Aop", "Received From Aop");
   if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
 
@@ -288,7 +309,13 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         deliveries: finalDeliveries
       };
 
-      if (!fullPayload.toFactory) {
+      // Compacting/Reprocess/HEAT Set are internal process steps, not
+      // factory-to-factory movements — skip the required-field checks
+      // below for these types. The fields are still sent (possibly as
+      // empty strings from `defaults`), just no longer block submit.
+      const factoryOptional = isFactoryOptional(rowChangedField.deliveryType);
+
+      if (!factoryOptional && !fullPayload.toFactory) {
         alert(
           !groupFactoryName
             ? `This work order has no factory name on record, so "To Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
@@ -296,7 +323,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         );
         return;
       }
-      if (!fullPayload.fromFactory) {
+      if (!factoryOptional && !fullPayload.fromFactory) {
         alert(
           !groupFactoryName
             ? `This work order has no factory name on record, so "From Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
@@ -407,14 +434,14 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
 
                       {row.workOrderQty > 0 && (
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${remainingDelivery > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                            remainingDelivery < 0 ? 'bg-red-50 text-red-600 border-red-200' :
-                              'bg-green-50 text-green-600 border-green-200'
+                          remainingDelivery < 0 ? 'bg-red-50 text-red-600 border-red-200' :
+                            'bg-green-50 text-green-600 border-green-200'
                           }`}>
                           {formatKg(Math.abs(remainingDelivery))} {remainingDelivery > 0 ? 'remaining' : remainingDelivery < 0 ? 'excess' : 'fulfilled'}
                         </span>
                       )}
 
-                     
+
 
                       {!group.factoryName && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200">

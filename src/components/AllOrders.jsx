@@ -390,6 +390,15 @@ const AllOrders = ({ orderType }) => {
             });
     };
 
+    const FACTORY_OPTIONAL_DELIVERY_TYPES = new Set([
+        "Received From Compacting",
+        "Received From Reprocess",
+        "Received From HEAT Set",
+    ]);
+
+    const isFactoryOptional = (deliveryType) =>
+        FACTORY_OPTIONAL_DELIVERY_TYPES.has(deliveryType);
+
     const handleEditOnChange = (yarnId, e) => {
         const { name, value } = e.target;
         setIsEditing(true);
@@ -417,6 +426,7 @@ const AllOrders = ({ orderType }) => {
             if (name === "deliveryType") {
                 delete updatedRow.toFactory;
                 delete updatedRow.fromFactory;
+                updatedRow.factoryOptional = isFactoryOptional(value);
             }
 
             const isAopGreyReceived = updatedRow.deliveryType === "Received From Aop";
