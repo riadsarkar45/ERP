@@ -33,6 +33,16 @@ const Sidebar = () => {
         { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package },
         { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package },
     ];
+    // Nested one level deeper than the other Movement items — these are
+    // processing-only movement types (no factory-to-factory transfer),
+    // grouped under their own "Others" sub-dropdown instead of flattened
+    // into movementSubItems.
+    const othersSubItems = [
+        { path: "/dashboard/challan/others/compacting", label: "Compacting", icon: Package },
+        { path: "/dashboard/challan/others/heat-set", label: "Heat Set", icon: Package },
+        { path: "/dashboard/challan/others/trumble", label: "Trumble", icon: Package },
+        { path: "/dashboard/challan/others/re-process", label: "Re-Process", icon: Package },
+    ];
     const misSubItems = [
         { path: "/dashboard/mis/glance", label: "At A Glance (Stock)", icon: FileText },
         // { path: "/dashboard/mis/dyeing", label: "Dyeing", icon: FileText },
@@ -48,6 +58,10 @@ const Sidebar = () => {
     );
     const [isMovementOpen, setIsMovementOpen] = useState(
         () => movementSubItems.some(item => item.path === location.pathname)
+            || othersSubItems.some(item => item.path === location.pathname)
+    );
+    const [isOthersOpen, setIsOthersOpen] = useState(
+        () => othersSubItems.some(item => item.path === location.pathname)
     );
     const [isMisOpen, setIsMisOpen] = useState(
         () => misSubItems.some(item => item.path === location.pathname)
@@ -64,7 +78,9 @@ const Sidebar = () => {
 
     // Auto-open dropdown if current route is an order/movement/mis sub-route
     const isOrdersActive = orderSubItems.some(item => isActive(item.path));
-    const isMovementActive = movementSubItems.some(item => isActive(item.path));
+    const isMovementActive = movementSubItems.some(item => isActive(item.path))
+        || othersSubItems.some(item => isActive(item.path));
+    const isOthersActive = othersSubItems.some(item => isActive(item.path));
     const isMisActive = misSubItems.some(item => isActive(item.path));
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -95,6 +111,10 @@ const Sidebar = () => {
             '/dashboard/challan/aop': { title: 'AOP Movement', subtitle: 'Manage AOP challans' },
             '/dashboard/challan/dyeing': { title: 'Dyeing Movement', subtitle: 'Manage dyeing challans' },
             '/dashboard/challan/knitting': { title: 'Knitting Movement', subtitle: 'Manage knitting challans' },
+            '/dashboard/challan/others/compacting': { title: 'Compacting', subtitle: 'Manage compacting movement' },
+            '/dashboard/challan/others/heat-set': { title: 'Heat Set', subtitle: 'Manage heat set movement' },
+            '/dashboard/challan/others/trumble': { title: 'Trumble', subtitle: 'Manage trumble movement' },
+            '/dashboard/challan/others/re-process': { title: 'Re-Process', subtitle: 'Manage re-process movement' },
         };
 
         const misRouteMap = {
@@ -273,6 +293,49 @@ const Sidebar = () => {
                                             </Link>
                                         </li>
                                     ))}
+
+                                    {/* Others — nested dropdown one level deeper than
+                                        the plain sub-items above, same open/active
+                                        pattern as the top-level Movement/Orders/MIS
+                                        dropdowns, just indented an extra step. */}
+                                    <li>
+                                        <button
+                                            onClick={() => setIsOthersOpen(prev => !prev)}
+                                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 text-sm justify-between ${isOthersActive
+                                                ? 'bg-primary-400 text-white font-medium'
+                                                : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Package size={16} className="shrink-0" />
+                                                Others
+                                            </div>
+                                            {isOthersOpen
+                                                ? <ChevronDown size={14} />
+                                                : <ChevronRight size={14} />
+                                            }
+                                        </button>
+
+                                        {isOthersOpen && (
+                                            <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                                {othersSubItems.map(item => (
+                                                    <li key={item.path}>
+                                                        <Link
+                                                            to={item.path}
+                                                            onClick={() => setIsMobileMenuOpen(false)}
+                                                            className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                                ? 'bg-primary-400 text-white font-medium'
+                                                                : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                                }`}
+                                                        >
+                                                            <item.icon size={16} className="shrink-0" />
+                                                            {item.label}
+                                                        </Link>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </li>
                                 </ul>
                             )}
                         </li>

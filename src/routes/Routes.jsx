@@ -26,6 +26,8 @@ import Dyeing from "../dashboard/pages/movement/Dyeing";
 import Knitting from "../dashboard/pages/movement/Knitting";
 import GlanceReport from "../dashboard/pages/MIS/GlanceReport";
 import Reconciliation from "../dashboard/pages/reconciliation/Reconciliation";
+import Compacting from "../dashboard/pages/movement/others/Compacting";
+import ReProcess from "../dashboard/pages/movement/others/ReProcess";
 
 const routers = createBrowserRouter([
     {
@@ -133,6 +135,14 @@ const routers = createBrowserRouter([
                     {
                         path: "challan/knitting",
                         element: <Knitting />
+                    },
+                    {
+                        path: "challan/others/compacting",
+                        element: <Compacting />
+                    },
+                    {
+                        path: "challan/others/re-process",
+                        element: <ReProcess />
                     },
 
                     {

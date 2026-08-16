@@ -1,22 +1,26 @@
 import type { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../../../database/prismaClient/prisma";
+import { evaluateQtyExpression } from "./evaluateQtyExpression";
+
+interface UpdateStyleReqBody {
+    salesContact?: string;
+    buyerName?: string;
+    styleNo?: string;
+    poNo?: string;
+    jobNo?: string;
+    changedTable?: string;
+    composition?: string;
+    finishDia?: string;
+    orderQty?: string;
+    rowId?: number;
+    color?: string;
+    additional?: string;
+    finishRequiredQty?: number;
+}
 
 export const updateStyleReq = async (req: Request, res: Response) => {
-    const { salesContact, buyerName, styleNo, additional, rowId, poNo, jobNo, changedTable, finishRequiredQty, composition, finishDia, orderQty, color, } = req.body as {
-        salesContact?: string;
-        buyerName?: string;
-        styleNo?: string;
-        poNo?: string;
-        jobNo?: string;
-        changedTable?: string;
-        composition?: string;
-        finishDia?: string;
-        orderQty?: number;
-        rowId?: number;
-        color: string;
-        additional: string;
-        finishRequiredQty: number;
-    };
+    const { salesContact, buyerName, styleNo, additional, rowId, poNo, jobNo, changedTable, finishRequiredQty, composition, finishDia, orderQty, color } = req.body as UpdateStyleReqBody;
 
     const { jobId } = req.params as { jobId: string };
     console.log(req.body);
@@ -35,17 +39,18 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                 return res.status(404).send({ message: "Row not found", type: "error" });
             }
 
-            const ops: any[] = [
+            const evaluatedOrderQty = orderQty !== undefined ? evaluateQtyExpression(orderQty) : null;
+            const evaluatedFinishRequiredQty = finishRequiredQty !== undefined ? evaluateQtyExpression(String(finishRequiredQty)) : null;
+
+            const ops: Prisma.PrismaPromise<any>[] = [
                 prisma.styleRequirementRow.update({
                     where: { id: existingRow.id },
                     data: {
                         ...(composition !== undefined && { composition }),
                         ...(finishDia !== undefined && { finishDia }),
-                        ...(orderQty !== undefined && { orderQty: Number(orderQty) }),
+                        ...(evaluatedOrderQty !== null && { orderQty: evaluatedOrderQty }),
                         ...(color !== undefined && { color: color }),
-                        ...(finishRequiredQty !== undefined && finishRequiredQty !== null && !isNaN(Number(finishRequiredQty)) && {
-                            finishRequiredQty: Number(Number(finishRequiredQty).toFixed(2))
-                        })
+                        ...(evaluatedFinishRequiredQty !== null && { finishRequiredQty: evaluatedFinishRequiredQty }),
                     },
                 }),
             ];
@@ -86,8 +91,12 @@ export const updateStyleReq = async (req: Request, res: Response) => {
         }
 
         if (changedTable === "compositionAdd") {
+            if (!rowId) {
+                return res.status(400).send({ message: "rowId is required", type: "error" });
+            }
+
             const targetRow = await prisma.styleRequirementRow.findUnique({
-                where: { id: Number(rowId) },
+                where: { id: rowId },
                 select: { styleRequirementId: true, composition: true, color: true },
             });
 
@@ -95,14 +104,19 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                 return res.status(404).send({ message: "Row not found", type: "error" });
             }
 
+            const additionalNum = Number(additional);
+            if (additional === undefined || isNaN(additionalNum)) {
+                return res.status(400).send({ message: "A valid additional value is required", type: "error" });
+            }
+
             await prisma.$transaction([
                 prisma.styleRequirementRow.update({
-                    where: { id: Number(rowId) },
-                    data: { additional: Number(additional) },
+                    where: { id: rowId },
+                    data: { additional: additionalNum },
                 }),
                 prisma.composition.updateMany({
-                    where: { styleRequirementRowId: Number(rowId) },
-                    data: { additional: Number(additional) },
+                    where: { styleRequirementRowId: rowId },
+                    data: { additional: additionalNum },
                 }),
                 prisma.composition.updateMany({
                     where: {
@@ -111,7 +125,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                         composition: targetRow.composition,
                         color: targetRow.color,
                     },
-                    data: { additional: Number(additional) },
+                    data: { additional: additionalNum },
                 }),
             ]);
 
@@ -120,6 +134,9 @@ export const updateStyleReq = async (req: Request, res: Response) => {
 
         // updating styleRequirement parent fields
         const jobIdToNumber = Number(jobId);
+        if (isNaN(jobIdToNumber)) {
+            return res.status(400).send({ message: "Invalid jobId", type: "error" });
+        }
 
         const existingStyleReq = await prisma.styleRequirement.findUnique({
             where: { id: jobIdToNumber },
@@ -130,7 +147,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
             return res.status(404).send({ message: "Style Requirement not found", type: "error" });
         }
 
-        const transactionOps: any[] = [
+        const transactionOps: Prisma.PrismaPromise<any>[] = [
             prisma.styleRequirement.update({
                 where: { id: jobIdToNumber },
                 data: {

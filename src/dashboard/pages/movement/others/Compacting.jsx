@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useFetchData } from '../../../hooks/fetch';
-import { formatToErpDate } from '../../../helpers/date/formateDate';
-import useAxiosPublic from '../../../hooks/Axios';
+import { useFetchData } from '../../../../hooks/fetch';
+import { formatToErpDate } from '../../../../helpers/date/formateDate';
+import useAxiosPublic from '../../../../hooks/Axios';
 
 const cellStyle = {
     border: "1px solid #999",
@@ -40,14 +40,14 @@ const tableHeader = [
     { header: "Color", width: "10%", key: "color" },
     { header: "From Factory", width: "8%", key: "fromFactory" },
     { header: "To Factory", width: "8%", key: "toFactory" },
-    { header: "Sent For Aop", width: "7%", key: "sentForAop" },
-    { header: "Receive From Aop", width: "7%", key: "receiveFromAop" },
-    { header: "Finish Receive", width: "7%", key: "finishReceiveFromAop" },
+    { header: "Sent Compacting", width: "7%", key: "sentForCompacting" },
+    { header: "Recv Compacting", width: "7%", key: "receivedFromCompacting" },
+    { header: "Finish Recv", width: "7%", key: "finishReceive" },
     { header: "Price/KG", width: "6%", key: "unitePrice" },
     { header: "Billing", width: "7%", key: "billingAmount" },
 ];
 
-const Aop = () => {
+const Compacting = () => {
     const [movements, setMovements] = useState([]);
     const [page, setPage] = useState(1);
     const [filters, setFilters] = useState({});
@@ -64,12 +64,16 @@ const Aop = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    // States for editable Price/KG
+    const [editingRowKey, setEditingRowKey] = useState(null);
+    const [editPrice, setEditPrice] = useState("");
+
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
 
     useEffect(() => {
         if (search) return;
-        fetchData(`/api/challan-movement/aopOrder?page=${page}&limit=10`)
+        fetchData(`/api/challan-movement/dyeingOrder/compacting?page=${page}&limit=10`)
             .then(data => {
                 if (data) {
                     const payload = Array.isArray(data) ? data : (data.data || []);
@@ -97,7 +101,6 @@ const Aop = () => {
         const makeRow = (challanNo, jobNo, comp, color, source) => {
             rowCounter += 1;
             return {
-                // rowCounter guarantees uniqueness even when challan/job/comp/color repeat
                 rowKey: `${challanNo}|${jobNo}|${comp}|${color}|${rowCounter}`,
                 chId: source?.id || challanNo,
                 challanNo,
@@ -107,9 +110,9 @@ const Aop = () => {
                 challanDate: source?.deliveryDate || source?.challanDate || "",
                 toFactory: source?.toFactory || "",
                 fromFactory: source?.fromFactory || "",
-                sentForAop: 0,
-                receiveFromAop: 0,
-                finishReceiveFromAop: 0,
+                sentForCompacting: 0,
+                receivedFromCompacting: 0,
+                finishReceive: 0,
                 deliveryQty: 0,
                 unitePrice: Number(source?.unitePrice) || 0,
                 paidBillingAmount: Number(source?.paidBillingAmount) || 0,
@@ -121,9 +124,9 @@ const Aop = () => {
             row.deliveryQty += qty;
 
             const type = String(dv?.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
-            if (type.includes("sentforaop")) row.sentForAop += qty;
-            else if (type.includes("aopfinishfabricrcvd") || type.includes("finishfabric") || type.includes("finishreceive") || type.includes("finishreceived") || type.includes("returnfromaop")) row.finishReceiveFromAop += qty;
-            else if (type.includes("receivedfromaop") || type.includes("receivefromaop")) row.receiveFromAop += qty;
+            if (type.includes("sentforcompacting") || type.includes("senttocompacting")) row.sentForCompacting += qty;
+            else if (type.includes("receivedfromcompacting") || type.includes("receivefromcompacting")) row.receivedFromCompacting += qty;
+            else if (type.includes("finishreceive") || type.includes("finishreceived") || type.includes("returnfromcompacting") || type.includes("finishfromcompacting")) row.finishReceive += qty;
 
             const price = Number(dv?.unitePrice || source?.unitePrice) || 0;
             if (price && !row.unitePrice) row.unitePrice = price;
@@ -132,11 +135,9 @@ const Aop = () => {
             if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
         };
 
-        // Build per-color "facets" so each color becomes its own row
         const getFacets = (item) => {
             const facets = [];
 
-            // 1) Backend provides a compositions array (composition + color pairs, optional qty)
             if (Array.isArray(item?.compositions) && item.compositions.length > 0) {
                 item.compositions.forEach((c) => {
                     if (!c) return;
@@ -149,14 +150,12 @@ const Aop = () => {
                     });
                 });
             }
-            // 2) Backend provides a merged color string ("color A, color B") — split it
             else if (typeof item?.color === "string" && item.color.includes(", ")) {
                 item.color.split(", ").map((s) => s.trim()).filter(Boolean).forEach((colorPart) => {
                     facets.push({ comp: item?.composition || "-", color: colorPart, qty: null });
                 });
             }
 
-            // 3) Fallback: single color row
             if (facets.length === 0) {
                 facets.push({ comp: item?.composition || "-", color: item?.color || "-", qty: null });
             }
@@ -168,7 +167,6 @@ const Aop = () => {
             const jobNo = extractJobNo(item) || "-";
 
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                // ── Deliveries branch: one row PER delivery, never merged with another delivery ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
@@ -182,7 +180,6 @@ const Aop = () => {
                     rows.push(row);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                // ── Flat branch: expand each color facet into its own row, never merged across items ──
                 const facets = getFacets(item);
                 const hasFacetQty = facets.some((f) => f.qty !== null);
 
@@ -190,13 +187,10 @@ const Aop = () => {
                     const row = makeRow(item.challanNo, jobNo, f.comp, f.color, item);
 
                     if (hasFacetQty) {
-                        // per-color quantities exist → apply only this color's qty
                         if (f.qty !== null) applyDelivery(row, { ...item, deliveryQty: f.qty }, item);
                     } else if (facets.length === 1) {
-                        // single color → behave exactly like before
                         applyDelivery(row, item, item);
                     }
-                    // (multiple colors without per-color qty → qty stays 0/"-" to avoid guessing a split)
                     rows.push(row);
                 });
             }
@@ -286,13 +280,56 @@ const Aop = () => {
         setSearchLoading(true); setSearchError(null); setPage(1);
         const challanArray = search.split(/[\s,]+/).filter(Boolean);
         try {
-            const res = await axiosPublic.get("/api/aopOrder/challan/search", { params: { challans: challanArray.join(","), context: "aopOrder" } });
+            const res = await axiosPublic.get("/api/compacting/challan/search", { params: { challans: challanArray.join(","), context: "dyeingOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;
             setMovements(searchData); setTotalPages(1);
         } catch (err) { setSearchError("Failed to search challans."); setMovements([]); }
         finally { setSearchLoading(false); }
+    };
+
+    // --- Price/KG Editable Logic ---
+    const handleDoubleClick = (row) => {
+        setEditingRowKey(row.rowKey);
+        setEditPrice(row.unitePrice);
+    };
+
+    const handlePriceChange = (e) => {
+        setEditPrice(e.target.value);
+    };
+
+    const handlePriceSave = (chId, newPrice) => {
+        const numericPrice = Number(newPrice) || 0;
+        setMovements(prev => prev.map(item => {
+            // Update if the ID matches the main item ID
+            if (item.id === chId) {
+                return { ...item, unitePrice: numericPrice };
+            }
+            // Update if the ID matches a delivery ID inside the item
+            if (item.deliveries && item.deliveries.some(dv => dv.id === chId)) {
+                return { ...item, unitePrice: numericPrice };
+            }
+            return item;
+        }));
+        setEditingRowKey(null);
+    };
+
+    const handlePriceBlur = () => {
+        const row = allRows.find(r => r.rowKey === editingRowKey);
+        if (row) {
+            handlePriceSave(row.chId, editPrice);
+        } else {
+            setEditingRowKey(null);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.target.blur();
+        } else if (e.key === 'Escape') {
+            setEditingRowKey(null);
+        }
     };
 
     if (loading && movements.length === 0 && !searchLoading) return <div style={{ padding: 20 }}>Loading...</div>;
@@ -306,7 +343,7 @@ const Aop = () => {
                 {search && <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}>Clear Search</button>}
             </div>
             {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
-            
+
             {challanIds.length > 0 && <div style={{ marginBottom: "16px" }}><button onClick={handleGenerateBill} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md border border-blue-500">Generate Bill ({challanIds.length})</button></div>}
 
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
@@ -355,10 +392,27 @@ const Aop = () => {
                                 <td style={cellStyle}>{row.color || "-"}</td>
                                 <td style={cellStyle}>{row.fromFactory || "-"}</td>
                                 <td style={cellStyle}>{row.toFactory || "-"}</td>
-                                <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
-                                <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
-                                <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? row.unitePrice : "-"}</td>
+                                <td style={cellStyle}>{row.sentForCompacting > 0 ? row.sentForCompacting : "-"}</td>
+                                <td style={cellStyle}>{row.receivedFromCompacting > 0 ? row.receivedFromCompacting : "-"}</td>
+                                <td style={cellStyle}>{row.finishReceive > 0 ? row.finishReceive : "-"}</td>
+                                
+                                {/* Editable Price/KG Column */}
+                                <td style={cellStyle} onDoubleClick={() => handleDoubleClick(row)}>
+                                    {editingRowKey === row.rowKey ? (
+                                        <input
+                                            type="number"
+                                            value={editPrice}
+                                            onChange={handlePriceChange}
+                                            onBlur={handlePriceBlur}
+                                            onKeyDown={handleKeyDown}
+                                            autoFocus
+                                            style={{ width: "100%", padding: "4px", border: "1px solid #3b82f6", borderRadius: "4px", textAlign: "center", outline: "none", boxSizing: "border-box" }}
+                                        />
+                                    ) : (
+                                        row.unitePrice > 0 ? row.unitePrice : "-"
+                                    )}
+                                </td>
+
                                 <td style={cellStyle}>{row.billingAmount > 0 ? row.billingAmount : "-"}</td>
                             </tr>
                         ))}
@@ -376,4 +430,4 @@ const Aop = () => {
         </div>
     );
 };
-export default Aop;
+export default Compacting;

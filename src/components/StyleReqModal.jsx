@@ -14,6 +14,21 @@ const defaultRow = () => ({
     finishRequiredQty: '',
 });
 
+const evaluateQtyExpression = (expr) => {
+    if (expr === undefined || expr === null) return null;
+    const sanitized = String(expr).trim();
+    if (sanitized === '') return null;
+    if (!/^[0-9+\-*/().\s]+$/.test(sanitized)) return null;
+
+    try {
+        // eslint-disable-next-line no-new-func
+        const result = Function(`"use strict"; return (${sanitized});`)();
+        return typeof result === 'number' && Number.isFinite(result) ? result : null;
+    } catch {
+        return null;
+    }
+};
+
 const StyleReqModal = ({ setShowModal, setRawData }) => {
     const [rows, setRows] = useState([defaultRow()]);
     const [orderInfo, setOrderInfo] = useState(
@@ -41,6 +56,24 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
         );
 
+    // Grand totals across all rows for the numeric columns. Recomputed on
+    // every render from `rows` (no separate state to keep in sync) —
+    // non-numeric/empty inputs count as 0 so a half-filled row doesn't
+    // break the running total or show NaN. The final finish qty total
+    // sums the EVALUATED expression per row, not the raw typed text.
+    const totalOrderQty = rows.reduce(
+        (sum, row) => sum + (Number(row.orderQty) || 0),
+        0
+    );
+    const totalFinishRequiredQty = rows.reduce(
+        (sum, row) => sum + (Number(row.finishRequiredQty) || 0),
+        0
+    );
+    const totalFinalFinishQty = rows.reduce(
+        (sum, row) => sum + (evaluateQtyExpression(row.finishRequiredQty) || 0),
+        0
+    );
+
     const createNewRequirement = async () => {
         const payload = {
             orderInfo,
@@ -49,7 +82,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                 composition: row.composition,
                 finishDia: row.finishDia,
                 orderQty: row.orderQty,
-                finishRequiredQty: row.finishRequiredQty,
+                finishRequiredQty: evaluateQtyExpression(row.finishRequiredQty) || 0,
             }))
         };
 
@@ -191,8 +224,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             </div>
 
                             {/* Column headers */}
-                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_32px] gap-2 mb-1 px-1">
-                                {['Color', 'Composition', 'Finish Dia', 'Order Qty', 'Finished Req. Qty', ''].map((h, i) => (
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mb-1 px-1">
+                                {['Color', 'Composition', 'Finish Dia', 'Order Qty', 'Finished Req. Qty', 'Final Finish Qty', ''].map((h, i) => (
                                     <span key={i} className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                         {h}
                                     </span>
@@ -201,37 +234,83 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
 
                             {/* Dynamic rows */}
                             <div className="flex flex-col gap-2">
-                                {rows.map((row) => (
-                                    <div
-                                        key={row.id}
-                                        className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
-                                    >
-                                        {[
-                                            { field: 'color', placeholder: 'Color' },
-                                            { field: 'composition', placeholder: 'Composition' },
-                                            { field: 'finishDia', placeholder: 'Finish Dia' },
-                                            { field: 'orderQty', placeholder: 'Order Qty' },
-                                            { field: 'finishRequiredQty', placeholder: 'Finished Req. Qty' },
-                                        ].map(({ field, placeholder }) => (
-                                            <input
-                                                key={field}
-                                                type="text"
-                                                placeholder={placeholder}
-                                                value={row[field]}
-                                                onChange={(e) => updateRow(row.id, field, e.target.value)}
-                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400"
-                                            />
-                                        ))}
-                                        <button
-                                            type="button"
-                                            onClick={() => removeRow(row.id)}
-                                            disabled={rows.length === 1}
-                                            className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                {rows.map((row) => {
+                                    // Live-evaluated result of whatever's typed in
+                                    // Finished Req. Qty for THIS row — recalculated
+                                    // on every keystroke since it's derived, not
+                                    // its own piece of state.
+                                    const finalFinishQty = evaluateQtyExpression(row.finishRequiredQty);
+
+                                    return (
+                                        <div
+                                            key={row.id}
+                                            className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
                                         >
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ))}
+                                            {[
+                                                { field: 'color', placeholder: 'Color' },
+                                                { field: 'composition', placeholder: 'Composition' },
+                                                { field: 'finishDia', placeholder: 'Finish Dia' },
+                                                { field: 'orderQty', placeholder: 'Order Qty' },
+                                                { field: 'finishRequiredQty', placeholder: 'e.g. 10+10+10' },
+                                            ].map(({ field, placeholder }) => (
+                                                <input
+                                                    key={field}
+                                                    type="text"
+                                                    placeholder={placeholder}
+                                                    value={row[field]}
+                                                    onChange={(e) => updateRow(row.id, field, e.target.value)}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400"
+                                                />
+                                            ))}
+
+                                            {/* Read-only computed output, not an
+                                                input — there's nothing to type
+                                                here, it just reflects Finished
+                                                Req. Qty's evaluated result. Shown
+                                                as a dash when that field is
+                                                empty or isn't a valid expression,
+                                                so it never displays a
+                                                misleading 0. */}
+                                            <div
+                                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 text-gray-700 font-medium"
+                                                title="Automatically calculated from Finished Req. Qty"
+                                            >
+                                                {finalFinishQty === null ? '—' : finalFinishQty.toLocaleString()}
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => removeRow(row.id)}
+                                                disabled={rows.length === 1}
+                                                className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Grand total row — lines up under the Order Qty /
+                                Finished Req. Qty / Final Finish Qty columns so
+                                the person filling this out can sanity-check
+                                totals as they go, without adding up rows
+                                manually. Purely derived/display — the payload
+                                still sends each row's own values. */}
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mt-2 px-1 pt-2 border-t border-gray-200">
+                                <span className="col-span-3 text-xs font-semibold text-gray-500 uppercase tracking-wide self-center">
+                                    Grand Total
+                                </span>
+                                <span className="text-sm font-semibold text-gray-800 px-3">
+                                    {totalOrderQty.toLocaleString()}
+                                </span>
+                                <span className="text-sm font-semibold text-gray-800 px-3">
+                                    {totalFinishRequiredQty.toLocaleString()}
+                                </span>
+                                <span className="text-sm font-semibold text-gray-800 px-3">
+                                    {totalFinalFinishQty.toLocaleString()}
+                                </span>
+                                <span />
                             </div>
                         </div>
 

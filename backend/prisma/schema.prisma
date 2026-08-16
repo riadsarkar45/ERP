@@ -100,6 +100,9 @@ model StyleRequirement {
   rows         StyleRequirementRow[]
   sizes        sizes[]
   workOrders   WorkOrder[]
+  @@index([buyerName])
+  @@index([jobNo])
+  @@index([poNo])
 }
 
 model StyleRequirementRow {
@@ -116,6 +119,8 @@ model StyleRequirementRow {
   reconciliation     reconciliationData?
 
   @@index([styleRequirementId])
+  @@index([color])
+  @@index([composition])
 }
 
 model sizeWiseCutting {

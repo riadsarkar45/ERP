@@ -57,7 +57,9 @@ getRouters.get("/glance-report/:factoryName/:orderType", responseTimeMonitor, pa
 
 getRouters.get("/management-view", responseTimeMonitor, partyData);
 
-getRouters.get("/challan-movement/:orderType", responseTimeMonitor, challanMovement);
+getRouters.get("/challan-movement/:orderType/", responseTimeMonitor, challanMovement);
+
+getRouters.get("/challan-movement/:orderType/:noOrderType", responseTimeMonitor, challanMovement);
 
 getRouters.get("/work-order/:orderType/filter-options/:column", responseTimeMonitor, getFilterOptions);
 
@@ -70,6 +72,8 @@ getRouters.get("/mis/glance/detail/:columnName/:jobNo", responseTimeMonitor, mis
 getRouters.get("/glance/:jobNo/trailing-data", responseTimeMonitor, styleReconciliation);
 
 getRouters.get("/:orderType/challan/search", responseTimeMonitor, searchChallans);
+
+getRouters.get("/:orderType/:noOrderType/challan/search", responseTimeMonitor, searchChallans);
 
 getRouters.get("/reports/hourly-challan", responseTimeMonitor, hourlyChallanReport);
 
