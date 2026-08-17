@@ -143,7 +143,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                 }
                 for (let j = 0; j < comp.yarnColors.length; j++) {
                     const yc = comp.yarnColors[j];
-                    if (!yc?.color || isInvalidNumber(yc?.qty) || isInvalidNumber(yc?.price)) {
+                    if (!yc?.color || isInvalidNumber(evaluateQtyExpression(String(yc?.qty))) || isInvalidNumber(evaluateQtyExpression(String(yc?.price)))) {
                         return res.status(400).send({
                             message: `Composition ${i + 1}, Yarn Color ${j + 1}: color, valid qty and price are required`,
                             type: "error",
@@ -152,13 +152,13 @@ export const createNewJob = async (req: Request, res: Response) => {
                 }
             } else {
                 // workOrderQty is the quantity that matters for non-yarn-dyeing orders
-                if (isInvalidNumber(comp?.workOrderQty)) {
+                if (isInvalidNumber(evaluateQtyExpression(String(comp?.workOrderQty)))) {
                     return res.status(400).send({
                         message: `Composition ${i + 1}: valid work order quantity is required`,
                         type: "error",
                     });
                 }
-                if (isInvalidNumber(comp?.unitPrice)) {
+                if (isInvalidNumber(evaluateQtyExpression(String(comp?.unitPrice)))) {
                     return res.status(400).send({
                         message: `Composition ${i + 1}: valid price per kg is required`,
                         type: "error",
