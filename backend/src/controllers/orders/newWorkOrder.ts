@@ -78,6 +78,10 @@ export const createNewJob = async (req: Request, res: Response) => {
     } = req.body as CreateJobBody;
 
     try {
+        const userId = Number(req.user?.userId);
+        if (!req.user || Number.isNaN(userId)) {
+            return res.status(401).json({ type: "error", message: "Unauthorized" });
+        }
         // ── Basic required validation ─────────────────────────────────────
         if (!jobNo) return res.status(400).send({ message: "Job number is required", type: "error" });
         if (!orderType) return res.status(400).send({ message: "Order type is required", type: "error" });
@@ -201,6 +205,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                     yarnCount,
                     stichLength,
                     machineDia,
+                    createdBy: userId,
                     // ── Compositions (per-row fields) ──
                     compositions: {
                         create: compositions.map((c) => ({

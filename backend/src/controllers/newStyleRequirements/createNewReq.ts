@@ -9,6 +9,12 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
         return res.status(400).send({ message: "No data provided", type: "error" })
     }
 
+    const userId = Number(req.user?.userId);
+    if (!req.user || Number.isNaN(userId)) {
+        return res.status(401).json({ type: "error", message: "Unauthorized" });
+    }
+
+
     try {
 
         const checkIfExist = await checkDataExist(orderInfo.jobNo)
@@ -28,6 +34,7 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                     processLoss: Number(orderInfo.processLoss) as number,
                     poNo: orderInfo.poNo as string,
                     salesContact: orderInfo.salesContact as string,
+                    createdBy: userId
                 },
                 select: {
                     id: true,

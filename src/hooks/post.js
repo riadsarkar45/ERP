@@ -1,17 +1,17 @@
 import { useCallback, useState } from "react";
-import useAxiosPublic from "./Axios"
+import useAxiosPrivate from "./UseAxiosPrivate";
 
 export const usePostData = () => {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
-    const axios = useAxiosPublic();
+    const axiosSecure = useAxiosPrivate()
 
     const postData = useCallback(async (apiRoute, payload) => {
         if (!apiRoute) return;
         setError(null);
         setLoading(true);
         try {
-            const res = await axios.post(apiRoute, payload);
+            const res = await axiosSecure.post(apiRoute, payload);
             return res.data;
         } catch (err) {
             if (err.response.data.type ==="error") {
@@ -25,7 +25,7 @@ export const usePostData = () => {
         } finally {
             setLoading(false);
         }
-    }, [axios]);
+    }, [axiosSecure]);
 
 
     return { postData, error, loading };

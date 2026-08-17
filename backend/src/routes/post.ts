@@ -7,6 +7,7 @@ import { createNewJob } from "../controllers/orders/newWorkOrder";
 import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 import { generateBill } from "../controllers/generateBill/generatebill";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
+import { authenticate } from "../middleware/Authenticate.middleware";
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ const upload = multer({ dest: "uploads/" });
 
 router.post("/upload", responseTimeMonitor, upload.single("file"), fileUpload as any);
 
-router.post("/create-job", responseTimeMonitor, createNewJob)
+router.post("/create-job", responseTimeMonitor, authenticate, createNewJob)
 
 router.post("/create-new-audit", responseTimeMonitor, createNewAudit)
 

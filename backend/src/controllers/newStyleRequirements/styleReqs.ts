@@ -51,6 +51,7 @@ const buildWhereClause = (
 
 export const styleRequirements = async (req: Request, res: Response) => {
     try {
+        
         const requestStart = process.hrtime.bigint();
 
         const { jobNo } = req.params as { jobNo: string | undefined };

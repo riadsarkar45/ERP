@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Loader2, Save, X, Plus, Package, FileText, ClipboardList, Factory, Layers } from "lucide-react";
+import { Loader2, Save, X, Plus, Package, FileText, ClipboardList, Factory, Layers, Rotate3D, Building2, Building } from "lucide-react";
 import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
@@ -47,6 +47,8 @@ const NewOrder = () => {
     const [rows, setRows] = useState([]);
     const [orderType, setOrderType] = useState("");
     const [isLoading, setIsLoading] = useState(true);
+    const [factoryData, setFactoryData] = useState([])
+    const [isFactoryDataLoading, setFactoryLoading] = useState(false)
 
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
@@ -420,6 +422,30 @@ const NewOrder = () => {
     const dyeingOrderType = ["knittingOrder", "aopOrder", "dyeingOrder", "yarnDyeingOrder"];
     const totalRequireQty = (Number(styleTotals.totalFinishRequiredQty) * (1 + Number(styleTotals.processLoss) / 100) + Number(styleTotals.totalAdditional)).toFixed(2)
 
+    console.log(orderType, "orderType");
+
+    useEffect(() => {
+        if (!orderType || !jobNumber) return;
+
+        const fetchFactoryWiseWorkOrderTotal = async () => {
+            setFactoryLoading(true);
+
+            try {
+                const response = await axiosPrivate.get(
+                    `/api/factories/workOrder/totals/${jobNumber}/${orderType}`
+                );
+
+                setFactoryData(response.data);
+            } catch (error) {
+                console.error("Failed to fetch factory totals:", error);
+            } finally {
+                setFactoryLoading(false);
+            }
+        };
+
+        fetchFactoryWiseWorkOrderTotal();
+    }, [axiosPrivate, jobNumber, orderType]);
+
     if (isLoading) {
         return (
             <DashboardLayout title="Add New Order">
@@ -480,7 +506,7 @@ const NewOrder = () => {
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px] gap-6 items-start">
                     <div className="space-y-6">
                         <SectionCard
                             icon={ClipboardList}
@@ -718,7 +744,7 @@ const NewOrder = () => {
 
                     {/* Sticky summary */}
                     <aside className="xl:sticky xl:top-6">
-                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                        <div className="rounded-xl border mb-8 border-slate-200 bg-white shadow-sm overflow-hidden">
                             <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-5 py-3">
                                 <FileText size={15} className="text-slate-500" />
                                 <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -733,7 +759,7 @@ const NewOrder = () => {
                                     </span>
                                     <span className="text-sm font-medium text-slate-900 tabular-nums">
                                         {styleTotals.totalOrderQty.toLocaleString()}
-                                        <span className="ml-1 text-xs text-slate-400">KG</span>
+                                        <span className="ml-1 text-xs text-slate-400">PCS</span>
                                     </span>
                                 </div>
 
@@ -770,7 +796,7 @@ const NewOrder = () => {
 
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                                     <span className="text-xs text-slate-500">
-                                        Work Orders Variation
+                                        Work Short & Excess``
                                     </span>
                                     <span
                                         className={`text-xs font-semibold tabular-nums ${(
@@ -813,6 +839,51 @@ const NewOrder = () => {
                                     <span className="ml-1.5 text-xs font-medium text-slate-400">BDT</span>
                                 </p>
                             </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                            <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-5 py-3">
+                                <Building2 size={15} className="text-slate-500" />
+                                <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                                    Factory wise total work order qty
+                                </h4>
+                            </div>
+
+                            {isFactoryDataLoading ? (
+                                // Skeleton rows — same shape as real rows so nothing jumps on load
+                                <div className="px-5 py-4 space-y-4">
+                                    {[...Array(3)].map((_, i) => (
+                                        <div key={i} className="flex items-center justify-between animate-pulse">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-3.5 w-3.5 rounded bg-slate-200" />
+                                                <div
+                                                    className="h-3.5 rounded bg-slate-200"
+                                                    style={{ width: 90 + (i % 3) * 20 }}
+                                                />
+                                            </div>
+                                            <div className="h-3.5 w-16 rounded bg-slate-200" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : factoryData?.length ? (
+                                factoryData.map((fact) => (
+                                    <div key={fact.factoryName} className="px-5 py-4 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="flex items-center gap-2 text-sm text-slate-600">
+                                                <Building size={14} className="text-slate-400" /> {fact.factoryName}
+                                            </span>
+                                            <span className="text-sm font-medium text-slate-900 tabular-nums">
+                                                {fact.workOrderQty}
+                                                <span className="ml-1 text-xs text-slate-400">KG</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="px-5 py-6 text-center text-xs text-slate-400">
+                                    No factory data available
+                                </div>
+                            )}
                         </div>
                     </aside>
                 </div>

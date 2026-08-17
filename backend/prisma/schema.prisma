@@ -39,6 +39,8 @@ model WorkOrder {
   yarnCount          String            @default("NULL")
   stichLength        String            @default("NULL")
   machineDia         String            @default("NULL")
+  createdBy          Int               @default(1)
+  user               user?             @relation("WorkOrderCreatedBy", fields: [createdBy], references: [id])
 
   @@index([yarnCount])
   @@index([machineDia])
@@ -97,10 +99,12 @@ model StyleRequirement {
   poNo                 String
   styleNo              String
   processLoss          Float
-  isReconciliationDone Boolean? @default(false)
+  isReconciliationDone Boolean?              @default(false)
   rows                 StyleRequirementRow[]
   sizes                sizes[]
   workOrders           WorkOrder[]
+  createdBy            Int?
+  user                 user?                 @relation(fields: [createdBy], references: [id])
 
   @@index([buyerName])
   @@index([jobNo])
@@ -225,15 +229,17 @@ model jobs {
 }
 
 model user {
-  id             Int            @id @default(autoincrement())
-  userName       String?        @default("NULL")
-  name           String
-  phoneNo        String         @unique
-  password       String
-  userRole       String
-  workingStation String?        @default("NULL")
-  refreshTokens  refreshToken[] // <-- ADD THIS LINE to your existing model
-  deliveries     deliveries[]
+  id                Int                @id @default(autoincrement())
+  userName          String?            @default("NULL")
+  name              String
+  phoneNo           String             @unique
+  password          String
+  userRole          String
+  workingStation    String?            @default("NULL")
+  refreshTokens     refreshToken[]
+  deliveries        deliveries[]
+  workOrders        WorkOrder[]        @relation("WorkOrderCreatedBy")
+  styleRequirements StyleRequirement[]
 }
 
 model refreshToken {
