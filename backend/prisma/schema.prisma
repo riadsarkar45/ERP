@@ -90,16 +90,18 @@ model Composition {
 }
 
 model StyleRequirement {
-  id           Int                   @id @default(autoincrement())
-  salesContact String
-  buyerName    String
-  jobNo        String                @unique
-  poNo         String
-  styleNo      String
-  processLoss  Float
-  rows         StyleRequirementRow[]
-  sizes        sizes[]
-  workOrders   WorkOrder[]
+  id                   Int                   @id @default(autoincrement())
+  salesContact         String
+  buyerName            String
+  jobNo                String                @unique
+  poNo                 String
+  styleNo              String
+  processLoss          Float
+  isReconciliationDone Boolean? @default(false)
+  rows                 StyleRequirementRow[]
+  sizes                sizes[]
+  workOrders           WorkOrder[]
+
   @@index([buyerName])
   @@index([jobNo])
   @@index([poNo])

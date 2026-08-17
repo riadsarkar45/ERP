@@ -19,7 +19,11 @@ const buildWhereClause = (
     jobNo: string | undefined,
     filters: StyleFilters | undefined
 ): Prisma.StyleRequirementWhereInput => {
-    const where: any = jobNo ? { jobNo } : {};
+    // Added condition to only fetch jobs where reconciliation is NOT done
+    const where: any = {
+        isReconciliationDone: false,
+        ...(jobNo ? { jobNo } : {}),
+    };
 
     if (!filters) return where;
 
@@ -110,6 +114,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                                     sewingInputQty: true,
                                     sewingOutputQty: true,
                                     shippedQty: true,
+                                    manufacturingUnite: true,
                                 }
                             }
                         },
@@ -197,8 +202,6 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
         let values: string[] = [];
 
         if (DIRECT_FIELDS.has(columnName)) {
-            // FIX: Removed `[columnName]: { not: null }` to prevent Prisma validation errors.
-            // We filter out nulls in JS below anyway.
             const rows = await prisma.styleRequirement.findMany({
                 where: scopingWhere,
                 distinct: [columnName as any],
@@ -214,7 +217,6 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
                         typeof value === "string" && value.length > 0
                 );
         } else {
-            // FIX: Removed `[columnName]: { not: null }` here as well.
             const rows = await prisma.styleRequirementRow.findMany({
                 where: {
                     styleRequirement: scopingWhere,

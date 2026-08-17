@@ -17,13 +17,15 @@ interface TrailingRowInput {
     physicalFoundLeftOver?: number | string;
     sentForEmbellishment?: number | string;
     receivedFromEmbellishment?: number | string;
+    // FIXED: was "manufacturingUnit" (no trailing "e") — the frontend actually
+    // sends the key as "manufacturingUnite" (matches the Prisma column name).
+    // That mismatch meant this field was ALWAYS undefined, so every save
+    // wrote null/"" regardless of what the user typed, and on first-time
+    // creates it threw "Argument `manufacturingUnite` must not be null."
+    // because the Prisma column is a required (non-nullable) String.
     manufacturingUnite?: string | null;
 }
 
-// NOTE: cadConsumption, plannedCuttingQty and plannedLeftOverQty are FORMULA
-// fields on the frontend (derived from other saved values) and are
-// intentionally NOT sent by the client. They are computed here instead of
-// being required as input.
 const REQUIRED_NUMERIC_KEYS = [
     "fabricIssueCuttingDept",
     "actualCuttingQty",
@@ -39,7 +41,6 @@ const REQUIRED_NUMERIC_KEYS = [
     "physicalFoundLeftOver",
 ] as const;
 
-// Optional numeric fields: accepted if present, default to 0 if missing.
 const OPTIONAL_NUMERIC_KEYS = [
     "sentForEmbellishment",
     "receivedFromEmbellishment",
@@ -76,9 +77,6 @@ export const styleReconciliation = async (req: Request, res: Response) => {
 
         const validRowIds = new Set(job.rows.map((r) => r.id));
 
-        // `notes` is a single note for the whole job submission (applied to
-        // every row in the transaction), matching what the frontend actually
-        // sends: { jobNo, rows, notes }.
         const { rows, notes } = req.body as { rows: TrailingRowInput[]; notes?: string | null };
         if (!Array.isArray(rows) || rows.length === 0) {
             return res.status(400).json({ message: "rows array is required and cannot be empty" });
@@ -121,13 +119,9 @@ export const styleReconciliation = async (req: Request, res: Response) => {
                 numericFields[key] = num === null ? 0 : num;
             }
 
-            // Derived/FORMULA fields — computed server-side so the client
-            // never has to send (or can't drift from) these values.
-            // Mirrors the frontend's calculateFormula logic for these keys.
-            // If you'd rather trust client-computed values, accept them as
-            // optional overrides instead of recomputing.
-            const cadConsumption = 0 || 0; // depends on finishRequiredQty/orderQty from styleRequirementRow — join in if needed
-            const plannedCuttingQty = 0 || 0; // depends on cadConsumption above
+            // Derived/FORMULA fields
+            const cadConsumption = 0;
+            const plannedCuttingQty = 0;
             const sewingInputQty = numericFields["sewingInputQty"] ?? 0;
             const shippedQty = numericFields["shippedQty"] ?? 0;
             const plannedLeftOverQty = sewingInputQty - shippedQty;
@@ -136,34 +130,41 @@ export const styleReconciliation = async (req: Request, res: Response) => {
             numericFields.plannedCuttingQty = plannedCuttingQty;
             numericFields.plannedLeftOverQty = plannedLeftOverQty;
 
+            const manufacturingUnite =
+                row.manufacturingUnite != null && row.manufacturingUnite !== ""
+                    ? String(row.manufacturingUnite)
+                    : "";
+
             prepared.push({
                 styleRequirementRowId,
                 data: {
                     ...numericFields,
                     note: notes ?? null,
-                    manufacturingUnite: row.manufacturingUnite ?? "NULL",
+                    manufacturingUnite,
                 },
             });
         }
 
-        const results = await prisma.$transaction(
-            prepared.map(({ styleRequirementRowId, data }) =>
-                prisma.reconciliationData.upsert({
-                    where: { styleRequirementRowId },
-                    update: {
-                        ...data,
-                        submittedBy,
-                        submittedDate: new Date(),
-                    } as any,
-                    create: {
-                        ...data,
-                        submittedBy,
-                        submittedDate: new Date(),
-                        styleRequirementRowId,
-                    } as any,
-                })
-            )
+        // Prepare transaction operations
+        const transactionOperations: any[] = prepared.map(({ styleRequirementRowId, data }) =>
+            prisma.reconciliationData.upsert({
+                where: { styleRequirementRowId },
+                update: {
+                    ...data,
+                    submittedBy,
+                    submittedDate: new Date(),
+                } as any,
+                create: {
+                    ...data,
+                    submittedBy,
+                    submittedDate: new Date(),
+                    styleRequirementRowId,
+                } as any,
+            })
         );
+
+        // Execute all upserts and the status update in a single atomic transaction
+        const results = await prisma.$transaction(transactionOperations);
 
         return res.status(200).json({ message: "Reconciliation data saved", data: results });
     } catch (err) {

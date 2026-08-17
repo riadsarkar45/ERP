@@ -21,8 +21,7 @@ const ShortExcess = ({ value }) => {
     );
 };
 
-// ── Frozen (sticky) column configuration ─────────────────────────────
-const STICKY_COL_WIDTHS = [170, 250, 300, 100, 150];
+const STICKY_COL_WIDTHS = [50, 170, 250, 300, 100, 150];
 const STICKY_LEFT_OFFSETS = STICKY_COL_WIDTHS.reduce((acc, w, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + STICKY_COL_WIDTHS[i - 1]);
     return acc;
@@ -46,11 +45,10 @@ const Reconciliation = () => {
     const [editValues, setEditValues] = useState({});
     const [savingJob, setSavingJob] = useState(false);
 
-    // ── Notes modal state ──
+    const [selectedJobs, setSelectedJobs] = useState(new Set());
     const [showNotesModal, setShowNotesModal] = useState(false);
     const [notes, setNotes] = useState("");
-    const [pendingSaveJobIndex, setPendingSaveJobIndex] = useState(null);
-    const [pendingSaveJob, setPendingSaveJob] = useState(null);
+    const [pendingSaveJobs, setPendingSaveJobs] = useState([]); 
 
     const WRAPPED_COL_WIDTH = 120;
     const wrapClass = isWrapped ? "whitespace-normal break-words" : "whitespace-nowrap";
@@ -71,59 +69,25 @@ const Reconciliation = () => {
     });
 
     const YARN_TABLE_HEADERS = [
-        "JOB NO",
-        "COLOR",
-        "COMPOSITION",
-        "ORDER QTY",
-        "MANUFACTURING UNITE",
-        "FINISH REQUIRE QTY",
-        "YARN REQUIRE QTY",
-        "YARN DELIVERY",
-        "YARN RETURN",
-        "GREY RECEIVED",
-        "SHORT & EXCESS",
-        "GREY DELIVERY FOR DYEING",
-        "GREY RET. RCVD FROM DYEING",
-        "GREY RECEIVED FROM DYEING",
-        "FINISH RECEIVED FROM DYEING",
-        "PROCESS LOSS %",
-        "SHORT & EXCESS",
-        "SENT FOR AOP",
-        "RETURN RECEIVED FROM AOP",
-        "GREY WEIGHT RECEIVED FROM AOP",
-        "FINISH RECEIVED FROM AOP",
-        "PROCESS LOSS", "SHORT & EXCESS",
-        "FABRIC ISSUE CUTTING",
-        "FABRIC ISSUED SHORT/EX",
-        "CAD CONSUMPTION",
-        "PLANNED CUTTING",
-        "ACTUAL CUTTING",
-        "CUTTING SHORT/EXCESS",
-        "SHORT/EXCESS %",
-        "SENT FOR EMBELLISHMENT",
-        "RECEIVED FROM EMBELLISHMENT",
-        "RECEIVED SHORT & EXCESS",
-        "CUTTING TO SEWING",
-        "NOT POSSIBLE TO INPUT",
-        "REJECTED CUT PANEL FOUND",
-        "SEWING INPUT",
-        "INPUT SHORT/EXCESS",
-        "SEWING OUTPUT",
-        "OUTPUT SHORT/EXCESS",
-        "FINISH INPUT",
-        "FINISH OUTPUT", "SHORT/EXCESS",
-        "PACKING INPUT", "PACKING OUTPUT", "SHIPPED QTY", "SHIPMENT EXCESS/SHORT",
+        "", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "MANUFACTURING UNIT",
+        "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY", "YARN RETURN", "GREY RECEIVED",
+        "SHORT & EXCESS", "GREY DELIVERY FOR DYEING", "GREY RET. RCVD FROM DYEING", "GREY RECEIVED FROM DYEING",
+        "FINISH RECEIVED FROM DYEING", "PROCESS LOSS %", "SHORT & EXCESS", "SENT FOR AOP", "RETURN RECEIVED FROM AOP",
+        "GREY WEIGHT RECEIVED FROM AOP", "FINISH RECEIVED FROM AOP", "PROCESS LOSS", "SHORT & EXCESS",
+        "FABRIC ISSUE CUTTING", "FABRIC ISSUED SHORT/EX", "CAD CONSUMPTION", "PLANNED CUTTING", "ACTUAL CUTTING",
+        "CUTTING SHORT/EXCESS", "SHORT/EXCESS %", "SENT FOR EMBELLISHMENT", "RECEIVED FROM EMBELLISHMENT",
+        "RECEIVED SHORT & EXCESS", "CUTTING TO SEWING", "NOT POSSIBLE TO INPUT", "REJECTED CUT PANEL FOUND",
+        "SEWING INPUT", "INPUT SHORT/EXCESS", "SEWING OUTPUT", "OUTPUT SHORT/EXCESS", "FINISH INPUT",
+        "FINISH OUTPUT", "SHORT/EXCESS", "PACKING INPUT", "PACKING OUTPUT", "SHIPPED QTY", "SHIPMENT EXCESS/SHORT",
         "PLANNED LEFTOVER", "PHYSICAL FOUND LEFTOVER", "% PHYSICAL FOUND", "LEFT OVER SHORT/EX"
     ];
 
     const FILTERABLE_COLS = {
-        0: { key: "jobNo", label: "JOB NO" },
-        1: { key: "color", label: "COLOR" },
-        2: { key: "composition", label: "COMPOSITION" },
+        1: { key: "jobNo", label: "JOB NO" },
+        2: { key: "color", label: "COLOR" },
+        3: { key: "composition", label: "COMPOSITION" },
     };
 
-    // `formula` fields are computed here for DISPLAY, but are now also sent
-    // to the backend (see buildJobPayload) since the schema stores them.
     const TRAILING_FIELDS = [
         { key: "fabricIssueCuttingDept", type: "input" }, { key: "fabricIssuedShortExcess", type: "FORMULA" },
         { key: "cadConsumption", type: "FORMULA" }, { key: "plannedCuttingQty", type: "FORMULA" },
@@ -141,14 +105,10 @@ const Reconciliation = () => {
         { key: "percentPhysicalFoundLeftover", type: "FORMULA" }, { key: "leftOverShortExcess", type: "FORMULA" },
     ];
 
-    // Subset of FORMULA keys that actually exist as columns in
-    // reconciliationData and therefore need to be included in the save
-    // payload (the rest — e.g. shortExcess percentages — are display-only
-    // and are NOT persisted, matching the Prisma schema).
     const FORMULA_KEYS_TO_PERSIST = ["cadConsumption", "plannedCuttingQty", "plannedLeftOverQty"];
 
     const STICKY_EDITABLE_FIELDS = [
-        { key: "manufacturingUnite", label: "MANUFACTURING UNITE" }
+        { key: "manufacturingUnite", label: "MANUFACTURING UNIT" } // Aligned with Prisma Schema
     ];
 
     const fetchFilteredData = useCallback(async () => {
@@ -241,9 +201,10 @@ const Reconciliation = () => {
                     initialValues[`${jobIndex}-${i}-${field.key}`] = reconciliation[field.key] != null ? String(reconciliation[field.key]) : "";
                 }
             });
-            // Add sticky editable fields
             STICKY_EDITABLE_FIELDS.forEach(field => {
-                initialValues[`${jobIndex}-${i}-${field.key}`] = comps[i]?.[field.key] != null ? String(comps[i][field.key]) : "";
+                // Reads from the nested reconciliation object correctly
+                const savedVal = reconciliation[field.key];
+                initialValues[`${jobIndex}-${i}-${field.key}`] = savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
             });
         }
         setEditValues(prev => ({ ...prev, ...initialValues }));
@@ -259,9 +220,6 @@ const Reconciliation = () => {
         setEditingJobIndex(null);
     };
 
-    // ✨ AUTO FORMULA CALCULATOR (EXACTLY AS NOTED IN THE IMAGE) ✨
-    // Declared before buildJobPayload so buildJobPayload can call it when
-    // assembling the fields the backend needs to persist.
     const calculateFormula = (jobIndex, i, fieldKey) => {
         const get = (key) => {
             const valStr = editValues[`${jobIndex}-${i}-${key}`];
@@ -272,69 +230,43 @@ const Reconciliation = () => {
             const row = reportData[jobIndex]?.rows?.[i];
             const saved = row?.reconciliation?.[key];
             if (saved != null) return Number(saved);
-            // Fallback to base row data (e.g. finishRequiredQty, orderQty)
             return row?.[key] != null ? Number(row[key]) : 0;
         };
 
         switch (fieldKey) {
-            case "fabricIssuedShortExcess":
-                return get("fabricIssueCuttingDept") - get("finishRequiredQty");
-
-            case "cadConsumption":
-                return get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
-
+            case "fabricIssuedShortExcess": return get("fabricIssueCuttingDept") - get("finishRequiredQty");
+            case "cadConsumption": return get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
             case "plannedCuttingQty": {
                 const cadConsumption = get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
                 return get("fabricIssueCuttingDept") ? get("fabricIssueCuttingDept") / cadConsumption : 0;
             }
-
-            case "cuttingShortExcess":
-                return get("actualCuttingQty") - get("orderQty");
-
+            case "cuttingShortExcess": return get("actualCuttingQty") - get("orderQty");
             case "shortExcessPercentCutting": {
                 const order = get("orderQty");
                 const shortEx = get("actualCuttingQty") - order;
                 return order > 0 ? (shortEx / order) * 100 : 0;
             }
-
-            case "notPossibleToInput":
-                return get("cuttingToSewingInput") - get("actualCuttingQty");
-
-            case "inputShortExcess":
-                return get("sewingInputQty") - get("orderQty");
-
-            case "outputShortExcess":
-                return get("sewingOutputQty") - get("sewingInputQty");
-
-            case "shortExcessFinish":
-                return get("finishOutputQty") - get("finishInputQty");
-
-            case "excessShort":
-                return get("shippedQty") - get("orderQty");
-
-            case "plannedLeftOverQty":
-                return get("sewingInputQty") - get("shippedQty");
-
+            case "notPossibleToInput": return get("cuttingToSewingInput") - get("actualCuttingQty");
+            case "inputShortExcess": return get("sewingInputQty") - get("orderQty");
+            case "outputShortExcess": return get("sewingOutputQty") - get("sewingInputQty");
+            case "shortExcessFinish": return get("finishOutputQty") - get("finishInputQty");
+            case "excessShort": return get("shippedQty") - get("orderQty");
+            case "plannedLeftOverQty": return get("sewingInputQty") - get("shippedQty");
             case "percentPhysicalFoundLeftover": {
                 const planned = get("sewingInputQty") - get("shippedQty");
                 const physical = get("physicalFoundLeftOver");
                 return planned > 0 ? (physical / planned) * 100 : 0;
             }
-
             case "leftOverShortExcess": {
                 const planned = get("sewingInputQty") - get("shippedQty");
                 return get("physicalFoundLeftOver") - planned;
             }
-
             case "receivedShortExcess": {
                 const sentForEmbellishment = get("sentForEmbellishment") || 0;
                 const receivedFromEmbellishment = get("receivedFromEmbellishment") || 0;
-                const total = receivedFromEmbellishment - sentForEmbellishment;
-                return total && total;
+                return receivedFromEmbellishment - sentForEmbellishment;
             }
-
-            default:
-                return 0;
+            default: return 0;
         }
     };
 
@@ -349,21 +281,28 @@ const Reconciliation = () => {
             TRAILING_FIELDS.forEach(field => {
                 if (field.type !== "FORMULA") {
                     const raw = editValues[`${jobIndex}-${i}-${field.key}`];
-                    const num = raw === "" || raw == null ? 0 : Math.round(Number(raw));
+                    let num;
+                    if (raw === undefined) {
+                        const saved = com.reconciliation?.[field.key];
+                        num = saved != null ? Math.round(Number(saved)) : 0;
+                    } else {
+                        num = raw === "" ? 0 : Math.round(Number(raw));
+                    }
                     rowPayload[field.key] = isNaN(num) ? 0 : num;
                 } else if (FORMULA_KEYS_TO_PERSIST.includes(field.key)) {
-                    // These FORMULA fields exist as real columns in
-                    // reconciliationData, so compute and include them —
-                    // the backend requires them.
                     const calculated = calculateFormula(jobIndex, i, field.key);
                     rowPayload[field.key] = Number.isFinite(calculated) ? Math.round(calculated) : 0;
                 }
             });
 
-            // Sticky editable fields (manufacturingUnite)
             STICKY_EDITABLE_FIELDS.forEach(field => {
                 const raw = editValues[`${jobIndex}-${i}-${field.key}`];
-                rowPayload[field.key] = raw != null && raw !== "" ? String(raw) : "";
+                if (raw !== undefined) {
+                    rowPayload[field.key] = raw !== "" ? String(raw) : "";
+                } else {
+                    const saved = com?.reconciliation?.[field.key];
+                    rowPayload[field.key] = saved != null && saved !== "NULL" ? String(saved) : "";
+                }
             });
 
             rows.push(rowPayload);
@@ -371,32 +310,67 @@ const Reconciliation = () => {
         return { jobNo: job.jobNo, rows };
     };
 
-    // Opens the reconciliation notes modal instead of saving directly
-    const handleSaveJob = (jobIndex, job) => {
-        setPendingSaveJobIndex(jobIndex);
-        setPendingSaveJob(job);
+    const toggleJobSelection = (jobIndex) => {
+        setSelectedJobs(prev => {
+            const next = new Set(prev);
+            if (next.has(jobIndex)) next.delete(jobIndex);
+            else next.add(jobIndex);
+            return next;
+        });
+    };
+
+    const allSelected = reportData.length > 0 && selectedJobs.size === reportData.length;
+    const toggleAllSelection = () => {
+        if (allSelected) {
+            setSelectedJobs(new Set());
+        } else {
+            setSelectedJobs(new Set(reportData.map((_, idx) => idx)));
+        }
+    };
+
+    const handleGlobalSubmit = () => {
+        const jobsToSave = Array.from(selectedJobs).map(idx => ({ index: idx, job: reportData[idx] }));
+        setPendingSaveJobs(jobsToSave);
         setNotes("");
         setShowNotesModal(true);
     };
 
-    // Actually saves the reconciliation data with notes after modal confirmation
+    const handleIndividualSave = async (jobIndex, job) => {
+        setSavingJob(true);
+        try {
+            const payload = buildJobPayload(jobIndex, job);
+            if (!payload || payload.rows.length === 0) {
+                alert("No valid rows to save.");
+                return;
+            }
+            payload.notes = ""; 
+            
+            await axiosPrivate.patch(`/api/styles/${encodeURIComponent(job.jobNo)}/reconciliation`, payload);
+            
+            setEditingJobIndex(null);
+            await fetchFilteredData();
+        } catch (err) {
+            console.error("Failed to save job data:", err);
+            alert("Failed to save. Please try again.");
+        } finally {
+            setSavingJob(false);
+        }
+    };
+
     const confirmSaveWithNotes = async () => {
         setSavingJob(true);
         try {
-            const payload = buildJobPayload(pendingSaveJobIndex, pendingSaveJob);
-            if (!payload || payload.rows.length === 0) {
-                alert("No valid rows to save.");
-                setShowNotesModal(false);
-                return;
+            for (const { index, job } of pendingSaveJobs) {
+                const payload = buildJobPayload(index, job);
+                if (!payload || payload.rows.length === 0) continue;
+                payload.notes = notes;
+                await axiosPrivate.patch(`/api/styles/${encodeURIComponent(job.jobNo)}/reconciliation`, payload);
             }
-            payload.notes = notes;
-
-            await axiosPrivate.patch(`/api/styles/${encodeURIComponent(pendingSaveJob.jobNo)}/reconciliation`, payload);
-
+            
+            setSelectedJobs(new Set());
             setEditingJobIndex(null);
             setShowNotesModal(false);
-            setPendingSaveJobIndex(null);
-            setPendingSaveJob(null);
+            setPendingSaveJobs([]);
             setNotes("");
             await fetchFilteredData();
         } catch (err) {
@@ -409,8 +383,7 @@ const Reconciliation = () => {
 
     const cancelNotesModal = () => {
         setShowNotesModal(false);
-        setPendingSaveJobIndex(null);
-        setPendingSaveJob(null);
+        setPendingSaveJobs([]);
         setNotes("");
     };
 
@@ -419,21 +392,26 @@ const Reconciliation = () => {
 
     return (
         <div className="min-h-screen w-full p-1 md:p-4 font-sans">
-            {/* Page Header */}
             <div className="mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => setIsWrapped(!isWrapped)} className="inline-flex items-center gap-2 px-4 py-2 bg-white border-1 border-black rounded-lg shadow-sm text-sm font-medium text-slate-800 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <button onClick={() => setIsWrapped(!isWrapped)} className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-black rounded-lg shadow-sm text-sm font-medium text-slate-800 hover:bg-slate-50 transition-colors">
                         {isWrapped ? <AlignJustify size={16} /> : <WrapText size={16} />}
                         {isWrapped ? "Unwrap Text" : "Wrap Text"}
                     </button>
-                    <button onClick={fetchFilteredData} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white border-1 border-black rounded-lg shadow-sm text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button onClick={fetchFilteredData} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <RefreshCcw size={16} className={isLoading ? "animate-spin" : ""} />
                         Refresh Data
                     </button>
+                    
+                    {selectedJobs.size > 0 && (
+                        <button onClick={handleGlobalSubmit} disabled={savingJob} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <CloudCog size={16} />
+                            Submit Reconciliation ({selectedJobs.size})
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* Active Filters Bar */}
             {activeFilterEntries.length > 0 && (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider mr-2">Active Filters:</span>
@@ -454,8 +432,7 @@ const Reconciliation = () => {
                 </div>
             )}
 
-            {/* FULL-WIDTH Table Card with deep black frame */}
-            <div className="w-full bg-white rounded-lg border-1 border-black shadow-sm overflow-hidden">
+            <div className="w-full bg-white rounded-lg border border-black shadow-sm overflow-hidden">
                 <div className="w-full overflow-x-auto max-h-[calc(100vh-190px)]">
                     <table
                         className="w-full"
@@ -472,7 +449,7 @@ const Reconciliation = () => {
                                     const hasActiveFilter = activeFilters[FILTERABLE_COLS[I]?.key]?.length > 0;
                                     const isSticky = I <= LAST_STICKY_INDEX;
                                     const isLastSticky = I === LAST_STICKY_INDEX;
-                                    const hasRightBorder = I === 0 || isLastSticky;
+                                    const hasRightBorder = I === 1 || isLastSticky; 
 
                                     return (
                                         <th
@@ -485,7 +462,17 @@ const Reconciliation = () => {
                                             style={isSticky ? stickyCellStyle(I, "#f3f4f6", hasRightBorder) : cellStyle}
                                         >
                                             <div className="relative flex items-center justify-center gap-1.5">
-                                                <span>{header}</span>
+                                                {I === 0 ? (
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={allSelected} 
+                                                        onChange={toggleAllSelection} 
+                                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" 
+                                                    />
+                                                ) : (
+                                                    <span>{header}</span>
+                                                )}
+                                                
                                                 {isFilterable && (
                                                     <button type="button" onClick={() => openFilterDropdown(I)} className={`p-1 rounded transition-colors ${openFilterCol === I ? "bg-indigo-100 text-indigo-700" : hasActiveFilter ? "text-indigo-600" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"}`}>
                                                         <ListFilter size={12} />
@@ -493,9 +480,9 @@ const Reconciliation = () => {
                                                 )}
 
                                                 {openFilterCol === I && isFilterable && (
-                                                    <div className={`absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl ring-1 ring-black/20 z-50 overflow-hidden text-left normal-case font-normal ${I === 0 ? "left-0" : I >= YARN_TABLE_HEADERS.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2"}`} onClick={(e) => e.stopPropagation()}>
+                                                    <div className={`absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl ring-1 ring-black/20 z-50 overflow-hidden text-left normal-case font-normal ${I === 1 ? "left-0" : I >= YARN_TABLE_HEADERS.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2"}`} onClick={(e) => e.stopPropagation()}>
                                                         <div className="p-3 border-b border-black">
-                                                            <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full text-sm border-1 border-black rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                                                            <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full text-sm border border-black rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
                                                         </div>
                                                         <div className="px-4 py-2 border-b border-black bg-slate-50">
                                                             <label className="flex items-center gap-2 cursor-pointer">
@@ -529,7 +516,7 @@ const Reconciliation = () => {
                         </thead>
                         <tbody>
                             {isLoading && (
-                                <tr><td colSpan={47} className="px-4 py-20 text-center align-middle border-b border-black">
+                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle border-b border-black">
                                     <div className="flex flex-col items-center justify-center gap-3">
                                         <RefreshCcw size={24} className="animate-spin text-indigo-500" />
                                         <span className="text-sm font-medium text-slate-500">Loading reconciliation data...</span>
@@ -538,7 +525,7 @@ const Reconciliation = () => {
                             )}
 
                             {!isLoading && reportData.length === 0 && (
-                                <tr><td colSpan={47} className="px-4 py-20 text-center align-middle text-sm text-slate-500 border-b border-black">No records match your current filters.</td></tr>
+                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle text-sm text-slate-500 border-b border-black">No records match your current filters.</td></tr>
                             )}
 
                             {!isLoading && reportData.map((job, jobIndex) => {
@@ -579,18 +566,32 @@ const Reconciliation = () => {
 
                                     return (
                                         <tr key={`${jobIndex}-${i}`}>
-                                            {/* ── STICKY COL 0: JOB NO ── */}
                                             {isFirstRow && (
                                                 <td
                                                     rowSpan={subRowCount}
-                                                    className={`sticky left-0 z-10 px-3 py-3 border-b border-black text-center align-middle ${isEditingThisJob ? "border-l-4 border-l-indigo-600" : ""}`}
-                                                    style={stickyCellStyle(0, stickyBg, true)}
+                                                    className="sticky left-0 z-10 px-3 py-3 border-b border-black text-center align-middle"
+                                                    style={stickyCellStyle(0, stickyBg, false)}
+                                                >
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedJobs.has(jobIndex)} 
+                                                        onChange={() => toggleJobSelection(jobIndex)} 
+                                                        className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                    />
+                                                </td>
+                                            )}
+
+                                            {isFirstRow && (
+                                                <td
+                                                    rowSpan={subRowCount}
+                                                    className={`sticky z-10 px-3 py-3 border-b border-black text-center align-middle ${isEditingThisJob ? "border-l-4 border-l-indigo-600" : ""}`}
+                                                    style={stickyCellStyle(1, stickyBg, true)}
                                                 >
                                                     <div className="flex flex-col items-center justify-center gap-3 h-full">
                                                         <span className="text-sm font-bold text-slate-900">{job.jobNo || "-"}</span>
                                                         {isEditingThisJob ? (
                                                             <div className="flex flex-col gap-2 w-full">
-                                                                <button type="button" onClick={() => handleSaveJob(jobIndex, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 border border-black rounded-md hover:bg-indigo-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1">
+                                                                <button type="button" onClick={() => handleIndividualSave(jobIndex, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 border border-black rounded-md hover:bg-indigo-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1">
                                                                     {savingJob ? <RefreshCcw size={12} className="animate-spin" /> : <><Save size={12} /> Save</>}
                                                                 </button>
                                                                 <button type="button" onClick={() => handleCancelEdit(jobIndex)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-black rounded-md hover:bg-slate-100 disabled:opacity-50 flex items-center justify-center gap-1">
@@ -606,37 +607,36 @@ const Reconciliation = () => {
                                                 </td>
                                             )}
 
-                                            {/* ── STICKY COL 1: COLOR ── */}
-                                            <td className={stickyBodyClass(1)} style={stickyCellStyle(1, stickyBg)}>
+                                            <td className={stickyBodyClass(2)} style={stickyCellStyle(2, stickyBg)}>
                                                 <div className="flex items-center justify-center h-full">{com?.color || "-"}</div>
                                             </td>
-                                            {/* ── STICKY COL 2: COMPOSITION ── */}
-                                            <td className={stickyBodyClass(2)} style={stickyCellStyle(2, stickyBg)}>
+                                            <td className={stickyBodyClass(3)} style={stickyCellStyle(3, stickyBg)}>
                                                 <div className="flex items-center justify-center h-full">{com?.composition || "-"}</div>
                                             </td>
-                                            {/* ── STICKY COL 3: ORDER QTY ── */}
-                                            <td className={stickyBodyClass(3)} style={stickyCellStyle(3, stickyBg)}>
+                                            <td className={stickyBodyClass(4)} style={stickyCellStyle(4, stickyBg)}>
                                                 <div className="flex items-center justify-center h-full">{com?.orderQty ?? "-"}</div>
                                             </td>
-                                            {/* ── STICKY COL 4: MANUFACTURING UNITE (EDITABLE) ── */}
-                                            <td className={stickyBodyClass(4)} style={stickyCellStyle(4, stickyBg, true)}>
+                                            
+                                            {/* MANUFACTURING UNIT COLUMN */}
+                                            <td className={stickyBodyClass(5)} style={stickyCellStyle(5, stickyBg, true)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
                                                         <input
                                                             className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-black rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                                             type="text"
-                                                            placeholder="MU"
+                                                            placeholder="Unit"
                                                             disabled={savingJob}
                                                             value={editValues[`${jobIndex}-${i}-manufacturingUnite`] ?? ""}
                                                             onChange={(e) => handleInputChange(jobIndex, i, "manufacturingUnite", e.target.value)}
                                                         />
                                                     ) : (
-                                                        com?.manufacturingUnite || (com ? "MU" : "-")
+                                                        com?.reconciliation?.manufacturingUnite && com.reconciliation.manufacturingUnite !== "NULL" 
+                                                            ? com.reconciliation.manufacturingUnite 
+                                                            : "-"
                                                     )}
                                                 </div>
                                             </td>
 
-                                            {/* ── Scrolling columns ── */}
                                             <td className={cellClass} style={cellStyle}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Yarn_Delivery ?? "-"}</td>
@@ -714,13 +714,12 @@ const Reconciliation = () => {
                 </div>
             </div>
 
-            {/* ── Reconciliation Notes Modal ── */}
             {showNotesModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="w-full max-w-lg bg-white rounded-xl border-2 border-black shadow-2xl overflow-hidden">
                         <div className="flex items-center justify-between px-5 py-3 border-b border-black bg-slate-50">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                                Reconciliation Notes — <span className="text-indigo-600">{pendingSaveJob?.jobNo || "-"}</span>
+                                Reconciliation Notes — <span className="text-indigo-600">{pendingSaveJobs.length} Job(s)</span>
                             </h3>
                             <button
                                 type="button"
