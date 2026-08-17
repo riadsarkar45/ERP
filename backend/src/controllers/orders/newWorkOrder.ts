@@ -221,8 +221,8 @@ export const createNewJob = async (req: Request, res: Response) => {
                 const yarnRows = compositions.flatMap((comp) =>
                     (comp.yarnColors ?? []).map((yc) => ({
                         color: yc.color,
-                        qty: Number(yc.qty),
-                        unitePrice: Number(yc.price),
+                        qty: evaluateQtyExpression(String(yc.qty)) ?? 0,
+                        unitePrice: evaluateQtyExpression(String(yc.price)) ?? 0,
                         composition: comp.composition,
                         workOrderId: created.id,
                     }))
