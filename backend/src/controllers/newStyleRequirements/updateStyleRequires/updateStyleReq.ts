@@ -104,7 +104,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                 return res.status(404).send({ message: "Row not found", type: "error" });
             }
 
-            const additionalNum = Number(additional);
+            const additionalNum = evaluateQtyExpression(String(additional)) ?? 0;
             if (additional === undefined || isNaN(additionalNum)) {
                 return res.status(400).send({ message: "A valid additional value is required", type: "error" });
             }
