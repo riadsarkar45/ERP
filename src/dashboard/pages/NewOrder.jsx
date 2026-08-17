@@ -78,11 +78,6 @@ const NewOrder = () => {
         );
     }, [styleData, orderType]);
 
-    // Order Qty / Finish Required Qty belong to the STYLE, not to whichever
-    // compositions happen to be in this work order right now. They must stay
-    // fixed even if the user removes a composition row from the list below —
-    // sourced from styleData.rows (the original fetched data), not the
-    // editable `rows` state.
     const styleTotals = useMemo(() => {
         const sourceRows = styleData?.rows || [];
         const sourceData = styleData || [];
@@ -99,8 +94,6 @@ const NewOrder = () => {
         });
         return { totalOrderQty, totalFinishRequiredQty, processLoss, totalAdditional, compositionId };
     }, [styleData]);
-
-    console.log(styleTotals.compositionId);
 
     const totals = useMemo(() => {
         let totalWorkOrderQty = 0;
@@ -140,7 +133,6 @@ const NewOrder = () => {
             try {
                 const req = await axiosPrivate.get(`/api/styles/${jobNumber}`);
                 const data = req.data.data;
-                console.log(data, "style data");
                 const style = Array.isArray(data) ? data[0] : data;
 
                 if (!style) {
@@ -422,8 +414,6 @@ const NewOrder = () => {
     const dyeingOrderType = ["knittingOrder", "aopOrder", "dyeingOrder", "yarnDyeingOrder"];
     const totalRequireQty = (Number(styleTotals.totalFinishRequiredQty) * (1 + Number(styleTotals.processLoss) / 100) + Number(styleTotals.totalAdditional)).toFixed(2)
 
-    console.log(orderType, "orderType");
-
     useEffect(() => {
         if (!orderType || !jobNumber) return;
 
@@ -487,7 +477,8 @@ const NewOrder = () => {
                 />
             )}
 
-            <div className="pb-28">
+            {/* pb-32 reserves space so the fixed bottom bar never overlaps content */}
+            <div className="pb-32">
                 {/* Page header */}
                 <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                     <div>
@@ -787,7 +778,6 @@ const NewOrder = () => {
                                     <span className="flex items-center gap-2 text-sm text-slate-600">
                                         <Package size={14} className="text-slate-400" /> New Work Order Qty
                                     </span>
-                                    {/* new work order qty  */}
                                     <span className="text-sm font-medium text-slate-900 tabular-nums">
                                         {totals.totalWorkOrderQty.toLocaleString()}
                                         <span className="ml-1 text-xs text-slate-400">KG</span>
@@ -796,7 +786,7 @@ const NewOrder = () => {
 
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                                     <span className="text-xs text-slate-500">
-                                        Work Short & Excess``
+                                        Work Short & Excess
                                     </span>
                                     <span
                                         className={`text-xs font-semibold tabular-nums ${(
@@ -823,8 +813,6 @@ const NewOrder = () => {
                                         {totals.compositionsWithWorkOrder} / {totals.totalRows} compositions
                                     </span>
                                 </div>
-
-
                             </div>
 
                             <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4">
@@ -850,7 +838,6 @@ const NewOrder = () => {
                             </div>
 
                             {isFactoryDataLoading ? (
-                                // Skeleton rows — same shape as real rows so nothing jumps on load
                                 <div className="px-5 py-4 space-y-4">
                                     {[...Array(3)].map((_, i) => (
                                         <div key={i} className="flex items-center justify-between animate-pulse">
@@ -873,7 +860,7 @@ const NewOrder = () => {
                                                 <Building size={14} className="text-slate-400" /> {fact.factoryName}
                                             </span>
                                             <span className="text-sm font-medium text-slate-900 tabular-nums">
-                                                {fact.workOrderQty}
+                                                {Number(fact.workOrderQty).toFixed(2)}
                                                 <span className="ml-1 text-xs text-slate-400">KG</span>
                                             </span>
                                         </div>
@@ -889,9 +876,9 @@ const NewOrder = () => {
                 </div>
             </div>
 
-            {/* Sticky action bar */}
-            <div className="sticky bottom-0 z-20 -mx-6 mt-6 border-t border-slate-200 bg-white/90 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Fixed action bar — pinned to the viewport bottom, not sticky-within-scroll */}
+            <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/90 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/70 lg:left-64">
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between max-w-[1400px] mx-auto">
                     <p className="text-xs text-slate-500">
                         {totals.totalRows} composition{totals.totalRows === 1 ? "" : "s"} · review before submitting
                     </p>
