@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
+import { evaluateQtyExpression } from "../../newStyleRequirements/updateStyleRequires/evaluateQtyExpression";
 
 export const updateWorkOrder = async (req: Request, res: Response) => {
     const { factoryName, rowId, updatedFieldName, unitePrice, workOrderQty, compId } = req.body as {
@@ -38,10 +39,13 @@ export const updateWorkOrder = async (req: Request, res: Response) => {
             });
         }
 
-        // Fields that live on Composition
         const updateData: Record<string, number> = {};
-        if (unitePrice !== undefined) updateData.unitePrice = Number(unitePrice);
-        if (workOrderQty !== undefined) updateData.workOrderQty = Number(workOrderQty);
+        if (unitePrice !== undefined) {
+            updateData.unitePrice = evaluateQtyExpression(String(unitePrice)) ?? 0;
+        }
+        if (workOrderQty !== undefined) {
+            updateData.workOrderQty = evaluateQtyExpression(String(workOrderQty)) ?? 0;
+        }
 
         if (Object.keys(updateData).length > 0 && compId !== undefined) {
             await prisma.composition.update({

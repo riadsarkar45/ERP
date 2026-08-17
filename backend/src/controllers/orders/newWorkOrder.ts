@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 import { checkDataExist } from "../../utils/checkIfDataExist";
+import { evaluateQtyExpression } from "../newStyleRequirements/updateStyleRequires/evaluateQtyExpression";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type YarnColorInput = { color: string; qty: string | number; price: string | number };
@@ -206,7 +207,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                             composition: c.composition,
                             color: c.color,
                             orderQty: 0, // not collected per work order — intentional
-                            workOrderQty: c.workOrderQty ? Number(c.workOrderQty) : 0,
+                            workOrderQty: evaluateQtyExpression(String(c.workOrderQty)) ?? 0,
                             unitePrice: c.unitPrice ? Number(c.unitPrice) : 0,
                             orderType,
                         })),
