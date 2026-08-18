@@ -87,7 +87,7 @@ export const searchChallans = async (req: Request, res: Response) => {
         select: {
             composition: true,
             color: true,
-            ...(isOthersType && { unitePrice: true }),
+            ...(!isOthersType && { unitePrice: true }),
             id: true,
             workOrderQty: true,
             workOrder: {
