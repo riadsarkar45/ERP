@@ -5,6 +5,7 @@ import useAxiosPublic from '../../../hooks/Axios';
 
 const cellStyle = { border: "1px solid #999", padding: "6px 8px", overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "middle", textAlign: "center" };
 const thStickyStyle = { ...cellStyle, position: "sticky", top: 0, zIndex: 10, background: "#f3f4f6" };
+const tfootCellStyle = { ...cellStyle, position: "sticky", bottom: 0, zIndex: 10, background: "#f3f4f6", fontWeight: 700 };
 const pageButtonStyle = (active) => ({ border: "1px solid #999", background: active ? "#333" : "#fff", color: active ? "#fff" : "#333", padding: "4px 10px", margin: "0 2px", borderRadius: 4, cursor: "pointer", fontSize: "0.9rem" });
 
 const tableHeader = [
@@ -17,9 +18,10 @@ const tableHeader = [
     { header: "From Factory", width: "8%", key: "fromFactory" },
     { header: "To Factory", width: "8%", key: "toFactory" },
     { header: "Grey Del", width: "7%", key: "greyDelivery" },
-    { header: "Grey Rec", width: "7%", key: "greyReceive" },
     { header: "Grey Ret", width: "6%", key: "greyReturn" },
+    { header: "Grey Rec", width: "7%", key: "greyReceive" },
     { header: "Finish Rec", width: "7%", key: "finishReceive" },
+    { header: "Process Loss %", width: "7%", key: "processLoss" },
     { header: "Price/KG", width: "6%", key: "unitePrice" },
     { header: "Billing", width: "6%", key: "billingAmount" },
 ];
@@ -37,7 +39,6 @@ const Dyeing = () => {
     const [searchLoading, setSearchLoading] = useState(false);
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
-
     const dropdownRef = useRef(null);
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
@@ -60,33 +61,45 @@ const Dyeing = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
-    // ── Build rows — ONE ROW PER SOURCE RECORD (delivery, or item/color-facet) ──
-    // IMPORTANT: rows are NEVER looked up/reused by a shared key and merged.
-    // Every delivery / facet produces its own independent row with its own
-    // qty, even if it shares the same challan + job + composition + color
-    // as another row. That "same key -> merge qty" behavior was the bug.
+    // ── Build rows — ONE ROW PER CHALLAN (+ job + composition + color) ──
+    // Grey Received and Finish Received deliveries that belong to the SAME
+    // challan/job/composition/color are merged into the SAME row (accumulated),
+    // so a challan's grey-received and finish-received both show on one line.
+    // Different challans (or different comp/color facets) never merge with
+    // each other — only deliveries sharing the same key are combined.
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
-        const rows = [];
-        let rowCounter = 0;
+        const rowMap = new Map(); // key -> row
+        const order = []; // preserve first-seen order of keys
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
 
-        const makeRow = (challanNo, jobNo, comp, color, source) => {
-            rowCounter += 1;
-            return {
-                // rowCounter guarantees uniqueness even when challan/job/comp/color repeat
-                rowKey: `${challanNo}|${jobNo}|${comp}|${color}|${rowCounter}`,
-                chId: source?.id || challanNo,
-                challanNo,
-                jobNo,
-                composition: comp || "-",
-                color: color || "-",
-                challanDate: source?.deliveryDate || source?.challanDate || "",
-                toFactory: source?.toFactory || "",
-                fromFactory: source?.fromFactory || "",
-                greyDelivery: 0, greyReceive: 0, greyReturn: 0, finishReceive: 0, deliveryQty: 0,
-                unitePrice: Number(source?.unitePrice) || 0,
-            };
+        const makeKey = (challanNo, jobNo, comp, color) => `${challanNo}|${jobNo}|${comp}|${color}`;
+
+        const getOrCreateRow = (challanNo, jobNo, comp, color, source) => {
+            const key = makeKey(challanNo, jobNo, comp, color);
+            let row = rowMap.get(key);
+            if (!row) {
+                row = {
+                    rowKey: key,
+                    chId: source?.id || challanNo,
+                    challanNo,
+                    jobNo,
+                    composition: comp || "-",
+                    color: color || "-",
+                    challanDate: source?.deliveryDate || source?.challanDate || "",
+                    toFactory: source?.toFactory || "",
+                    fromFactory: source?.fromFactory || "",
+                    greyDelivery: 0,
+                    greyReturn: 0,
+                    greyReceive: 0,
+                    finishReceive: 0,
+                    deliveryQty: 0,
+                    unitePrice: Number(source?.unitePrice) || 0,
+                };
+                rowMap.set(key, row);
+                order.push(key);
+            }
+            return row;
         };
 
         const applyDelivery = (row, dv, source) => {
@@ -141,25 +154,26 @@ const Dyeing = () => {
             const jobNo = extractJobNo(item) || "-";
 
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                // ── Deliveries branch: one row PER delivery, never merged with another delivery ──
+                // ── Deliveries branch: deliveries for the SAME challan/comp/color
+                // accumulate into ONE row (grey received + finish received merge here) ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
 
                     const comp = dv?.composition || item?.composition || "-";
                     const color = dv?.color || item?.color || "-";
-                    const row = makeRow(challanNo, jobNo, comp, color, dv);
+                    const row = getOrCreateRow(challanNo, jobNo, comp, color, dv);
                     if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
                     applyDelivery(row, dv, item);
-                    rows.push(row);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                // ── Flat branch: expand each color facet into its own row, never merged across items ──
+                // ── Flat branch: expand each color facet, but facets sharing the same
+                // challan/comp/color still land on the same merged row ──
                 const facets = getFacets(item);
                 const hasFacetQty = facets.some((f) => f.qty !== null);
 
                 facets.forEach((f) => {
-                    const row = makeRow(item.challanNo, jobNo, f.comp, f.color, item);
+                    const row = getOrCreateRow(item.challanNo, jobNo, f.comp, f.color, item);
 
                     if (hasFacetQty) {
                         // per-color quantities exist → apply only this color's qty
@@ -169,15 +183,21 @@ const Dyeing = () => {
                         applyDelivery(row, item, item);
                     }
                     // (multiple colors without per-color qty → qty stays 0/"-" to avoid guessing a split)
-                    rows.push(row);
                 });
             }
         });
 
-        return rows.map((row) => ({
-            ...row,
-            billingAmount: row.finishReceive * row.unitePrice,
-        }));
+        return order.map((key) => {
+            const row = rowMap.get(key);
+            const processLoss = row.greyReceive > 0
+                ? ((row.greyReceive - row.finishReceive) / row.greyReceive) * 100
+                : 0;
+            return {
+                ...row,
+                billingAmount: row.greyReceive * row.unitePrice,
+                processLoss,
+            };
+        });
     }, [movements]);
 
     const filterOptions = useMemo(() => {
@@ -197,6 +217,28 @@ const Dyeing = () => {
         if (!selected) return true;
         return selected.has(String(row[col.key] ?? ""));
     })), [allRows, filters]);
+
+    // ── Footer totals for the currently visible (filtered) rows ──
+    const totals = useMemo(() => {
+        const t = {
+            greyDelivery: 0,
+            greyReturn: 0,
+            greyReceive: 0,
+            finishReceive: 0,
+            billingAmount: 0,
+        };
+        filteredRows.forEach((row) => {
+            t.greyDelivery += Number(row.greyDelivery) || 0;
+            t.greyReturn += Number(row.greyReturn) || 0;
+            t.greyReceive += Number(row.greyReceive) || 0;
+            t.finishReceive += Number(row.finishReceive) || 0;
+            t.billingAmount += Number(row.billingAmount) || 0;
+        });
+        t.processLoss = t.greyReceive > 0
+            ? ((t.greyReceive - t.finishReceive) / t.greyReceive) * 100
+            : 0;
+        return t;
+    }, [filteredRows]);
 
     const goToPage = (p) => { if (p < 1 || p > totalPages) return; setPage(p); };
     const pageNumbers = useMemo(() => {
@@ -301,16 +343,38 @@ const Dyeing = () => {
                                 <td style={cellStyle}>{row.color || "-"}</td>
                                 <td style={cellStyle}>{row.fromFactory || "-"}</td>
                                 <td style={cellStyle}>{row.toFactory || "-"}</td>
-                                <td style={cellStyle}>{row.greyDelivery > 0 ? row.greyDelivery : "-"}</td>
-                                <td style={cellStyle}>{row.greyReceive > 0 ? row.greyReceive : "-"}</td>
-                                <td style={cellStyle}>{row.greyReturn > 0 ? row.greyReturn : "-"}</td>
-                                <td style={cellStyle}>{row.finishReceive > 0 ? row.finishReceive : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? row.unitePrice : "-"}</td>
-                                <td style={cellStyle}>{row.billingAmount > 0 ? row.billingAmount : "-"}</td>
+                                <td style={cellStyle}>{row.greyDelivery > 0 ? Number(row.greyDelivery).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.greyReturn > 0 ? Number(row.greyReturn).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.greyReceive > 0 ? Number(row.greyReceive).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.finishReceive > 0 ? Number(row.finishReceive).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.greyReceive > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
+                                <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td>
                             </tr>
                         ))}
                         {filteredRows.length === 0 && <tr><td style={cellStyle} colSpan={tableHeader.length}>{movements.length === 0 ? "No records found." : "No rows match filters."}</td></tr>}
                     </tbody>
+                    {filteredRows.length > 0 && (
+                        <tfoot>
+                            <tr>
+                                <td style={tfootCellStyle}></td> {/* 0: select */}
+                                <td style={tfootCellStyle}></td> {/* 1: Date */}
+                                <td style={tfootCellStyle}></td> {/* 2: Challan No */}
+                                <td style={tfootCellStyle}></td> {/* 3: Job No */}
+                                <td style={tfootCellStyle}></td> {/* 4: Composition */}
+                                <td style={tfootCellStyle}></td> {/* 5: Color */}
+                                <td style={tfootCellStyle}>Total</td> {/* 6: From Factory */}
+                                <td style={tfootCellStyle}></td> {/* 7: To Factory */}
+                                <td style={tfootCellStyle}>{totals.greyDelivery > 0 ? totals.greyDelivery.toFixed(2) : "-"}</td> {/* 8: Grey Del */}
+                                <td style={tfootCellStyle}>{totals.greyReturn > 0 ? totals.greyReturn.toFixed(2) : "-"}</td> {/* 9: Grey Ret */}
+                                <td style={tfootCellStyle}>{totals.greyReceive > 0 ? totals.greyReceive.toFixed(2) : "-"}</td> {/* 10: Grey Rec */}
+                                <td style={tfootCellStyle}>{totals.finishReceive > 0 ? totals.finishReceive.toFixed(2) : "-"}</td> {/* 11: Finish Rec */}
+                                <td style={tfootCellStyle}>{totals.greyReceive > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}</td> {/* 12: Process Loss % */}
+                                <td style={tfootCellStyle}></td> {/* 13: Price/KG */}
+                                <td style={tfootCellStyle}>{totals.billingAmount > 0 ? totals.billingAmount.toFixed(2) : "-"}</td> {/* 14: Billing */}
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
             {!search && totalPages > 1 && (

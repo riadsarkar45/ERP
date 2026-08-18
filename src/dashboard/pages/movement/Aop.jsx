@@ -20,6 +20,15 @@ const thStickyStyle = {
     background: "#f3f4f6",
 };
 
+const tfootCellStyle = {
+    ...cellStyle,
+    position: "sticky",
+    bottom: 0,
+    zIndex: 10,
+    background: "#f3f4f6",
+    fontWeight: 700,
+};
+
 const pageButtonStyle = (active) => ({
     border: "2px solid #999",
     background: active ? "#333" : "#fff",
@@ -34,17 +43,19 @@ const pageButtonStyle = (active) => ({
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true },
     { header: "Date", width: "8%", key: "challanDate" },
-    { header: "Challan No", width: "8%", key: "challanNo" },
-    { header: "Job No", width: "12%", key: "jobNo" },
-    { header: "Composition", width: "12%", key: "composition" },
-    { header: "Color", width: "10%", key: "color" },
-    { header: "From Factory", width: "8%", key: "fromFactory" },
-    { header: "To Factory", width: "8%", key: "toFactory" },
-    { header: "Sent For Aop", width: "7%", key: "sentForAop" },
-    { header: "Receive From Aop", width: "7%", key: "receiveFromAop" },
-    { header: "Finish Receive", width: "7%", key: "finishReceiveFromAop" },
+    { header: "Challan No", width: "7%", key: "challanNo" },
+    { header: "Job No", width: "10%", key: "jobNo" },
+    { header: "Composition", width: "11%", key: "composition" },
+    { header: "Color", width: "9%", key: "color" },
+    { header: "From Factory", width: "7%", key: "fromFactory" },
+    { header: "To Factory", width: "7%", key: "toFactory" },
+    { header: "Sent For Aop", width: "6%", key: "sentForAop" },
+    { header: "Return From Aop", width: "6%", key: "returnFromAop" },
+    { header: "Receive From Aop", width: "6%", key: "receiveFromAop" },
+    { header: "Finish Receive", width: "6%", key: "finishReceiveFromAop" },
+    { header: "Process Loss %", width: "6%", key: "processLoss" },
     { header: "Price/KG", width: "6%", key: "unitePrice" },
-    { header: "Billing", width: "7%", key: "billingAmount" },
+    { header: "Billing", width: "6%", key: "billingAmount" },
 ];
 
 const Aop = () => {
@@ -88,32 +99,46 @@ const Aop = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
+    // ── Build rows — ONE ROW PER CHALLAN (+ job + composition + color) ──
+    // Receive From Aop and Finish Receive deliveries that belong to the SAME
+    // challan/job/composition/color are merged into the SAME row (accumulated),
+    // so a challan's receive-from-aop and finish-receive both show on one line.
+    // Different challans (or different comp/color facets) never merge with
+    // each other — only deliveries sharing the same key are combined.
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
-        const rows = [];
-        let rowCounter = 0;
+        const rowMap = new Map(); // key -> row
+        const order = []; // preserve first-seen order of keys
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
 
-        const makeRow = (challanNo, jobNo, comp, color, source) => {
-            rowCounter += 1;
-            return {
-                // rowCounter guarantees uniqueness even when challan/job/comp/color repeat
-                rowKey: `${challanNo}|${jobNo}|${comp}|${color}|${rowCounter}`,
-                chId: source?.id || challanNo,
-                challanNo,
-                jobNo,
-                composition: comp || "-",
-                color: color || "-",
-                challanDate: source?.deliveryDate || source?.challanDate || "",
-                toFactory: source?.toFactory || "",
-                fromFactory: source?.fromFactory || "",
-                sentForAop: 0,
-                receiveFromAop: 0,
-                finishReceiveFromAop: 0,
-                deliveryQty: 0,
-                unitePrice: Number(source?.unitePrice) || 0,
-                paidBillingAmount: Number(source?.paidBillingAmount) || 0,
-            };
+        const makeKey = (challanNo, jobNo, comp, color) => `${challanNo}|${jobNo}|${comp}|${color}`;
+
+        const getOrCreateRow = (challanNo, jobNo, comp, color, source) => {
+            const key = makeKey(challanNo, jobNo, comp, color);
+            let row = rowMap.get(key);
+            if (!row) {
+                row = {
+                    rowKey: key,
+                    chId: source?.id || challanNo,
+                    challanNo,
+                    jobNo,
+                    composition: comp || "-",
+                    color: color || "-",
+                    challanDate: source?.deliveryDate || source?.challanDate || "",
+                    toFactory: source?.toFactory || "",
+                    fromFactory: source?.fromFactory || "",
+                    sentForAop: 0,
+                    returnFromAop: 0,
+                    receiveFromAop: 0,
+                    finishReceiveFromAop: 0,
+                    deliveryQty: 0,
+                    unitePrice: Number(source?.unitePrice) || 0,
+                    paidBillingAmount: Number(source?.paidBillingAmount) || 0,
+                };
+                rowMap.set(key, row);
+                order.push(key);
+            }
+            return row;
         };
 
         const applyDelivery = (row, dv, source) => {
@@ -122,7 +147,8 @@ const Aop = () => {
 
             const type = String(dv?.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
             if (type.includes("sentforaop")) row.sentForAop += qty;
-            else if (type.includes("aopfinishfabricrcvd") || type.includes("finishfabric") || type.includes("finishreceive") || type.includes("finishreceived") || type.includes("returnfromaop")) row.finishReceiveFromAop += qty;
+            else if (type.includes("aopfinishfabricrcvd") || type.includes("finishfabric") || type.includes("finishreceive") ||
+            type.includes("finishreceived") || type.includes("returnfromaop")) row.finishReceiveFromAop += qty;
             else if (type.includes("receivedfromaop") || type.includes("receivefromaop")) row.receiveFromAop += qty;
 
             const price = Number(dv?.unitePrice || source?.unitePrice) || 0;
@@ -168,26 +194,27 @@ const Aop = () => {
             const jobNo = extractJobNo(item) || "-";
 
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                // ── Deliveries branch: one row PER delivery, never merged with another delivery ──
+                // ── Deliveries branch: deliveries for the SAME challan/comp/color
+                // accumulate into ONE row (receive from aop + finish receive merge here) ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
 
                     const comp = dv?.composition || item?.composition || "-";
                     const color = dv?.color || item?.color || "-";
-                    const row = makeRow(challanNo, jobNo, comp, color, dv);
+                    const row = getOrCreateRow(challanNo, jobNo, comp, color, dv);
 
                     if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
                     applyDelivery(row, dv, item);
-                    rows.push(row);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                // ── Flat branch: expand each color facet into its own row, never merged across items ──
+                // ── Flat branch: expand each color facet, but facets sharing the same
+                // challan/comp/color still land on the same merged row ──
                 const facets = getFacets(item);
                 const hasFacetQty = facets.some((f) => f.qty !== null);
 
                 facets.forEach((f) => {
-                    const row = makeRow(item.challanNo, jobNo, f.comp, f.color, item);
+                    const row = getOrCreateRow(item.challanNo, jobNo, f.comp, f.color, item);
 
                     if (hasFacetQty) {
                         // per-color quantities exist → apply only this color's qty
@@ -197,15 +224,21 @@ const Aop = () => {
                         applyDelivery(row, item, item);
                     }
                     // (multiple colors without per-color qty → qty stays 0/"-" to avoid guessing a split)
-                    rows.push(row);
                 });
             }
         });
 
-        return rows.map((row) => ({
-            ...row,
-            billingAmount: row.deliveryQty * row.unitePrice,
-        }));
+        return order.map((key) => {
+            const row = rowMap.get(key);
+            const processLoss = row.receiveFromAop > 0
+                ? ((row.receiveFromAop - row.finishReceiveFromAop) / row.receiveFromAop) * 100
+                : 0;
+            return {
+                ...row,
+                billingAmount: row.receiveFromAop * row.unitePrice,
+                processLoss,
+            };
+        });
     }, [movements]);
 
     const filterOptions = useMemo(() => {
@@ -225,6 +258,28 @@ const Aop = () => {
         if (!selected) return true;
         return selected.has(String(row[col.key] ?? ""));
     })), [allRows, filters]);
+
+    // ── Footer totals for the currently visible (filtered) rows ──
+    const totals = useMemo(() => {
+        const t = {
+            sentForAop: 0,
+            returnFromAop: 0,
+            receiveFromAop: 0,
+            finishReceiveFromAop: 0,
+            billingAmount: 0,
+        };
+        filteredRows.forEach((row) => {
+            t.sentForAop += Number(row.sentForAop) || 0;
+            t.returnFromAop += Number(row.returnFromAop) || 0;
+            t.receiveFromAop += Number(row.receiveFromAop) || 0;
+            t.finishReceiveFromAop += Number(row.finishReceiveFromAop) || 0;
+            t.billingAmount += Number(row.billingAmount) || 0;
+        });
+        t.processLoss = t.receiveFromAop > 0
+            ? ((t.receiveFromAop - t.finishReceiveFromAop) / t.receiveFromAop) * 100
+            : 0;
+        return t;
+    }, [filteredRows]);
 
     const goToPage = (p) => { if (p < 1 || p > totalPages) return; setPage(p); };
     const pageNumbers = useMemo(() => {
@@ -306,7 +361,7 @@ const Aop = () => {
                 {search && <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}>Clear Search</button>}
             </div>
             {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
-            
+
             {challanIds.length > 0 && <div style={{ marginBottom: "16px" }}><button onClick={handleGenerateBill} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md border border-blue-500">Generate Bill ({challanIds.length})</button></div>}
 
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
@@ -355,15 +410,38 @@ const Aop = () => {
                                 <td style={cellStyle}>{row.color || "-"}</td>
                                 <td style={cellStyle}>{row.fromFactory || "-"}</td>
                                 <td style={cellStyle}>{row.toFactory || "-"}</td>
-                                <td style={cellStyle}>{row.sentForAop > 0 ? row.sentForAop : "-"}</td>
-                                <td style={cellStyle}>{row.receiveFromAop > 0 ? row.receiveFromAop : "-"}</td>
-                                <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? row.finishReceiveFromAop : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? row.unitePrice : "-"}</td>
-                                <td style={cellStyle}>{row.billingAmount > 0 ? row.billingAmount : "-"}</td>
+                                <td style={cellStyle}>{row.sentForAop > 0 ? Number (row.sentForAop).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.returnFromAop > 0 ? Number (row.returnFromAop).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.receiveFromAop > 0 ? Number (row.receiveFromAop).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? Number (row.finishReceiveFromAop).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.receiveFromAop > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
+                                <td style={cellStyle}>{row.unitePrice > 0 ? Number (row.unitePrice).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.billingAmount > 0 ? Number (row.billingAmount).toFixed(2) : "-"}</td>
                             </tr>
                         ))}
                         {filteredRows.length === 0 && <tr><td style={cellStyle} colSpan={tableHeader.length}>{movements.length === 0 ? "No records found." : "No rows match filters."}</td></tr>}
                     </tbody>
+                    {filteredRows.length > 0 && (
+                        <tfoot>
+                            <tr>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}>Total</td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}>{totals.sentForAop > 0 ? totals.sentForAop.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}>{totals.returnFromAop > 0 ? totals.returnFromAop.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}>{totals.receiveFromAop > 0 ? totals.receiveFromAop.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}>{totals.finishReceiveFromAop > 0 ? totals.finishReceiveFromAop.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}>{totals.receiveFromAop > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}</td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}>{totals.billingAmount > 0 ? totals.billingAmount.toFixed(2) : "-"}</td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
             {!search && totalPages > 1 && (

@@ -9,6 +9,7 @@ import FilterableTh from './FilterBleth';
 
 const cellStyle = { border: "1px solid #999", padding: "6px 8px", overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "middle", textAlign: "center" };
 const thStickyStyle = { ...cellStyle, position: "sticky", top: 0, zIndex: 10, background: "#f3f4f6" };
+const tfootCellStyle = { ...cellStyle, position: "sticky", bottom: 0, zIndex: 10, background: "#f3f4f6", fontWeight: 700 };
 
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true },
@@ -173,6 +174,23 @@ const Knitting = () => {
 
     const filtersString = JSON.stringify(filters || {});
 
+    // ── Footer totals for the currently visible (filtered) rows ──
+    const totals = useMemo(() => {
+        const t = {
+            yarnDelivery: 0,
+            yarnReturn: 0,
+            greyFabricReceived: 0,
+            billingAmount: 0,
+        };
+        filteredRows.forEach((row) => {
+            t.yarnDelivery += Number(row.yarnDelivery) || 0;
+            t.yarnReturn += Number(row.yarnReturn) || 0;
+            t.greyFabricReceived += Number(row.greyFabricReceived) || 0;
+            t.billingAmount += Number(row.billingAmount) || 0;
+        });
+        return t;
+    }, [filteredRows]);
+
     const toggleRow = (rowKey) => {
         setSelectedRows((prev) => {
             const next = new Set(prev);
@@ -294,15 +312,34 @@ const Knitting = () => {
                                 <td style={cellStyle}>{row.color || "-"}</td>
                                 <td style={cellStyle}>{row.fromFactory || "-"}</td>
                                 <td style={cellStyle}>{row.toFactory || "-"}</td>
-                                <td style={cellStyle}>{row.yarnDelivery > 0 ? fmtNumber(row.yarnDelivery) : "-"}</td>
-                                <td style={cellStyle}>{row.yarnReturn > 0 ? fmtNumber(row.yarnReturn) : "-"}</td>
-                                <td style={cellStyle}>{row.greyFabricReceived > 0 ? fmtNumber(row.greyFabricReceived) : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? fmtNumber(row.unitePrice) : "-"}</td>
-                                <td style={cellStyle}>{row.billingAmount > 0 ? fmtNumber(row.billingAmount) : "-"}</td>
+                                <td style={cellStyle}>{row.yarnDelivery > 0 ? Number(row.yarnDelivery).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.yarnReturn > 0 ? Number(row.yarnReturn).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.greyFabricReceived > 0 ? Number(row.greyFabricReceived).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td>
                             </tr>
                         ))}
                         {filteredRows.length === 0 && <tr><td style={cellStyle} colSpan={tableHeader.length}>{movements.length === 0 && !loading && !searchLoading ? "No records found." : "No rows match the current filters."}</td></tr>}
                     </tbody>
+                    {filteredRows.length > 0 && (
+                        <tfoot>
+                            <tr>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}>Total</td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}>{totals.yarnDelivery > 0 ? totals.yarnDelivery.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}>{totals.yarnReturn > 0 ? totals.yarnReturn.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}>{totals.greyFabricReceived > 0 ? totals.greyFabricReceived.toFixed(2) : "-"}</td>
+                                <td style={tfootCellStyle}></td>
+                                <td style={tfootCellStyle}>{totals.billingAmount > 0 ? totals.billingAmount.toFixed(2) : "-"}</td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
         </div>

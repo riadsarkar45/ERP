@@ -48,7 +48,7 @@ const Reconciliation = () => {
     const [selectedJobs, setSelectedJobs] = useState(new Set());
     const [showNotesModal, setShowNotesModal] = useState(false);
     const [notes, setNotes] = useState("");
-    const [pendingSaveJobs, setPendingSaveJobs] = useState([]); 
+    const [pendingSaveJobs, setPendingSaveJobs] = useState([]);
 
     const WRAPPED_COL_WIDTH = 120;
     const wrapClass = isWrapped ? "whitespace-normal break-words" : "whitespace-nowrap";
@@ -238,7 +238,8 @@ const Reconciliation = () => {
             case "cadConsumption": return get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
             case "plannedCuttingQty": {
                 const cadConsumption = get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
-                return get("fabricIssueCuttingDept") ? get("fabricIssueCuttingDept") / cadConsumption : 0;
+
+                return cadConsumption > 0 && get("fabricIssueCuttingDept") ? get("fabricIssueCuttingDept") / cadConsumption : 0;
             }
             case "cuttingShortExcess": return get("actualCuttingQty") - get("orderQty");
             case "shortExcessPercentCutting": {
@@ -343,10 +344,10 @@ const Reconciliation = () => {
                 alert("No valid rows to save.");
                 return;
             }
-            payload.notes = ""; 
-            
+            payload.notes = "";
+
             await axiosPrivate.patch(`/api/styles/${encodeURIComponent(job.jobNo)}/reconciliation`, payload);
-            
+
             setEditingJobIndex(null);
             await fetchFilteredData();
         } catch (err) {
@@ -366,7 +367,7 @@ const Reconciliation = () => {
                 payload.notes = notes;
                 await axiosPrivate.patch(`/api/styles/${encodeURIComponent(job.jobNo)}/reconciliation`, payload);
             }
-            
+
             setSelectedJobs(new Set());
             setEditingJobIndex(null);
             setShowNotesModal(false);
@@ -402,7 +403,7 @@ const Reconciliation = () => {
                         <RefreshCcw size={16} className={isLoading ? "animate-spin" : ""} />
                         Refresh Data
                     </button>
-                    
+
                     {selectedJobs.size > 0 && (
                         <button onClick={handleGlobalSubmit} disabled={savingJob} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <CloudCog size={16} />
@@ -449,7 +450,7 @@ const Reconciliation = () => {
                                     const hasActiveFilter = activeFilters[FILTERABLE_COLS[I]?.key]?.length > 0;
                                     const isSticky = I <= LAST_STICKY_INDEX;
                                     const isLastSticky = I === LAST_STICKY_INDEX;
-                                    const hasRightBorder = I === 1 || isLastSticky; 
+                                    const hasRightBorder = I === 1 || isLastSticky;
 
                                     return (
                                         <th
@@ -463,16 +464,16 @@ const Reconciliation = () => {
                                         >
                                             <div className="relative flex items-center justify-center gap-1.5">
                                                 {I === 0 ? (
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={allSelected} 
-                                                        onChange={toggleAllSelection} 
-                                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" 
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={allSelected}
+                                                        onChange={toggleAllSelection}
+                                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                                     />
                                                 ) : (
                                                     <span>{header}</span>
                                                 )}
-                                                
+
                                                 {isFilterable && (
                                                     <button type="button" onClick={() => openFilterDropdown(I)} className={`p-1 rounded transition-colors ${openFilterCol === I ? "bg-indigo-100 text-indigo-700" : hasActiveFilter ? "text-indigo-600" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"}`}>
                                                         <ListFilter size={12} />
@@ -540,23 +541,23 @@ const Reconciliation = () => {
                                     const comp = compBreakDown[i];
                                     const isFirstRow = i === 0;
 
-                                    const finishQty = Number(com?.finishRequiredQty) || 0;
+                                    const finishQty = Number(com?.finishRequiredQty).toFixed(2) || 0;
                                     const processLoss = Number(job.processLoss) || 0;
                                     const yarnRequiredQty = finishQty * (1 + processLoss / 100);
-                                    const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) || 0;
-                                    const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
-                                    const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return) || 0;
+                                    const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) ?? 0;
+                                    const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received).toFixed(2) || 0;
+                                    const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return).toFixed(2) || 0;
                                     const knitShortExcess = knitGreyReceived + knitYarnReturn - knitYarnDelivery;
-                                    const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
-                                    const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
+                                    const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received).toFixed(2) || 0;
+                                    const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received).toFixed(2) || 0;
                                     const dyeProcessLoss = dyeGreyReceived > 0 ? ((dyeGreyReceived - dyeFinishReceived) / dyeGreyReceived) * 100 : 0;
-                                    const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
+                                    const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery).toFixed(2) || 0;
                                     const dyeShortExcess = dyeGreyDelivery - dyeGreyReceived;
-                                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
-                                    const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop) || 0;
+                                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) || 0;
+                                    const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop).toFixed(2) || 0;
                                     const aopProcessLoss = aopGreyReceived > 0 ? ((aopGreyReceived - aopFinishReceived) / aopGreyReceived) * 100 : 0;
-                                    const aopSent = Number(comp?.aopOrder_Sent_for_AOP) || 0;
-                                    const aopReceived = Number(comp?.aopOrder_Return_From_Aop) || 0;
+                                    const aopSent = Number(comp?.aopOrder_Sent_for_AOP).toFixed(2) || 0;
+                                    const aopReceived = Number(comp?.aopOrder_Return_From_Aop).toFixed(2) || 0;
                                     const aopShortExcess = aopSent - aopReceived;
 
                                     const stickyBodyClass = (colIdx) => [
@@ -572,10 +573,10 @@ const Reconciliation = () => {
                                                     className="sticky left-0 z-10 px-3 py-3 border-b border-black text-center align-middle"
                                                     style={stickyCellStyle(0, stickyBg, false)}
                                                 >
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={selectedJobs.has(jobIndex)} 
-                                                        onChange={() => toggleJobSelection(jobIndex)} 
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedJobs.has(jobIndex)}
+                                                        onChange={() => toggleJobSelection(jobIndex)}
                                                         className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                                     />
                                                 </td>
@@ -616,7 +617,7 @@ const Reconciliation = () => {
                                             <td className={stickyBodyClass(4)} style={stickyCellStyle(4, stickyBg)}>
                                                 <div className="flex items-center justify-center h-full">{com?.orderQty ?? "-"}</div>
                                             </td>
-                                            
+
                                             {/* MANUFACTURING UNIT COLUMN */}
                                             <td className={stickyBodyClass(5)} style={stickyCellStyle(5, stickyBg, true)}>
                                                 <div className="flex items-center justify-center h-full">
@@ -630,8 +631,8 @@ const Reconciliation = () => {
                                                             onChange={(e) => handleInputChange(jobIndex, i, "manufacturingUnite", e.target.value)}
                                                         />
                                                     ) : (
-                                                        com?.reconciliation?.manufacturingUnite && com.reconciliation.manufacturingUnite !== "NULL" 
-                                                            ? com.reconciliation.manufacturingUnite 
+                                                        com?.reconciliation?.manufacturingUnite && com.reconciliation.manufacturingUnite !== "NULL"
+                                                            ? com.reconciliation.manufacturingUnite
                                                             : "-"
                                                     )}
                                                 </div>
@@ -639,20 +640,56 @@ const Reconciliation = () => {
 
                                             <td className={cellClass} style={cellStyle}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Yarn_Delivery ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Yarn_Return ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.knittingOrder_Grey_Fabric_Received ?? "-"}</td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
+                                                    ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.knittingOrder_Yarn_Return && !isNaN(Number(comp.knittingOrder_Yarn_Return))
+                                                    ? Number(comp.knittingOrder_Yarn_Return).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.knittingOrder_Grey_Fabric_Received && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received))
+                                                    ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2)                                                   : "-"}
+                                            </td>                                         
                                             <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={knitShortExcess} /> : "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Grey_Delivery ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Grey_Return ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Grey_Received ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.dyeingOrder_Finish_Received ?? "-"}</td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.dyeingOrder_Grey_Delivery && !isNaN(Number(comp.dyeingOrder_Grey_Delivery))
+                                                    ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.dyeingOrder_Grey_Return && !isNaN(Number(comp.dyeingOrder_Grey_Return))
+                                                    ? Number(comp.dyeingOrder_Grey_Return).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.dyeingOrder_Grey_Received && !isNaN(Number(comp.dyeingOrder_Grey_Received))
+                                                    ? Number(comp.dyeingOrder_Grey_Received).toFixed(2)                                                   : "-"}
+                                            </td>                                           
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.dyeingOrder_Finish_Received && !isNaN(Number(comp.dyeingOrder_Finish_Received))
+                                                    ? Number(comp.dyeingOrder_Finish_Received).toFixed(2)                                                   : "-"}
+                                            </td>                                           
+                                        
                                             <td className={cellClass} style={cellStyle}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.aopOrder_Sent_for_AOP ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.aopOrder_Return_From_Aop ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.aopOrder_Received_From_Aop ?? "-"}</td>
-                                            <td className={cellClass} style={cellStyle}>{comp?.aopOrder_AOP_Finish_Fabric_Rcvd ?? "-"}</td>
+                                           
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.aopOrder_Sent_for_AOP && !isNaN(Number(comp.aopOrder_Sent_for_AOP))
+                                                    ? Number(comp.aopOrder_Sent_for_AOP).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.aopOrder_Return_From_Aop && !isNaN(Number(comp.aopOrder_Return_From_Aop))
+                                                    ? Number(comp.aopOrder_Return_From_Aop).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.aopOrder_Received_From_Aop && !isNaN(Number(comp.aopOrder_Received_From_Aop))
+                                                    ? Number(comp.aopOrder_Received_From_Aop).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>
+                                                {comp?.aopOrder_AOP_Finish_Fabric_Rcvd && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd))
+                                                    ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2)                                                   : "-"}
+                                            </td>
+                                            
                                             <td className={cellClass} style={cellStyle}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
 
