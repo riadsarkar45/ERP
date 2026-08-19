@@ -9,128 +9,152 @@ import {
     PanelRightOpen,
     X,
     Bell,
-    Scissors,
     ChevronDown,
     ChevronRight,
     UserRoundPlus,
+    ZoomIn,
+    ZoomOut,
 } from "lucide-react";
-import { AuthContext, AuthProvider } from "./auth/AuthContext";
+import { AuthContext } from "./auth/AuthContext";
 
 const Sidebar = () => {
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    
+    // NEW: Zoom state (default 100%, minimum fixed at 70%)
+    const [zoomLevel, setZoomLevel] = useState(100);
+
     const isActive = (path) => location.pathname === path;
-    const { user } = useContext(AuthContext)
+    const { user } = useContext(AuthContext);
+
+    // Handle zoom changes with a fixed minimum of 70% and maximum of 200%
+    const handleZoomChange = (e) => {
+        let val = parseInt(e.target.value, 10);
+        if (isNaN(val)) val = 100;
+        if (val < 70) val = 70;   // Fixed minimum capacity at 70%
+        if (val > 200) val = 200; // Maximum capacity at 200%
+        setZoomLevel(val);
+    };
+
+    // Unified Yarn routes (including Yarn Dyed Movement & Stock)
+    const yarnSubItems = [
+        { path: "/dashboard/yarn", label: "Yarn Purchase", icon: Package },
+        { path: "/dashboard/yarn/movement", label: "Yarn Movement", icon: Package },
+        { path: "/dashboard/yarn/stock", label: "Yarn Stock", icon: Package },
+        { path: "/dashboard/yarndyed/movement", label: "Yarn Dyed Movement", icon: Package },
+        { path: "/dashboard/yarndyed/stock", label: "Yarn Dyed Stock", icon: Package },
+    ];
+
     const orderSubItems = [
         { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
         { path: "/dashboard/dyeing-order", label: "Dyeing Orders", icon: Package },
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Package },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: Package },
     ];
+    
     const movementSubItems = [
         { path: "/dashboard/challan/aop", label: "Aop", icon: Package },
         { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package },
         { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package },
     ];
-    // Nested one level deeper than the other Movement items — these are
-    // processing-only movement types (no factory-to-factory transfer),
-    // grouped under their own "Others" sub-dropdown instead of flattened
-    // into movementSubItems.
+    
     const othersSubItems = [
         { path: "/dashboard/challan/others/compacting", label: "Compacting", icon: Package },
         { path: "/dashboard/challan/others/heat-set", label: "Heat Set", icon: Package },
         { path: "/dashboard/challan/others/trumble", label: "Trumble", icon: Package },
         { path: "/dashboard/challan/others/re-process", label: "Re-Process", icon: Package },
     ];
+    
     const misSubItems = [
         { path: "/dashboard/mis/glance", label: "At A Glance (Stock)", icon: FileText },
-        // { path: "/dashboard/mis/dyeing", label: "Dyeing", icon: FileText },
-        // { path: "/dashboard/mis/knitting", label: "Knitting", icon: FileText },
     ];
 
-    // Each dropdown's open state is seeded from whether we've landed on one of
-    // its sub-routes, but after that the user's click is the only thing that
-    // controls it — no OR-ing with an "active" check that would keep forcing
-    // it back open every render.
+    // Dropdown open states
+    const [isYarnOpen, setIsYarnOpen] = useState(
+        () => yarnSubItems.some(item => item.path === location.pathname)
+    );
+
     const [isOrdersOpen, setIsOrdersOpen] = useState(
         () => orderSubItems.some(item => item.path === location.pathname)
     );
+    
     const [isMovementOpen, setIsMovementOpen] = useState(
         () => movementSubItems.some(item => item.path === location.pathname)
             || othersSubItems.some(item => item.path === location.pathname)
     );
+    
     const [isOthersOpen, setIsOthersOpen] = useState(
         () => othersSubItems.some(item => item.path === location.pathname)
     );
+    
     const [isMisOpen, setIsMisOpen] = useState(
         () => misSubItems.some(item => item.path === location.pathname)
     );
 
     function ThreadIcon({ size = 16 }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="95 25 210 350" width={size} height={size}>
-            <defs>
-                <linearGradient id="coneBody" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#f2ede2" />
-                    <stop offset="20%" stopColor="#ffffff" />
-                    <stop offset="45%" stopColor="#e8e0d0" />
-                    <stop offset="55%" stopColor="#faf7f0" />
-                    <stop offset="75%" stopColor="#e0d7c4" />
-                    <stop offset="100%" stopColor="#f5f1e6" />
-                </linearGradient>
-                <linearGradient id="coneShade" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
-                    <stop offset="50%" stopColor="#000000" stopOpacity="0" />
-                    <stop offset="100%" stopColor="#000000" stopOpacity="0.15" />
-                </linearGradient>
-                <radialGradient id="capGrad" cx="50%" cy="35%" r="65%">
-                    <stop offset="0%" stopColor="#4a4a52" />
-                    <stop offset="100%" stopColor="#1c1c22" />
-                </radialGradient>
-                <radialGradient id="baseGrad" cx="50%" cy="35%" r="65%">
-                    <stop offset="0%" stopColor="#4a4a52" />
-                    <stop offset="100%" stopColor="#1c1c22" />
-                </radialGradient>
-            </defs>
-            <path d="M 155 65 Q 155 55 170 55 L 230 55 Q 245 55 245 65 L 285 320 Q 288 335 270 340 L 130 340 Q 112 335 115 320 Z"
-                fill="url(#coneBody)" stroke="#c9bfa8" strokeWidth="2" />
-            <path d="M 155 65 Q 155 55 170 55 L 230 55 Q 245 55 245 65 L 285 320 Q 288 335 270 340 L 130 340 Q 112 335 115 320 Z"
-                fill="url(#coneShade)" />
-            <g stroke="#c7bda3" strokeWidth="1" fill="none" opacity="0.55">
-                <path d="M 130 90 L 262 190" /><path d="M 126 120 L 268 220" />
-                <path d="M 123 150 L 273 250" /><path d="M 120 180 L 277 280" />
-                <path d="M 117 210 L 281 300" /><path d="M 114 240 L 283 320" />
-                <path d="M 262 90 L 130 190" /><path d="M 268 120 L 126 220" />
-                <path d="M 273 150 L 123 250" /><path d="M 277 180 L 120 280" />
-                <path d="M 281 210 L 117 300" /><path d="M 283 240 L 114 320" />
-            </g>
-            <ellipse cx="200" cy="57" rx="42" ry="14" fill="url(#capGrad)" />
-            <ellipse cx="200" cy="53" rx="42" ry="13" fill="#2a2a30" />
-            <ellipse cx="200" cy="338" rx="78" ry="18" fill="url(#baseGrad)" />
-            <ellipse cx="200" cy="332" rx="78" ry="17" fill="#2a2a30" />
-            <ellipse cx="200" cy="53" rx="14" ry="5" fill="#0e0e12" />
-        </svg>
-    );
-}
+        return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="95 25 210 350" width={size} height={size}>
+                <defs>
+                    <linearGradient id="coneBody" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#f2ede2" />
+                        <stop offset="20%" stopColor="#ffffff" />
+                        <stop offset="45%" stopColor="#e8e0d0" />
+                        <stop offset="55%" stopColor="#faf7f0" />
+                        <stop offset="75%" stopColor="#e0d7c4" />
+                        <stop offset="100%" stopColor="#f5f1e6" />
+                    </linearGradient>
+                    <linearGradient id="coneShade" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
+                        <stop offset="50%" stopColor="#000000" stopOpacity="0" />
+                        <stop offset="100%" stopColor="#000000" stopOpacity="0.15" />
+                    </linearGradient>
+                    <radialGradient id="capGrad" cx="50%" cy="35%" r="65%">
+                        <stop offset="0%" stopColor="#4a4a52" />
+                        <stop offset="100%" stopColor="#1c1c22" />
+                    </radialGradient>
+                    <radialGradient id="baseGrad" cx="50%" cy="35%" r="65%">
+                        <stop offset="0%" stopColor="#4a4a52" />
+                        <stop offset="100%" stopColor="#1c1c22" />
+                    </radialGradient>
+                </defs>
+                <path d="M 155 65 Q 155 55 170 55 L 230 55 Q 245 55 245 65 L 285 320 Q 288 335 270 340 L 130 340 Q 112 335 115 320 Z"
+                    fill="url(#coneBody)" stroke="#c9bfa8" strokeWidth="2" />
+                <path d="M 155 65 Q 155 55 170 55 L 230 55 Q 245 55 245 65 L 285 320 Q 288 335 270 340 L 130 340 Q 112 335 115 320 Z"
+                    fill="url(#coneShade)" />
+                <g stroke="#c7bda3" strokeWidth="1" fill="none" opacity="0.55">
+                    <path d="M 130 90 L 262 190" /><path d="M 126 120 L 268 220" />
+                    <path d="M 123 150 L 273 250" /><path d="M 120 180 L 277 280" />
+                    <path d="M 117 210 L 281 300" /><path d="M 114 240 L 283 320" />
+                    <path d="M 262 90 L 130 190" /><path d="M 268 120 L 126 220" />
+                    <path d="M 273 150 L 123 250" /><path d="M 277 180 L 120 280" />
+                    <path d="M 281 210 L 117 300" /><path d="M 283 240 L 114 320" />
+                </g>
+                <ellipse cx="200" cy="57" rx="42" ry="14" fill="url(#capGrad)" />
+                <ellipse cx="200" cy="53" rx="42" ry="13" fill="#2a2a30" />
+                <ellipse cx="200" cy="338" rx="78" ry="18" fill="url(#baseGrad)" />
+                <ellipse cx="200" cy="332" rx="78" ry="17" fill="#2a2a30" />
+                <ellipse cx="200" cy="53" rx="14" ry="5" fill="#0e0e12" />
+            </svg>
+        );
+    }
+
     const navItems = [
-        { path: "/dashboard/yarn", label: "Yarn", icon: ThreadIcon },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
-        // { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
-        // { path: "/dashboard/management-view", label: "Management View", icon: UserRoundPlus },
     ];
 
-    // Auto-open dropdown if current route is an order/movement/mis sub-route
+    // Active checks for highlighting parent dropdowns
+    const isYarnActive = yarnSubItems.some(item => isActive(item.path));
     const isOrdersActive = orderSubItems.some(item => isActive(item.path));
-    const isMovementActive = movementSubItems.some(item => isActive(item.path))
-        || othersSubItems.some(item => isActive(item.path));
+    const isMovementActive = movementSubItems.some(item => isActive(item.path)) || othersSubItems.some(item => isActive(item.path));
     const isOthersActive = othersSubItems.some(item => isActive(item.path));
     const isMisActive = misSubItems.some(item => isActive(item.path));
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+    
     const getPageInfo = () => {
         const path = location.pathname;
         if (path.includes('/factory-wise-report/')) {
@@ -146,6 +170,11 @@ const Sidebar = () => {
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
+            '/dashboard/yarn': { title: 'Yarn Purchase', subtitle: 'Purchase order status' },
+            '/dashboard/yarn/movement': { title: 'Yarn Movement', subtitle: 'Yarn movement report' },
+            '/dashboard/yarn/stock': { title: 'Yarn Stock', subtitle: 'Yarn stock status' },
+            '/dashboard/yarn-dyed/movement': { title: 'Yarn Dyed Movement', subtitle: 'Yarn dyed movement report' },
+            '/dashboard/yarn-dyed/stock': { title: 'Yarn Dyed Stock', subtitle: 'Yarn dyed stock status' },
             '/dashboard/knitting-order': { title: 'Knitting Orders', subtitle: 'Manage knitting orders' },
             '/dashboard/yarn-dye-order': { title: 'Yarn Dyeing Orders', subtitle: 'Manage yarn dyeing orders' },
             '/dashboard/aop-order': { title: 'AOP Orders', subtitle: 'Manage AOP orders' },
@@ -165,11 +194,8 @@ const Sidebar = () => {
 
         const misRouteMap = {
             '/dashboard/mis/glance': { title: 'MIS - AOP', subtitle: 'At A Glance' },
-            // '/dashboard/mis/dyeing': { title: 'MIS - Dyeing', subtitle: 'Dyeing MIS report' },
-            // '/dashboard/mis/knitting': { title: 'MIS - Knitting', subtitle: 'Knitting MIS report' },
         };
 
-        // Look up by the actual path, in either map
         return (
             routeMap[path] ||
             movementRouteMap[path] ||
@@ -242,6 +268,44 @@ const Sidebar = () => {
                             </Link>
                         </li>
 
+                        {/* Yarn Dropdown (Includes Yarn Dyed Movement & Stock) */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsYarnOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isYarnActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'Yarn' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <ThreadIcon size={20} />
+                                    {!isCollapsed && <span className="font-medium text-sm">Yarn</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    isYarnOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {isYarnOpen && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {yarnSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+
                         {/* Orders Dropdown */}
                         <li>
                             <button
@@ -255,13 +319,10 @@ const Sidebar = () => {
                                     {!isCollapsed && <span className="font-medium text-sm">Orders</span>}
                                 </div>
                                 {!isCollapsed && (
-                                    isOrdersOpen
-                                        ? <ChevronDown size={16} />
-                                        : <ChevronRight size={16} />
+                                    isOrdersOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
                                 )}
                             </button>
 
-                            {/* Sub Items */}
                             {isOrdersOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {orderSubItems.map(item => (
@@ -283,7 +344,7 @@ const Sidebar = () => {
                             )}
                         </li>
 
-                        {/* Rest of nav items */}
+                        {/* Standalone Nav Items */}
                         {navItems.map((item) => {
                             const Icon = item.icon;
                             return (
@@ -315,13 +376,10 @@ const Sidebar = () => {
                                     {!isCollapsed && <span className="font-medium text-sm">Movement</span>}
                                 </div>
                                 {!isCollapsed && (
-                                    isMovementOpen
-                                        ? <ChevronDown size={16} />
-                                        : <ChevronRight size={16} />
+                                    isMovementOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
                                 )}
                             </button>
 
-                            {/* Sub Items */}
                             {isMovementOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {movementSubItems.map(item => (
@@ -340,10 +398,7 @@ const Sidebar = () => {
                                         </li>
                                     ))}
 
-                                    {/* Others — nested dropdown one level deeper than
-                                        the plain sub-items above, same open/active
-                                        pattern as the top-level Movement/Orders/MIS
-                                        dropdowns, just indented an extra step. */}
+                                    {/* Others Nested Dropdown */}
                                     <li>
                                         <button
                                             onClick={() => setIsOthersOpen(prev => !prev)}
@@ -356,10 +411,7 @@ const Sidebar = () => {
                                                 <Package size={16} className="shrink-0" />
                                                 Others
                                             </div>
-                                            {isOthersOpen
-                                                ? <ChevronDown size={14} />
-                                                : <ChevronRight size={14} />
-                                            }
+                                            {isOthersOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                         </button>
 
                                         {isOthersOpen && (
@@ -399,13 +451,10 @@ const Sidebar = () => {
                                     {!isCollapsed && <span className="font-medium text-sm">MIS</span>}
                                 </div>
                                 {!isCollapsed && (
-                                    isMisOpen
-                                        ? <ChevronDown size={16} />
-                                        : <ChevronRight size={16} />
+                                    isMisOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
                                 )}
                             </button>
 
-                            {/* Sub Items */}
                             {isMisOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {misSubItems.map(item => (
@@ -448,9 +497,29 @@ const Sidebar = () => {
                             <p className="text-sm text-gray-500">{pageInfo.subtitle}</p>
                         </div>
                     </div>
-                    {/* import {Bell, ChevronDown, User} from "lucide-react"; */}
 
                     <div className="flex items-center gap-3">
+                        {/* NEW: Zoom Control (Fixed min 70%, Customizable) */}
+                        <div className="hidden md:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5 border border-gray-200">
+                            <ZoomOut size={14} className="text-gray-500" />
+                            <select 
+                                value={zoomLevel} 
+                                onChange={handleZoomChange}
+                                className="bg-transparent text-sm font-bold text-gray-700 focus:outline-none cursor-pointer w-16"
+                                title="Adjust zoom level (Minimum 70%)"
+                            >
+                                <option value="70">70%</option>
+                                <option value="80">80%</option>
+                                <option value="90">90%</option>
+                                <option value="100">100%</option>
+                                <option value="110">110%</option>
+                                <option value="125">125%</option>
+                                <option value="150">150%</option>
+                                <option value="200">200%</option>
+                            </select>
+                            <ZoomIn size={14} className="text-gray-500" />
+                        </div>
+
                         {/* Notification */}
                         <button className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                             <Bell size={20} />
@@ -460,26 +529,20 @@ const Sidebar = () => {
                         {/* User Profile */}
                         <button className="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors">
                             <div className="w-10 uppercase h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold">
-                                {/* User initials */}
-                                {
-                                    user && (
-                                        <h2>{user?.name?.[0] || "UNK"}</h2>
-                                    )
-                                }
-                                {/* {
-                                    user && (
-                                        <h2>{user?.userRole || "UNK"}</h2>
-                                    )
-                                } */}
-                                {/* Or use image */}
-                                {/* <img src={user?.photoURL} className="w-full h-full rounded-full object-cover" /> */}
+                                {user && (
+                                    <h2>{user?.name?.[0] || "UNK"}</h2>
+                                )}
                             </div>
                         </button>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-auto">
-                    <div className="p-6 lg:p-8 w-full">
+                {/* Outlet Wrapper with Zoom Applied */}
+                <div className="flex-1 overflow-auto bg-gray-50">
+                    <div 
+                        className="p-6 lg:p-8 w-full transition-all duration-200 ease-in-out origin-top-left"
+                        style={{ zoom: `${zoomLevel}%` }}
+                    >
                         <Outlet />
                     </div>
                 </div>

@@ -31,6 +31,8 @@ import ReProcess from "../dashboard/pages/movement/others/ReProcess";
 import PurchaseOrderStatus from "../dashboard/pages/yarnstock/PurchaseOrderStatus";
 import YarnMovementReport from "../dashboard/pages/yarnstock/MovementReport";
 import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
+import YarnDyedMovement from "../dashboard/pages/yarnstock/YarnDyedMovement";
+import YarnDyedStock from "../dashboard/pages/yarnstock/YarnDyedStock";
 
 const routers = createBrowserRouter([
     {
@@ -167,6 +169,14 @@ const routers = createBrowserRouter([
                     {
                         path: "yarn/stock",
                         element: <StockStaus/>
+                    },
+                    {
+                        path: "yarndyed/movement",
+                        element: <YarnDyedMovement/>
+                    },
+                    {
+                        path: "yarndyed/stock",
+                        element: <YarnDyedStock/>
                     },
                 ]
             }
