@@ -27,31 +27,32 @@ const IconCheck = () => (
 
 /* ----------------------------- Column definitions ----------------------------- */
 const COLUMNS = [
-  { key: 'piNo', label: 'PI NO.', width: 100, type: 'text' },
-  { key: 'piDate', label: 'PI DATE', width: 110, type: 'date' },
-  { key: 'lcNo', label: 'LC NO.', width: 110, type: 'text' },
-  { key: 'po', label: 'PO', width: 110, type: 'text' },
-  { key: 'supplierName', label: 'SUPPLIER NAME', width: 180, type: 'text' },
-  { key: 'yarnCount', label: 'YARN COUNT', width: 100, type: 'text' },
-  { key: 'composition', label: 'COMPOSITION', width: 150, type: 'text' },
-  { key: 'poQty', label: 'PO QTY', width: 110, type: 'number', numeric: true },
-  { key: 'yarnReceivedFromSpinning', label: 'YARN RECEIVED FROM SPINNING', width: 180, type: 'number', numeric: true },
-  { key: 'yarnReturnedToSpinning', label: 'YARN RETURNED TO SPINNING', width: 170, type: 'number', numeric: true },
-  { key: 'pendingReceivedQty', label: 'PENDING RECEIVED QTY', width: 150, type: 'number', numeric: true },
-  { key: 'estimatedPiDate', label: 'ESTIMATED PI DATE', width: 130, type: 'date' },
-  { key: 'periodTime', label: 'PERIOD TIME', width: 110, type: 'text' },
-  { key: 'remarks', label: 'REMARKS', width: 200, type: 'text' },
+  { key: 'jobNumber', label: 'JOB NUMBER', width: 100, type: 'text' },
+  { key: 'color', label: 'COLOR', width: 90, type: 'text' },
+  { key: 'fabricComposition', label: 'FABRIC COMPOSITION', width: 160, type: 'text' },
+  { key: 'fabricWidth', label: 'FABRIC WIDTH', width: 100, type: 'text' },
+  { key: 'yarnCount', label: 'YARN COUNT', width: 90, type: 'text' },
+  { key: 'composition', label: 'COMPOSITION', width: 140, type: 'text' },
+  { key: 'lot', label: 'LOT', width: 140, type: 'text' },
+  { key: 'workOrderQty', label: 'WORKORDER QTY', width: 120, type: 'number', numeric: true },
+  { key: 'yarnDeliveryQty', label: 'YARN DELIVERY QTY (Y/D)', width: 140, type: 'number', numeric: true },
+  { key: 'delShortExcess', label: 'DEL. SHORT & EXCESS', width: 130, type: 'number', numeric: true },
+  { key: 'yarnReturnQty', label: 'YARN RETURN QTY (Y/D FACTORY)', width: 150, type: 'number', numeric: true },
+  { key: 'yarnReceivedGrey', label: 'YARN RECEIVED QTY (GREY)', width: 150, type: 'number', numeric: true },
+  { key: 'yarnReceivedFinish', label: 'YARN RECEIVED QTY (FINISH)', width: 160, type: 'number', numeric: true },
+  { key: 'stock', label: 'STOCK', width: 90, type: 'number', numeric: true },
+  { key: 'remarks', label: 'REMARKS', width: 220, type: 'text' },
 ];
 
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
 
 /* ----------------------------- Mock Data ----------------------------- */
 const BASE_DATA = [
-  { id: 1, date: '2026-08-01', piNo: 'PI-1001', piDate: '2026-08-01', lcNo: 'LC-5001', po: 'PO-2001', supplierName: 'ABC Textiles Ltd. (Long Name Test)', yarnCount: '30s', composition: '100% Cotton Combed', poQty: 5000.00, yarnReceivedFromSpinning: 3500.50, yarnReturnedToSpinning: 150.00, pendingReceivedQty: 1349.50, estimatedPiDate: '2026-09-15', periodTime: '45 Days', remarks: 'Regular shipment with special instructions' },
-  { id: 2, date: '2026-08-05', piNo: 'PI-1002', piDate: '2026-08-05', lcNo: 'LC-5002', po: 'PO-2002', supplierName: 'XYZ Fabrics Inc.', yarnCount: '40s', composition: '80% Cotton, 20% Polyester Blend', poQty: 7500.00, yarnReceivedFromSpinning: 5000.00, yarnReturnedToSpinning: 200.00, pendingReceivedQty: 2300.00, estimatedPiDate: '2026-09-20', periodTime: '45 Days', remarks: 'Urgent order' },
-  { id: 3, date: '2026-07-15', piNo: 'PI-1003', piDate: '2026-07-15', lcNo: 'LC-5003', po: 'PO-2003', supplierName: 'Global Yarn Co.', yarnCount: '20s', composition: '100% Polyester', poQty: 10000.00, yarnReceivedFromSpinning: 8500.75, yarnReturnedToSpinning: 300.25, pendingReceivedQty: 1199.00, estimatedPiDate: '2026-08-30', periodTime: '45 Days', remarks: 'Monthly batch' },
-  { id: 4, date: '2026-08-10', piNo: 'PI-1004', piDate: '2026-08-10', lcNo: 'LC-5004', po: 'PO-2004', supplierName: 'Prime Textiles', yarnCount: '24s', composition: '60% Cotton, 40% Linen', poQty: 6000.00, yarnReceivedFromSpinning: 4200.00, yarnReturnedToSpinning: 125.00, pendingReceivedQty: 1675.00, estimatedPiDate: '2026-09-25', periodTime: '45 Days', remarks: 'Special order' },
-  { id: 5, date: '2026-07-22', piNo: 'PI-1005', piDate: '2026-07-22', lcNo: 'LC-5005', po: 'PO-2005', supplierName: 'Elite Fabrics', yarnCount: '60s', composition: '100% Silk', poQty: 2000.00, yarnReceivedFromSpinning: 1800.00, yarnReturnedToSpinning: 50.00, pendingReceivedQty: 150.00, estimatedPiDate: '2026-09-05', periodTime: '45 Days', remarks: 'Premium quality' },
+  { id: 1, date: '2026-08-01', jobNumber: 'JOB-2001', color: 'Navy Blue', fabricComposition: '100% Cotton Combed Long Text', fabricWidth: '58"', yarnCount: '30s', composition: '100% Cotton', lot: 'LOT-A1-Long', workOrderQty: 2000.00, yarnDeliveryQty: 1500.50, delShortExcess: -499.50, yarnReturnQty: 50.00, yarnReceivedGrey: 1450.50, yarnReceivedFinish: 1400.00, stock: 50.50, remarks: 'Regular shipment with special instructions' },
+  { id: 2, date: '2026-08-05', jobNumber: 'JOB-2002', color: 'White', fabricComposition: '80% Cotton, 20% Polyester Blend', fabricWidth: '60"', yarnCount: '40s', composition: '80% Cotton, 20% Poly', lot: 'LOT-B2', workOrderQty: 2500.00, yarnDeliveryQty: 2000.00, delShortExcess: -500.00, yarnReturnQty: 100.00, yarnReceivedGrey: 1900.00, yarnReceivedFinish: 1850.50, stock: 49.50, remarks: 'Urgent order' },
+  { id: 3, date: '2026-07-15', jobNumber: 'JOB-2003', color: 'Red', fabricComposition: '100% Polyester', fabricWidth: '56"', yarnCount: '20s', composition: '100% Polyester', lot: 'LOT-C3', workOrderQty: 3500.00, yarnDeliveryQty: 3000.75, delShortExcess: -499.25, yarnReturnQty: 150.25, yarnReceivedGrey: 2850.50, yarnReceivedFinish: 2800.00, stock: 50.50, remarks: 'Monthly batch' },
+  { id: 4, date: '2026-08-10', jobNumber: 'JOB-2004', color: 'Green', fabricComposition: '60% Cotton, 40% Linen', fabricWidth: '62"', yarnCount: '24s', composition: '60% Cotton, 40% Linen', lot: 'LOT-D4', workOrderQty: 2000.00, yarnDeliveryQty: 1800.00, delShortExcess: -200.00, yarnReturnQty: 75.00, yarnReceivedGrey: 1725.00, yarnReceivedFinish: 1700.25, stock: 24.75, remarks: 'Special order' },
+  { id: 5, date: '2026-07-22', jobNumber: 'JOB-2005', color: 'Yellow', fabricComposition: '100% Silk', fabricWidth: '54"', yarnCount: '60s', composition: '100% Silk', lot: 'LOT-E5', workOrderQty: 600.00, yarnDeliveryQty: 500.00, delShortExcess: -100.00, yarnReturnQty: 25.00, yarnReceivedGrey: 475.00, yarnReceivedFinish: 450.00, stock: 25.00, remarks: 'Premium quality' },
 ];
 
 /* ----------------------------- Filter Popover Component ----------------------------- */
@@ -100,7 +101,7 @@ function FilterPopover({ column, values, activeSet, onApply, onClose }) {
 }
 
 /* ----------------------------- Main Component ----------------------------- */
-const PurchaseOrderStatus = () => {
+const YarnDyedStock = () => {
   const [allData] = useState(BASE_DATA);
   const [searchInput, setSearchInput] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('all');
@@ -108,11 +109,6 @@ const PurchaseOrderStatus = () => {
   const [openFilterCol, setOpenFilterCol] = useState(null);
 
   const fmt = (num) => Number.isFinite(num) ? num.toFixed(2) : '0.00';
-  const fmtDate = (iso) => {
-    if (!iso) return '-';
-    const d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
   const fmtMonthLabel = (monthStr) => {
     if (!monthStr) return '';
     const [y, m] = monthStr.split('-');
@@ -130,23 +126,21 @@ const PurchaseOrderStatus = () => {
     return map;
   }, [allData]);
 
-  // Available months (based on PI DATE)
+  // Available months
   const availableMonths = useMemo(() => {
     const months = new Set();
-    allData.forEach(item => {
-      if (item.piDate) months.add(item.piDate.substring(0, 7));
-    });
+    allData.forEach(item => months.add(item.date.substring(0, 7)));
     return Array.from(months).sort().reverse();
   }, [allData]);
 
   // Filtered Data (Search + Month + Header Filters)
   const filteredData = useMemo(() => {
     return allData.filter(item => {
-      if (selectedMonth !== 'all' && item.piDate && !item.piDate.startsWith(selectedMonth)) return false;
+      if (selectedMonth !== 'all' && !item.date.startsWith(selectedMonth)) return false;
       
       if (searchInput.trim()) {
         const q = searchInput.trim().toLowerCase();
-        const hay = [item.piNo, item.lcNo, item.po, item.supplierName, item.yarnCount, item.composition].join(' ').toLowerCase();
+        const hay = [item.jobNumber, item.color, item.lot, item.fabricComposition].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
@@ -167,9 +161,10 @@ const PurchaseOrderStatus = () => {
     }, {});
   };
 
+  const grandTotals = useMemo(() => calculateTotals(allData), [allData]);
   const filteredTotals = useMemo(() => calculateTotals(filteredData), [filteredData]);
 
-  const handleSearch = () => {};
+  const handleSearch = () => {}; // Reactive via useMemo
   const handleClear = () => { setSearchInput(''); setSelectedMonth('all'); setFilters({}); };
 
   const applyFilter = (colKey, set) => {
@@ -185,27 +180,31 @@ const PurchaseOrderStatus = () => {
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
       
-      {/* QUICK SUMMARY - 4 numeric cards */}
+      {/* QUICK SUMMARY - 5 cards */}
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
           <span className="w-1 h-4 bg-blue-600 rounded-full"></span> Quick Summary
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg border-l-4 border-blue-600 p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total PO Qty</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.poQty || 0)}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Work Order Qty</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.workOrderQty || 0)}</p>
           </div>
-          <div className="bg-white rounded-lg border-l-4 border-emerald-500 p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Received From Spinning</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReceivedFromSpinning || 0)}</p>
+          <div className="bg-white rounded-lg border-l-4 border-amber-500 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Delivery (Y/D)</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnDeliveryQty || 0)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-orange-500 p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Returned To Spinning</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReturnedToSpinning || 0)}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Return (Y/D)</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReturnQty || 0)}</p>
           </div>
-          <div className="bg-white rounded-lg border-l-4 border-red-500 p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Pending Received Qty</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.pendingReceivedQty || 0)}</p>
+          <div className="bg-white rounded-lg border-l-4 border-teal-500 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Received (Grey)</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReceivedGrey || 0)}</p>
+          </div>
+          <div className="bg-white rounded-lg border-l-4 border-purple-600 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Stock</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.stock || 0)}</p>
           </div>
         </div>
       </div>
@@ -214,7 +213,7 @@ const PurchaseOrderStatus = () => {
       <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative flex-1 max-w-md">
-            <input type="text" placeholder="Search PI, LC, PO, Supplier..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="text" placeholder="Search Job, Color, Lot..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <div className="absolute left-3 top-2.5"><IconSearch /></div>
           </div>
           <button onClick={handleSearch} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2">
@@ -239,7 +238,7 @@ const PurchaseOrderStatus = () => {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead className="bg-gray-100">
-              {/* Main Header with Filters */}
+              {/* Main Header with Filters - NO Header Total Row */}
               <tr>
                 {COLUMNS.map((col) => {
                   const isFiltered = !!filters[col.key];
@@ -264,27 +263,28 @@ const PurchaseOrderStatus = () => {
               {filteredData.length > 0 ? (
                 filteredData.map((item, index) => (
                   <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words font-medium">{item.piNo}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words whitespace-nowrap">{fmtDate(item.piDate)}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.lcNo}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.po}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.supplierName}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words font-medium">{item.jobNumber}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.color}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.fabricComposition}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.fabricWidth}</td>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.yarnCount}</td>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.composition}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.lot}</td>
                     
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.poQty)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFromSpinning)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnedToSpinning)}</td>
-                    <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-semibold ${item.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.pendingReceivedQty)}</td>
+                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.workOrderQty)}</td>
+                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnDeliveryQty)}</td>
+                    <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums ${item.delShortExcess < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.delShortExcess)}</td>
+                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnQty)}</td>
+                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedGrey)}</td>
+                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFinish)}</td>
+                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-bold">{fmt(item.stock)}</td>
                     
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words whitespace-nowrap">{fmtDate(item.estimatedPiDate)}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.periodTime}</td>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.remarks}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="14" className="px-6 py-12 text-center text-gray-500 italic bg-white">No records found matching your search or filter criteria.</td>
+                  <td colSpan="15" className="px-6 py-12 text-center text-gray-500 italic bg-white">No records found matching your search or filter criteria.</td>
                 </tr>
               )}
             </tbody>
@@ -292,11 +292,14 @@ const PurchaseOrderStatus = () => {
             <tfoot className="bg-gray-100">
               <tr className="border-t-2 border-gray-400">
                 <td colSpan="7" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">Footer Sub-Total:</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.poQty)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedFromSpinning)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReturnedToSpinning)}</td>
-                <td className={`px-3 py-3 text-right text-sm font-bold border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50 ${filteredTotals.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(filteredTotals.pendingReceivedQty)}</td>
-                <td colSpan="4" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.workOrderQty)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnDeliveryQty)}</td>
+                <td className={`px-3 py-3 text-right text-sm font-bold border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50 ${filteredTotals.delShortExcess < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(filteredTotals.delShortExcess)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReturnQty)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedGrey)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedFinish)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.stock)}</td>
+                <td colSpan="1" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
               </tr>
             </tfoot>
           </table>
@@ -310,4 +313,4 @@ const PurchaseOrderStatus = () => {
   );
 };
 
-export default PurchaseOrderStatus;
+export default YarnDyedStock;

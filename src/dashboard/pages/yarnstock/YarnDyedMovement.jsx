@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 
 const YarnDyedMovement = () => {
-    // Sample data
+    // --- 1. Sample Data (Replace with your actual API data) ---
     const [allData] = useState([
         {
             id: 1, date: '2026-08-01', challanNo: 'CH-001', piNo: 'PI-1001', lcNumber: 'LC-5001',
@@ -45,24 +45,28 @@ const YarnDyedMovement = () => {
         }
     ]);
 
+    // --- 2. State Management ---
     const [searchInput, setSearchInput] = useState('');
     const [activeSearch, setActiveSearch] = useState('');
     const [selectedMonth, setSelectedMonth] = useState('all');
 
-    // Get unique months
+    // --- 3. Available Months for Filter ---
     const availableMonths = useMemo(() => {
         const months = new Set();
         allData.forEach(item => {
-            const monthYear = item.date.substring(0, 7);
+            const monthYear = item.date.substring(0, 7); // 'YYYY-MM'
             months.add(monthYear);
         });
         return Array.from(months).sort().reverse();
     }, [allData]);
 
-    // Filter data
+    // --- 4. Filtered Data (Search + Month Filter) ---
     const filteredData = useMemo(() => {
         return allData.filter(item => {
+            // Month Filter
             const matchesMonth = selectedMonth === 'all' || item.date.startsWith(selectedMonth);
+            
+            // Search Filter
             const searchLower = activeSearch.toLowerCase();
             const matchesSearch = activeSearch === '' || 
                 item.challanNo.toLowerCase().includes(searchLower) ||
@@ -71,11 +75,12 @@ const YarnDyedMovement = () => {
                 item.jobNumber.toLowerCase().includes(searchLower) ||
                 item.color.toLowerCase().includes(searchLower) ||
                 item.lot.toLowerCase().includes(searchLower);
+
             return matchesMonth && matchesSearch;
         });
     }, [allData, selectedMonth, activeSearch]);
 
-    // Calculate totals
+    // --- 5. Calculate Totals ---
     const totals = useMemo(() => {
         return filteredData.reduce((acc, item) => ({
             delivery: acc.delivery + item.yarnDeliveryQty,
@@ -85,12 +90,9 @@ const YarnDyedMovement = () => {
         }), { delivery: 0, return: 0, grey: 0, finish: 0 });
     }, [filteredData]);
 
-    // Helpers
+    // --- 6. Helpers ---
     const fmt = (num) => num.toFixed(2);
-    const fmtDate = (dateStr) => {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    };
+    const fmtDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const fmtMonthLabel = (monthStr) => {
         const [y, m] = monthStr.split('-');
         return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -101,36 +103,39 @@ const YarnDyedMovement = () => {
 
     return (
         <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
-            {/* Header */}
+            
+            {/* ==========================================
+                SECTION 1: SUMMARY CARDS (Above Header) 
+               ========================================== */}
             <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                    <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
-                    <h2 className="text-lg font-bold text-gray-800">Quick Summary</h2>
-                </div>
-                
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white p-4 rounded-lg border-l-4 border-blue-600 shadow-sm">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Delivery (Y/D)</div>
-                        <div className="text-2xl font-bold text-gray-900">{fmt(totals.delivery)}</div>
+                <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="w-1 h-5 bg-blue-600 rounded-full inline-block"></span>
+                    Quick Summary
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500 flex flex-col justify-between">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Delivery (Y/D)</span>
+                        <span className="text-2xl font-bold text-gray-800 mt-1">{fmt(totals.delivery)}</span>
                     </div>
-                    <div className="bg-white p-4 rounded-lg border-l-4 border-amber-500 shadow-sm">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Return (Y/D)</div>
-                        <div className="text-2xl font-bold text-gray-900">{fmt(totals.return)}</div>
+                    <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-amber-500 flex flex-col justify-between">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Return (Y/D)</span>
+                        <span className="text-2xl font-bold text-gray-800 mt-1">{fmt(totals.return)}</span>
                     </div>
-                    <div className="bg-white p-4 rounded-lg border-l-4 border-emerald-500 shadow-sm">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Received (Grey)</div>
-                        <div className="text-2xl font-bold text-gray-900">{fmt(totals.grey)}</div>
+                    <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-emerald-500 flex flex-col justify-between">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Received (Grey)</span>
+                        <span className="text-2xl font-bold text-gray-800 mt-1">{fmt(totals.grey)}</span>
                     </div>
-                    <div className="bg-white p-4 rounded-lg border-l-4 border-purple-600 shadow-sm">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Total Received (Finish)</div>
-                        <div className="text-2xl font-bold text-gray-900">{fmt(totals.finish)}</div>
+                    <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-purple-500 flex flex-col justify-between">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Received (Finish)</span>
+                        <span className="text-2xl font-bold text-gray-800 mt-1">{fmt(totals.finish)}</span>
                     </div>
                 </div>
             </div>
 
-            {/* Search and Filter Bar */}
-            <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm">
+            {/* ==========================================
+                SECTION 2: SEARCH & FILTER (Action Bar)
+               ========================================== */}
+            <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-3 flex-1">
                     <div className="relative flex-1 max-w-md">
                         <input
@@ -139,7 +144,7 @@ const YarnDyedMovement = () => {
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -147,11 +152,9 @@ const YarnDyedMovement = () => {
                     </div>
                     <button 
                         onClick={handleSearch}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
                     >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                         Search
                     </button>
                     <button 
@@ -164,15 +167,13 @@ const YarnDyedMovement = () => {
 
                 <div className="flex items-center gap-3">
                     <label className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                        <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                        <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                         Month Filter:
                     </label>
                     <select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
                     >
                         <option value="all">All Months</option>
                         {availableMonths.map(month => (
@@ -182,12 +183,16 @@ const YarnDyedMovement = () => {
                 </div>
             </div>
 
-            {/* Table */}
+            {/* ==========================================
+                SECTION 3: DATA TABLE
+               ========================================== */}
             <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[calc(100vh-350px)]">
                     <table className="w-full border-collapse text-sm">
-                        <thead>
-                            <tr className="bg-gray-100 border-b border-gray-300">
+                        
+                        {/* TABLE HEADER */}
+                        <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
+                            <tr>
                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Date</th>
                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Challan No.</th>
                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">PI No</th>
@@ -208,23 +213,25 @@ const YarnDyedMovement = () => {
                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">To</th>
                                 <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Remarks</th>
                             </tr>
-                            {/* Header Total Row */}
-                            <tr className="bg-blue-50 border-b border-gray-300">
-                                <td colSpan="12" className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 uppercase">
+                            
+                            {/* HEADER TOTAL ROW */}
+                            <tr className="bg-blue-50">
+                                <td colSpan="12" className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 uppercase tracking-wider">
                                     Header Total:
                                 </td>
                                 <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.delivery)}</td>
                                 <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.return)}</td>
                                 <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.grey)}</td>
                                 <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.finish)}</td>
-                                <td colSpan="3" className="px-3 py-2 border border-gray-300"></td>
+                                <td colSpan="3" className="px-3 py-2 border border-gray-300 bg-blue-50"></td>
                             </tr>
                         </thead>
 
-                        <tbody>
+                        {/* TABLE BODY */}
+                        <tbody className="divide-y divide-gray-200">
                             {filteredData.length > 0 ? (
                                 filteredData.map((item, index) => (
-                                    <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
+                                    <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 whitespace-nowrap font-medium">{fmtDate(item.date)}</td>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.challanNo}</td>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[80px]">{item.piNo}</td>
@@ -237,10 +244,13 @@ const YarnDyedMovement = () => {
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 whitespace-nowrap">{item.yarnCount}</td>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[150px]">{item.composition}</td>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.lot}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono">{fmt(item.yarnDeliveryQty)}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono">{fmt(item.yarnReturnQty)}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono">{fmt(item.yarnReceivedQtyGrey)}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono">{fmt(item.yarnReceivedQtyFinish)}</td>
+                                        
+                                        {/* Numeric Columns (Right Aligned, Fixed 2 decimals, No Wrap) */}
+                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnDeliveryQty)}</td>
+                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnQty)}</td>
+                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedQtyGrey)}</td>
+                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedQtyFinish)}</td>
+                                        
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.from}</td>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.to}</td>
                                         <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[150px]">{item.remarks}</td>
@@ -248,29 +258,30 @@ const YarnDyedMovement = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="19" className="px-6 py-12 text-center text-gray-500 italic">
+                                    <td colSpan="19" className="px-6 py-12 text-center text-gray-500 italic bg-white">
                                         No records found matching your search or filter criteria.
                                     </td>
                                 </tr>
                             )}
                         </tbody>
 
-                        <tfoot>
-                            <tr className="bg-gray-100 border-t-2 border-gray-400">
-                                <td colSpan="12" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase">
+                        {/* TABLE FOOTER */}
+                        <tfoot className="bg-gray-100 sticky bottom-0 z-10 shadow-[0_-2px_4px_rgba(0,0,0,0.05)]">
+                            <tr className="border-t-2 border-gray-400">
+                                <td colSpan="12" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">
                                     Footer Total:
                                 </td>
-                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono bg-green-50">{fmt(totals.delivery)}</td>
-                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono bg-green-50">{fmt(totals.return)}</td>
-                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono bg-green-50">{fmt(totals.grey)}</td>
-                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono bg-green-50">{fmt(totals.finish)}</td>
-                                <td colSpan="3" className="px-3 py-3 border border-gray-300"></td>
+                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.delivery)}</td>
+                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.return)}</td>
+                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.grey)}</td>
+                                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.finish)}</td>
+                                <td colSpan="3" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
             </div>
-
+            
             {/* Record Count */}
             <div className="mt-3 text-right text-xs text-gray-500 font-medium">
                 Showing {filteredData.length} of {allData.length} records
