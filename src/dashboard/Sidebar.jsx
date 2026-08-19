@@ -67,8 +67,54 @@ const Sidebar = () => {
         () => misSubItems.some(item => item.path === location.pathname)
     );
 
+    function ThreadIcon({ size = 16 }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="95 25 210 350" width={size} height={size}>
+            <defs>
+                <linearGradient id="coneBody" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#f2ede2" />
+                    <stop offset="20%" stopColor="#ffffff" />
+                    <stop offset="45%" stopColor="#e8e0d0" />
+                    <stop offset="55%" stopColor="#faf7f0" />
+                    <stop offset="75%" stopColor="#e0d7c4" />
+                    <stop offset="100%" stopColor="#f5f1e6" />
+                </linearGradient>
+                <linearGradient id="coneShade" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
+                    <stop offset="50%" stopColor="#000000" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0.15" />
+                </linearGradient>
+                <radialGradient id="capGrad" cx="50%" cy="35%" r="65%">
+                    <stop offset="0%" stopColor="#4a4a52" />
+                    <stop offset="100%" stopColor="#1c1c22" />
+                </radialGradient>
+                <radialGradient id="baseGrad" cx="50%" cy="35%" r="65%">
+                    <stop offset="0%" stopColor="#4a4a52" />
+                    <stop offset="100%" stopColor="#1c1c22" />
+                </radialGradient>
+            </defs>
+            <path d="M 155 65 Q 155 55 170 55 L 230 55 Q 245 55 245 65 L 285 320 Q 288 335 270 340 L 130 340 Q 112 335 115 320 Z"
+                fill="url(#coneBody)" stroke="#c9bfa8" strokeWidth="2" />
+            <path d="M 155 65 Q 155 55 170 55 L 230 55 Q 245 55 245 65 L 285 320 Q 288 335 270 340 L 130 340 Q 112 335 115 320 Z"
+                fill="url(#coneShade)" />
+            <g stroke="#c7bda3" strokeWidth="1" fill="none" opacity="0.55">
+                <path d="M 130 90 L 262 190" /><path d="M 126 120 L 268 220" />
+                <path d="M 123 150 L 273 250" /><path d="M 120 180 L 277 280" />
+                <path d="M 117 210 L 281 300" /><path d="M 114 240 L 283 320" />
+                <path d="M 262 90 L 130 190" /><path d="M 268 120 L 126 220" />
+                <path d="M 273 150 L 123 250" /><path d="M 277 180 L 120 280" />
+                <path d="M 281 210 L 117 300" /><path d="M 283 240 L 114 320" />
+            </g>
+            <ellipse cx="200" cy="57" rx="42" ry="14" fill="url(#capGrad)" />
+            <ellipse cx="200" cy="53" rx="42" ry="13" fill="#2a2a30" />
+            <ellipse cx="200" cy="338" rx="78" ry="18" fill="url(#baseGrad)" />
+            <ellipse cx="200" cy="332" rx="78" ry="17" fill="#2a2a30" />
+            <ellipse cx="200" cy="53" rx="14" ry="5" fill="#0e0e12" />
+        </svg>
+    );
+}
     const navItems = [
-        { path: "/dashboard/new-audit", label: "New Audit", icon: PlusCircle },
+        { path: "/dashboard/yarn", label: "Yarn", icon: ThreadIcon },
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
         // { path: "/dashboard/monitoring", label: "Api Monitoring", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },

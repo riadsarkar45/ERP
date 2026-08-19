@@ -28,6 +28,9 @@ import GlanceReport from "../dashboard/pages/MIS/GlanceReport";
 import Reconciliation from "../dashboard/pages/reconciliation/Reconciliation";
 import Compacting from "../dashboard/pages/movement/others/Compacting";
 import ReProcess from "../dashboard/pages/movement/others/ReProcess";
+import PurchaseOrderStatus from "../dashboard/pages/yarnstock/PurchaseOrderStatus";
+import YarnMovementReport from "../dashboard/pages/yarnstock/MovementReport";
+import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
 
 const routers = createBrowserRouter([
     {
@@ -152,7 +155,19 @@ const routers = createBrowserRouter([
                     {
                         path: "style/reconciliation",
                         element: <Reconciliation />
-                    }
+                    },
+                    {
+                        path: "yarn",
+                        element: <PurchaseOrderStatus/>
+                    },
+                    {
+                        path: "yarn/movement",
+                        element: <YarnMovementReport/>
+                    },
+                    {
+                        path: "yarn/stock",
+                        element: <StockStaus/>
+                    },
                 ]
             }
         ]
