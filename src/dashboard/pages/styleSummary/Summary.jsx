@@ -730,28 +730,7 @@ export default function Summary() {
                 >
                     <thead className="sticky top-0 z-30 text-sm text-body">
                         
-                        {/* ── Totals Row (Above Main Header) ── */}
-                        <tr>
-                            {COLUMNS.map((col, index) => {
-                                const totalKey = TOTALS_MAPPING[index];
-                                const totalValue = totalKey ? deliveryTypeTotals[totalKey] : null;
-                                
-                                return (
-                                    <th
-                                        key={`total-${index}`}
-                                        scope="col"
-                                        className="p-3 font-bold text-blue-800 text-center border-black border border-r whitespace-nowrap"
-                                        style={getTotalStyle(index)}
-                                    >
-                                        {totalValue !== null && totalValue !== undefined ? (
-                                            Number(totalValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                                        ) : (
-                                            ""
-                                        )}
-                                    </th>
-                                );
-                            })}
-                        </tr>
+                       
 
                         {/* ── Main Header Row ── */}
                         <tr>
