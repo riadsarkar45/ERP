@@ -2,7 +2,6 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen, PencilOff } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
-import useAxiosPublic from "../../../hooks/Axios";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetchData } from "../../../hooks/fetch";
 import * as XLSX from "xlsx";
@@ -50,6 +49,23 @@ const FROZEN_LEFTS = FROZEN_WIDTHS.reduce((acc, width, idx) => {
     acc.push(idx === 0 ? 0 : acc[idx - 1] + FROZEN_WIDTHS[idx - 1]);
     return acc;
 }, []);
+
+// ── Totals Mapping (Column Index -> Backend Key) ─────────────────────────────
+const TOTALS_MAPPING = {
+    16: "YarnDelivery",
+    18: "YarnDeliveryForYarnDye",
+    21: "GreyFabricReceived",
+    22: "YarnReturn",
+    24: "GreyDelivery",
+    25: "GreyReturn",
+    26: "GreyReceived",
+    27: "FinishReceived",
+    29: "SentForAop",
+    30: "ReceivedFromAop",
+    33: "SentForReprocess",
+    34: "ReturnFromAop",
+    35: "ReceivedFromReprocess",
+};
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 const getBreakdownValue = (item, key) => {
@@ -107,7 +123,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 position: "fixed",
                 zIndex: 9999,
                 background: "#fff",
-                border: "1px solid #000307",
+                border: "1px solid #000000",
                 borderRadius: 6,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                 minWidth: 220,
@@ -115,7 +131,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
             }}
             className="filter-dropdown"
         >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-black bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide truncate">{colLabel}</span>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0">
                     <X size={13} />
@@ -197,7 +213,6 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
 
 // ── Summary Page ─────────────────────────────────────────────────────────────
 export default function Summary() {
-    // const axiosPublic = useAxiosPublic();
     const [rawData, setRawData] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
@@ -223,9 +238,10 @@ export default function Summary() {
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
     const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
-    
+
     const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
+    const [deliveryTypeTotals, setDeliveryTypeTotals] = useState({})
 
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
@@ -236,14 +252,16 @@ export default function Summary() {
             const params = { page: 1, limit: 10000 };
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
+            const devTypeTotals = await axiosPrivate.get('/api/delivery/type/total');
             if (res.data && res.data.data) setRawData(res.data.data);
+            if (devTypeTotals.data) setDeliveryTypeTotals(devTypeTotals.data)
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
             setIsLoading(prev => ({ ...prev, refreshLoading: false }));
         }
     }, [activeFilters, axiosPrivate]);
-
+    
     useEffect(() => {
         fetchFilteredData();
     }, [fetchFilteredData]);
@@ -253,11 +271,11 @@ export default function Summary() {
     }, [activeFilters]);
 
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
-    
+
     useEffect(() => {
         try {
             sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(activeFilters));
-        } catch (e){
+        } catch (e) {
             console.log(e);
         }
     }, [activeFilters]);
@@ -312,7 +330,6 @@ export default function Summary() {
             const otherFilters = { ...activeFilters };
             delete otherFilters[col.key];
             const params = Object.keys(otherFilters).length > 0 ? { filters: JSON.stringify(otherFilters) } : {};
-
             const res = await axiosPrivate.get(`/api/glance/filter-options/${col.key}`, { params });
             setFilterOptions(res.data?.data || []);
         } catch (err) {
@@ -356,10 +373,10 @@ export default function Summary() {
             style={{
                 backgroundColor: colIndex >= 6 ? '#fbf8f8' : '#f9f3f3',
                 borderRight: '1px solid #000000',
-                borderBottom: '1px solid #000206',
+                borderBottom: '1px solid #000000',
             }}
         >
-            <div className="divide-y divide-red-600">
+            <div className="divide-y divide-black">
                 {compBreakdown.map((cb, j) => {
                     if (cb?.status) return <div key={j} className="px-3 py-2 whitespace-nowrap text-black italic">_</div>;
                     const value = cb?.[key];
@@ -370,6 +387,7 @@ export default function Summary() {
     );
 
     const getColBg = (index) => index >= 6 ? '#fefeff' : '#ffffff';
+    
     const getFrozenStyle = (index) => ({
         position: 'sticky',
         left: `${FROZEN_LEFTS[index]}px`,
@@ -383,9 +401,28 @@ export default function Summary() {
         boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : 'none',
         overflow: index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
     });
+
+    const getTotalStyle = (index) => {
+        const isFrozen = index < FROZEN_COUNT;
+        return {
+            position: 'sticky',
+            top: 0,
+            left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
+            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            zIndex: isFrozen ? 50 : 40,
+            backgroundColor: isFrozen ? '#dbeafe' : '#eff6ff',
+            borderRight: '1px solid #000000',
+            borderBottom: '1px solid #000000',
+            boxShadow: isFrozen && index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.15)' : 'none',
+            overflow: isFrozen && index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
+        };
+    };
+
     const getCellStyle = (index) => ({
         backgroundColor: getColBg(index),
-        borderRight: '1px solid #000001',
+        borderRight: '1px solid #000000',
         borderBottom: '1px solid #000000',
     });
 
@@ -419,13 +456,11 @@ export default function Summary() {
         }));
     };
 
-    // Submits parallel requests to your EXACT existing backend controller
     const handleSubmit = async () => {
         setIsLoading(prev => ({ ...prev, loadAfterUpdate: true }));
-        
-        // Extract only the cells that were actually modified
+
         const cellsToSave = Object.values(editingCells).filter(c => c.isDirty);
-        
+
         if (cellsToSave.length === 0) {
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
             setEditingCells({});
@@ -433,24 +468,21 @@ export default function Summary() {
         }
 
         try {
-            // Fire parallel requests to your EXISTING backend endpoint
             const promises = cellsToSave.map(async (cell) => {
                 const updatedData = {
                     [cell.fieldName]: cell.value,
                     changedTable: cell.changedTable,
                     rowId: cell.rowId
                 };
-                // Using rowId as the URL param, exactly matching your original code
                 return axiosPrivate.patch(`/api/update-style-req/${cell.rowId}`, updatedData);
             });
 
-            // Wait for all of them to finish
             const results = await Promise.all(promises);
             const allSuccess = results.every(res => res.data?.type === "success");
 
             if (allSuccess) {
                 await fetchFilteredData();
-                setEditingCells({}); // Clear state on success
+                setEditingCells({});
             }
         } catch (err) {
             console.error("Failed to save updates:", err);
@@ -582,7 +614,6 @@ export default function Summary() {
                 }
 
                 {
-                    // Show Save button if ANY cell has been modified
                     Object.values(editingCells).some(c => c.isDirty) && (
                         isLoading.loadAfterUpdate ?
                             <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
@@ -593,9 +624,8 @@ export default function Summary() {
                             </button>
                     )
                 }
-                
+
                 {
-                    // Added Cancel button to clear edits without saving
                     Object.keys(editingCells).length > 0 && !isLoading.loadAfterUpdate && (
                         <button onClick={() => setEditingCells({})} className="flex items-center gap-2 px-6 py-2.5 bg-red-200 text-red-700 font-medium rounded-md hover:bg-red-300 transition-colors border border-red-300">
                             <PencilOff size={18} /> Cancel
@@ -644,7 +674,7 @@ export default function Summary() {
                                 return (
                                     <span
                                         key={colKey}
-                                        className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium"
+                                        className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-black text-blue-700 text-xs rounded-full font-medium"
                                     >
                                         {colIndex !== undefined ? COLUMNS[colIndex] : colKey}
                                         <span className="bg-blue-200 text-blue-800 rounded-full px-1 text-xs">{values.length}</span>
@@ -703,10 +733,36 @@ export default function Summary() {
                     style={{ borderCollapse: 'separate', borderSpacing: 0 }}
                 >
                     <thead className="sticky top-0 z-30 text-sm text-body">
+                        
+                        {/* ── Totals Row (Above Main Header) ── */}
+                        <tr>
+                            {COLUMNS.map((col, index) => {
+                                const totalKey = TOTALS_MAPPING[index];
+                                const totalValue = totalKey ? deliveryTypeTotals[totalKey] : null;
+                                
+                                return (
+                                    <th
+                                        key={`total-${index}`}
+                                        scope="col"
+                                        className="p-3 font-bold text-blue-800 text-center border-black border border-r whitespace-nowrap"
+                                        style={getTotalStyle(index)}
+                                    >
+                                        {totalValue !== null && totalValue !== undefined ? (
+                                            Number(totalValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                        ) : (
+                                            ""
+                                        )}
+                                    </th>
+                                );
+                            })}
+                        </tr>
+
+                        {/* ── Main Header Row ── */}
                         <tr>
                             {COLUMNS.map((col, index) => {
                                 const isFilterable = index in FILTERABLE_COLS;
                                 const hasFilter = isFilterable && !!activeFilters[FILTERABLE_COLS[index].key];
+                                const isFrozen = index < FROZEN_COUNT;
 
                                 return (
                                     <th
@@ -715,14 +771,15 @@ export default function Summary() {
                                         className="px-3 py-3 font-medium whitespace-nowrap"
                                         style={{
                                             backgroundColor: index >= 6 ? '#c7d2fe' : '#e5e7eb',
-                                            position: index < FROZEN_COUNT ? 'sticky' : 'relative',
-                                            left: index < FROZEN_COUNT ? `${FROZEN_LEFTS[index]}px` : 'auto',
-                                            width: index < FROZEN_COUNT ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-                                            minWidth: index < FROZEN_COUNT ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-                                            maxWidth: index < FROZEN_COUNT ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-                                            zIndex: index < FROZEN_COUNT ? 40 : 30,
-                                            borderRight: '1px solid #000409',
-                                            borderBottom: '2px solid #00060e',
+                                            position: 'sticky',
+                                            top: '44px',
+                                            left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
+                                            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+                                            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+                                            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+                                            zIndex: isFrozen ? 45 : 35,
+                                            borderRight: '1px solid #000000',
+                                            borderBottom: '2px solid #000000',
                                             boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.15)' : 'none',
                                             overflow: index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
                                         }}
@@ -1212,7 +1269,7 @@ export default function Summary() {
             </div>
 
             {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 border-gray-200 rounded-b-base shadow-xs">
+                <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 border-black rounded-b-base shadow-xs">
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm text-gray-700">

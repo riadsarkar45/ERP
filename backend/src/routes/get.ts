@@ -21,6 +21,7 @@ import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 import { hourlyChallanReport } from "../controllers/users/hrlyChallanReport";
 import { hourlyDeliveryMovement } from "../controllers/users/hrlyDeliveryReport";
 import { factoriesWithTotalWorkOrderQty } from "../controllers/orders/factoriesWorkOrderTotal";
+import { getDeliveryTotals } from "../controllers/deliveries/allDeliveryTotals";
 
 const getRouters = express.Router();
 
@@ -81,5 +82,7 @@ getRouters.get("/reports/hourly-challan", responseTimeMonitor, hourlyChallanRepo
 getRouters.get("/reports/daily-delivery", responseTimeMonitor, hourlyDeliveryMovement);
 
 getRouters.get("/factories/workOrder/totals/:jobNo/:orderType", responseTimeMonitor, factoriesWithTotalWorkOrderQty);
+
+getRouters.get("/delivery/type/total/:orderType", responseTimeMonitor, getDeliveryTotals);
 
 export default getRouters;

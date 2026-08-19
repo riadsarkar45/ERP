@@ -270,11 +270,6 @@ const GlanceReport = () => {
                 )}
             </div>
 
-            {/* {
-                <MISGlanceReport
-                    isLoading={isLoading}
-                />
-            } */}
 
             {/* ERP Table */}
             <div style={{ border: `2px solid ${BORDER_COLOR}`, background: "#fff", borderRadius: "4px" }}>

@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 import { AuthContext } from "../auth/AuthContext";
+import TotalSummary from "../../components/deliveryTotalsSummary/TotalSummary";
 
 const AVATAR_STYLES = [
     "bg-blue-50 text-blue-700",
@@ -408,6 +409,11 @@ const Home = () => {
     return (
         <DashboardLayout title="Dashboard">
             <div className="p-6">
+                <TotalSummary 
+                    bgColor={"bg-white"}
+                    color={"text-black"}
+                    height={""}
+                />
                 {
                     user?.userRole === "SUPER ADMIN" && <HourlyChallanBoard payload={challan} loading={challanLoading} />
                 }
