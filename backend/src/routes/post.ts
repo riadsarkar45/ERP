@@ -19,7 +19,7 @@ router.post("/create-job", responseTimeMonitor, authenticate, createNewJob)
 
 router.post("/create-new-audit", responseTimeMonitor, createNewAudit)
 
-router.post("/new-style-requirements", responseTimeMonitor, createNewStyleRequirement)
+router.post("/new-style-requirements", responseTimeMonitor, authenticate, createNewStyleRequirement)
 
 router.post("/cutting-production", responseTimeMonitor, cuttingDataUpdate)
 
