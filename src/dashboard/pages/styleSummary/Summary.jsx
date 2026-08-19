@@ -241,8 +241,6 @@ export default function Summary() {
 
     const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
-    const [deliveryTypeTotals, setDeliveryTypeTotals] = useState({})
-
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
@@ -252,9 +250,7 @@ export default function Summary() {
             const params = { page: 1, limit: 10000 };
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
-            const devTypeTotals = await axiosPrivate.get('/api/delivery/type/total');
             if (res.data && res.data.data) setRawData(res.data.data);
-            if (devTypeTotals.data) setDeliveryTypeTotals(devTypeTotals.data)
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
