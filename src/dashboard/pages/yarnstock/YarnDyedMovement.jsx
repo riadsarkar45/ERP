@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 const YarnDyedMovement = () => {
-    // --- 1. Sample Data (Replace with your actual API data) ---
+    // --- 1. Sample Data ---
     const [allData] = useState([
         {
             id: 1, date: '2026-08-01', challanNo: 'CH-001', piNo: 'PI-1001', lcNumber: 'LC-5001',
@@ -49,26 +49,65 @@ const YarnDyedMovement = () => {
     const [searchInput, setSearchInput] = useState('');
     const [activeSearch, setActiveSearch] = useState('');
     const [selectedMonth, setSelectedMonth] = useState('all');
+    
+    // Excel-like filter state: { columnName: ['Value1', 'Value2'] }
+    const [columnFilters, setColumnFilters] = useState({});
+    const [openFilterCol, setOpenFilterCol] = useState(null);
+    const [filterSearch, setFilterSearch] = useState('');
+    const [tempFilterValues, setTempFilterValues] = useState([]);
 
-    // --- 3. Available Months for Filter ---
+    // --- 3. Column Definitions ---
+    const columns = [
+        { key: 'date', label: 'Date', align: 'left', minWidth: 'min-w-[80px]' },
+        { key: 'challanNo', label: 'Challan No.', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'piNo', label: 'PI No', align: 'left', minWidth: 'min-w-[80px]' },
+        { key: 'lcNumber', label: 'LC Number', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'supplierName', label: 'Supplier Name', align: 'left', minWidth: 'min-w-[150px]' },
+        { key: 'jobNumber', label: 'Job Number', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'color', label: 'Color', align: 'left', minWidth: 'min-w-[80px]' },
+        { key: 'fabricComposition', label: 'Fabric Composition', align: 'left', minWidth: 'min-w-[150px]' },
+        { key: 'fabricWidth', label: 'Fabric Width', align: 'left', minWidth: 'min-w-[60px]' },
+        { key: 'yarnCount', label: 'Yarn Count', align: 'left', minWidth: 'min-w-[60px]' },
+        { key: 'composition', label: 'Composition', align: 'left', minWidth: 'min-w-[150px]' },
+        { key: 'lot', label: 'Lot', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'yarnDeliveryQty', label: 'Yarn Delivery Qty (Y/D)', align: 'right', minWidth: 'min-w-[120px]' },
+        { key: 'yarnReturnQty', label: 'Yarn Return Qty (Y/D Factory)', align: 'right', minWidth: 'min-w-[140px]' },
+        { key: 'yarnReceivedQtyGrey', label: 'Yarn Received Qty (Grey)', align: 'right', minWidth: 'min-w-[140px]' },
+        { key: 'yarnReceivedQtyFinish', label: 'Yarn Received Qty (Finish)', align: 'right', minWidth: 'min-w-[140px]' },
+        { key: 'from', label: 'From', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'to', label: 'To', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'remarks', label: 'Remarks', align: 'left', minWidth: 'min-w-[150px]' },
+    ];
+
+    // --- 4. Precompute Unique Values for Each Column (For Excel Dropdown) ---
+    const columnUniqueValues = useMemo(() => {
+        const uniqueMap = {};
+        columns.forEach(col => {
+            const vals = allData.map(item => String(item[col.key] ?? '').trim());
+            uniqueMap[col.key] = [...new Set(vals)].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        });
+        return uniqueMap;
+    }, [allData]);
+
+    // --- 5. Available Months for Filter ---
     const availableMonths = useMemo(() => {
         const months = new Set();
         allData.forEach(item => {
-            const monthYear = item.date.substring(0, 7); // 'YYYY-MM'
+            const monthYear = item.date.substring(0, 7);
             months.add(monthYear);
         });
         return Array.from(months).sort().reverse();
     }, [allData]);
 
-    // --- 4. Filtered Data (Search + Month Filter) ---
+    // --- 6. Filtered Data Logic ---
     const filteredData = useMemo(() => {
         return allData.filter(item => {
             // Month Filter
             const matchesMonth = selectedMonth === 'all' || item.date.startsWith(selectedMonth);
             
-            // Search Filter
+            // Global Search Filter
             const searchLower = activeSearch.toLowerCase();
-            const matchesSearch = activeSearch === '' || 
+            const matchesGlobalSearch = activeSearch === '' || 
                 item.challanNo.toLowerCase().includes(searchLower) ||
                 item.piNo.toLowerCase().includes(searchLower) ||
                 item.supplierName.toLowerCase().includes(searchLower) ||
@@ -76,11 +115,20 @@ const YarnDyedMovement = () => {
                 item.color.toLowerCase().includes(searchLower) ||
                 item.lot.toLowerCase().includes(searchLower);
 
-            return matchesMonth && matchesSearch;
-        });
-    }, [allData, selectedMonth, activeSearch]);
+            // Excel-like Column Filters
+            const matchesColumnFilters = Object.keys(columnFilters).every(key => {
+                const filterValues = columnFilters[key];
+                if (!filterValues) return true; // undefined means no filter applied
+                
+                const itemValue = String(item[key] ?? '').trim();
+                return filterValues.includes(itemValue);
+            });
 
-    // --- 5. Calculate Totals ---
+            return matchesMonth && matchesGlobalSearch && matchesColumnFilters;
+        });
+    }, [allData, selectedMonth, activeSearch, columnFilters]);
+
+    // --- 7. Calculate Totals ---
     const totals = useMemo(() => {
         return filteredData.reduce((acc, item) => ({
             delivery: acc.delivery + item.yarnDeliveryQty,
@@ -90,7 +138,7 @@ const YarnDyedMovement = () => {
         }), { delivery: 0, return: 0, grey: 0, finish: 0 });
     }, [filteredData]);
 
-    // --- 6. Helpers ---
+    // --- 8. Helpers ---
     const fmt = (num) => num.toFixed(2);
     const fmtDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const fmtMonthLabel = (monthStr) => {
@@ -99,14 +147,29 @@ const YarnDyedMovement = () => {
     };
 
     const handleSearch = () => setActiveSearch(searchInput);
-    const handleClear = () => { setSearchInput(''); setActiveSearch(''); };
+    
+    const handleClearAll = () => { 
+        setSearchInput(''); 
+        setActiveSearch(''); 
+        setColumnFilters({});
+        setSelectedMonth('all');
+    };
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (openFilterCol && !event.target.closest('.excel-filter-dropdown')) {
+                setOpenFilterCol(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [openFilterCol]);
 
     return (
         <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
             
-            {/* ==========================================
-                SECTION 1: SUMMARY CARDS (Above Header) 
-               ========================================== */}
+            {/* SECTION 1: SUMMARY CARDS */}
             <div className="mb-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
                     <span className="w-1 h-5 bg-blue-600 rounded-full inline-block"></span>
@@ -132,15 +195,13 @@ const YarnDyedMovement = () => {
                 </div>
             </div>
 
-            {/* ==========================================
-                SECTION 2: SEARCH & FILTER (Action Bar)
-               ========================================== */}
+            {/* SECTION 2: SEARCH & FILTER (Action Bar) */}
             <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-3 flex-1">
                     <div className="relative flex-1 max-w-md">
                         <input
                             type="text"
-                            placeholder="Search Challan, PI, Supplier, Job, Color..."
+                            placeholder="Global Search: Challan, PI, Supplier, Job, Color..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -150,18 +211,13 @@ const YarnDyedMovement = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </div>
-                    <button 
-                        onClick={handleSearch}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
-                    >
+                    <button onClick={handleSearch} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                         Search
                     </button>
-                    <button 
-                        onClick={handleClear}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors border border-gray-300"
-                    >
-                        Clear
+                    <button onClick={handleClearAll} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors border border-gray-300 flex items-center gap-2">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        Clear All
                     </button>
                 </div>
 
@@ -183,47 +239,139 @@ const YarnDyedMovement = () => {
                 </div>
             </div>
 
-            {/* ==========================================
-                SECTION 3: DATA TABLE
-               ========================================== */}
+            {/* SECTION 3: DATA TABLE */}
             <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto max-h-[calc(100vh-350px)]">
                     <table className="w-full border-collapse text-sm">
                         
-                        {/* TABLE HEADER */}
+                        {/* TABLE HEADER with Excel-like Dropdown Filters */}
                         <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
                             <tr>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Date</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Challan No.</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">PI No</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">LC Number</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Supplier Name</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Job Number</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Color</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Fabric Composition</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Fabric Width</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Yarn Count</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Composition</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Lot</th>
-                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Yarn Delivery Qty (Y/D)</th>
-                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Yarn Return Qty (Y/D Factory)</th>
-                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Yarn Received Qty (Grey)</th>
-                                <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Yarn Received Qty (Finish)</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">From</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">To</th>
-                                <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase border border-gray-300 whitespace-nowrap">Remarks</th>
-                            </tr>
-                            
-                            {/* HEADER TOTAL ROW */}
-                            <tr className="bg-blue-50">
-                                <td colSpan="12" className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 uppercase tracking-wider">
-                                    Header Total:
-                                </td>
-                                <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.delivery)}</td>
-                                <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.return)}</td>
-                                <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.grey)}</td>
-                                <td className="px-3 py-2 text-right text-xs font-bold text-blue-800 border border-gray-300 font-mono">{fmt(totals.finish)}</td>
-                                <td colSpan="3" className="px-3 py-2 border border-gray-300 bg-blue-50"></td>
+                                {columns.map(col => {
+                                    const uniqueValues = columnUniqueValues[col.key];
+                                    const hasFilter = columnFilters[col.key] && columnFilters[col.key].length > 0;
+
+                                    return (
+                                        <th key={col.key} className="px-2 py-2 text-xs font-bold text-gray-700 uppercase border border-gray-300 bg-gray-100 relative">
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : 'justify-start'}`}>
+                                                    <span className="whitespace-nowrap">{col.label}</span>
+                                                    
+                                                    {/* Filter Toggle Button */}
+                                                    <div className="relative excel-filter-dropdown">
+                                                        <button 
+                                                            onClick={() => {
+                                                                const isOpen = openFilterCol === col.key;
+                                                                setOpenFilterCol(isOpen ? null : col.key);
+                                                                setFilterSearch('');
+                                                                const current = columnFilters[col.key];
+                                                                // If opening, pre-select current filters, or all if none
+                                                                setTempFilterValues(current && current.length > 0 ? [...current] : [...uniqueValues]);
+                                                            }}
+                                                            className="p-0.5 rounded hover:bg-gray-200 transition-colors flex items-center"
+                                                            title="Filter"
+                                                        >
+                                                            <svg className={`h-3.5 w-3.5 ${hasFilter ? 'text-blue-600' : 'text-gray-500'}`} fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </button>
+
+                                                        {/* DROPDOWN MENU */}
+                                                        {openFilterCol === col.key && (
+                                                            <div className="absolute right-0 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-xl z-50 text-left excel-filter-dropdown">
+                                                                <div className="p-2 border-b border-gray-200 bg-gray-50 rounded-t-md">
+                                                                    <input 
+                                                                        type="text" 
+                                                                        placeholder="Search" 
+                                                                        value={filterSearch}
+                                                                        onChange={(e) => setFilterSearch(e.target.value)}
+                                                                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    />
+                                                                </div>
+                                                                
+                                                                <div className="max-h-60 overflow-y-auto p-2 custom-scrollbar">
+                                                                    <label className="flex items-center gap-2 p-1.5 hover:bg-blue-50 rounded cursor-pointer border-b border-gray-100 mb-1">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={tempFilterValues.length === uniqueValues.length}
+                                                                            onChange={() => {
+                                                                                const allSelected = tempFilterValues.length === uniqueValues.length;
+                                                                                setTempFilterValues(allSelected ? [] : [...uniqueValues]);
+                                                                            }}
+                                                                            className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                                                                        />
+                                                                        <span className="text-xs font-semibold text-gray-700">(Select All)</span>
+                                                                    </label>
+                                                                    {uniqueValues
+                                                                        .filter(val => val.toLowerCase().includes(filterSearch.toLowerCase()))
+                                                                        .map(val => (
+                                                                            <label key={val} className="flex items-center gap-2 p-1.5 hover:bg-blue-50 rounded cursor-pointer">
+                                                                                <input 
+                                                                                    type="checkbox" 
+                                                                                    checked={tempFilterValues.includes(val)}
+                                                                                    onChange={() => {
+                                                                                        setTempFilterValues(prev => 
+                                                                                            prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]
+                                                                                        );
+                                                                                    }}
+                                                                                    className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                                                                                />
+                                                                                <span className="text-xs text-gray-700 truncate" title={val || '(Blank)'}>
+                                                                                    {val || '(Blank)'}
+                                                                                </span>
+                                                                            </label>
+                                                                        ))
+                                                                    }
+                                                                </div>
+                                                                
+                                                                <div className="p-2 border-t border-gray-200 flex justify-between items-center bg-gray-50 rounded-b-md">
+                                                                    <button 
+                                                                        onClick={() => setTempFilterValues([])}
+                                                                        className="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                                    >
+                                                                        Clear
+                                                                    </button>
+                                                                    <div className="flex gap-2">
+                                                                        <button 
+                                                                            onClick={() => setOpenFilterCol(null)} 
+                                                                            className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 transition-colors"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => {
+                                                                                if (tempFilterValues.length === 0) {
+                                                                                    // Explicitly show nothing
+                                                                                    setColumnFilters(prev => ({ ...prev, [col.key]: [] }));
+                                                                                } else if (tempFilterValues.length === uniqueValues.length) {
+                                                                                    // All selected, remove filter
+                                                                                    const newFilters = { ...columnFilters };
+                                                                                    delete newFilters[col.key];
+                                                                                    setColumnFilters(newFilters);
+                                                                                } else {
+                                                                                    // Apply specific selection
+                                                                                    setColumnFilters(prev => ({
+                                                                                        ...prev,
+                                                                                        [col.key]: tempFilterValues
+                                                                                    }));
+                                                                                }
+                                                                                setOpenFilterCol(null);
+                                                                            }} 
+                                                                            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors shadow-sm"
+                                                                        >
+                                                                            OK
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </th>
+                                    );
+                                })}
                             </tr>
                         </thead>
 
@@ -232,28 +380,17 @@ const YarnDyedMovement = () => {
                             {filteredData.length > 0 ? (
                                 filteredData.map((item, index) => (
                                     <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 whitespace-nowrap font-medium">{fmtDate(item.date)}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.challanNo}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[80px]">{item.piNo}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.lcNumber}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[150px]">{item.supplierName}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.jobNumber}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[80px]">{item.color}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[150px]">{item.fabricComposition}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 whitespace-nowrap">{item.fabricWidth}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 whitespace-nowrap">{item.yarnCount}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[150px]">{item.composition}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.lot}</td>
-                                        
-                                        {/* Numeric Columns (Right Aligned, Fixed 2 decimals, No Wrap) */}
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnDeliveryQty)}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnQty)}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedQtyGrey)}</td>
-                                        <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedQtyFinish)}</td>
-                                        
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.from}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[100px]">{item.to}</td>
-                                        <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words min-w-[150px]">{item.remarks}</td>
+                                        {columns.map(col => {
+                                            const isNumeric = col.align === 'right';
+                                            const value = item[col.key];
+                                            const displayValue = col.key === 'date' ? fmtDate(value) : (isNumeric ? fmt(value) : value);
+                                            
+                                            return (
+                                                <td key={col.key} className={`px-3 py-2 text-gray-900 border border-gray-300 ${isNumeric ? 'text-right whitespace-nowrap font-mono tabular-nums' : `break-words ${col.minWidth}`}`}>
+                                                    {displayValue}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
                                 ))
                             ) : (
@@ -275,7 +412,9 @@ const YarnDyedMovement = () => {
                                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.return)}</td>
                                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.grey)}</td>
                                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.finish)}</td>
-                                <td colSpan="3" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
+                                <td className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
+                                <td className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
+                                <td className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
                             </tr>
                         </tfoot>
                     </table>
