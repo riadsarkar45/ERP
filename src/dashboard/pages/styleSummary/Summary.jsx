@@ -241,6 +241,7 @@ export default function Summary() {
 
     const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
+
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
@@ -730,7 +731,6 @@ export default function Summary() {
                 >
                     <thead className="sticky top-0 z-30 text-sm text-body">
                         
-                       
 
                         {/* ── Main Header Row ── */}
                         <tr>
@@ -747,7 +747,6 @@ export default function Summary() {
                                         style={{
                                             backgroundColor: index >= 6 ? '#c7d2fe' : '#e5e7eb',
                                             position: 'sticky',
-                                            top: '44px',
                                             left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
                                             width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
                                             minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
