@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { RefreshCcw, WrapText, AlignJustify, ListFilter, X, Edit3, Save, XCircle, CloudCog } from 'lucide-react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
@@ -70,7 +70,9 @@ const Reconciliation = () => {
 
     const YARN_TABLE_HEADERS = [
         "", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "MANUFACTURING UNIT",
-        "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY", "YARN RETURN", "GREY RECEIVED",
+        "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY",
+        "SHORT & EXCESS", 
+        "YARN RETURN", "GREY RECEIVED",
         "SHORT & EXCESS", "GREY DELIVERY FOR DYEING", "GREY RET. RCVD FROM DYEING", "GREY RECEIVED FROM DYEING",
         "FINISH RECEIVED FROM DYEING", "PROCESS LOSS %", "SHORT & EXCESS", "SENT FOR AOP", "RETURN RECEIVED FROM AOP",
         "GREY WEIGHT RECEIVED FROM AOP", "FINISH RECEIVED FROM AOP", "PROCESS LOSS", "SHORT & EXCESS",
@@ -86,6 +88,7 @@ const Reconciliation = () => {
         1: { key: "jobNo", label: "JOB NO" },
         2: { key: "color", label: "COLOR" },
         3: { key: "composition", label: "COMPOSITION" },
+        5: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
     };
 
     const TRAILING_FIELDS = [
@@ -108,7 +111,7 @@ const Reconciliation = () => {
     const FORMULA_KEYS_TO_PERSIST = ["cadConsumption", "plannedCuttingQty", "plannedLeftOverQty"];
 
     const STICKY_EDITABLE_FIELDS = [
-        { key: "manufacturingUnite", label: "MANUFACTURING UNIT" } // Aligned with Prisma Schema
+        { key: "manufacturingUnite", label: "MANUFACTURING UNIT" }
     ];
 
     const fetchFilteredData = useCallback(async () => {
@@ -202,7 +205,6 @@ const Reconciliation = () => {
                 }
             });
             STICKY_EDITABLE_FIELDS.forEach(field => {
-                // Reads from the nested reconciliation object correctly
                 const savedVal = reconciliation[field.key];
                 initialValues[`${jobIndex}-${i}-${field.key}`] = savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
             });
@@ -238,7 +240,6 @@ const Reconciliation = () => {
             case "cadConsumption": return get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
             case "plannedCuttingQty": {
                 const cadConsumption = get("orderQty") ? get("finishRequiredQty") / get("orderQty") : 0;
-
                 return cadConsumption > 0 && get("fabricIssueCuttingDept") ? get("fabricIssueCuttingDept") / cadConsumption : 0;
             }
             case "cuttingShortExcess": return get("actualCuttingQty") - get("orderQty");
@@ -391,6 +392,97 @@ const Reconciliation = () => {
     const isLoading = isDataLoading;
     const activeFilterEntries = Object.entries(activeFilters);
 
+    const footerTotals = useMemo(() => {
+        const totals = {
+            orderQty: 0,
+            finishRequiredQty: 0,
+            yarnRequiredQty: 0,
+            knitYarnDelivery: 0,
+            yarnShortExcessReq: 0,
+            yarnShortExcessReturn: 0,
+            knitYarnReturn: 0,
+            knitGreyReceived: 0,
+            knitShortExcess: 0,
+            dyeGreyDelivery: 0,
+            dyeGreyReturn: 0,
+            dyeGreyReceived: 0,
+            dyeFinishReceived: 0,
+            dyeShortExcess: 0,
+            aopSent: 0,
+            aopReceived: 0,
+            aopGreyReceived: 0,
+            aopFinishReceived: 0,
+            aopShortExcess: 0,
+        };
+        TRAILING_FIELDS.forEach(f => { totals[f.key] = 0; });
+
+        reportData.forEach((job, jobIndex) => {
+            const comps = job?.rows || [];
+            const compBreakDown = job.compBreakdown || [];
+            const subRowCount = getSubRowCount(job);
+
+            for (let i = 0; i < subRowCount; i++) {
+                const com = comps[i];
+                const comp = compBreakDown[i];
+                if (!com && !comp) continue;
+
+                const finishQty = Number(com?.finishRequiredQty) || 0;
+                const processLoss = Number(job.processLoss) || 0;
+                const yarnRequiredQty = finishQty * (1 + processLoss / 100);
+                const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) || 0;
+                const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
+                const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return) || 0;
+                const knitShortExcess = knitGreyReceived + knitYarnReturn - knitYarnDelivery;
+                const yarnShortExcessReq = knitYarnDelivery - yarnRequiredQty;
+                const yarnShortExcessReturn = knitYarnReturn + knitGreyReceived - knitYarnDelivery;
+                const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
+                const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
+                const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
+                const dyeGreyReturn = Number(comp?.dyeingOrder_Grey_Return) || 0;
+                const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
+                const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
+                const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop) || 0;
+                const aopSent = Number(comp?.aopOrder_Sent_for_AOP) || 0;
+                const aopReceived = Number(comp?.aopOrder_Return_From_Aop) || 0;
+                const aopShortExcess = aopReceived - aopSent;
+
+                totals.orderQty += Number(com?.orderQty) || 0;
+                totals.finishRequiredQty += finishQty;
+                totals.yarnRequiredQty += yarnRequiredQty;
+                totals.knitYarnDelivery += knitYarnDelivery;
+                totals.yarnShortExcessReq += yarnShortExcessReq;
+                totals.yarnShortExcessReturn += yarnShortExcessReturn;
+                totals.knitYarnReturn += knitYarnReturn;
+                totals.knitGreyReceived += knitGreyReceived;
+                totals.knitShortExcess += knitShortExcess;
+                totals.dyeGreyDelivery += dyeGreyDelivery;
+                totals.dyeGreyReturn += dyeGreyReturn;
+                totals.dyeGreyReceived += dyeGreyReceived;
+                totals.dyeFinishReceived += dyeFinishReceived;
+                totals.dyeShortExcess += dyeShortExcess;
+                totals.aopSent += aopSent;
+                totals.aopReceived += aopReceived;
+                totals.aopGreyReceived += aopGreyReceived;
+                totals.aopFinishReceived += aopFinishReceived;
+                totals.aopShortExcess += aopShortExcess;
+
+                TRAILING_FIELDS.forEach(field => {
+                    if (field.type === "FORMULA") {
+                        totals[field.key] += calculateFormula(jobIndex, i, field.key);
+                    } else {
+                        const raw = editValues[`${jobIndex}-${i}-${field.key}`];
+                        const num = raw !== undefined
+                            ? Number(raw)
+                            : Number(com?.reconciliation?.[field.key]);
+                        totals[field.key] += isNaN(num) ? 0 : num;
+                    }
+                });
+            }
+        });
+
+        return totals;
+    }, [reportData, editValues, editingJobIndex]);
+
     return (
         <div className="min-h-screen w-full p-1 md:p-4 font-sans">
             <div className="mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -451,6 +543,7 @@ const Reconciliation = () => {
                                     const isSticky = I <= LAST_STICKY_INDEX;
                                     const isLastSticky = I === LAST_STICKY_INDEX;
                                     const hasRightBorder = I === 1 || isLastSticky;
+                                    const showFilterIcon = I !== 0;
 
                                     return (
                                         <th
@@ -478,6 +571,10 @@ const Reconciliation = () => {
                                                     <button type="button" onClick={() => openFilterDropdown(I)} className={`p-1 rounded transition-colors ${openFilterCol === I ? "bg-indigo-100 text-indigo-700" : hasActiveFilter ? "text-indigo-600" : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"}`}>
                                                         <ListFilter size={12} />
                                                     </button>
+                                                )}
+
+                                                {!isFilterable && showFilterIcon && (
+                                                    <ListFilter size={12} className="text-slate-300" />
                                                 )}
 
                                                 {openFilterCol === I && isFilterable && (
@@ -544,15 +641,17 @@ const Reconciliation = () => {
                                     const finishQty = Number(com?.finishRequiredQty).toFixed(2) || 0;
                                     const processLoss = Number(job.processLoss) || 0;
                                     const yarnRequiredQty = finishQty * (1 + processLoss / 100);
-                                    const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) ?? 0;
-                                    const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received).toFixed(2) || 0;
-                                    const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return).toFixed(2) || 0;
-                                    const knitShortExcess = knitGreyReceived + knitYarnReturn - knitYarnDelivery;
+                                    const knitYarnDelivery = comp?.knittingOrder_Yarn_Delivery || 0;
+                                    const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
+                                    const knitYarnReturn = comp?.knittingOrder_Yarn_Return || 0;
+                                    const yarnShortExcessReq = knitYarnDelivery - yarnRequiredQty;
+                                    const knitShortExcess = knitYarnReturn + knitGreyReceived - knitYarnDelivery || 0;
+                                    const convertKnitShortExcessToNumber = knitShortExcess.toFixed(2)
                                     const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received).toFixed(2) || 0;
                                     const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received).toFixed(2) || 0;
                                     const dyeProcessLoss = dyeGreyReceived > 0 ? ((dyeGreyReceived - dyeFinishReceived) / dyeGreyReceived) * 100 : 0;
                                     const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery).toFixed(2) || 0;
-                                    const dyeShortExcess = dyeGreyDelivery - dyeGreyReceived;
+                                    const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
                                     const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) || 0;
                                     const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop).toFixed(2) || 0;
                                     const aopProcessLoss = aopGreyReceived > 0 ? ((aopGreyReceived - aopFinishReceived) / aopGreyReceived) * 100 : 0;
@@ -618,7 +717,6 @@ const Reconciliation = () => {
                                                 <div className="flex items-center justify-center h-full">{com?.orderQty ?? "-"}</div>
                                             </td>
 
-                                            {/* MANUFACTURING UNIT COLUMN */}
                                             <td className={stickyBodyClass(5)} style={stickyCellStyle(5, stickyBg, true)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
@@ -642,32 +740,36 @@ const Reconciliation = () => {
                                             <td className={cellClass} style={cellStyle}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
-                                                    ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2) : "-"}
                                             </td>
+
+                                            <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
+                                            
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.knittingOrder_Yarn_Return && !isNaN(Number(comp.knittingOrder_Yarn_Return))
-                                                    ? Number(comp.knittingOrder_Yarn_Return).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.knittingOrder_Yarn_Return).toFixed(2) : "-"}
                                             </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.knittingOrder_Grey_Fabric_Received && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received))
-                                                    ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2)                                                   : "-"}
-                                            </td>                                         
-                                            <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={knitShortExcess} /> : "-"}</td>
+                                                    ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2) : "-"}
+                                            </td>
+                                            <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>                                         
+                                            
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Grey_Delivery && !isNaN(Number(comp.dyeingOrder_Grey_Delivery))
-                                                    ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2) : "-"}
                                             </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Grey_Return && !isNaN(Number(comp.dyeingOrder_Grey_Return))
-                                                    ? Number(comp.dyeingOrder_Grey_Return).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.dyeingOrder_Grey_Return).toFixed(2) : "-"}
                                             </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Grey_Received && !isNaN(Number(comp.dyeingOrder_Grey_Received))
-                                                    ? Number(comp.dyeingOrder_Grey_Received).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.dyeingOrder_Grey_Received).toFixed(2) : "-"}
                                             </td>                                           
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Finish_Received && !isNaN(Number(comp.dyeingOrder_Finish_Received))
-                                                    ? Number(comp.dyeingOrder_Finish_Received).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.dyeingOrder_Finish_Received).toFixed(2) : "-"}
                                             </td>                                           
                                         
                                             <td className={cellClass} style={cellStyle}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
@@ -675,19 +777,19 @@ const Reconciliation = () => {
                                            
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.aopOrder_Sent_for_AOP && !isNaN(Number(comp.aopOrder_Sent_for_AOP))
-                                                    ? Number(comp.aopOrder_Sent_for_AOP).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.aopOrder_Sent_for_AOP).toFixed(2) : "-"}
                                             </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.aopOrder_Return_From_Aop && !isNaN(Number(comp.aopOrder_Return_From_Aop))
-                                                    ? Number(comp.aopOrder_Return_From_Aop).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.aopOrder_Return_From_Aop).toFixed(2) : "-"}
                                             </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.aopOrder_Received_From_Aop && !isNaN(Number(comp.aopOrder_Received_From_Aop))
-                                                    ? Number(comp.aopOrder_Received_From_Aop).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.aopOrder_Received_From_Aop).toFixed(2) : "-"}
                                             </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.aopOrder_AOP_Finish_Fabric_Rcvd && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd))
-                                                    ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2)                                                   : "-"}
+                                                    ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) : "-"}
                                             </td>
                                             
                                             <td className={cellClass} style={cellStyle}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
@@ -747,6 +849,109 @@ const Reconciliation = () => {
                                 });
                             })}
                         </tbody>
+
+                        {!isLoading && reportData.length > 0 && (
+                            <tfoot className="sticky bottom-0 z-20 bg-white">
+                                <tr>
+                                    <td className="sticky bottom-0 left-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle" style={stickyCellStyle(0, "#e2e8f0", false)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle text-xs font-extrabold uppercase tracking-wider text-slate-700" style={stickyCellStyle(1, "#e2e8f0", true)}>
+                                        Sub-Total
+                                    </td>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(2, "#e2e8f0")} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(3, "#e2e8f0")} />
+
+                                    {/* FIXED: Order Qty footer cell now has sticky bottom-0 and correct left-sticky styling */}
+                                    <td 
+                                        className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" 
+                                        style={{ ...stickyCellStyle(4, "#e2e8f0", false), borderTop: "2px solid #000000" }}
+                                    >
+                                        {footerTotals.orderQty.toFixed(2)}
+                                    </td>
+
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(5, "#e2e8f0", true)} />
+
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.finishRequiredQty.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.yarnRequiredQty.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.knitYarnDelivery.toFixed(2)}
+                                    </td>
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.yarnShortExcessReq} /></div>
+                                    </td>
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.knitYarnReturn.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.knitGreyReceived.toFixed(2)}
+                                    </td>
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.knitShortExcess} /></div>
+                                    </td>
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.dyeGreyDelivery.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.dyeGreyReturn.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.dyeGreyReceived.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.dyeFinishReceived.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }} />
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.dyeShortExcess} /></div>
+                                    </td>
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.aopSent.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.aopReceived.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.aopGreyReceived.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        {footerTotals.aopFinishReceived.toFixed(2)}
+                                    </td>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }} />
+                                    
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                        <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.aopShortExcess} /></div>
+                                    </td>
+
+                                    {TRAILING_FIELDS.map((field) => {
+                                        const isPercent = field.key.toLowerCase().includes("percent");
+                                        const isShortExcess = field.key.toLowerCase().includes("short") || field.key.toLowerCase().includes("excess");
+                                        const val = footerTotals[field.key];
+                                        
+                                        if (isShortExcess) {
+                                            return (
+                                                <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                                    <div className="flex items-center justify-center h-full"><ShortExcess value={val} /></div>
+                                                </td>
+                                            );
+                                        }
+                                        return (
+                                            <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                                {isPercent ? `${val.toFixed(1)}%` : val.toFixed(2)}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            </tfoot>
+                        )}
                     </table>
                 </div>
             </div>
