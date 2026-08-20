@@ -188,15 +188,23 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
 
                             {/* COL 11 — TOTAL YARN DELIVERY */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.YarnDelivery?.toFixed(2) || "-"}</div>)))}
+                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
+                                    const yarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0
+                                    const yarnReturn = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0
+                                    const total = yarnDelivery - yarnReturn || 0
+                                    return (
+                                        <div key={`${i}-${j}`} className={innerItem}>{total.toFixed(2)}</div>
+                                    )
+                                }))}
                             </td>
 
                             {/* COL 12 — DEL SHORT & EXCESS */}
                             <td style={plainTd(isHovered)}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const workOrderQty = Number(wrk.workOrderQty?.toFixed(2)) || 0;
-                                    const totalYarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery?.toFixed(2)) || 0;
-                                    const diff = workOrderQty - totalYarnDelivery;
+                                    const workOrderQty = Number(wrk.workOrderQty) || 0;
+                                    const totalYarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
+                                    const totalYarnReturn = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;                                    
+                                    const diff = workOrderQty - totalYarnDelivery+totalYarnReturn;
                                     const exceeded = diff?.toFixed(2) > 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
