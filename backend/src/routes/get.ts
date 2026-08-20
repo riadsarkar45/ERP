@@ -88,6 +88,6 @@ getRouters.get("/delivery/type/total/:orderType", responseTimeMonitor, getDelive
 
 getRouters.get("/total/yarn-stock", responseTimeMonitor, authenticate, yarnStock);
 
-getRouters.get("/total/yd-stock", responseTimeMonitor, authenticate, ydStock);
+getRouters.get("/total/yd-stock", responseTimeMonitor, ydStock);
 
 export default getRouters;

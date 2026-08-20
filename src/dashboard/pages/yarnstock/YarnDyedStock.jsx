@@ -26,35 +26,85 @@ const IconCheck = () => (
   </svg>
 );
 
-/* ----------------------------- Column definitions ----------------------------- */
+/* ----------------------------- Column definitions -----------------------------
+   `available: false` marks columns the /api/total/yd-stock feed does not currently
+   supply (workOrderQty, delivery/return/received quantities, fabric width). Those
+   headers are kept exactly as-is; their cells/totals render as "—" instead of a
+   fabricated number. `stock` is the one real numeric figure this endpoint returns
+   (mapped from `yarnDyedStock`).
+------------------------------------------------------------------------------- */
 const COLUMNS = [
   { key: 'jobNumber', label: 'JOB NUMBER', width: 100, type: 'text' },
   { key: 'color', label: 'COLOR', width: 90, type: 'text' },
   { key: 'fabricComposition', label: 'FABRIC COMPOSITION', width: 160, type: 'text' },
-  { key: 'fabricWidth', label: 'FABRIC WIDTH', width: 100, type: 'text' },
+  { key: 'fabricWidth', label: 'FABRIC WIDTH', width: 100, type: 'text', available: false },
   { key: 'yarnCount', label: 'YARN COUNT', width: 90, type: 'text' },
   { key: 'composition', label: 'COMPOSITION', width: 140, type: 'text' },
   { key: 'lot', label: 'LOT', width: 140, type: 'text' },
-  { key: 'workOrderQty', label: 'WORKORDER QTY', width: 120, type: 'number', numeric: true },
-  { key: 'yarnDeliveryQty', label: 'YARN DELIVERY QTY (Y/D)', width: 140, type: 'number', numeric: true },
-  { key: 'delShortExcess', label: 'DEL. SHORT & EXCESS', width: 130, type: 'number', numeric: true },
-  { key: 'yarnReturnQty', label: 'YARN RETURN QTY (Y/D FACTORY)', width: 150, type: 'number', numeric: true },
-  { key: 'yarnReceivedGrey', label: 'YARN RECEIVED QTY (GREY)', width: 150, type: 'number', numeric: true },
-  { key: 'yarnReceivedFinish', label: 'YARN RECEIVED QTY (FINISH)', width: 160, type: 'number', numeric: true },
+  { key: 'workOrderQty', label: 'WORKORDER QTY', width: 120, type: 'number', numeric: true, available: false },
+  { key: 'yarnDeliveryQty', label: 'YARN DELIVERY QTY (Y/D)', width: 140, type: 'number', numeric: true, available: false },
+  { key: 'delShortExcess', label: 'DEL. SHORT & EXCESS', width: 130, type: 'number', numeric: true, available: false },
+  { key: 'yarnReturnQty', label: 'YARN RETURN QTY (Y/D FACTORY)', width: 150, type: 'number', numeric: true, available: false },
+  { key: 'yarnReceivedGrey', label: 'YARN RECEIVED QTY (GREY)', width: 150, type: 'number', numeric: true, available: false },
+  { key: 'yarnReceivedFinish', label: 'YARN RECEIVED QTY (FINISH)', width: 160, type: 'number', numeric: true, available: false },
   { key: 'stock', label: 'STOCK', width: 90, type: 'number', numeric: true },
   { key: 'remarks', label: 'REMARKS', width: 220, type: 'text' },
 ];
 
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
 
-/* ----------------------------- Mock Data ----------------------------- */
-const BASE_DATA = [
-  { id: 1, date: '2026-08-01', jobNumber: 'JOB-2001', color: 'Navy Blue', fabricComposition: '100% Cotton Combed Long Text', fabricWidth: '58"', yarnCount: '30s', composition: '100% Cotton', lot: 'LOT-A1-Long', workOrderQty: 2000.00, yarnDeliveryQty: 1500.50, delShortExcess: -499.50, yarnReturnQty: 50.00, yarnReceivedGrey: 1450.50, yarnReceivedFinish: 1400.00, stock: 50.50, remarks: 'Regular shipment with special instructions' },
-  { id: 2, date: '2026-08-05', jobNumber: 'JOB-2002', color: 'White', fabricComposition: '80% Cotton, 20% Polyester Blend', fabricWidth: '60"', yarnCount: '40s', composition: '80% Cotton, 20% Poly', lot: 'LOT-B2', workOrderQty: 2500.00, yarnDeliveryQty: 2000.00, delShortExcess: -500.00, yarnReturnQty: 100.00, yarnReceivedGrey: 1900.00, yarnReceivedFinish: 1850.50, stock: 49.50, remarks: 'Urgent order' },
-  { id: 3, date: '2026-07-15', jobNumber: 'JOB-2003', color: 'Red', fabricComposition: '100% Polyester', fabricWidth: '56"', yarnCount: '20s', composition: '100% Polyester', lot: 'LOT-C3', workOrderQty: 3500.00, yarnDeliveryQty: 3000.75, delShortExcess: -499.25, yarnReturnQty: 150.25, yarnReceivedGrey: 2850.50, yarnReceivedFinish: 2800.00, stock: 50.50, remarks: 'Monthly batch' },
-  { id: 4, date: '2026-08-10', jobNumber: 'JOB-2004', color: 'Green', fabricComposition: '60% Cotton, 40% Linen', fabricWidth: '62"', yarnCount: '24s', composition: '60% Cotton, 40% Linen', lot: 'LOT-D4', workOrderQty: 2000.00, yarnDeliveryQty: 1800.00, delShortExcess: -200.00, yarnReturnQty: 75.00, yarnReceivedGrey: 1725.00, yarnReceivedFinish: 1700.25, stock: 24.75, remarks: 'Special order' },
-  { id: 5, date: '2026-07-22', jobNumber: 'JOB-2005', color: 'Yellow', fabricComposition: '100% Silk', fabricWidth: '54"', yarnCount: '60s', composition: '100% Silk', lot: 'LOT-E5', workOrderQty: 600.00, yarnDeliveryQty: 500.00, delShortExcess: -100.00, yarnReturnQty: 25.00, yarnReceivedGrey: 475.00, yarnReceivedFinish: 450.00, stock: 25.00, remarks: 'Premium quality' },
-];
+/* ----------------------------- API → row mapping ----------------------------- */
+const MONTH_MAP = {
+  JANUARY: 0, FEBRUARY: 1, MARCH: 2, APRIL: 3, MAY: 4, JUNE: 5,
+  JULY: 6, AUGUST: 7, SEPTEMBER: 8, OCTOBER: 9, NOVEMBER: 10, DECEMBER: 11,
+};
+
+// Job numbers look like "SM25-2260 JUNE" or "SM25-SAMPLE/1014" (no month).
+// Pull a sortable month key + display label out of the job number when present.
+function parseJobMeta(jobNo) {
+  if (!jobNo) return { monthKey: null, monthLabel: null };
+  const yearMatch = jobNo.match(/SM(\d{2})/i);
+  const monthName = Object.keys(MONTH_MAP).find((m) => jobNo.toUpperCase().includes(m));
+  if (!yearMatch || !monthName) return { monthKey: null, monthLabel: null };
+  const year = 2000 + parseInt(yearMatch[1], 10);
+  const monthIndex = MONTH_MAP[monthName];
+  const monthKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+  const monthLabel = new Date(year, monthIndex).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return { monthKey, monthLabel };
+}
+
+// Maps one raw /api/total/yd-stock record into the row shape the table renders.
+function mapApiItem(item) {
+  const stockNum = parseFloat(item.yarnDyedStock);
+  const { monthKey, monthLabel } = parseJobMeta(item.jobNo);
+  const remarksParts = [
+    item.buyer,
+    item.styleNo && item.styleNo !== 'SAMPLE' ? `Style ${item.styleNo}` : (item.styleNo === 'SAMPLE' ? 'Sample' : null),
+  ].filter(Boolean);
+
+  return {
+    id: item.id,
+    jobNumber: item.jobNo || '—',
+    color: item.color || '—',
+    fabricComposition: item.composition || '—',
+    fabricWidth: null,
+    yarnCount: item.count || '—',
+    composition: item.composition || '—',
+    lot: item.dyedYarnLot || '—',
+    workOrderQty: null,
+    yarnDeliveryQty: null,
+    delShortExcess: null,
+    yarnReturnQty: null,
+    yarnReceivedGrey: null,
+    yarnReceivedFinish: null,
+    stock: Number.isFinite(stockNum) ? stockNum : null,
+    remarks: remarksParts.length ? remarksParts.join(' • ') : '—',
+    monthKey,
+    monthLabel,
+    buyer: item.buyer || '',
+    styleNo: item.styleNo || '',
+  };
+}
 
 /* ----------------------------- Filter Popover Component ----------------------------- */
 function FilterPopover({ column, values, activeSet, onApply, onClose }) {
@@ -103,75 +153,123 @@ function FilterPopover({ column, values, activeSet, onApply, onClose }) {
 
 /* ----------------------------- Main Component ----------------------------- */
 const YarnDyedStock = () => {
-  const [allData] = useState(BASE_DATA);
+  const [allData, setAllData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
-  const [yarnDyedStock, setYarnDyedStock] = useState([])
-  const axiosSecure = useAxiosPrivate()
-  const fmt = (num) => Number.isFinite(num) ? num.toFixed(2) : '0.00';
-  const fmtMonthLabel = (monthStr) => {
-    if (!monthStr) return '';
-    const [y, m] = monthStr.split('-');
-    return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  };
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const axiosSecure = useAxiosPrivate();
+
+  const fmt = (num) => (num === null || num === undefined ? '—' : (Number.isFinite(num) ? num.toFixed(2) : '—'));
+  const cell = (val) => (val === null || val === undefined || val === '' ? '—' : val);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchYdStock = async () => {
-      const ydStock = await axiosSecure.get("/api/total/yd-stock")
-      console.log(ydStock);
-    }
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await axiosSecure.get('/api/total/yd-stock');
+        const raw = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
+        if (!cancelled) setAllData(raw.map(mapApiItem));
+      } catch (err) {
+        if (!cancelled) setError('Failed to load yarn dyed stock data.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     fetchYdStock();
-  }, [axiosSecure])
+    return () => { cancelled = true; };
+  }, [axiosSecure]);
 
-  // Unique values for header filters
+  // Unique values for header filters (nulls normalized to "—")
   const uniqueValues = useMemo(() => {
     const map = {};
     COLUMNS.forEach((col) => {
       const set = new Set();
-      allData.forEach((row) => set.add(String(row[col.key])));
+      allData.forEach((row) => set.add(cell(row[col.key]) === '—' ? '—' : String(row[col.key])));
       map[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     });
     return map;
   }, [allData]);
 
-  // Available months
+  // Available months, derived from job numbers (e.g. "SM25-2260 JUNE")
   const availableMonths = useMemo(() => {
-    const months = new Set();
-    allData.forEach(item => months.add(item.date.substring(0, 7)));
-    return Array.from(months).sort().reverse();
+    const map = new Map();
+    allData.forEach((item) => {
+      if (item.monthKey) map.set(item.monthKey, item.monthLabel);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [allData]);
 
   // Filtered Data (Search + Month + Header Filters)
   const filteredData = useMemo(() => {
-    return allData.filter(item => {
-      if (selectedMonth !== 'all' && !item.date.startsWith(selectedMonth)) return false;
+    return allData.filter((item) => {
+      if (selectedMonth !== 'all' && item.monthKey !== selectedMonth) return false;
 
       if (searchInput.trim()) {
         const q = searchInput.trim().toLowerCase();
-        const hay = [item.jobNumber, item.color, item.lot, item.fabricComposition].join(' ').toLowerCase();
+        const hay = [item.jobNumber, item.color, item.lot, item.fabricComposition, item.buyer, item.styleNo]
+          .join(' ')
+          .toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
       for (const col of COLUMNS) {
         const active = filters[col.key];
         if (!active) continue;
-        if (!active.has(String(item[col.key]))) return false;
+        const val = cell(item[col.key]) === '—' ? '—' : String(item[col.key]);
+        if (!active.has(val)) return false;
       }
       return true;
     });
   }, [allData, selectedMonth, searchInput, filters]);
 
-  // Totals
+  // Totals — only computed for columns the API actually supplies data for
   const calculateTotals = (data) => {
     return NUMERIC_KEYS.reduce((acc, key) => {
-      acc[key] = data.reduce((sum, item) => sum + (item[key] || 0), 0);
+      const values = data.map((item) => item[key]).filter((v) => v !== null && v !== undefined);
+      acc[key] = values.length ? values.reduce((sum, v) => sum + v, 0) : null;
       return acc;
     }, {});
   };
 
   const filteredTotals = useMemo(() => calculateTotals(filteredData), [filteredData]);
+
+  // Reset to page 1 whenever the filtered result set changes underneath the current page
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchInput, selectedMonth, filters, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedData = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, safePage, pageSize]);
+
+  const rangeStart = filteredData.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filteredData.length);
+
+  // Builds a numbered page list like: 1 … 4 5 [6] 7 8 … 42
+  const pageNumbers = useMemo(() => {
+    const delta = 2;
+    const pages = [];
+    const start = Math.max(2, safePage - delta);
+    const end = Math.min(totalPages - 1, safePage + delta);
+
+    pages.push(1);
+    if (start > 2) pages.push('ellipsis-start');
+    for (let p = start; p <= end; p++) pages.push(p);
+    if (end < totalPages - 1) pages.push('ellipsis-end');
+    if (totalPages > 1) pages.push(totalPages);
+
+    return pages;
+  }, [safePage, totalPages]);
 
   const handleSearch = () => { }; // Reactive via useMemo
   const handleClear = () => { setSearchInput(''); setSelectedMonth('all'); setFilters({}); };
@@ -197,23 +295,23 @@ const YarnDyedStock = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg border-l-4 border-blue-600 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Work Order Qty</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.workOrderQty || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.workOrderQty)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-amber-500 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Delivery (Y/D)</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnDeliveryQty || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnDeliveryQty)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-orange-500 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Return (Y/D)</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReturnQty || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReturnQty)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-teal-500 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Received (Grey)</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReceivedGrey || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReceivedGrey)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-purple-600 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Stock</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.stock || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.stock)}</p>
           </div>
         </div>
       </div>
@@ -222,7 +320,7 @@ const YarnDyedStock = () => {
       <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative flex-1 max-w-md">
-            <input type="text" placeholder="Search Job, Color, Lot..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="text" placeholder="Search Job, Color, Lot, Buyer..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <div className="absolute left-3 top-2.5"><IconSearch /></div>
           </div>
           <button onClick={handleSearch} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2">
@@ -237,22 +335,21 @@ const YarnDyedStock = () => {
           </label>
           <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm">
             <option value="all">All Months</option>
-            {availableMonths.map(month => (<option key={month} value={month}>{fmtMonthLabel(month)}</option>))}
+            {availableMonths.map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
           </select>
         </div>
       </div>
 
       {/* TABLE */}
       <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto" style={{ maxHeight: '65vh' }}>
           <table className="w-full border-collapse text-sm">
-            <thead className="bg-gray-100">
-              {/* Main Header with Filters - NO Header Total Row */}
+            <thead className="bg-gray-100 sticky top-0 z-20">
               <tr>
                 {COLUMNS.map((col) => {
                   const isFiltered = !!filters[col.key];
                   return (
-                    <th key={col.key} className="relative border border-gray-300 px-2 py-3 text-left font-bold text-gray-700 uppercase text-xs align-top" style={{ minWidth: col.width }}>
+                    <th key={col.key} className="relative border border-gray-300 px-2 py-3 text-left font-bold text-gray-700 uppercase text-xs align-top bg-gray-100" style={{ minWidth: col.width }}>
                       <div className="flex items-start justify-between gap-1">
                         <span className={`whitespace-normal break-words leading-tight ${col.numeric ? 'text-right w-full' : ''}`}>{col.label}</span>
                         <button onClick={() => setOpenFilterCol(openFilterCol === col.key ? null : col.key)} className={`shrink-0 p-1 rounded mt-0.5 ${isFiltered ? 'bg-blue-100' : 'hover:bg-gray-200'}`} title={`Filter ${col.label}`}>
@@ -269,45 +366,53 @@ const YarnDyedStock = () => {
             </thead>
 
             <tbody>
-              {filteredData.length > 0 ? (
-                filteredData.map((item, index) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-500 italic bg-white">Loading yarn dyed stock…</td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-red-600 italic bg-white">{error}</td>
+                </tr>
+              ) : paginatedData.length > 0 ? (
+                paginatedData.map((item, index) => (
                   <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words font-medium">{item.jobNumber}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.color}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.fabricComposition}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.fabricWidth}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.yarnCount}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.composition}</td>
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.lot}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words font-medium">{cell(item.jobNumber)}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.color)}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.fabricComposition)}</td>
+                    <td className="px-3 py-2 text-gray-400 border border-gray-300 break-words">{cell(item.fabricWidth)}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.yarnCount)}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.composition)}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.lot)}</td>
 
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.workOrderQty)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnDeliveryQty)}</td>
-                    <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums ${item.delShortExcess < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.delShortExcess)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnQty)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedGrey)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFinish)}</td>
-                    <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-bold">{fmt(item.stock)}</td>
+                    <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.workOrderQty)}</td>
+                    <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnDeliveryQty)}</td>
+                    <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.delShortExcess)}</td>
+                    <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnQty)}</td>
+                    <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedGrey)}</td>
+                    <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFinish)}</td>
+                    <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-bold ${item.stock !== null && item.stock < 0 ? 'text-red-600' : 'text-gray-900'}`}>{fmt(item.stock)}</td>
 
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.remarks}</td>
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.remarks)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="15" className="px-6 py-12 text-center text-gray-500 italic bg-white">No records found matching your search or filter criteria.</td>
+                  <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-500 italic bg-white">No records found matching your search or filter criteria.</td>
                 </tr>
               )}
             </tbody>
 
-            <tfoot className="bg-gray-100">
+            <tfoot className="bg-gray-100 sticky bottom-0 z-20">
               <tr className="border-t-2 border-gray-400">
                 <td colSpan="7" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">Footer Sub-Total:</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.workOrderQty)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnDeliveryQty)}</td>
-                <td className={`px-3 py-3 text-right text-sm font-bold border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50 ${filteredTotals.delShortExcess < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(filteredTotals.delShortExcess)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReturnQty)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedGrey)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedFinish)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.stock)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.workOrderQty)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnDeliveryQty)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.delShortExcess)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReturnQty)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedGrey)}</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedFinish)}</td>
+                <td className={`px-3 py-3 text-right text-sm font-bold border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50 ${filteredTotals.stock !== null && filteredTotals.stock < 0 ? 'text-red-600' : 'text-gray-800'}`}>{fmt(filteredTotals.stock)}</td>
                 <td colSpan="1" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
               </tr>
             </tfoot>
@@ -315,8 +420,37 @@ const YarnDyedStock = () => {
         </div>
       </div>
 
-      <div className="mt-3 text-right text-xs text-gray-500 font-medium">
-        Showing {filteredData.length} of {allData.length} records
+      {/* PAGINATION BAR */}
+      <div className="mt-3 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white border border-gray-200 rounded-md px-4 py-2.5 shadow-sm">
+        <div className="text-xs text-gray-500 font-medium">
+          Showing {rangeStart}-{rangeEnd} of {filteredData.length} records
+          {filteredData.length !== allData.length && <span className="text-gray-400"> (filtered from {allData.length})</span>}
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="text-xs font-medium text-gray-600 flex items-center gap-2">
+            Rows per page:
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              {[10, 25, 50, 100].map((n) => (<option key={n} value={n}>{n}</option>))}
+            </select>
+          </label>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100">‹ Prev</button>
+            {pageNumbers.map((p, i) =>
+              typeof p === 'number' ? (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`min-w-[28px] px-2 py-1 text-xs border rounded font-medium ${p === safePage ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
+                >
+                  {p}
+                </button>
+              ) : (
+                <span key={p + i} className="px-1 text-xs text-gray-400">…</span>
+              )
+            )}
+            <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100">Next ›</button>
+          </div>
+        </div>
       </div>
     </div>
   );
