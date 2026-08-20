@@ -281,3 +281,25 @@ model reconciliationData {
   styleRequirementRowId     Int?                 @unique
   note                      String?
 }
+
+model yarnStock {
+  id                 Int    @unique @default(autoincrement())
+  supplierName       String
+  count              String
+  composition        String
+  lotNo              String
+  physicalBalanceQty String
+  createdBy          Int
+}
+
+model ydStock {
+  id            Int    @unique @default(autoincrement())
+  count         String
+  composition   String
+  buyer         String
+  jobNo         String
+  styleNo       String
+  color         String
+  dyedYarnLot   String
+  yarnDyedStock String
+}

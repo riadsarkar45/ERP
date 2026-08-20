@@ -1,6 +1,8 @@
 import ExcelJS from "exceljs";
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
+
+// ── Existing Helpers ──────────────────────────────────────────────
 import { uploadDataFromFile } from "../../helpers/uploadStyleReqData/uploadFileData";
 import { uploadKWODataFromFile } from "../../helpers/uploadStyleReqData/uploadWorkOrder";
 import { uploadAOWDataFromFile } from "../../helpers/uploadStyleReqData/uploadawoOrder";
@@ -8,10 +10,14 @@ import { uploadDYEINGDataFromFile } from "../../helpers/uploadStyleReqData/uploa
 import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadawoDeliveres";
 import { uploadYarnGreyRcvdDataFromFile, type YarnGreyRcvdParsedRow } from "../../helpers/uploadStyleReqData/uploadYarnDevData";
 import { uploadDyeingGreyDeliveryDataFromFile, type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
-// import { uploadDyeing type DyeingGreyDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadDyeingGreyDev";
+import { uploadYarnAndYdStockData, YarnStockParsedRow, YdStockParsedRow } from "../../helpers/uploadStyleReqData/uploadYarnAndStock";
 
-// ⚠️ Adjust this path to match where you saved the helper file provided earlier
-// import { uploadAopDeliveryDataFromFile, type AOPDeliveryParsedRow } from "../../helpers/uploadStyleReqData/uploadAopDelivery"; 
+// ✅ NEW: Import Yarn & YD Stock Helper
+// import { 
+//     uploadYarnAndYdStockData, 
+//     type YarnStockParsedRow, 
+//     type YdStockParsedRow 
+// } from "../../helpers/uploadStyleReqData/uploadYarnYdStockData"; 
 
 // ── Type Definitions ──────────────────────────────────────────────
 interface MulterFile {
@@ -89,7 +95,7 @@ interface AWOParsedRow {
     awoFactoryName: string;
     awoWorkOrderQty: number;
     awoPricePerKg: number;
-    fabricReturnFromAop: number
+    fabricReturnFromAop: number;
 }
 
 interface AWOColumnIndices {
@@ -106,7 +112,7 @@ interface AWOColumnIndices {
     awoFactoryName: number;
     awoWorkOrderQty: number;
     awoPricePerKg: number;
-    fabricReturnFromAop: number
+    fabricReturnFromAop: number;
 }
 
 interface DWOColumnIndices {
@@ -157,7 +163,6 @@ interface KWOColumnIndices {
     knittingPricePerKg: number;
 }
 
-// ── AOP DEL. & RCVD Specific Parsing ──────────────────────────────
 interface AOPDeliveryColumnIndices {
     challanDate: number;
     challanNo: number;
@@ -175,9 +180,30 @@ interface AOPDeliveryColumnIndices {
     aopReceivedFromFactoryName: number;
     aopFabricDeliveryFactoryNameSM: number;
     aopFinishFabricRcvd: number;
-    fabricReturnFromAop: number
+    fabricReturnFromAop: number;
 }
 
+// ✅ NEW: Yarn Stock & YD Stock Interfaces
+interface YarnStockColumnIndices {
+    supplierName: number;
+    count: number;
+    composition: number;
+    lotNo: number;
+    physicalBalanceQty: number;
+}
+
+interface YdStockColumnIndices {
+    count: number;
+    composition: number;
+    buyer: number;
+    jobNo: number;
+    styleNo: number;
+    color: number;
+    dyedYarnLot: number;
+    yarnDyedStock: number;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
 const parseDateValue = (val: unknown): Date | null => {
     if (val instanceof Date) return val;
     if (typeof val === "string") {
@@ -185,11 +211,105 @@ const parseDateValue = (val: unknown): Date | null => {
         return isNaN(d.getTime()) ? null : d;
     }
     if (typeof val === "number" && val > 25569) {
-        return new Date(Math.round((val - 25569) * 86400 * 1000)); // Excel serial date
+        return new Date(Math.round((val - 25569) * 86400 * 1000));
     }
     return null;
 };
 
+const getCellValue = (row: unknown[], index: number): unknown => {
+    if (!Array.isArray(row) || index < 0 || index >= row.length) return null;
+    return row[index];
+};
+
+const asString = (val: unknown): string => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string") return val.trim();
+    if (val instanceof Date) return val.toISOString().split("T")[0] ?? "";
+    if (typeof val === "object" && val !== null) {
+        const obj = val as { richText?: { text?: string }[]; text?: string | number | boolean; result?: string | number | boolean };
+        if (obj.richText && Array.isArray(obj.richText)) {
+            return obj.richText.map((rt) => rt.text || "").join("").trim();
+        }
+        if (obj.text !== undefined) return String(obj.text).trim();
+        if (obj.result !== undefined) return String(obj.result).trim();
+    }
+    return String(val).trim();
+};
+
+const toNumber = (val: unknown): number => {
+    if (val === null || val === undefined || val === "") return 0;
+    if (typeof val === "number") return val;
+    if (val instanceof Date) return 0;
+    if (typeof val === "object" && val !== null) {
+        const obj = val as { result?: unknown; text?: unknown };
+        if (obj.result !== undefined) return toNumber(obj.result);
+        if (obj.text !== undefined) return toNumber(obj.text);
+    }
+    const cleaned = String(val).replace(/,/g, "").trim();
+    const num = Number(cleaned);
+    return isNaN(num) ? 0 : num;
+};
+
+const findPartialCol = (headers: unknown[], keyword: string): number => {
+    const normalizedKeyword = keyword.toLowerCase().replace(/\s+/g, "");
+    return headers.findIndex((h: unknown) => {
+        const normalizedHeader = asString(h).toLowerCase().replace(/\s+/g, "");
+        return normalizedHeader.includes(normalizedKeyword);
+    });
+};
+
+const buildMergedHeaders = (rawData: unknown[][], headerRowIndex: number): unknown[] => {
+    const fieldHeaders: unknown[] = rawData[headerRowIndex] ?? [];
+    const sectionHeaders: unknown[] = headerRowIndex > 0 ? rawData[headerRowIndex - 1] ?? [] : [];
+    return fieldHeaders.map((cell, idx) => (asString(cell) ? cell : sectionHeaders[idx]));
+};
+
+type WorksheetRow = { values: unknown[] };
+type WorksheetReader = AsyncIterable<WorksheetRow> & { name?: string };
+
+async function readAllRowsAndFindHeader(
+    worksheetReader: WorksheetReader,
+    keywords: string[],
+    minScore: number,
+    scanLimit: number
+): Promise<{ allRows: unknown[][]; headerRowIndex: number }> {
+    const allRows: unknown[][] = [];
+    const normalizedKeywords = keywords.map((kw) => kw.toLowerCase().replace(/\s+/g, ""));
+
+    const scoreRow = (row: unknown[]): number => {
+        if (!Array.isArray(row)) return 0;
+        return normalizedKeywords.filter((kw) =>
+            row.some((cell) => {
+                const normalizedCell = asString(cell).toLowerCase().replace(/\s+/g, "");
+                return normalizedCell.includes(kw);
+            })
+        ).length;
+    };
+
+    for await (const row of worksheetReader) {
+        const denseRow: unknown[] = [];
+        if (Array.isArray(row.values)) {
+            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
+        }
+        allRows.push(denseRow);
+    }
+
+    let headerRowIndex = -1;
+    let bestScore = 0;
+    const searchLimit = Math.min(scanLimit, allRows.length);
+    for (let i = 0; i < searchLimit; i++) {
+        const score = scoreRow(allRows[i] ?? []);
+        if (score > bestScore) {
+            bestScore = score;
+            headerRowIndex = i;
+        }
+    }
+    if (bestScore < minScore) headerRowIndex = -1;
+
+    return { allRows, headerRowIndex };
+}
+
+// ── Sheet Processing Functions ────────────────────────────────────
 const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices => ({
     challanDate: findPartialCol(headers, "date of challan"),
     challanNo: findPartialCol(headers, "challan no"),
@@ -203,13 +323,11 @@ const buildAOPDeliveryColIndex = (headers: unknown[]): AOPDeliveryColumnIndices 
     composition: findPartialCol(headers, "composition"),
     deliveryForAop: findPartialCol(headers, "delivery for aop"),
     afterAopFabricRcvd: findPartialCol(headers, "after aop fabric rcvd"),
-    aopFinishFabricRcvd: findPartialCol(headers, "aop finish fabric rcvd"), // 👈 ADD THIS
+    aopFinishFabricRcvd: findPartialCol(headers, "aop finish fabric rcvd"),
     aopReceivedFromFactoryName: findPartialCol(headers, "aop received from factory"),
     aopFabricDeliveryFactoryNameSM: findPartialCol(headers, "aop fabric delivery factory"),
-    // aopFinishFabricRcvd: toNumber(getCellValue(row, colIndex.aopFinishFabricRcvd)),
     aopFinishFabricRcvp: findPartialCol(headers, "aop finish fabric rcvd"),
     fabricReturnFromAop: findPartialCol(headers, "fabric return from aop")
-
 });
 
 const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices): AOPDeliveryParsedRow => ({
@@ -231,7 +349,26 @@ const parseAOPDeliveryRow = (row: unknown[], colIndex: AOPDeliveryColumnIndices)
     fabricReturnFromAop: toNumber(getCellValue(row, colIndex.fabricReturnFromAop))
 });
 
-// ── YARN & GREY RCVD Specific Parsing ──────────────────────────────
+const isValidAOPDeliveryRow = (row: AOPDeliveryParsedRow): boolean => {
+    return !!(row.jobNo && (row.deliveryForAop > 0 || row.afterAopFabricRcvd > 0 || row.aopFinishFabricRcvd > 0 || row.fabricReturnFromAop > 0));
+};
+
+async function processAOPDeliverySheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
+    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd", "fabric return from aop"];
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, AOP_DEL_KEYWORDS, 2, 15);
+    if (headerRowIndex === -1) return { parsedRows: [] as AOPDeliveryParsedRow[], headerFound: false };
+    
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
+    const colIndex = buildAOPDeliveryColIndex(headers);
+    const parsedRows: AOPDeliveryParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseAOPDeliveryRow(allRows[i] ?? [], colIndex);
+        if (isValidAOPDeliveryRow(parsed)) parsedRows.push(parsed);
+    }
+    return { parsedRows, headerFound: true };
+}
+
+// ── YARN & GREY RCVD ──────────────────────────────────────────────
 interface YarnGreyRcvdColumnIndices {
     challanDate: number;
     challanNo: number;
@@ -272,184 +409,22 @@ const isValidYarnGreyRcvdRow = (row: YarnGreyRcvdParsedRow): boolean => {
     return !!(row.jobNo && (row.yarnDeliveryForKnitting > 0 || row.greyReceivedQty > 0 || row.yarnReturn > 0));
 };
 
-async function processYarnGreyRcvdSheet(
-    worksheetReader: WorksheetReader
-): Promise<{ parsedRows: YarnGreyRcvdParsedRow[]; headerFound: boolean }> {
+async function processYarnGreyRcvdSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: YarnGreyRcvdParsedRow[]; headerFound: boolean }> {
     const YARN_GREY_RCVD_KEYWORDS = ["challan no", "job no", "yarn delivery for knitting", "grey received"];
-    const MIN_SCORE = 2;
-    const SCAN_LIMIT = 15;
-
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, YARN_GREY_RCVD_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
-
-    if (headerRowIndex === -1) {
-        return { parsedRows: [] as YarnGreyRcvdParsedRow[], headerFound: false };
-    }
-
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, YARN_GREY_RCVD_KEYWORDS, 2, 15);
+    if (headerRowIndex === -1) return { parsedRows: [] as YarnGreyRcvdParsedRow[], headerFound: false };
+    
     const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildYarnGreyRcvdColIndex(headers);
-
     const parsedRows: YarnGreyRcvdParsedRow[] = [];
     for (let i = headerRowIndex + 1; i < allRows.length; i++) {
         const parsed = parseYarnGreyRcvdRow(allRows[i] ?? [], colIndex);
         if (isValidYarnGreyRcvdRow(parsed)) parsedRows.push(parsed);
     }
-
     return { parsedRows, headerFound: true };
 }
 
-const isValidAOPDeliveryRow = (row: AOPDeliveryParsedRow): boolean => {
-    return !!(
-        row.jobNo &&
-        (row.deliveryForAop > 0 ||
-            row.afterAopFabricRcvd > 0 ||
-            row.aopFinishFabricRcvd > 0 ||
-            row.fabricReturnFromAop > 0)
-    );
-};
-
-async function processAOPDeliverySheet(
-    worksheetReader: WorksheetReader
-): Promise<{ parsedRows: AOPDeliveryParsedRow[]; headerFound: boolean }> {
-    // Clean keywords: the scanner will automatically strip spaces and match them perfectly
-    const AOP_DEL_KEYWORDS = ["challan no", "job no", "delivery for aop", "after aop fabric rcvd", "aop finish fabric rcvd", "fabric return from aop"];
-    const MIN_SCORE = 2;
-    const SCAN_LIMIT = 15;
-
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, AOP_DEL_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
-
-    if (headerRowIndex === -1) {
-        return { parsedRows: [] as AOPDeliveryParsedRow[], headerFound: false };
-    }
-
-    const headers = buildMergedHeaders(allRows, headerRowIndex);
-    const colIndex = buildAOPDeliveryColIndex(headers);
-
-    const parsedRows: AOPDeliveryParsedRow[] = [];
-    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
-        const parsed = parseAOPDeliveryRow(allRows[i] ?? [], colIndex);
-        if (isValidAOPDeliveryRow(parsed)) parsedRows.push(parsed);
-    }
-
-    return { parsedRows, headerFound: true };
-}
-
-// ── ExcelJS Cell Value Types ─────────────────────────────────────
-interface RichTextItem {
-    text?: string;
-}
-
-interface ExcelCellObject {
-    richText?: RichTextItem[];
-    text?: string | number | boolean;
-    result?: string | number | boolean;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────
-const getCellValue = (row: unknown[], index: number): unknown => {
-    if (!Array.isArray(row) || index < 0 || index >= row.length) return null;
-    return row[index];
-};
-
-const asString = (val: unknown): string => {
-    if (val === null || val === undefined) return "";
-    if (typeof val === "string") return val.trim();
-    if (val instanceof Date) return val.toISOString().split("T")[0] ?? "";
-    if (typeof val === "object" && val !== null) {
-        const obj = val as ExcelCellObject;
-        if (obj.richText && Array.isArray(obj.richText)) {
-            return obj.richText.map((rt) => rt.text || "").join("").trim();
-        }
-        if (obj.text !== undefined) return String(obj.text).trim();
-        if (obj.result !== undefined) return String(obj.result).trim();
-    }
-    return String(val).trim();
-};
-
-const toNumber = (val: unknown): number => {
-    if (val === null || val === undefined || val === "") return 0;
-    if (typeof val === "number") return val;
-    if (val instanceof Date) return 0;
-    if (typeof val === "object" && val !== null) {
-        const obj = val as ExcelCellObject;
-        if (obj.result !== undefined) return toNumber(obj.result);
-        if (obj.text !== undefined) return toNumber(obj.text);
-    }
-    const cleaned = String(val).replace(/,/g, "").trim();
-    const num = Number(cleaned);
-    return isNaN(num) ? 0 : num;
-};
-
-// ✅ ROBUST: Ignores random extra spaces in Excel headers (e.g., "CHALLAN          NO")
-const findPartialCol = (headers: unknown[], keyword: string): number => {
-    const normalizedKeyword = keyword.toLowerCase().replace(/\s+/g, "");
-    return headers.findIndex((h: unknown) => {
-        const normalizedHeader = asString(h).toLowerCase().replace(/\s+/g, "");
-        return normalizedHeader.includes(normalizedKeyword);
-    });
-};
-
-const buildMergedHeaders = (rawData: unknown[][], headerRowIndex: number): unknown[] => {
-    const fieldHeaders: unknown[] = rawData[headerRowIndex] ?? [];
-    const sectionHeaders: unknown[] = headerRowIndex > 0 ? rawData[headerRowIndex - 1] ?? [] : [];
-    return fieldHeaders.map((cell, idx) => (asString(cell) ? cell : sectionHeaders[idx]));
-};
-
-// ── Worksheet Reader Types ────────────────────────────────────────
-type WorksheetRow = {
-    values: unknown[];
-};
-
-type WorksheetReader = AsyncIterable<WorksheetRow> & {
-    name?: string;
-};
-
-// ── Header Scanner ────────────────────────────────────────────────
-async function readAllRowsAndFindHeader(
-    worksheetReader: WorksheetReader,
-    keywords: string[],
-    minScore: number,
-    scanLimit: number
-): Promise<{ allRows: unknown[][]; headerRowIndex: number }> {
-    const allRows: unknown[][] = [];
-
-    // Normalize keywords by removing all spaces to handle erratic Excel spacing
-    const normalizedKeywords = keywords.map((kw) => kw.toLowerCase().replace(/\s+/g, ""));
-
-    const scoreRow = (row: unknown[]): number => {
-        if (!Array.isArray(row)) return 0;
-        return normalizedKeywords.filter((kw) =>
-            row.some((cell) => {
-                // Normalize the cell content by removing all spaces before checking
-                const normalizedCell = asString(cell).toLowerCase().replace(/\s+/g, "");
-                return normalizedCell.includes(kw);
-            })
-        ).length;
-    };
-
-    for await (const row of worksheetReader) {
-        const denseRow: unknown[] = [];
-        if (Array.isArray(row.values)) {
-            for (let i = 1; i < row.values.length; i++) denseRow.push(row.values[i]);
-        }
-        allRows.push(denseRow);
-    }
-
-    let headerRowIndex = -1;
-    let bestScore = 0;
-    const searchLimit = Math.min(scanLimit, allRows.length);
-    for (let i = 0; i < searchLimit; i++) {
-        const score = scoreRow(allRows[i] ?? []);
-        if (score > bestScore) {
-            bestScore = score;
-            headerRowIndex = i;
-        }
-    }
-    if (bestScore < minScore) headerRowIndex = -1;
-
-    return { allRows, headerRowIndex };
-}
-
-// ── DYEING GREY DEL. & RCVD Specific Parsing ──────────────────────────────
+// ── DYEING GREY DEL. & RCVD ───────────────────────────────────────
 interface DyeingGreyDeliveryColumnIndices {
     challanDate: number;
     challanNo: number;
@@ -458,7 +433,7 @@ interface DyeingGreyDeliveryColumnIndices {
     composition: number;
     greyDeliveryQty: number;
     greyReceivedQty: number;
-    finishReceivedQty: number; // ✅ ADDED
+    finishReceivedQty: number;
     dyeingFactoryName: number;
     toFactory: number;
     fromFactory: number;
@@ -471,16 +446,13 @@ const buildDyeingGreyDeliveryColIndex = (headers: unknown[]): DyeingGreyDelivery
     jobNo: findPartialCol(headers, "job no"),
     color: findPartialCol(headers, "color"),
     composition: findPartialCol(headers, "composition"),
-    
-    // ✅ UPDATED: Keywords now perfectly match the actual Excel headers (spaces are ignored)
-    greyDeliveryQty: findPartialCol(headers, "grey fabric del"),       // Matches "GREY FABRIC DEL. FOR DYEING"
-    greyReceivedQty: findPartialCol(headers, "grey fabric rcvd"),      // Matches "GREY FABRIC RCVD FROM DYEING"
-    finishReceivedQty: findPartialCol(headers, "finish fabric rcvd"),  // Matches "FINISH FABRIC RCVD FROM DYEING"
-    
-    dyeingFactoryName: findPartialCol(headers, "dyeing factory name"), // Matches "GREY DEL & RECVED FROM DYEING FACTORY NAME"
-    toFactory: findPartialCol(headers, "finished fabric delivery"),    // Matches "FINISHED FABRIC DELIVERY FACTORY NAME"
+    greyDeliveryQty: findPartialCol(headers, "grey fabric del"),
+    greyReceivedQty: findPartialCol(headers, "grey fabric rcvd"),
+    finishReceivedQty: findPartialCol(headers, "finish fabric rcvd"),
+    dyeingFactoryName: findPartialCol(headers, "dyeing factory name"),
+    toFactory: findPartialCol(headers, "finished fabric delivery"),
     greyReturnFromFactory: findPartialCol(headers, "grey return from dyeing"),
-    fromFactory: findPartialCol(headers, "remarks"),                   // Remarks often contains "FROM [Factory Name]"
+    fromFactory: findPartialCol(headers, "remarks"),
 });
 
 const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDeliveryColumnIndices): DyeingGreyDeliveryParsedRow => ({
@@ -491,7 +463,7 @@ const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDelivery
     composition: asString(getCellValue(row, colIndex.composition)),
     greyDeliveryQty: toNumber(getCellValue(row, colIndex.greyDeliveryQty)),
     greyReceivedQty: toNumber(getCellValue(row, colIndex.greyReceivedQty)),
-    finishReceivedQty: toNumber(getCellValue(row, colIndex.finishReceivedQty)), // ✅ ADDED
+    finishReceivedQty: toNumber(getCellValue(row, colIndex.finishReceivedQty)),
     dyeingFactoryName: asString(getCellValue(row, colIndex.dyeingFactoryName)),
     toFactory: asString(getCellValue(row, colIndex.toFactory)),
     fromFactory: asString(getCellValue(row, colIndex.fromFactory)),
@@ -499,37 +471,25 @@ const parseDyeingGreyDeliveryRow = (row: unknown[], colIndex: DyeingGreyDelivery
 });
 
 const isValidDyeingGreyDeliveryRow = (row: DyeingGreyDeliveryParsedRow): boolean => {
-    // ✅ UPDATED: Now checks for finishReceivedQty as well
     return !!(row.jobNo && (row.greyDeliveryQty > 0 || row.greyReceivedQty > 0 || row.finishReceivedQty > 0 || row.greyReturnFromFactory > 0));
 };
 
-
-async function processDyeingGreyDeliverySheet(
-    worksheetReader: WorksheetReader
-): Promise<{ parsedRows: DyeingGreyDeliveryParsedRow[]; headerFound: boolean }> {
+async function processDyeingGreyDeliverySheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: DyeingGreyDeliveryParsedRow[]; headerFound: boolean }> {
     const DYEING_GREY_DELIVERY_KEYWORDS = ["challan no", "job no", "dyeing delivery", "dyeing received", "grey return from dyeing"];
-    const MIN_SCORE = 2;
-    const SCAN_LIMIT = 15;
-
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, DYEING_GREY_DELIVERY_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
-
-    if (headerRowIndex === -1) {
-        return { parsedRows: [] as DyeingGreyDeliveryParsedRow[], headerFound: false };
-    }
-
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, DYEING_GREY_DELIVERY_KEYWORDS, 2, 15);
+    if (headerRowIndex === -1) return { parsedRows: [] as DyeingGreyDeliveryParsedRow[], headerFound: false };
+    
     const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildDyeingGreyDeliveryColIndex(headers);
-
     const parsedRows: DyeingGreyDeliveryParsedRow[] = [];
     for (let i = headerRowIndex + 1; i < allRows.length; i++) {
         const parsed = parseDyeingGreyDeliveryRow(allRows[i] ?? [], colIndex);
         if (isValidDyeingGreyDeliveryRow(parsed)) parsedRows.push(parsed);
     }
-
     return { parsedRows, headerFound: true };
 }
 
-// ── Sheet Parsing Functions (STYLE, KWO, AWO, DWO) ────────────────
+// ── STYLE REQUIREMENT ─────────────────────────────────────────────
 const buildStyleReqColIndex = (headers: unknown[]): StyleReqColumnIndices => ({
     salesContractNo: findPartialCol(headers, "sales contract"),
     buyer: findPartialCol(headers, "buyer"),
@@ -564,31 +524,22 @@ const isValidStyleReqRow = (row: ParsedRow): boolean => {
     return !!(row.salesContractNo || row.jobNo || row.style || row.poNo);
 };
 
-async function processStyleReqSheet(
-    worksheetReader: WorksheetReader
-): Promise<{ parsedRows: ParsedRow[]; headerFound: boolean }> {
+async function processStyleReqSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: ParsedRow[]; headerFound: boolean }> {
     const STYLE_REQ_KEYWORDS = ["sales contract", "buyer", "job no", "po no", "style", "color", "composition"];
-    const MIN_SCORE = 4;
-    const SCAN_LIMIT = 15;
-
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, STYLE_REQ_KEYWORDS, MIN_SCORE, SCAN_LIMIT);
-
-    if (headerRowIndex === -1) {
-        return { parsedRows: [] as ParsedRow[], headerFound: false };
-    }
-
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, STYLE_REQ_KEYWORDS, 4, 15);
+    if (headerRowIndex === -1) return { parsedRows: [] as ParsedRow[], headerFound: false };
+    
     const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildStyleReqColIndex(headers);
-
     const parsedRows: ParsedRow[] = [];
     for (let i = headerRowIndex + 1; i < allRows.length; i++) {
         const parsed = parseStyleReqRow(allRows[i] ?? [], colIndex);
         if (isValidStyleReqRow(parsed)) parsedRows.push(parsed);
     }
-
     return { parsedRows, headerFound: true };
 }
 
+// ── K.W.O, A.W.O, D.W.O ───────────────────────────────────────────
 const buildKWOColIndex = (headers: unknown[]): KWOColumnIndices => ({
     workOrderDate: findPartialCol(headers, "work order date"),
     workOrderNo: findPartialCol(headers, "work order no"),
@@ -692,8 +643,7 @@ const isValidAWORow = (row: AWOParsedRow): boolean => !!(row.workOrderNo || row.
 const isValidDWORow = (row: DWOParsedRow): boolean => !!(row.workOrderNo || row.jobNo || row.style);
 
 async function processKWOSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: KWOParsedRow[]; headerFound: boolean }> {
-    const KWO_KEYWORDS = ["work order no", "month", "job no", "style", "color", "composition", "knitting factory name"];
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, KWO_KEYWORDS, 4, 15);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, ["work order no", "month", "job no", "style", "color", "composition", "knitting factory name"], 4, 15);
     if (headerRowIndex === -1) return { parsedRows: [] as KWOParsedRow[], headerFound: false };
     const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildKWOColIndex(headers);
@@ -706,8 +656,7 @@ async function processKWOSheet(worksheetReader: WorksheetReader): Promise<{ pars
 }
 
 async function processAWOSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: AWOParsedRow[]; headerFound: boolean }> {
-    const AWO_KEYWORDS = ["work order no", "month", "job no", "style", "color", "composition", "aop factory name"];
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, AWO_KEYWORDS, 4, 15);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, ["work order no", "month", "job no", "style", "color", "composition", "aop factory name"], 4, 15);
     if (headerRowIndex === -1) return { parsedRows: [] as AWOParsedRow[], headerFound: false };
     const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildAWOColIndex(headers);
@@ -720,8 +669,7 @@ async function processAWOSheet(worksheetReader: WorksheetReader): Promise<{ pars
 }
 
 async function processDWOSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: DWOParsedRow[]; headerFound: boolean }> {
-    const DWO_KEYWORDS = ["work order no", "month", "job no", "style", "color", "composition", "dyeing factory name"];
-    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, DWO_KEYWORDS, 4, 15);
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, ["work order no", "month", "job no", "style", "color", "composition", "dyeing factory name"], 4, 15);
     if (headerRowIndex === -1) return { parsedRows: [] as DWOParsedRow[], headerFound: false };
     const headers = buildMergedHeaders(allRows, headerRowIndex);
     const colIndex = buildDWOColIndex(headers);
@@ -729,6 +677,77 @@ async function processDWOSheet(worksheetReader: WorksheetReader): Promise<{ pars
     for (let i = headerRowIndex + 1; i < allRows.length; i++) {
         const parsed = parseDWORow(allRows[i] ?? [], colIndex);
         if (isValidDWORow(parsed)) parsedRows.push(parsed);
+    }
+    return { parsedRows, headerFound: true };
+}
+
+// ✅ NEW: YARN STOCK & YD STOCK Processing
+const buildYarnStockColIndex = (headers: unknown[]): YarnStockColumnIndices => ({
+    supplierName: findPartialCol(headers, "suppliers"),
+    count: findPartialCol(headers, "count"),
+    composition: findPartialCol(headers, "composition"),
+    lotNo: findPartialCol(headers, "lot"),
+    physicalBalanceQty: findPartialCol(headers, "physical balance qty"),
+});
+
+const parseYarnStockRow = (row: unknown[], colIndex: YarnStockColumnIndices): YarnStockParsedRow => ({
+    supplierName: asString(getCellValue(row, colIndex.supplierName)),
+    count: asString(getCellValue(row, colIndex.count)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    lotNo: asString(getCellValue(row, colIndex.lotNo)),
+    physicalBalanceQty: asString(getCellValue(row, colIndex.physicalBalanceQty)),
+});
+
+const isValidYarnStockRow = (row: YarnStockParsedRow): boolean => !!(row.supplierName && row.count);
+
+async function processYarnStockSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: YarnStockParsedRow[]; headerFound: boolean }> {
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, ["suppliers", "count", "composition", "lot", "physical balance qty"], 3, 15);
+    if (headerRowIndex === -1) return { parsedRows: [] as YarnStockParsedRow[], headerFound: false };
+    
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
+    const colIndex = buildYarnStockColIndex(headers);
+    const parsedRows: YarnStockParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseYarnStockRow(allRows[i] ?? [], colIndex);
+        if (isValidYarnStockRow(parsed)) parsedRows.push(parsed);
+    }
+    return { parsedRows, headerFound: true };
+}
+
+const buildYdStockColIndex = (headers: unknown[]): YdStockColumnIndices => ({
+    count: findPartialCol(headers, "count"),
+    composition: findPartialCol(headers, "composition"),
+    buyer: findPartialCol(headers, "buyer"),
+    jobNo: findPartialCol(headers, "job number"),
+    styleNo: findPartialCol(headers, "style name"),
+    color: findPartialCol(headers, "colour"),
+    dyedYarnLot: findPartialCol(headers, "dyed yarn lot"),
+    yarnDyedStock: findPartialCol(headers, "yarn dyed stock"),
+});
+
+const parseYdStockRow = (row: unknown[], colIndex: YdStockColumnIndices): YdStockParsedRow => ({
+    count: asString(getCellValue(row, colIndex.count)),
+    composition: asString(getCellValue(row, colIndex.composition)),
+    buyer: asString(getCellValue(row, colIndex.buyer)),
+    jobNo: asString(getCellValue(row, colIndex.jobNo)),
+    styleNo: asString(getCellValue(row, colIndex.styleNo)),
+    color: asString(getCellValue(row, colIndex.color)),
+    dyedYarnLot: asString(getCellValue(row, colIndex.dyedYarnLot)),
+    yarnDyedStock: asString(getCellValue(row, colIndex.yarnDyedStock)),
+});
+
+const isValidYdStockRow = (row: YdStockParsedRow): boolean => !!(row.count && row.buyer);
+
+async function processYdStockSheet(worksheetReader: WorksheetReader): Promise<{ parsedRows: YdStockParsedRow[]; headerFound: boolean }> {
+    const { allRows, headerRowIndex } = await readAllRowsAndFindHeader(worksheetReader, ["count", "composition", "buyer", "job number", "style name", "colour", "dyed yarn lot", "yarn dyed stock"], 4, 15);
+    if (headerRowIndex === -1) return { parsedRows: [] as YdStockParsedRow[], headerFound: false };
+    
+    const headers = buildMergedHeaders(allRows, headerRowIndex);
+    const colIndex = buildYdStockColIndex(headers);
+    const parsedRows: YdStockParsedRow[] = [];
+    for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+        const parsed = parseYdStockRow(allRows[i] ?? [], colIndex);
+        if (isValidYdStockRow(parsed)) parsedRows.push(parsed);
     }
     return { parsedRows, headerFound: true };
 }
@@ -762,7 +781,6 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         let dwoHeaderFound = false;
         let dwoSheetName = "";
 
-        // ✅ NEW: AOP Delivery variables
         let parsedRowsAOPDel: AOPDeliveryParsedRow[] = [];
         let aopDelHeaderFound = false;
         let aopDelSheetName = "";
@@ -774,6 +792,15 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
         let parsedRowsDyeingGreyDelivery: DyeingGreyDeliveryParsedRow[] = [];
         let dyeingGreyDeliveryHeaderFound = false;
         let dyeingGreyDeliverySheetName = "";
+
+        // ✅ NEW: Yarn Stock & YD Stock variables
+        let parsedRowsYarnStock: YarnStockParsedRow[] = [];
+        let yarnStockHeaderFound = false;
+        let yarnStockSheetName = "";
+
+        let parsedRowsYdStock: YdStockParsedRow[] = [];
+        let ydStockHeaderFound = false;
+        let ydStockSheetName = "";
 
         for await (const worksheetReader of workbookReader) {
             const sheetName = (worksheetReader as WorksheetReader).name || "";
@@ -799,7 +826,6 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 dwoHeaderFound = result.headerFound;
                 dwoSheetName = sheetName;
             } else if (sheetName === "AOP DEL. & RCVD" || sheetName === "AOP DEL & RCVD") {
-                // ✅ NEW: Process AOP Delivery sheet
                 const result = await processAOPDeliverySheet(worksheetReader as WorksheetReader);
                 parsedRowsAOPDel = result.parsedRows;
                 aopDelHeaderFound = result.headerFound;
@@ -814,13 +840,24 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
                 parsedRowsDyeingGreyDelivery = result.parsedRows;
                 dyeingGreyDeliveryHeaderFound = result.headerFound;
                 dyeingGreyDeliverySheetName = sheetName;
+            } else if (sheetName === "YARN STOCK") {
+                const result = await processYarnStockSheet(worksheetReader as WorksheetReader);
+                parsedRowsYarnStock = result.parsedRows;
+                yarnStockHeaderFound = result.headerFound;
+                yarnStockSheetName = sheetName;
+            } else if (sheetName === "YD STOCK") {
+                const result = await processYdStockSheet(worksheetReader as WorksheetReader);
+                parsedRowsYdStock = result.parsedRows;
+                ydStockHeaderFound = result.headerFound;
+                ydStockSheetName = sheetName;
             } else {
                 for await (const _row of worksheetReader) { /* drain */ }
             }
         }
 
-        // ✅ UPDATED: Include aopDelHeaderFound in validation
-        if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && !aopDelHeaderFound && !yarnGreyRcvdHeaderFound && !dyeingGreyDeliveryHeaderFound) {
+        if (!styleReqHeaderFound && !kwoHeaderFound && !awoHeaderFound && !dwoHeaderFound && 
+            !aopDelHeaderFound && !yarnGreyRcvdHeaderFound && !dyeingGreyDeliveryHeaderFound && 
+            !yarnStockHeaderFound && !ydStockHeaderFound) {
             res.status(400).json({ error: "Could not locate a valid header row in the Excel file." });
             return;
         }
@@ -837,63 +874,62 @@ export const fileUpload = async (req: MulterRequest, res: Response): Promise<voi
             kwo: { sheetName: kwoSheetName, found: kwoHeaderFound, totalRows: parsedRowsKWO.length },
             awo: { sheetName: awoSheetName, found: awoHeaderFound, totalRows: parsedRowsAWO.length },
             dwo: { sheetName: dwoSheetName, found: dwoHeaderFound, totalRows: parsedRowsDWO.length },
-            // ✅ NEW: Return AOP Delivery parsing summary
             aopDel: { sheetName: aopDelSheetName, found: aopDelHeaderFound, totalRows: parsedRowsAOPDel.length },
             yarnGreyRcvd: { sheetName: yarnGreyRcvdSheetName, found: yarnGreyRcvdHeaderFound, totalRows: parsedRowsYarnGreyRcvd.length },
             dyeingGreyDelivery: { sheetName: dyeingGreyDeliverySheetName, found: dyeingGreyDeliveryHeaderFound, totalRows: parsedRowsDyeingGreyDelivery.length },
+            yarnStock: { sheetName: yarnStockSheetName, found: yarnStockHeaderFound, totalRows: parsedRowsYarnStock.length },
+            ydStock: { sheetName: ydStockSheetName, found: ydStockHeaderFound, totalRows: parsedRowsYdStock.length },
         });
 
-        // ── Background: Parallel upload processing ─────────────────
-                // ── Background: SEQUENTIAL upload processing (Prevents RAM Crashes) ─────────────────
+        // ── Background: SEQUENTIAL upload processing (Prevents RAM Crashes) ─────────────────
         (async () => {
             try {
-                // 1. Style Requirement
                 if (styleReqHeaderFound && parsedRows.length > 0) {
                     await uploadDataFromFile(parsedRows, jobId);
                     console.log(`✅ [${jobId}] Style Requirement done.`);
-                    parsedRows = []; // 🧹 Free memory immediately
+                    parsedRows = [];
                 }
-
-                // 2. K.W.O
                 if (kwoHeaderFound && parsedRowsKWO.length > 0) {
                     await uploadKWODataFromFile(parsedRowsKWO, jobId);
                     console.log(`✅ [${jobId}] K.W.O done.`);
-                    parsedRowsKWO = []; // 🧹 Free memory immediately
+                    parsedRowsKWO = [];
                 }
-
-                // 3. A.W.O
                 if (awoHeaderFound && parsedRowsAWO.length > 0) {
                     await uploadAOWDataFromFile(parsedRowsAWO, jobId);
                     console.log(`✅ [${jobId}] A.W.O done.`);
-                    parsedRowsAWO = []; // 🧹 Free memory immediately
+                    parsedRowsAWO = [];
                 }
-
-                // 4. D.W.O
                 if (dwoHeaderFound && parsedRowsDWO.length > 0) {
                     await uploadDYEINGDataFromFile(parsedRowsDWO, jobId);
                     console.log(`✅ [${jobId}] D.W.O done.`);
-                    parsedRowsDWO = []; // 🧹 Free memory immediately
+                    parsedRowsDWO = [];
                 }
-
-                // 5. AOP Delivery
                 if (aopDelHeaderFound && parsedRowsAOPDel.length > 0) {
                     await uploadAopDeliveryDataFromFile(parsedRowsAOPDel, jobId);
                     console.log(`✅ [${jobId}] AOP DEL. & RCVD done.`);
-                    parsedRowsAOPDel = []; // 🧹 Free memory immediately
+                    parsedRowsAOPDel = [];
                 }
-
-                // 6. Yarn & Grey Rcvd
                 if (yarnGreyRcvdHeaderFound && parsedRowsYarnGreyRcvd.length > 0) {
                     await uploadYarnGreyRcvdDataFromFile(parsedRowsYarnGreyRcvd, jobId);
                     console.log(`✅ [${jobId}] YARN & GREY RCVD done.`);
-                    parsedRowsYarnGreyRcvd = []; // 🧹 Free memory immediately
+                    parsedRowsYarnGreyRcvd = [];
                 }
-
-                // 7. Dyeing Grey Delivery
                 if (dyeingGreyDeliveryHeaderFound && parsedRowsDyeingGreyDelivery.length > 0) {
                     await uploadDyeingGreyDeliveryDataFromFile(parsedRowsDyeingGreyDelivery, jobId);
                     console.log(`✅ [${jobId}] DYEING GREY DEL. & RCVD done.`);
-                    parsedRowsDyeingGreyDelivery = []; // 🧹 Free memory immediately
+                    parsedRowsDyeingGreyDelivery = [];
+                }
+
+                // ✅ NEW: Yarn Stock & YD Stock Upload
+                if ((yarnStockHeaderFound && parsedRowsYarnStock.length > 0) || (ydStockHeaderFound && parsedRowsYdStock.length > 0)) {
+                    // ⚠️ IMPORTANT: Replace '1' with your actual logged-in user ID extraction logic
+                    // Example: const createdBy = (req as any).user?.id || 1;
+                    const createdBy = 1; 
+                    
+                    await uploadYarnAndYdStockData(parsedRowsYarnStock, parsedRowsYdStock, jobId, createdBy);
+                    console.log(`✅ [${jobId}] YARN & YD STOCK done.`);
+                    parsedRowsYarnStock = [];
+                    parsedRowsYdStock = [];
                 }
 
                 console.log(`🎉 [${jobId}] All background uploads completed.`);
