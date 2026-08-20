@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
 /* ----------------------------- Icons ----------------------------- */
 const IconSearch = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/>
+    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor" />
   </svg>
 );
 
@@ -107,13 +108,22 @@ const YarnDyedStock = () => {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
-
+  const [yarnDyedStock, setYarnDyedStock] = useState([])
+  const axiosSecure = useAxiosPrivate()
   const fmt = (num) => Number.isFinite(num) ? num.toFixed(2) : '0.00';
   const fmtMonthLabel = (monthStr) => {
     if (!monthStr) return '';
     const [y, m] = monthStr.split('-');
     return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
+
+  useEffect(() => {
+    const fetchYdStock = async () => {
+      const ydStock = await axiosSecure.get("/api/total/yd-stock")
+      console.log(ydStock);
+    }
+    fetchYdStock();
+  }, [axiosSecure])
 
   // Unique values for header filters
   const uniqueValues = useMemo(() => {
@@ -137,7 +147,7 @@ const YarnDyedStock = () => {
   const filteredData = useMemo(() => {
     return allData.filter(item => {
       if (selectedMonth !== 'all' && !item.date.startsWith(selectedMonth)) return false;
-      
+
       if (searchInput.trim()) {
         const q = searchInput.trim().toLowerCase();
         const hay = [item.jobNumber, item.color, item.lot, item.fabricComposition].join(' ').toLowerCase();
@@ -161,10 +171,9 @@ const YarnDyedStock = () => {
     }, {});
   };
 
-  const grandTotals = useMemo(() => calculateTotals(allData), [allData]);
   const filteredTotals = useMemo(() => calculateTotals(filteredData), [filteredData]);
 
-  const handleSearch = () => {}; // Reactive via useMemo
+  const handleSearch = () => { }; // Reactive via useMemo
   const handleClear = () => { setSearchInput(''); setSelectedMonth('all'); setFilters({}); };
 
   const applyFilter = (colKey, set) => {
@@ -179,7 +188,7 @@ const YarnDyedStock = () => {
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
-      
+
       {/* QUICK SUMMARY - 5 cards */}
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -270,7 +279,7 @@ const YarnDyedStock = () => {
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.yarnCount}</td>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.composition}</td>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.lot}</td>
-                    
+
                     <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.workOrderQty)}</td>
                     <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnDeliveryQty)}</td>
                     <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums ${item.delShortExcess < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.delShortExcess)}</td>
@@ -278,7 +287,7 @@ const YarnDyedStock = () => {
                     <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedGrey)}</td>
                     <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFinish)}</td>
                     <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-bold">{fmt(item.stock)}</td>
-                    
+
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.remarks}</td>
                   </tr>
                 ))
@@ -305,7 +314,7 @@ const YarnDyedStock = () => {
           </table>
         </div>
       </div>
-      
+
       <div className="mt-3 text-right text-xs text-gray-500 font-medium">
         Showing {filteredData.length} of {allData.length} records
       </div>
