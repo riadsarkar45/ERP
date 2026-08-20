@@ -13,7 +13,7 @@ import { io } from 'socket.io-client';
 // StrictMode's mount/unmount/remount simulation untouched.
 // http://localhost:3000
 // https://erp-eyf7.onrender.com
-const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000', {
+const socket = io(import.meta.env.VITE_BACKEND_URL || 'https://erp-eyf7.onrender.com', {
     withCredentials: true,
 });
 
