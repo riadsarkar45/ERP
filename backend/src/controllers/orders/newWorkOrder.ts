@@ -221,22 +221,22 @@ export const createNewJob = async (req: Request, res: Response) => {
                 include: { compositions: true },
             });
 
-            // ── Yarn dyeing color rows ────────────────────────────────────
-            if (orderType === "yarnDyeingOrder") {
-                const yarnRows = compositions.flatMap((comp) =>
-                    (comp.yarnColors ?? []).map((yc) => ({
-                        color: yc.color,
-                        qty: evaluateQtyExpression(String(yc.qty)) ?? 0,
-                        unitePrice: evaluateQtyExpression(String(yc.price)) ?? 0,
-                        composition: comp.composition,
-                        workOrderId: created.id,
-                    }))
-                );
+            // // ── Yarn dyeing color rows ────────────────────────────────────
+            // if (orderType === "yarnDyeingOrder") {
+            //     const yarnRows = compositions.flatMap((comp) =>
+            //         (comp.yarnColors ?? []).map((yc) => ({
+            //             color: yc.color,
+            //             qty: evaluateQtyExpression(String(yc.qty)) ?? 0,
+            //             unitePrice: evaluateQtyExpression(String(yc.price)) ?? 0,
+            //             composition: comp.composition,
+            //             workOrderId: created.id,
+            //         }))
+            //     );
 
-                if (yarnRows.length > 0) {
-                    await tx.yarnDyeingJobs.createMany({ data: yarnRows });
-                }
-            }
+            //     if (yarnRows.length > 0) {
+            //         await tx.yarnDyeingJobs.createMany({ data: yarnRows });
+            //     }
+            // }
 
             return created;
         });

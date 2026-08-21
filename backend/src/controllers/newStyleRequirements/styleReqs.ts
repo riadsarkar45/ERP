@@ -120,12 +120,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             }
                         },
                     },
-                    sizes: {
-                        select: {
-                            id: true,
-                            sizeName: true,
-                        },
-                    },
+                    
                     workOrders: {
                         select: {
                             orderType: true,

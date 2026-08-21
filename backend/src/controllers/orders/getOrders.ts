@@ -39,7 +39,7 @@ export const buildWorkOrderWhere = (
     
     const where: Prisma.WorkOrderWhereInput = { orderType };
     const compositionFilters: Prisma.CompositionWhereInput = {};
-    const yarnDyeingFilters: Prisma.yarnDyeingJobsWhereInput = {};
+    // const yarnDyeingFilters: Prisma.yarnDyeingJobsWhereInput = {};
     let styleRequirementFilters: Prisma.StyleRequirementWhereInput = {};
 
     for (const [key, values] of Object.entries(filters)) {
@@ -58,9 +58,9 @@ export const buildWorkOrderWhere = (
             case "composition":
                 (compositionFilters as any)[dbColumn] = { in: values };
                 break;
-            case "yarnDyeingJob":
-                (yarnDyeingFilters as any)[dbColumn] = { in: values };
-                break;
+            // case "yarnDyeingJob":
+            //     (yarnDyeingFilters as any)[dbColumn] = { in: values };
+            //     break;
         }
     }
 
@@ -70,9 +70,9 @@ export const buildWorkOrderWhere = (
     if (Object.keys(compositionFilters).length) {
         where.compositions = { some: compositionFilters };
     }
-    if (Object.keys(yarnDyeingFilters).length) {
-        where.yarnDyeingJobs = { some: yarnDyeingFilters };
-    }
+    // if (Object.keys(yarnDyeingFilters).length) {
+    //     where.yarnDyeingJobs = { some: yarnDyeingFilters };
+    // }
 
     return where;
 };
@@ -119,9 +119,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             lotNo: true,
                             orderType: true,
                             factoryName: true,
-                            yarnDyeingJobs: {
-                                select: { id: true, qty: true, color: true, composition: true },
-                            },
+                            
                             compositions: {
                                 select: {
                                     id: true,
@@ -231,17 +229,17 @@ export const getFilterOptions = async (req: Request, res: Response) => {
                 break;
             }
 
-            case "yarnDyeingJob": {
-                const rows = await prisma.yarnDyeingJobs.findMany({
-                    where: {
-                        workOrder: workOrderWhere,
-                    } as Prisma.yarnDyeingJobsWhereInput,
-                    select: { [dbColumn]: true } as any,
-                    distinct: [dbColumn as any],
-                });
-                values = rows.map(r => (r as any)[dbColumn]).filter(v => v != null && v !== "").map(String);
-                break;
-            }
+            // case "yarnDyeingJob": {
+            //     const rows = await prisma.yarnDyeingJobs.findMany({
+            //         where: {
+            //             workOrder: workOrderWhere,
+            //         } as Prisma.yarnDyeingJobsWhereInput,
+            //         select: { [dbColumn]: true } as any,
+            //         distinct: [dbColumn as any],
+            //     });
+            //     values = rows.map(r => (r as any)[dbColumn]).filter(v => v != null && v !== "").map(String);
+            //     break;
+            // }
         }
 
         const sorted = values.sort((a, b) => {

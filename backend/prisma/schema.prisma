@@ -34,7 +34,7 @@ model WorkOrder {
   styleRequirementId Int?
   jobs               jobs?             @relation(fields: [jobId], references: [id])
   jobId              Int?
-  yarnDyeingJobs     yarnDyeingJobs[]
+  // yarnDyeingJobs     yarnDyeingJobs[]
   factoryName        String            @default("NULL")
   yarnCount          String            @default("NULL")
   stichLength        String            @default("NULL")
@@ -51,17 +51,17 @@ model WorkOrder {
   @@index([jobId])
 }
 
-model yarnDyeingJobs {
-  id          Int        @id @default(autoincrement())
-  color       String
-  qty         Float
-  composition String
-  createdAt   DateTime   @default(now())
-  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
-  workOrderId Int?
-  unitePrice  Float      @default(0.0)
-  // yarnDeliveries yarnDeliveries[]
-}
+// model yarnDyeingJobs {
+//   id          Int        @id @default(autoincrement())
+//   color       String
+//   qty         Float
+//   composition String
+//   createdAt   DateTime   @default(now())
+//   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+//   workOrderId Int?
+//   unitePrice  Float      @default(0.0)
+//   // yarnDeliveries yarnDeliveries[]
+// }
 
 // model yarnDeliveries {
 //   id Int @id @default(autoincrement())
