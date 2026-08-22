@@ -90,4 +90,6 @@ getRouters.get("/total/yarn-stock", responseTimeMonitor, authenticate, yarnStock
 
 getRouters.get("/total/yd-stock", responseTimeMonitor, ydStock);
 
+getRouters.get("/total/yarn-work-order", responseTimeMonitor, yarnStock);
+
 export default getRouters;

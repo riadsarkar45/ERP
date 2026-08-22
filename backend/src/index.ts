@@ -9,6 +9,7 @@ import { initSocket } from "./middleware/socket.io/socket";
 import { trackRequests } from "./middleware/rateLimiter/trackRequest";
 import authRouter from "./routes/auth/auth.Routes";
 import cookieParser from "cookie-parser";
+import { initSocketRoutes } from "./socketRoutes/socket.routes";
 const app = express();
 app.use(cookieParser())
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app"];
@@ -52,6 +53,7 @@ const start = async () => {
     console.log(`Server is running on port ${PORT}`);
   });
   initSocket(server);
+  initSocketRoutes();
 };
 
 start();

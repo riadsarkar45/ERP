@@ -34,13 +34,13 @@ model WorkOrder {
   styleRequirementId Int?
   jobs               jobs?             @relation(fields: [jobId], references: [id])
   jobId              Int?
-  // yarnDyeingJobs     yarnDyeingJobs[]
   factoryName        String            @default("NULL")
   yarnCount          String            @default("NULL")
   stichLength        String            @default("NULL")
   machineDia         String            @default("NULL")
   createdBy          Int               @default(1)
   user               user?             @relation("WorkOrderCreatedBy", fields: [createdBy], references: [id])
+  isApproved         Boolean           @default(false)
 
   @@index([yarnCount])
   @@index([machineDia])
@@ -51,24 +51,21 @@ model WorkOrder {
   @@index([jobId])
 }
 
-// model yarnDyeingJobs {
-//   id          Int        @id @default(autoincrement())
-//   color       String
-//   qty         Float
-//   composition String
-//   createdAt   DateTime   @default(now())
-//   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
-//   workOrderId Int?
-//   unitePrice  Float      @default(0.0)
-//   // yarnDeliveries yarnDeliveries[]
-// }
+model YarnColorBooking {
+  id            Int         @id @default(autoincrement())
+  color         String
+  shade         String?
+  yarnCount     String?
+  machineDia    String?
+  lotNo         String?
+  qty           Float
+  price         Float
+  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  compositionId Int
 
-// model yarnDeliveries {
-//   id Int @id @default(autoincrement())
-
-//   yarnDyeingJobs   yarnDyeingJobs? @relation(fields: [yarnDyeingJobsId], references: [id])
-//   yarnDyeingJobsId Int?
-// }
+  @@index([compositionId])
+  @@index([color])
+}
 
 model Composition {
   id                    Int                  @id @default(autoincrement())
@@ -85,6 +82,7 @@ model Composition {
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
   challans              Challan[]
+  yarnColors            YarnColorBooking[] // <-- Relation added here
 
   @@index([workOrderId])
   @@index([color])
@@ -134,7 +132,7 @@ model sizeWiseCutting {
   cuttingStyleId Int
   sizeId         Int
   size           sizes @relation(fields: [sizeId], references: [id])
-  cutQty         Int // ← was String
+  cutQty         Int
 
   @@index([sizeId])
   @@index([cuttingStyleId])
@@ -151,7 +149,6 @@ model sizes {
   @@index([styleRequirementId])
 }
 
-// ── Universal Challan Model (works for ALL delivery types) ──
 model Challan {
   id          Int      @id @default(autoincrement())
   challanNo   Int
@@ -159,17 +156,14 @@ model Challan {
   toFactory   String
   fromFactory String
 
-  // Optional composition link (for AOP/KWO/DWO deliveries)
   yarnCompId  Int?
   composition Composition? @relation(fields: [yarnCompId], references: [id])
 
-  // One challan can have multiple deliveries (different types)
   deliveries deliveries[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Prevent duplicate challans for the same number + factories
   @@unique([challanNo, toFactory, fromFactory])
   @@index([challanNo])
   @@index([challanDate])
@@ -177,13 +171,12 @@ model Challan {
   @@index([fromFactory])
 }
 
-// ── Updated deliveries model ──
 model deliveries {
   id           Int      @id @default(autoincrement())
   challanNo    Int
   deliveryDate DateTime
   deliveryQty  Float
-  deliveryType String // "Yarn Delivery", "Knitting Delivery", "Dyeing Delivery", "Sent For Aop", "Received From Aop", etc.
+  deliveryType String
   yarnId       Int
   toFactory    String
   fromFactory  String
@@ -191,16 +184,14 @@ model deliveries {
   composition Composition? @relation(fields: [yarnCompId], references: [id])
   yarnCompId  Int?
 
-  // ── Link to universal Challan ──
   challan   Challan? @relation(fields: [challanId], references: [id])
-  challanId Int? // NULL for legacy/manual entries
+  challanId Int?
   createdBy Int      @default(1)
   userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@index([yarnCompId])
   @@index([createdBy])
-  // @@index([userId])
   @@index([deliveryDate])
   @@index([challanNo])
   @@index([challanId])
@@ -288,7 +279,7 @@ model yarnStock {
   count              String
   composition        String
   lotNo              String
-  physicalBalanceQty String
+  physicalBalanceQty Int
   createdBy          Int
 }
 

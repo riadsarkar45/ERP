@@ -32,9 +32,9 @@ const Input = ({
                         <option value="">
                             {placeholder || `Select ${label}`}
                         </option>
-                        {options.map((option) => (
+                        {options.map((option, i) => (
                             <option 
-                                key={option} 
+                                key={i+1} 
                                 value={option}
                             >
                                 {option}

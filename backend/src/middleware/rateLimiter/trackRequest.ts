@@ -5,7 +5,7 @@ export const trackRequests = (req: any, res: any, next: any) => {
   const route = req.originalUrl;
 
   res.on("finish", () => {
-    const io = getIO(); // ✅ MOVE INSIDE
+    const io = getIO();
     if(!io) return; 
     if (!metrics.byRoute.has(route)) {
       metrics.byRoute.set(route, { allowed: 0, blocked: 0 });

@@ -92,7 +92,7 @@ export const uploadYarnAndYdStockData = async (
                     count: row.count.trim(),
                     composition: row.composition ? row.composition.trim() : "",
                     lotNo: row.lotNo ? row.lotNo.trim() : "",
-                    physicalBalanceQty: row.physicalBalanceQty ? String(row.physicalBalanceQty).trim() : "0",
+                    physicalBalanceQty: row.physicalBalanceQty ? Number(row.physicalBalanceQty) : 0,
                     createdBy: createdBy,
                 })),
             });

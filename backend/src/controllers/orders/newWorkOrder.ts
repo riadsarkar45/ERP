@@ -3,8 +3,15 @@ import prisma from "../../database/prismaClient/prisma";
 import { checkDataExist } from "../../utils/checkIfDataExist";
 import { evaluateQtyExpression } from "../newStyleRequirements/updateStyleRequires/evaluateQtyExpression";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-type YarnColorInput = { color: string; qty: string | number; price: string | number };
+type YarnColorInput = {
+    color: string;
+    shade?: string;
+    yarnCount?: string;
+    machineDia?: string;
+    lotNo?: string;
+    qty: string | number;
+    price: string | number;
+};
 
 type CompositionInput = {
     composition: string;
@@ -39,30 +46,28 @@ type CreateJobBody = {
     compositions: CompositionInput[];
 };
 
-// FIX: same shape/values as ORDER_TYPE_RULES in NewOrder.jsx. This is the
-// single source of truth for "which WorkOrder-level field is required for
-// which order type" — previously the backend had its own hand-written
-// combination of `orderType !== "yarnDyeingOrder"`, `orderType === "knittingOrder"`,
-// and `orderType === "knittingOrder" || orderType === "dyeingOrder"` checks
-// that didn't match what the frontend showed/required (e.g. stichLength was
-// required here for dyeingOrder, but the frontend didn't require it for
-// dyeingOrder — so a blank Stich Length passed the frontend and 400'd here).
-// Keep this object identical to the frontend's ORDER_TYPE_RULES.
-const ORDER_TYPE_RULES: Record<string, { lotNo: boolean; yarnCount: boolean; stichLength: boolean; machineDia: boolean }> = {
+const ORDER_TYPE_RULES: Record<
+    string,
+    { lotNo: boolean; yarnCount: boolean; stichLength: boolean; machineDia: boolean }
+> = {
     knittingOrder: { lotNo: true, yarnCount: true, stichLength: true, machineDia: true },
     aopOrder: { lotNo: true, yarnCount: true, stichLength: false, machineDia: false },
     dyeingOrder: { lotNo: true, yarnCount: true, stichLength: true, machineDia: false },
     yarnDyeingOrder: { lotNo: false, yarnCount: false, stichLength: false, machineDia: false },
 };
 
-const getRules = (orderType: string) =>
-    ORDER_TYPE_RULES[orderType] ?? { lotNo: false, yarnCount: false, stichLength: false, machineDia: false };
+const DEFAULT_RULES = { lotNo: false, yarnCount: false, stichLength: false, machineDia: false };
+const getRules = (orderType: string) => ORDER_TYPE_RULES[orderType] ?? DEFAULT_RULES;
 
-const isInvalid = (v: unknown) =>
+const isInvalid = (v: unknown): boolean =>
     v === "" || v === null || v === undefined || (typeof v === "string" && !v.trim());
 
-const isInvalidNumber = (v: unknown) =>
-    v === "" || v === null || v === undefined || isNaN(Number(v));
+const toValidNumber = (v: unknown): number | null => {
+    if (v === "" || v === null || v === undefined) return null;
+    const evaluated = evaluateQtyExpression(String(v));
+    const n = Number(evaluated);
+    return Number.isNaN(n) ? null : n;
+};
 
 export const createNewJob = async (req: Request, res: Response) => {
     const {
@@ -82,12 +87,9 @@ export const createNewJob = async (req: Request, res: Response) => {
         if (!req.user || Number.isNaN(userId)) {
             return res.status(401).json({ type: "error", message: "Unauthorized" });
         }
-        // ── Basic required validation ─────────────────────────────────────
+
         if (!jobNo) return res.status(400).send({ message: "Job number is required", type: "error" });
         if (!orderType) return res.status(400).send({ message: "Order type is required", type: "error" });
-        // FIX: reject unknown order types up front instead of silently falling
-        // through with all-false rules (which would make every field optional
-        // for a typo'd/unsupported orderType).
         if (!ORDER_TYPE_RULES[orderType]) {
             return res.status(400).send({ message: `Unknown order type: ${orderType}`, type: "error" });
         }
@@ -100,146 +102,128 @@ export const createNewJob = async (req: Request, res: Response) => {
             return res.status(400).send({ message: "At least one composition is required", type: "error" });
         }
 
-        // ── Extract WorkOrder-level fields from the first composition ─────
-        // Frontend sends these per-row; schema stores them once on WorkOrder.
-        const firstRow = compositions[0];
-        const lotNo = firstRow?.lotNo || "";
-        const yarnCount = firstRow?.yarnCount || "";
-        const stichLength = firstRow?.stichLength || "";
-        const machineDia = firstRow?.machineDia || "";
+        const firstRow: CompositionInput | undefined = compositions[0];
+        const lotNo: string = firstRow?.lotNo || "";
+        const yarnCount: string = firstRow?.yarnCount || "";
+        const stichLength: string = firstRow?.stichLength || "";
+        const machineDia: string = firstRow?.machineDia || "";
 
-        // ── WorkOrder-level field validation ──────────────────────────────
-        // FIX: driven by the shared rules table instead of a bespoke
-        // `orderType !== "yarnDyeingOrder"` + per-field `orderType === "x"` checks.
         const rules = getRules(orderType);
-        if (rules.lotNo && isInvalid(lotNo)) {
-            return res.status(400).send({ message: "Lot No is required", type: "error" });
-        }
-        if (rules.yarnCount && isInvalid(yarnCount)) {
-            return res.status(400).send({ message: "Yarn Count is required", type: "error" });
-        }
-        if (rules.machineDia && isInvalid(machineDia)) {
-            return res.status(400).send({ message: "Machine Dia is required for knitting order", type: "error" });
-        }
-        if (rules.stichLength && isInvalid(stichLength)) {
-            return res.status(400).send({ message: "Stich Length is required", type: "error" });
-        }
+        if (rules.lotNo && isInvalid(lotNo)) return res.status(400).send({ message: "Lot No is required", type: "error" });
+        if (rules.yarnCount && isInvalid(yarnCount)) return res.status(400).send({ message: "Yarn Count is required", type: "error" });
+        if (rules.machineDia && isInvalid(machineDia)) return res.status(400).send({ message: "Machine Dia is required", type: "error" });
+        if (rules.stichLength && isInvalid(stichLength)) return res.status(400).send({ message: "Stich Length is required", type: "error" });
 
-        // ── Per-composition validation ────────────────────────────────────
+        const resolvedQtyByIndex: (number | null)[] = [];
+        const resolvedPriceByIndex: (number | null)[] = [];
+
         for (let i = 0; i < compositions.length; i++) {
-            const comp = compositions[i];
+            const comp: CompositionInput | undefined = compositions[i];
 
-            // orderQty is intentionally not required — it's not collected per
-            // work order (see orderQty: 0 in the create() call below).
-            if (!comp?.composition || !comp?.color) {
-                return res.status(400).send({
-                    message: `Composition ${i + 1}: composition and color are required`,
-                    type: "error",
-                });
+            if (!comp || !comp.composition || !comp.color) {
+                return res.status(400).send({ message: `Composition ${i + 1}: composition and color are required`, type: "error" });
             }
 
             if (orderType === "yarnDyeingOrder") {
-                if (!Array.isArray(comp.yarnColors) || comp.yarnColors.length === 0) {
-                    return res.status(400).send({
-                        message: `Composition ${i + 1}: at least one yarn color is required for yarn dyeing order`,
-                        type: "error",
-                    });
+                const yarnColors: YarnColorInput[] = comp.yarnColors ?? [];
+                if (yarnColors.length === 0) {
+                    return res.status(400).send({ message: `Composition ${i + 1}: at least one yarn color is required`, type: "error" });
                 }
-                for (let j = 0; j < comp.yarnColors.length; j++) {
-                    const yc = comp.yarnColors[j];
-                    if (!yc?.color || isInvalidNumber(evaluateQtyExpression(String(yc?.qty))) || isInvalidNumber(evaluateQtyExpression(String(yc?.price)))) {
-                        return res.status(400).send({
-                            message: `Composition ${i + 1}, Yarn Color ${j + 1}: color, valid qty and price are required`,
-                            type: "error",
-                        });
+                
+                let rowQty = 0;
+                let rowAmount = 0;
+                for (let j = 0; j < yarnColors.length; j++) {
+                    const yc: YarnColorInput | undefined = yarnColors[j];
+                    const qty = toValidNumber(yc?.qty);
+                    const price = toValidNumber(yc?.price);
+                    if (!yc || !yc.color || qty === null || price === null) {
+                        return res.status(400).send({ message: `Composition ${i + 1}, Yarn Color ${j + 1}: color, valid qty and price are required`, type: "error" });
                     }
+                    rowQty += qty;
+                    rowAmount += qty * price;
                 }
+                resolvedQtyByIndex.push(rowQty);
+                resolvedPriceByIndex.push(rowQty > 0 ? rowAmount / rowQty : 0);
             } else {
-                // workOrderQty is the quantity that matters for non-yarn-dyeing orders
-                if (isInvalidNumber(evaluateQtyExpression(String(comp?.workOrderQty)))) {
-                    return res.status(400).send({
-                        message: `Composition ${i + 1}: valid work order quantity is required`,
-                        type: "error",
-                    });
+                const workOrderQty = toValidNumber(comp.workOrderQty);
+                if (workOrderQty === null) {
+                    return res.status(400).send({ message: `Composition ${i + 1}: valid work order quantity is required`, type: "error" });
                 }
-                if (isInvalidNumber(evaluateQtyExpression(String(comp?.unitPrice)))) {
-                    return res.status(400).send({
-                        message: `Composition ${i + 1}: valid price per kg is required`,
-                        type: "error",
-                    });
+                const unitPrice = toValidNumber(comp.unitPrice);
+                if (unitPrice === null) {
+                    return res.status(400).send({ message: `Composition ${i + 1}: valid price per kg is required`, type: "error" });
                 }
+                resolvedQtyByIndex.push(workOrderQty);
+                resolvedPriceByIndex.push(unitPrice);
             }
         }
 
-        // ── Lookups ───────────────────────────────────────────────────────
         const findStyleRequirement = await prisma.styleRequirement.findUnique({ where: { jobNo } });
         if (!findStyleRequirement) {
-            return res.status(404).send({
-                message: "Style requirement not found for this job number",
-                type: "error",
-            });
+            return res.status(404).send({ message: "Style requirement not found for this job number", type: "error" });
         }
 
         const jobRecord = await checkDataExist(jobNo);
         if (!jobRecord?.id) {
             return res.status(404).send({ message: "Job record not found", type: "error" });
         }
-        const jobId = jobRecord.id;
 
-        // ── Transactional create (WorkOrder + Compositions + YarnJobs) ────
-        const workOrder = await prisma.$transaction(async (tx) => {
-            const created = await tx.workOrder.create({
-                data: {
-                    // ── Top-level WorkOrder fields ──
-                    workOrderPlaceDate,
-                    workOrderNo,
-                    month,
-                    styleNo: styleNo || style || "",
-                    lotNo,
-                    jobNo,
-                    factoryName,
-                    orderType,
-                    jobId,
-                    styleRequirementId: findStyleRequirement.id,
-                    // ── WorkOrder-level fields (extracted from row 0) ──
-                    yarnCount,
-                    stichLength,
-                    machineDia,
-                    createdBy: userId,
-                    // ── Compositions (per-row fields) ──
-                    compositions: {
-                        create: compositions.map((c) => ({
-                            composition: c.composition,
-                            color: c.color,
-                            orderQty: 0, // not collected per work order — intentional
-                            workOrderQty: evaluateQtyExpression(String(c.workOrderQty)) ?? 0,
-                            unitePrice: c.unitPrice ? Number(c.unitPrice) : 0,
-                            orderType,
-                        })),
+        // ── FIX: Added explicit timeout config to prevent P2028 transaction drop errors ──
+        const workOrder = await prisma.$transaction(
+            async (tx) => {
+                return await tx.workOrder.create({
+                    data: {
+                        workOrderPlaceDate,
+                        workOrderNo,
+                        month,
+                        styleNo: styleNo || style || "",
+                        lotNo,
+                        jobNo,
+                        factoryName,
+                        orderType,
+                        jobId: jobRecord.id,
+                        styleRequirementId: findStyleRequirement.id,
+                        yarnCount,
+                        stichLength,
+                        machineDia,
+                        createdBy: userId,
+                        compositions: {
+                            create: compositions.map((c: CompositionInput, i: number) => {
+                                const compData: any = {
+                                    composition: c.composition,
+                                    color: c.color,
+                                    orderQty: 0,
+                                    workOrderQty: resolvedQtyByIndex[i] ?? 0,
+                                    unitePrice: resolvedPriceByIndex[i] ?? 0,
+                                    orderType,
+                                };
+
+                                if (orderType === "yarnDyeingOrder" && c.yarnColors && c.yarnColors.length > 0) {
+                                    compData.yarnColors = {
+                                        create: c.yarnColors.map((yc) => ({
+                                            color: yc.color,
+                                            shade: yc.shade || "",
+                                            yarnCount: yc.yarnCount || "",
+                                            machineDia: yc.machineDia || "",
+                                            lotNo: yc.lotNo || "",
+                                            qty: toValidNumber(yc.qty) ?? 0,
+                                            price: toValidNumber(yc.price) ?? 0,
+                                        })),
+                                    };
+                                }
+
+                                return compData;
+                            }),
+                        },
                     },
-                },
-                include: { compositions: true },
-            });
-
-            // // ── Yarn dyeing color rows ────────────────────────────────────
-            // if (orderType === "yarnDyeingOrder") {
-            //     const yarnRows = compositions.flatMap((comp) =>
-            //         (comp.yarnColors ?? []).map((yc) => ({
-            //             color: yc.color,
-            //             qty: evaluateQtyExpression(String(yc.qty)) ?? 0,
-            //             unitePrice: evaluateQtyExpression(String(yc.price)) ?? 0,
-            //             composition: comp.composition,
-            //             workOrderId: created.id,
-            //         }))
-            //     );
-
-            //     if (yarnRows.length > 0) {
-            //         await tx.yarnDyeingJobs.createMany({ data: yarnRows });
-            //     }
-            // }
-
-            return created;
-        });
+                    include: { compositions: true },
+                });
+            },
+            {
+                timeout: 15000, // 15 seconds (prevents P2028 timeout drops)
+                maxWait: 20000,
+            }
+        );
 
         return res.status(201).send({
             message: "Work order created successfully",
@@ -252,24 +236,15 @@ export const createNewJob = async (req: Request, res: Response) => {
         });
     } catch (e) {
         console.error("Error creating work order:", e);
-
-        const code = (e as any)?.code;
+        const code = (e as { code?: string })?.code;
+        
         if (code === "P2002") {
-            return res.status(409).send({
-                message: "A work order with this number already exists",
-                type: "error",
-            });
+            return res.status(409).send({ message: "A work order with this number already exists", type: "error" });
         }
         if (code === "P2003") {
-            return res.status(400).send({
-                message: "Invalid reference data - please check your inputs",
-                type: "error",
-            });
+            return res.status(400).send({ message: "Invalid reference data - please check your inputs", type: "error" });
         }
 
-        return res.status(500).send({
-            message: "Internal server error while creating work order",
-            type: "error",
-        });
+        return res.status(500).send({ message: "Internal server error while creating work order", type: "error" });
     }
 };
