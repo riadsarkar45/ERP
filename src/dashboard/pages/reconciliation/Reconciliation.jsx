@@ -91,7 +91,7 @@ const Reconciliation = () => {
         5: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
     };
 
-    const TRAILING_FIELDS = [
+    const TRAILING_FIELDS = useMemo(() => [
         { key: "fabricIssueCuttingDept", type: "input" }, { key: "fabricIssuedShortExcess", type: "FORMULA" },
         { key: "cadConsumption", type: "FORMULA" }, { key: "plannedCuttingQty", type: "FORMULA" },
         { key: "actualCuttingQty", type: "input" }, { key: "cuttingShortExcess", type: "FORMULA" },
@@ -106,7 +106,7 @@ const Reconciliation = () => {
         { key: "shippedQty", type: "input" }, { key: "excessShort", type: "FORMULA" },
         { key: "plannedLeftOverQty", type: "FORMULA" }, { key: "physicalFoundLeftOver", type: "input" },
         { key: "percentPhysicalFoundLeftover", type: "FORMULA" }, { key: "leftOverShortExcess", type: "FORMULA" },
-    ];
+    ], []);
 
     const FORMULA_KEYS_TO_PERSIST = ["cadConsumption", "plannedCuttingQty", "plannedLeftOverQty"];
 
@@ -222,7 +222,7 @@ const Reconciliation = () => {
         setEditingJobIndex(null);
     };
 
-    const calculateFormula = (jobIndex, i, fieldKey) => {
+    const calculateFormula = useCallback((jobIndex, i, fieldKey) => {
         const get = (key) => {
             const valStr = editValues[`${jobIndex}-${i}-${key}`];
             if (valStr !== undefined && valStr !== "") {
@@ -270,7 +270,7 @@ const Reconciliation = () => {
             }
             default: return 0;
         }
-    };
+    }, [editValues, reportData]);
 
     const buildJobPayload = (jobIndex, job) => {
         const comps = job?.rows || [];
@@ -481,7 +481,7 @@ const Reconciliation = () => {
         });
 
         return totals;
-    }, [reportData, editValues, editingJobIndex]);
+    }, [reportData, editValues,TRAILING_FIELDS, calculateFormula,]);
 
     return (
         <div className="min-h-screen w-full p-1 md:p-4 font-sans">
