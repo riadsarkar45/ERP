@@ -23,6 +23,8 @@ import { hourlyDeliveryMovement } from "../controllers/users/hrlyDeliveryReport"
 import { factoriesWithTotalWorkOrderQty } from "../controllers/orders/factoriesWorkOrderTotal";
 import { getDeliveryTotals } from "../controllers/deliveries/allDeliveryTotals";
 import { yarnStock, ydStock } from "../controllers/yarnStock/yarnStock";
+import { pendingWorkOrders } from "../controllers/orders/pendingWorkOrder";
+import { generateKnittingPdfWorkOrder } from "../controllers/orders/pdfWorkOrder";
 
 const getRouters = express.Router();
 
@@ -91,5 +93,11 @@ getRouters.get("/total/yarn-stock", responseTimeMonitor, authenticate, yarnStock
 getRouters.get("/total/yd-stock", responseTimeMonitor, ydStock);
 
 getRouters.get("/total/yarn-work-order", responseTimeMonitor, yarnStock);
+
+getRouters.get("/total/yarn-work-order", responseTimeMonitor, yarnStock);
+
+getRouters.get("/pending/work-order/:orderType", responseTimeMonitor, pendingWorkOrders);
+
+getRouters.get("/generate-pdf-work-order/:id", responseTimeMonitor, generateKnittingPdfWorkOrder);
 
 export default getRouters;
