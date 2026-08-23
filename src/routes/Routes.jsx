@@ -34,6 +34,7 @@ import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
 import YarnDyedMovement from "../dashboard/pages/yarnstock/YarnDyedMovement";
 import YarnDyedStock from "../dashboard/pages/yarnstock/YarnDyedStock";
 import BalanceSheet from "../dashboard/pages/reconciliation/JobWiseBalance";
+import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
 
 const routers = createBrowserRouter([
     {
