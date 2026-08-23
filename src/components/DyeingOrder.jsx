@@ -169,6 +169,51 @@ const DyeingOrder = ({ orders, handleInlineEdit,handleRedirect, updatedFields, h
                                     ))
                                 )}
                             </td>
+                            <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((col, j) => (
+                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
+                                            YARN COUNT
+                                        </div>
+                                    ))
+                                )}
+                            </td>
+                            <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((col, j) => (
+                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
+                                            YARN LOT
+                                        </div>
+                                    ))
+                                )}
+                            </td>
+                            <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((col, j) => (
+                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
+                                            STICH LENGTH
+                                        </div>
+                                    ))
+                                )}
+                            </td>
+                            <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((col, j) => (
+                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
+                                            MACHINE DIA
+                                        </div>
+                                    ))
+                                )}
+                            </td>
+                            <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
+                                {workOrders.map((wo, i) =>
+                                    wo.compositions?.map((col, j) => (
+                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
+                                            SHADE %
+                                        </div>
+                                    ))
+                                )}
+                            </td>
 
                             <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
@@ -339,6 +384,11 @@ const DyeingOrder = ({ orders, handleInlineEdit,handleRedirect, updatedFields, h
                     </td>
                     <td style={footerTd}>-</td>
                     {/* <td style={footerTd}>{totals.orderQty}</td> */}
+                    <td style={footerTd}>-</td>
+                    <td style={footerTd}>-</td>
+                    <td style={footerTd}>-</td>
+                    <td style={footerTd}>-</td>
+                    <td style={footerTd}>-</td>
                     <td style={footerTd}>{totals?.workOrderQty?.toFixed(2)}</td>
                     <td style={footerTd}>{totals?.totalGreyDelivery?.toFixed(2)}</td>
                     <td style={{ ...footerTd, color: totals?.shortExcess > 0 ? "red" : "green" }}>
