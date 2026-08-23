@@ -119,7 +119,8 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             lotNo: true,
                             orderType: true,
                             factoryName: true,
-                            
+                            machineDia: true,
+                            yarnCount: true,
                             compositions: {
                                 select: {
                                     id: true,
@@ -166,7 +167,6 @@ export const getAllOrders = async (req: Request, res: Response) => {
         return res.status(200).json({
             type: "success",
             data: statsResult,
-            // pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         });
     } catch (e) {
         console.error(e);

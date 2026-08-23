@@ -33,6 +33,7 @@ import YarnMovementReport from "../dashboard/pages/yarnstock/MovementReport";
 import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
 import YarnDyedMovement from "../dashboard/pages/yarnstock/YarnDyedMovement";
 import YarnDyedStock from "../dashboard/pages/yarnstock/YarnDyedStock";
+import PendingWorkOrder from "../dashboard/pages/pendingWorkders/pendingWorkOrder";
 
 const routers = createBrowserRouter([
     {
@@ -160,23 +161,27 @@ const routers = createBrowserRouter([
                     },
                     {
                         path: "yarn",
-                        element: <PurchaseOrderStatus/>
+                        element: <PurchaseOrderStatus />
                     },
                     {
                         path: "yarn/movement",
-                        element: <YarnMovementReport/>
+                        element: <YarnMovementReport />
                     },
                     {
                         path: "yarn/stock",
-                        element: <StockStaus/>
+                        element: <StockStaus />
                     },
                     {
                         path: "yarndyed/movement",
-                        element: <YarnDyedMovement/>
+                        element: <YarnDyedMovement />
                     },
                     {
                         path: "yarndyed/stock",
-                        element: <YarnDyedStock/>
+                        element: <YarnDyedStock />
+                    },
+                    {
+                        path: "pending-work-orders",
+                        element: <PendingWorkOrder />
                     },
                 ]
             }
