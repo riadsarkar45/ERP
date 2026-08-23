@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import  { useEffect, useState } from 'react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 import { Loader2 } from 'lucide-react';
 import AllPendingWorkOrder from './AllPendingWorkOrder';
 
-const PendingWorkOrder = () => {
+const NotApprovedWorkOrder = () => {
     const axiosSecure = useAxiosPrivate();
     const [isLoading, setIsLoading] = useState(true);
     const [selectOrderType, setSelectedOrderType] = useState("knittingOrder");
@@ -123,4 +123,5 @@ const PendingWorkOrder = () => {
     );
 };
 
-export default PendingWorkOrder;
+
+export default NotApprovedWorkOrder;
