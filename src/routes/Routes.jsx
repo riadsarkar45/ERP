@@ -33,6 +33,7 @@ import YarnMovementReport from "../dashboard/pages/yarnstock/MovementReport";
 import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
 import YarnDyedMovement from "../dashboard/pages/yarnstock/YarnDyedMovement";
 import YarnDyedStock from "../dashboard/pages/yarnstock/YarnDyedStock";
+import BalanceSheet from "../dashboard/pages/reconciliation/JobWiseBalance";
 
 const routers = createBrowserRouter([
     {
@@ -177,6 +178,10 @@ const routers = createBrowserRouter([
                     {
                         path: "yarndyed/stock",
                         element: <YarnDyedStock/>
+                    },
+                    {
+                        path: "balance-sheet",
+                        element: <BalanceSheet/>
                     },
                 ]
             }

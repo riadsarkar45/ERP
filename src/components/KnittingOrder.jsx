@@ -171,6 +171,30 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
                                     <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>{col.color || "-"}</div>
                                 )))}
                             </td>
+                            {/* COL 8 — YARN COUNT */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
+                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>YARN COUNT</div>
+                                )))}
+                            </td>
+                            {/* COL 8 — YARN LOT */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
+                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>YARN LOT</div>
+                                )))}
+                            </td>
+                            {/* COL 8 — STITCH LENGTH */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
+                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>STITCH LENGHT</div>
+                                )))}
+                            </td>
+                            {/* COL 8 — MACHINE DIA */}
+                            <td style={plainTd(isHovered)}>
+                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
+                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>MC DIA</div>
+                                )))}
+                            </td>
 
 
 
@@ -300,7 +324,15 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
                     <td style={footerStickyTd(6)}><div className={innerItem}></div></td>
 
                     {/* COL 7 — COLOR (not numeric, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div></td>
+                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
+                    {/* COL 7 — YARN COUNT (not numeric, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
+                    {/* COL 7 — YARN LOT (not numeric, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
+                    {/* COL 7 — S.L (not numeric, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
+                    {/* COL 7 — MC DIA (not numeric, blank) */}
+                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
 
                     {/* COL 8 — ORDER QTY total */}
                     {/* <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.orderQty)}</div></td>                    */}

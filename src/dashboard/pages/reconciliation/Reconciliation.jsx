@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { RefreshCcw, WrapText, AlignJustify, ListFilter, X, Edit3, Save, XCircle, CloudCog } from 'lucide-react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+import { Link } from 'react-router-dom';
 
 const ShortExcess = ({ value }) => {
     const val = Number(value) || 0;
@@ -71,7 +72,7 @@ const Reconciliation = () => {
     const YARN_TABLE_HEADERS = [
         "", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "MANUFACTURING UNIT",
         "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY",
-        "SHORT & EXCESS", 
+        "SHORT & EXCESS",
         "YARN RETURN", "GREY RECEIVED",
         "SHORT & EXCESS", "GREY DELIVERY FOR DYEING", "GREY RET. RCVD FROM DYEING", "GREY RECEIVED FROM DYEING",
         "FINISH RECEIVED FROM DYEING", "PROCESS LOSS %", "SHORT & EXCESS", "SENT FOR AOP", "RETURN RECEIVED FROM AOP",
@@ -495,6 +496,11 @@ const Reconciliation = () => {
                         <RefreshCcw size={16} className={isLoading ? "animate-spin" : ""} />
                         Refresh Data
                     </button>
+                    <Link to={"/dashboard/balance-sheet"}>
+                        <button className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50">
+                            Balance Sheet
+                        </button>
+                    </Link>
 
                     {selectedJobs.size > 0 && (
                         <button onClick={handleGlobalSubmit} disabled={savingJob} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -744,7 +750,7 @@ const Reconciliation = () => {
                                             </td>
 
                                             <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
-                                            
+
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.knittingOrder_Yarn_Return && !isNaN(Number(comp.knittingOrder_Yarn_Return))
                                                     ? Number(comp.knittingOrder_Yarn_Return).toFixed(2) : "-"}
@@ -753,8 +759,8 @@ const Reconciliation = () => {
                                                 {comp?.knittingOrder_Grey_Fabric_Received && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received))
                                                     ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>                                         
-                                            
+                                            <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
+
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Grey_Delivery && !isNaN(Number(comp.dyeingOrder_Grey_Delivery))
                                                     ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2) : "-"}
@@ -766,15 +772,15 @@ const Reconciliation = () => {
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Grey_Received && !isNaN(Number(comp.dyeingOrder_Grey_Received))
                                                     ? Number(comp.dyeingOrder_Grey_Received).toFixed(2) : "-"}
-                                            </td>                                           
+                                            </td>
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.dyeingOrder_Finish_Received && !isNaN(Number(comp.dyeingOrder_Finish_Received))
                                                     ? Number(comp.dyeingOrder_Finish_Received).toFixed(2) : "-"}
-                                            </td>                                           
-                                        
+                                            </td>
+
                                             <td className={cellClass} style={cellStyle}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
-                                           
+
                                             <td className={cellClass} style={cellStyle}>
                                                 {comp?.aopOrder_Sent_for_AOP && !isNaN(Number(comp.aopOrder_Sent_for_AOP))
                                                     ? Number(comp.aopOrder_Sent_for_AOP).toFixed(2) : "-"}
@@ -791,7 +797,7 @@ const Reconciliation = () => {
                                                 {comp?.aopOrder_AOP_Finish_Fabric_Rcvd && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd))
                                                     ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) : "-"}
                                             </td>
-                                            
+
                                             <td className={cellClass} style={cellStyle}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
                                             <td className={cellClass} style={cellStyle}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
 
@@ -861,8 +867,8 @@ const Reconciliation = () => {
                                     <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(3, "#e2e8f0")} />
 
                                     {/* FIXED: Order Qty footer cell now has sticky bottom-0 and correct left-sticky styling */}
-                                    <td 
-                                        className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" 
+                                    <td
+                                        className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900"
                                         style={{ ...stickyCellStyle(4, "#e2e8f0", false), borderTop: "2px solid #000000" }}
                                     >
                                         {footerTotals.orderQty.toFixed(2)}
@@ -879,22 +885,22 @@ const Reconciliation = () => {
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         {footerTotals.knitYarnDelivery.toFixed(2)}
                                     </td>
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.yarnShortExcessReq} /></div>
                                     </td>
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         {footerTotals.knitYarnReturn.toFixed(2)}
                                     </td>
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         {footerTotals.knitGreyReceived.toFixed(2)}
                                     </td>
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.knitShortExcess} /></div>
                                     </td>
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         {footerTotals.dyeGreyDelivery.toFixed(2)}
                                     </td>
@@ -908,11 +914,11 @@ const Reconciliation = () => {
                                         {footerTotals.dyeFinishReceived.toFixed(2)}
                                     </td>
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }} />
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.dyeShortExcess} /></div>
                                     </td>
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         {footerTotals.aopSent.toFixed(2)}
                                     </td>
@@ -926,7 +932,7 @@ const Reconciliation = () => {
                                         {footerTotals.aopFinishReceived.toFixed(2)}
                                     </td>
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }} />
-                                    
+
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.aopShortExcess} /></div>
                                     </td>
@@ -935,7 +941,7 @@ const Reconciliation = () => {
                                         const isPercent = field.key.toLowerCase().includes("percent");
                                         const isShortExcess = field.key.toLowerCase().includes("short") || field.key.toLowerCase().includes("excess");
                                         const val = footerTotals[field.key];
-                                        
+
                                         if (isShortExcess) {
                                             return (
                                                 <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
