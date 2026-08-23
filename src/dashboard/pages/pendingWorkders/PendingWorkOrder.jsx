@@ -1,4 +1,4 @@
-import  { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 import { Loader2 } from 'lucide-react';
 import AllPendingWorkOrder from './AllPendingWorkOrder';
@@ -13,7 +13,7 @@ const NotApprovedWorkOrder = () => {
     const [error, setError] = useState(null);
     const partyViews = ["knittingOrder", "dyeingOrder", "aopOrder"];
 
-    
+
     const handleOrderType = (v) => {
         if (v === selectOrderType) return;
         setSelectedOrderType(v);
@@ -107,6 +107,7 @@ const NotApprovedWorkOrder = () => {
                 {workOrder?.map((it) => (
                     <AllPendingWorkOrder
                         key={it.id ?? `${it.workOrderNo}-${it.jobNo}`}
+                        id={it.id}
                         jobNo={it.jobNo}
                         workOrderNo={it.workOrderNo}
                         factoryName={it.factoryName}
@@ -122,6 +123,5 @@ const NotApprovedWorkOrder = () => {
         </div>
     );
 };
-
 
 export default NotApprovedWorkOrder;
