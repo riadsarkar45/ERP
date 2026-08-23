@@ -33,12 +33,7 @@ import YarnMovementReport from "../dashboard/pages/yarnstock/MovementReport";
 import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
 import YarnDyedMovement from "../dashboard/pages/yarnstock/YarnDyedMovement";
 import YarnDyedStock from "../dashboard/pages/yarnstock/YarnDyedStock";
-<<<<<<< HEAD
 import BalanceSheet from "../dashboard/pages/reconciliation/JobWiseBalance";
-=======
-import PendingWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
-import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
->>>>>>> 1e9d0ee08a675c51876995c4e8841a5fd3f8fc8a
 
 const routers = createBrowserRouter([
     {
