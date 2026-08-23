@@ -303,8 +303,8 @@ const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, han
                     </td>
                     {/* COLOR — not numeric, left blank */}
                     <td style={footerTd}></td>
-                    {/* ORDER QTY */}
-                    {/* <td style={footerTd}>{totals.orderQty}</td>                    */}
+                    {/* SHADE % */}
+                    <td style={footerTd}>-</td>                   
                     {/* WORK ORDER QTY */}
                     <td style={footerTd}>{totals.workOrderQty.toFixed(2)}</td>
                     {/* SENT FOR AOP */}
