@@ -33,10 +33,15 @@ import YarnMovementReport from "../dashboard/pages/yarnstock/MovementReport";
 import StockStaus from "../dashboard/pages/yarnstock/StockStatus";
 import YarnDyedMovement from "../dashboard/pages/yarnstock/YarnDyedMovement";
 import YarnDyedStock from "../dashboard/pages/yarnstock/YarnDyedStock";
+<<<<<<< HEAD
 // import PendingWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
 // import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
 import RequestedOrders from "../dashboard/pages/pendingWorkders/RequestedOrders";
 import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/pendingWorkOrder";
+=======
+import BalanceSheet from "../dashboard/pages/reconciliation/JobWiseBalance";
+import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
+>>>>>>> 8f4ff27eb4c4a08ebb038b4fa649134b7306c41b
 
 const routers = createBrowserRouter([
     {
@@ -186,9 +191,16 @@ const routers = createBrowserRouter([
                         path: "pending-work-orders",
                         element: <NotApprovedWorkOrder />
                     },
+<<<<<<< HEAD
                     {
                         path: "requested-work-orders",
                         element: <RequestedOrders/>
+=======
+
+                    {
+                        path: "balance-sheet",
+                        element: <BalanceSheet/>
+>>>>>>> 8f4ff27eb4c4a08ebb038b4fa649134b7306c41b
                     },
                 ]
             }

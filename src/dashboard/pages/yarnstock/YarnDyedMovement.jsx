@@ -1,60 +1,76 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
 const YarnDyedMovement = () => {
-    // --- 1. Sample Data ---
-    const [allData] = useState([
+    // --- 1. Sample Data (with localStorage persistence) ---
+    const defaultData = [
         {
             id: 1, date: '2026-08-01', challanNo: 'CH-001', piNo: 'PI-1001', lcNumber: 'LC-5001',
             supplierName: 'ABC Textiles Ltd. (Very Long Name for Testing Wrap)', jobNumber: 'JOB-2001',
-            color: 'Navy Blue', fabricComposition: '100% Cotton Combed', fabricWidth: '58"',
+            orderNo: 'ORD-1001', color: 'Navy Blue', fabricComposition: '100% Cotton Combed', fabricWidth: '58"',
             yarnCount: '30s', composition: '100% Cotton', lot: 'LOT-A1-Long-Lot-Number',
             yarnDeliveryQty: 1500.50, yarnReturnQty: 50.00, yarnReceivedQtyGrey: 1450.50, yarnReceivedQtyFinish: 1400.00,
             from: 'Factory A', to: 'Factory B', remarks: 'Regular shipment with special instructions'
         },
         {
             id: 2, date: '2026-08-05', challanNo: 'CH-002', piNo: 'PI-1002', lcNumber: 'LC-5002',
-            supplierName: 'XYZ Fabrics Inc.', jobNumber: 'JOB-2002', color: 'White',
-            fabricComposition: '80% Cotton, 20% Polyester Blend', fabricWidth: '60"',
+            supplierName: 'XYZ Fabrics Inc.', jobNumber: 'JOB-2002',
+            orderNo: 'ORD-1002', color: 'White', fabricComposition: '80% Cotton, 20% Polyester Blend', fabricWidth: '60"',
             yarnCount: '40s', composition: '80% Cotton, 20% Poly', lot: 'LOT-B2',
             yarnDeliveryQty: 2000.00, yarnReturnQty: 100.00, yarnReceivedQtyGrey: 1900.00, yarnReceivedQtyFinish: 1850.50,
             from: 'Factory B', to: 'Factory C', remarks: 'Urgent order'
         },
         {
             id: 3, date: '2026-07-15', challanNo: 'CH-003', piNo: 'PI-1003', lcNumber: 'LC-5003',
-            supplierName: 'Global Yarn Co.', jobNumber: 'JOB-2003', color: 'Red',
-            fabricComposition: '100% Polyester', fabricWidth: '56"',
+            supplierName: 'Global Yarn Co.', jobNumber: 'JOB-2003',
+            orderNo: 'ORD-1003', color: 'Red', fabricComposition: '100% Polyester', fabricWidth: '56"',
             yarnCount: '20s', composition: '100% Polyester', lot: 'LOT-C3',
             yarnDeliveryQty: 3000.75, yarnReturnQty: 150.25, yarnReceivedQtyGrey: 2850.50, yarnReceivedQtyFinish: 2800.00,
             from: 'Factory C', to: 'Factory A', remarks: 'Monthly batch'
         },
         {
             id: 4, date: '2026-08-10', challanNo: 'CH-004', piNo: 'PI-1004', lcNumber: 'LC-5004',
-            supplierName: 'Prime Textiles', jobNumber: 'JOB-2004', color: 'Green',
-            fabricComposition: '60% Cotton, 40% Linen', fabricWidth: '62"',
+            supplierName: 'Prime Textiles', jobNumber: 'JOB-2004',
+            orderNo: 'ORD-1004', color: 'Green', fabricComposition: '60% Cotton, 40% Linen', fabricWidth: '62"',
             yarnCount: '24s', composition: '60% Cotton, 40% Linen', lot: 'LOT-D4',
             yarnDeliveryQty: 1800.00, yarnReturnQty: 75.00, yarnReceivedQtyGrey: 1725.00, yarnReceivedQtyFinish: 1700.25,
             from: 'Factory A', to: 'Factory D', remarks: 'Special order'
         },
         {
             id: 5, date: '2026-07-22', challanNo: 'CH-005', piNo: 'PI-1005', lcNumber: 'LC-5005',
-            supplierName: 'Elite Fabrics', jobNumber: 'JOB-2005', color: 'Yellow',
-            fabricComposition: '100% Silk', fabricWidth: '54"',
+            supplierName: 'Elite Fabrics', jobNumber: 'JOB-2005',
+            orderNo: 'ORD-1005', color: 'Yellow', fabricComposition: '100% Silk', fabricWidth: '54"',
             yarnCount: '60s', composition: '100% Silk', lot: 'LOT-E5',
             yarnDeliveryQty: 500.00, yarnReturnQty: 25.00, yarnReceivedQtyGrey: 475.00, yarnReceivedQtyFinish: 450.00,
             from: 'Factory D', to: 'Factory B', remarks: 'Premium quality'
         }
-    ]);
+    ];
+
+    // Load from localStorage if available, otherwise use default data
+    const [allData, setAllData] = useState(() => {
+        try {
+            const saved = localStorage.getItem('yarnDyedMovementData');
+            return saved ? JSON.parse(saved) : defaultData;
+        } catch (error) {
+            return defaultData;
+        }
+    });
 
     // --- 2. State Management ---
     const [searchInput, setSearchInput] = useState('');
     const [activeSearch, setActiveSearch] = useState('');
     const [selectedMonth, setSelectedMonth] = useState('all');
     
-    // Excel-like filter state: { columnName: ['Value1', 'Value2'] }
+    // Excel-like filter state
     const [columnFilters, setColumnFilters] = useState({});
     const [openFilterCol, setOpenFilterCol] = useState(null);
     const [filterSearch, setFilterSearch] = useState('');
     const [tempFilterValues, setTempFilterValues] = useState([]);
+
+    // Inline Editing State (Batch Edit Pattern)
+    const [pendingEdits, setPendingEdits] = useState({}); // { [id]: "new remark string" }
+    const [editingRemarkId, setEditingRemarkId] = useState(null);
+
+    const hasPendingEdits = Object.keys(pendingEdits).length > 0;
 
     // --- 3. Column Definitions ---
     const columns = [
@@ -64,6 +80,7 @@ const YarnDyedMovement = () => {
         { key: 'lcNumber', label: 'LC Number', align: 'left', minWidth: 'min-w-[100px]' },
         { key: 'supplierName', label: 'Supplier Name', align: 'left', minWidth: 'min-w-[150px]' },
         { key: 'jobNumber', label: 'Job Number', align: 'left', minWidth: 'min-w-[100px]' },
+        { key: 'orderNo', label: 'Order No', align: 'left', minWidth: 'min-w-[100px]' },
         { key: 'color', label: 'Color', align: 'left', minWidth: 'min-w-[80px]' },
         { key: 'fabricComposition', label: 'Fabric Composition', align: 'left', minWidth: 'min-w-[150px]' },
         { key: 'fabricWidth', label: 'Fabric Width', align: 'left', minWidth: 'min-w-[60px]' },
@@ -79,7 +96,7 @@ const YarnDyedMovement = () => {
         { key: 'remarks', label: 'Remarks', align: 'left', minWidth: 'min-w-[150px]' },
     ];
 
-    // --- 4. Precompute Unique Values for Each Column (For Excel Dropdown) ---
+    // --- 4. Precompute Unique Values for Each Column ---
     const columnUniqueValues = useMemo(() => {
         const uniqueMap = {};
         columns.forEach(col => {
@@ -102,24 +119,22 @@ const YarnDyedMovement = () => {
     // --- 6. Filtered Data Logic ---
     const filteredData = useMemo(() => {
         return allData.filter(item => {
-            // Month Filter
             const matchesMonth = selectedMonth === 'all' || item.date.startsWith(selectedMonth);
             
-            // Global Search Filter
             const searchLower = activeSearch.toLowerCase();
             const matchesGlobalSearch = activeSearch === '' || 
                 item.challanNo.toLowerCase().includes(searchLower) ||
                 item.piNo.toLowerCase().includes(searchLower) ||
                 item.supplierName.toLowerCase().includes(searchLower) ||
                 item.jobNumber.toLowerCase().includes(searchLower) ||
+                item.orderNo.toLowerCase().includes(searchLower) ||
                 item.color.toLowerCase().includes(searchLower) ||
-                item.lot.toLowerCase().includes(searchLower);
+                item.lot.toLowerCase().includes(searchLower) ||
+                item.remarks.toLowerCase().includes(searchLower);
 
-            // Excel-like Column Filters
             const matchesColumnFilters = Object.keys(columnFilters).every(key => {
                 const filterValues = columnFilters[key];
-                if (!filterValues) return true; // undefined means no filter applied
-                
+                if (!filterValues) return true; 
                 const itemValue = String(item[key] ?? '').trim();
                 return filterValues.includes(itemValue);
             });
@@ -138,7 +153,7 @@ const YarnDyedMovement = () => {
         }), { delivery: 0, return: 0, grey: 0, finish: 0 });
     }, [filteredData]);
 
-    // --- 8. Helpers ---
+    // --- 8. Helpers & Handlers ---
     const fmt = (num) => num.toFixed(2);
     const fmtDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const fmtMonthLabel = (monthStr) => {
@@ -153,6 +168,36 @@ const YarnDyedMovement = () => {
         setActiveSearch(''); 
         setColumnFilters({});
         setSelectedMonth('all');
+    };
+
+    // --- Batch Edit Handlers ---
+    const handleSaveChanges = () => {
+        // Apply all pending edits to the main data source
+        const updatedData = allData.map(item => 
+            pendingEdits[item.id] !== undefined 
+                ? { ...item, remarks: pendingEdits[item.id] } 
+                : item
+        );
+        
+        // Update state
+        setAllData(updatedData);
+        
+        // Save to localStorage for persistence
+        try {
+            localStorage.setItem('yarnDyedMovementData', JSON.stringify(updatedData));
+        } catch (error) {
+            console.error('Failed to save to localStorage:', error);
+        }
+        
+        // Clear pending state and exit any active edit mode
+        setPendingEdits({});
+        setEditingRemarkId(null);
+    };
+
+    const handleDiscard = () => {
+        // Discard all pending edits and exit edit mode
+        setPendingEdits({});
+        setEditingRemarkId(null);
     };
 
     // Close dropdown when clicking outside
@@ -197,11 +242,11 @@ const YarnDyedMovement = () => {
 
             {/* SECTION 2: SEARCH & FILTER (Action Bar) */}
             <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-center gap-3 flex-1">
-                    <div className="relative flex-1 max-w-md">
+                <div className="flex items-center gap-3 flex-1 flex-wrap">
+                    <div className="relative flex-1 min-w-[250px]">
                         <input
                             type="text"
-                            placeholder="Global Search: Challan, PI, Supplier, Job, Color..."
+                            placeholder="Search: Challan, PI, Supplier, Job, Order, Color..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -219,6 +264,26 @@ const YarnDyedMovement = () => {
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                         Clear All
                     </button>
+                    
+                    {/* CONDITIONAL: Discard & Save Buttons (Only appear when there are pending edits) */}
+                    {hasPendingEdits && (
+                        <>
+                            <button 
+                                onClick={handleDiscard} 
+                                className="px-4 py-2 bg-red-50 text-red-700 text-sm font-medium rounded-md hover:bg-red-100 transition-colors border border-red-200 flex items-center gap-2"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                Discard
+                            </button>
+                            <button 
+                                onClick={handleSaveChanges} 
+                                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors border border-green-600 flex items-center gap-2 shadow-sm"
+                            >
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                                Save Changes
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -244,7 +309,7 @@ const YarnDyedMovement = () => {
                 <div className="overflow-x-auto max-h-[calc(100vh-350px)]">
                     <table className="w-full border-collapse text-sm">
                         
-                        {/* TABLE HEADER with Excel-like Dropdown Filters */}
+                        {/* TABLE HEADER */}
                         <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 {columns.map(col => {
@@ -257,7 +322,6 @@ const YarnDyedMovement = () => {
                                                 <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : 'justify-start'}`}>
                                                     <span className="whitespace-nowrap">{col.label}</span>
                                                     
-                                                    {/* Filter Toggle Button */}
                                                     <div className="relative excel-filter-dropdown">
                                                         <button 
                                                             onClick={() => {
@@ -265,7 +329,6 @@ const YarnDyedMovement = () => {
                                                                 setOpenFilterCol(isOpen ? null : col.key);
                                                                 setFilterSearch('');
                                                                 const current = columnFilters[col.key];
-                                                                // If opening, pre-select current filters, or all if none
                                                                 setTempFilterValues(current && current.length > 0 ? [...current] : [...uniqueValues]);
                                                             }}
                                                             className="p-0.5 rounded hover:bg-gray-200 transition-colors flex items-center"
@@ -276,7 +339,6 @@ const YarnDyedMovement = () => {
                                                             </svg>
                                                         </button>
 
-                                                        {/* DROPDOWN MENU */}
                                                         {openFilterCol === col.key && (
                                                             <div className="absolute right-0 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-xl z-50 text-left excel-filter-dropdown">
                                                                 <div className="p-2 border-b border-gray-200 bg-gray-50 rounded-t-md">
@@ -342,15 +404,12 @@ const YarnDyedMovement = () => {
                                                                         <button 
                                                                             onClick={() => {
                                                                                 if (tempFilterValues.length === 0) {
-                                                                                    // Explicitly show nothing
                                                                                     setColumnFilters(prev => ({ ...prev, [col.key]: [] }));
                                                                                 } else if (tempFilterValues.length === uniqueValues.length) {
-                                                                                    // All selected, remove filter
                                                                                     const newFilters = { ...columnFilters };
                                                                                     delete newFilters[col.key];
                                                                                     setColumnFilters(newFilters);
                                                                                 } else {
-                                                                                    // Apply specific selection
                                                                                     setColumnFilters(prev => ({
                                                                                         ...prev,
                                                                                         [col.key]: tempFilterValues
@@ -385,6 +444,44 @@ const YarnDyedMovement = () => {
                                             const value = item[col.key];
                                             const displayValue = col.key === 'date' ? fmtDate(value) : (isNumeric ? fmt(value) : value);
                                             
+                                            // --- EDITABLE REMARKS COLUMN LOGIC ---
+                                            if (col.key === 'remarks') {
+                                                const isEditing = editingRemarkId === item.id;
+                                                const currentRemark = pendingEdits[item.id] !== undefined ? pendingEdits[item.id] : item.remarks;
+                                                
+                                                return (
+                                                    <td key={col.key} className={`px-3 py-2 text-gray-900 border border-gray-300 break-words ${col.minWidth}`}>
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="text"
+                                                                value={currentRemark}
+                                                                onChange={(e) => setPendingEdits(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        setEditingRemarkId(null); // Exit edit mode, data stays in pendingEdits
+                                                                    }
+                                                                }}
+                                                                onBlur={() => setEditingRemarkId(null)} // Exit edit mode on click outside
+                                                                autoFocus
+                                                                className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                                                            />
+                                                        ) : (
+                                                            <span 
+                                                                onDoubleClick={() => setEditingRemarkId(item.id)}
+                                                                className={`cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 transition-colors block min-h-[1.5rem] ${
+                                                                    pendingEdits[item.id] !== undefined ? 'text-blue-700 font-medium italic' : ''
+                                                                }`}
+                                                                title="Double-click to edit"
+                                                            >
+                                                                {currentRemark}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                );
+                                            }
+                                            
+                                            // --- STANDARD COLUMNS ---
                                             return (
                                                 <td key={col.key} className={`px-3 py-2 text-gray-900 border border-gray-300 ${isNumeric ? 'text-right whitespace-nowrap font-mono tabular-nums' : `break-words ${col.minWidth}`}`}>
                                                     {displayValue}
@@ -395,7 +492,7 @@ const YarnDyedMovement = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="19" className="px-6 py-12 text-center text-gray-500 italic bg-white">
+                                    <td colSpan="20" className="px-6 py-12 text-center text-gray-500 italic bg-white">
                                         No records found matching your search or filter criteria.
                                     </td>
                                 </tr>
@@ -405,7 +502,7 @@ const YarnDyedMovement = () => {
                         {/* TABLE FOOTER */}
                         <tfoot className="bg-gray-100 sticky bottom-0 z-10 shadow-[0_-2px_4px_rgba(0,0,0,0.05)]">
                             <tr className="border-t-2 border-gray-400">
-                                <td colSpan="12" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">
+                                <td colSpan="13" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">
                                     Footer Total:
                                 </td>
                                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(totals.delivery)}</td>
@@ -423,7 +520,13 @@ const YarnDyedMovement = () => {
             
             {/* Record Count */}
             <div className="mt-3 text-right text-xs text-gray-500 font-medium">
-                Showing {filteredData.length} of {allData.length} records
+                Showing {filteredData.length} of {allData.length} records 
+                {hasPendingEdits && (
+                    <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+                        Unsaved changes
+                    </span>
+                )}
             </div>
         </div>
     );
