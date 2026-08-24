@@ -13,6 +13,11 @@ export const pendingWorkOrders = async (
             orderType: string;
         };
 
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).send({ message: "Not Authorized" })
+        }
+
         if (!VALID_ORDER_TYPES.includes(orderType as OrderType)) {
             return res.status(400).json({
                 message: `Invalid orderType. Must be one of: ${VALID_ORDER_TYPES.join(", ")}`,
@@ -27,6 +32,7 @@ export const pendingWorkOrders = async (
         const findPendingWorkOrders = await prisma.workOrder.findMany({
             where: {
                 isApproved: false,
+                createdBy: Number(userId),
                 compositions: {
                     some: {
                         orderType,
@@ -34,43 +40,45 @@ export const pendingWorkOrders = async (
                 },
                 ...(search
                     ? {
-                          OR: [
-                              { jobNo: { contains: search, mode: "insensitive" } },
-                              { workOrderNo: { contains: search, mode: "insensitive" } },
-                              { factoryName: { contains: search, mode: "insensitive" } },
-                              { lotNo: { contains: search, mode: "insensitive" } },
-                              { stichLength: { contains: search, mode: "insensitive" } },
-                              { machineDia: { contains: search, mode: "insensitive" } },
-                              { yarnCount: { contains: search, mode: "insensitive" } },
-                              {
-                                  styleRequirement: {
-                                      buyerName: { contains: search, mode: "insensitive" },
-                                  },
-                              },
-                              {
-                                  compositions: {
-                                      some: {
-                                          composition: { contains: search, mode: "insensitive" },
-                                          ...(Number.isFinite(numericSearch)
-                                              ? { workOrderQty: { equals: numericSearch } }
-                                              : {}),
-                                      },
-                                  },
-                              },
-                              ...(Number.isFinite(numericSearch)
-                                  ? [
-                                        {
-                                            compositions: {
-                                                some: {
-                                                    unitePrice: { equals: numericSearch },
-                                                },
+                        OR: [
+                            { jobNo: { contains: search, mode: "insensitive" } },
+                            { workOrderNo: { contains: search, mode: "insensitive" } },
+                            { factoryName: { contains: search, mode: "insensitive" } },
+                            { lotNo: { contains: search, mode: "insensitive" } },
+                            { stichLength: { contains: search, mode: "insensitive" } },
+                            { machineDia: { contains: search, mode: "insensitive" } },
+                            { yarnCount: { contains: search, mode: "insensitive" } },
+                            {
+                                styleRequirement: {
+                                    buyerName: { contains: search, mode: "insensitive" },
+                                },
+                            },
+                            {
+                                compositions: {
+                                    some: {
+                                        composition: { contains: search, mode: "insensitive" },
+                                        ...(Number.isFinite(numericSearch)
+                                            ? { workOrderQty: { equals: numericSearch } }
+                                            : {}),
+                                    },
+                                },
+                            },
+                            ...(Number.isFinite(numericSearch)
+                                ? [
+                                    {
+                                        compositions: {
+                                            some: {
+                                                unitePrice: { equals: numericSearch },
                                             },
                                         },
-                                    ]
-                                  : []),
-                          ],
-                      }
+                                    },
+                                ]
+                                : []),
+                        ],
+                    }
                     : {}),
+
+                
             },
             select: {
                 id: true,
@@ -81,6 +89,8 @@ export const pendingWorkOrders = async (
                 machineDia: true,
                 stichLength: true,
                 jobNo: true,
+                isRequested: true,
+                isApproved: true,
                 styleRequirement: {
                     select: {
                         buyerName: true,

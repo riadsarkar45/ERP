@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Download } from 'lucide-react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+import Input from '../../../components/Input';
 
 const AllPendingWorkOrder = ({
     id,
@@ -13,6 +14,9 @@ const AllPendingWorkOrder = ({
     stichLength,
     machineDia,
     yarnCount,
+    concernPersons,
+    handleUserOnchange,
+    isRequested
 }) => {
     const axiosSecure = useAxiosPrivate();
     const [isDownloading, setIsDownloading] = useState(false);
@@ -72,11 +76,16 @@ const AllPendingWorkOrder = ({
             setIsDownloading(false);
         }
     };
-
+    console.log(concernPersons, "concern person");
+    const userName = concernPersons?.map((it) => ({
+        name: it.name,
+        userId: it.id
+    })) || [];
+    console.log(userName, "usernames");
     return (
         <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-3">
             {/* Header strip */}
-            <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-gray-200 rounded-t-lg">
+            <div className={`flex items-center justify-between px-4 py-2 ${isRequested && "bg-yellow-200 border-yellow-300"} border-b border-gray-200 rounded-t-lg`}>
                 <div className="flex gap-1">
                     <h2 className="font-semibold text-blue-900">{styleRequirement?.buyerName}</h2>
                     <h2 className="font-semibold text-blue-900">|</h2>
@@ -86,25 +95,42 @@ const AllPendingWorkOrder = ({
                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         WO# {workOrderNo} {"->"} {id}
                     </span>
-                    <button
-                        type="button"
-                        onClick={handleDownloadPdf}
-                        disabled={isDownloading || !id}
-                        title={!id ? 'Missing work order id' : 'Download PDF'}
-                        className="flex items-center gap-1 text-xs font-medium bg-blue-800 hover:bg-blue-900 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-2.5 py-1.5 rounded-md uppercase tracking-wide transition-colors"
-                    >
-                        {isDownloading ? (
-                            <>
-                                <Loader2 className="animate-spin" size={12} />
-                                Generating
-                            </>
-                        ) : (
-                            <>
-                                <Download size={12} />
-                                Download Pdf
-                            </>
-                        )}
-                    </button>
+                    {
+                        isRequested === false &&
+                        <div>
+                            <select onChange={(e) => handleUserOnchange(e, id)}>
+                                <option value="">Select User</option>
+
+                                {userName.map((user) => (
+                                    <option key={user.userId} value={user.userId}>
+                                        {user.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    }
+                    {
+                        isRequested ? <h2>Request Sent</h2>
+                            : <button
+                                type="button"
+                                onClick={handleDownloadPdf}
+                                disabled={isDownloading || !id}
+                                title={!id ? 'Missing work order id' : 'Download PDF'}
+                                className="flex items-center gap-1 text-xs font-medium bg-blue-800 hover:bg-blue-900 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-2.5 py-1.5 rounded-md uppercase tracking-wide transition-colors"
+                            >
+                                {isDownloading ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={12} />
+                                        Generating
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download size={12} />
+                                        Download Pdf
+                                    </>
+                                )}
+                            </button>
+                    }
                 </div>
             </div>
 

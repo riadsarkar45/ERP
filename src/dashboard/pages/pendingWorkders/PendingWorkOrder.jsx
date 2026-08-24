@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 import { Loader2 } from 'lucide-react';
 import AllPendingWorkOrder from './AllPendingWorkOrder';
+import UseAllUsers from '../users/allUsers/AllUsers';
 
 const NotApprovedWorkOrder = () => {
     const axiosSecure = useAxiosPrivate();
@@ -12,7 +13,8 @@ const NotApprovedWorkOrder = () => {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [error, setError] = useState(null);
     const partyViews = ["knittingOrder", "dyeingOrder", "aopOrder"];
-
+    const { allUsers } = UseAllUsers();
+    console.log(allUsers);
 
     const handleOrderType = (v) => {
         if (v === selectOrderType) return;
@@ -61,6 +63,36 @@ const NotApprovedWorkOrder = () => {
         };
     }, [axiosSecure, selectOrderType, debouncedSearch]);
 
+    const handleUserOnchange = async (e, workOrderId) => {
+        let isActive = true;
+
+        const { value } = e.target;
+
+        if (!value && !workOrderId) return;
+
+        const sendRequest = await axiosSecure.patch(`/api/request-for-approval/${"workOrderApproval"}/${workOrderId}/${value}`)
+        if (sendRequest.status === 200) {
+            setError(null);
+            try {
+                const { data } = await axiosSecure.get(
+                    `/api/pending/work-order/${selectOrderType}`,
+                );
+                if (isActive) {
+                    setWorkOrder(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                if (isActive) {
+                    console.error("Failed to fetch pending work orders:", err);
+                    setError("Failed to load pending work orders. Please try again.");
+                    setWorkOrder([]);
+                }
+            } finally {
+                if (isActive) setIsLoading(false);
+            }
+        }
+
+    }
+    console.log(workOrder, "work order");
     return (
         <div className="mx-auto p-4">
             {/* Tabs */}
@@ -69,11 +101,10 @@ const NotApprovedWorkOrder = () => {
                     <button
                         key={v}
                         onClick={() => handleOrderType(v)}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                            selectOrderType === v
-                                ? "bg-blue-800 text-white shadow-sm"
-                                : "bg-blue-50 text-blue-900 hover:bg-blue-100"
-                        }`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${selectOrderType === v
+                            ? "bg-blue-800 text-white shadow-sm"
+                            : "bg-blue-50 text-blue-900 hover:bg-blue-100"
+                            }`}
                     >
                         {v.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
                     </button>
@@ -117,6 +148,10 @@ const NotApprovedWorkOrder = () => {
                         stichLength={it.stichLength}
                         compositions={it.compositions}
                         lotNo={it.lotNo}
+                        isRequested={it.isRequested}
+                        isApproved={it.isApproved}
+                        concernPersons={allUsers}
+                        handleUserOnchange={handleUserOnchange}
                     />
                 ))}
             </div>

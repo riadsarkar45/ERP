@@ -21,26 +21,29 @@ model Yarns {
 }
 
 model WorkOrder {
-  id                 Int               @id @default(autoincrement())
-  workOrderNo        String
-  workOrderPlaceDate String
-  month              String
-  styleNo            String
-  lotNo              String
-  jobNo              String
-  orderType          String
-  compositions       Composition[]
-  styleRequirement   StyleRequirement? @relation(fields: [styleRequirementId], references: [id])
-  styleRequirementId Int?
-  jobs               jobs?             @relation(fields: [jobId], references: [id])
-  jobId              Int?
-  factoryName        String            @default("NULL")
-  yarnCount          String            @default("NULL")
-  stichLength        String            @default("NULL")
-  machineDia         String            @default("NULL")
-  createdBy          Int               @default(1)
-  user               user?             @relation("WorkOrderCreatedBy", fields: [createdBy], references: [id])
-  isApproved         Boolean           @default(false)
+  id                        Int                        @id @default(autoincrement())
+  workOrderNo               String
+  workOrderPlaceDate        String
+  month                     String
+  styleNo                   String
+  lotNo                     String
+  jobNo                     String
+  orderType                 String
+  compositions              Composition[]
+  styleRequirement          StyleRequirement?          @relation(fields: [styleRequirementId], references: [id])
+  styleRequirementId        Int?
+  jobs                      jobs?                      @relation(fields: [jobId], references: [id])
+  jobId                     Int?
+  factoryName               String                     @default("NULL")
+  yarnCount                 String                     @default("NULL")
+  stichLength                String                     @default("NULL")
+  machineDia                String                     @default("NULL")
+  createdBy                 Int                        @default(1)
+  user                      user?                      @relation("WorkOrderCreatedBy", fields: [createdBy], references: [id])
+  isApproved                Boolean                    @default(false)
+  approvedBy                Int?                       @default(0)
+  isRequested               Boolean?                   @default(false)
+  workOrderApprovalRequests workOrderApprovalRequest[]
 
   @@index([yarnCount])
   @@index([machineDia])
@@ -82,7 +85,7 @@ model Composition {
   styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   styleRequirementRowId Int?
   challans              Challan[]
-  yarnColors            YarnColorBooking[] // <-- Relation added here
+  yarnColors            YarnColorBooking[]
 
   @@index([workOrderId])
   @@index([color])
@@ -220,17 +223,19 @@ model jobs {
 }
 
 model user {
-  id                Int                @id @default(autoincrement())
-  userName          String?            @default("NULL")
+  id                Int                        @id @default(autoincrement())
+  userName          String?                    @default("NULL")
   name              String
-  phoneNo           String             @unique
+  phoneNo           String                     @unique
   password          String
   userRole          String
-  workingStation    String?            @default("NULL")
+  workingStation    String?                    @default("NULL")
   refreshTokens     refreshToken[]
   deliveries        deliveries[]
-  workOrders        WorkOrder[]        @relation("WorkOrderCreatedBy")
+  workOrders        WorkOrder[]                @relation("WorkOrderCreatedBy")
   styleRequirements StyleRequirement[]
+  requestsReceived  workOrderApprovalRequest[] @relation("RequestTo")
+  requestsMade      workOrderApprovalRequest[] @relation("RequestedBy")
 }
 
 model refreshToken {
@@ -293,4 +298,16 @@ model ydStock {
   color         String
   dyedYarnLot   String
   yarnDyedStock String
+}
+
+model workOrderApprovalRequest {
+  id          Int        @unique @default(autoincrement())
+  requestTo   Int
+  requestedBy Int
+  requestAt   DateTime   @default(now())
+  requestType String
+  workOrderId Int?
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  toUser      user       @relation("RequestTo", fields: [requestTo], references: [id])
+  byUser      user       @relation("RequestedBy", fields: [requestedBy], references: [id])
 }

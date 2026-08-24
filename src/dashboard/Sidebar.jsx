@@ -14,6 +14,7 @@ import {
     UserRoundPlus,
     ZoomIn,
     ZoomOut,
+    EqualApproximately,
 } from "lucide-react";
 import { AuthContext } from "./auth/AuthContext";
 
@@ -21,7 +22,7 @@ const Sidebar = () => {
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
-    
+
     // NEW: Zoom state (default 100%, minimum fixed at 70%)
     const [zoomLevel, setZoomLevel] = useState(100);
 
@@ -52,20 +53,20 @@ const Sidebar = () => {
         { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Package },
         { path: "/dashboard/aop-order", label: "AOP Orders", icon: Package },
     ];
-    
+
     const movementSubItems = [
         { path: "/dashboard/challan/aop", label: "Aop", icon: Package },
         { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package },
         { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package },
     ];
-    
+
     const othersSubItems = [
         { path: "/dashboard/challan/others/compacting", label: "Compacting", icon: Package },
         { path: "/dashboard/challan/others/heat-set", label: "Heat Set", icon: Package },
         { path: "/dashboard/challan/others/trumble", label: "Trumble", icon: Package },
         { path: "/dashboard/challan/others/re-process", label: "Re-Process", icon: Package },
     ];
-    
+
     const misSubItems = [
         { path: "/dashboard/mis/glance", label: "At A Glance (Stock)", icon: FileText },
     ];
@@ -78,16 +79,16 @@ const Sidebar = () => {
     const [isOrdersOpen, setIsOrdersOpen] = useState(
         () => orderSubItems.some(item => item.path === location.pathname)
     );
-    
+
     const [isMovementOpen, setIsMovementOpen] = useState(
         () => movementSubItems.some(item => item.path === location.pathname)
             || othersSubItems.some(item => item.path === location.pathname)
     );
-    
+
     const [isOthersOpen, setIsOthersOpen] = useState(
         () => othersSubItems.some(item => item.path === location.pathname)
     );
-    
+
     const [isMisOpen, setIsMisOpen] = useState(
         () => misSubItems.some(item => item.path === location.pathname)
     );
@@ -143,6 +144,7 @@ const Sidebar = () => {
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
+        { path: "/dashboard/requested-work-orders", label: "Work Order Requests", icon: EqualApproximately },
     ];
 
     // Active checks for highlighting parent dropdowns
@@ -154,7 +156,7 @@ const Sidebar = () => {
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
-    
+
     const getPageInfo = () => {
         const path = location.pathname;
         if (path.includes('/factory-wise-report/')) {
@@ -502,8 +504,8 @@ const Sidebar = () => {
                         {/* NEW: Zoom Control (Fixed min 70%, Customizable) */}
                         <div className="hidden md:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5 border border-gray-200">
                             <ZoomOut size={14} className="text-gray-500" />
-                            <select 
-                                value={zoomLevel} 
+                            <select
+                                value={zoomLevel}
                                 onChange={handleZoomChange}
                                 className="bg-transparent text-sm font-bold text-gray-700 focus:outline-none cursor-pointer w-16"
                                 title="Adjust zoom level (Minimum 70%)"
@@ -539,7 +541,7 @@ const Sidebar = () => {
 
                 {/* Outlet Wrapper with Zoom Applied */}
                 <div className="flex-1 overflow-auto bg-gray-50">
-                    <div 
+                    <div
                         className="p-6 lg:p-8 w-full transition-all duration-200 ease-in-out origin-top-left"
                         style={{ zoom: `${zoomLevel}%` }}
                     >

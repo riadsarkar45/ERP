@@ -4,6 +4,7 @@ import prisma from "../../database/prismaClient/prisma";
 
 export const generateKnittingPdfWorkOrder = async (req: Request, res: Response) => {
   const { id } = req.params;
+  
   const convertWorkOrderIdToNumber = Number(id);
 
   if (Number.isNaN(convertWorkOrderIdToNumber)) {
@@ -12,7 +13,7 @@ export const generateKnittingPdfWorkOrder = async (req: Request, res: Response) 
   }
 
   const workOrder = await prisma.workOrder.findUnique({
-    where: { id: convertWorkOrderIdToNumber },
+    where: { id: convertWorkOrderIdToNumber},
     select: {
       jobNo: true,
       workOrderNo: true,
