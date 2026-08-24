@@ -1,6 +1,5 @@
-import React from 'react';
 
-const RequestedData = ({ byUser, requestType, requestedAt, workOrder }) => {
+const RequestedData = ({ byUser, requestedAt, workOrder }) => {
     return (
         <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-3">
             {/* Header strip */}
