@@ -76,12 +76,10 @@ const AllPendingWorkOrder = ({
             setIsDownloading(false);
         }
     };
-    console.log(concernPersons, "concern person");
     const userName = concernPersons?.map((it) => ({
         name: it.name,
         userId: it.id
     })) || [];
-    console.log(userName, "usernames");
     return (
         <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow mb-3">
             {/* Header strip */}

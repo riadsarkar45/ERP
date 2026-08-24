@@ -1,8 +1,5 @@
-import {
-    handleYarnLotSelection,
-    handleYarnLotClear,
-    handleYarnLotDisconnect,
-} from "../middleware/socket.io/handleYarnLotSelection";
+import { handleYarnLotSelection, handleYarnLotClear, handleYarnLotDisconnect } from "../middleware/socket.io/handleYarnLotSelection";
+import { notify } from "../middleware/socket.io/notify";
 import { getIO } from "../middleware/socket.io/socket";
 
 export const initSocketRoutes = () => {
@@ -11,17 +8,34 @@ export const initSocketRoutes = () => {
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.id}`);
 
+        const joinRoom = (userId: string | number) => {
+            const id = String(userId);
+            socket.data.userId = id;
+            socket.join(`user:${id}`);
+            console.log(`✅ User ${id} joined room user:${id}`);
+        };
+
+        // 1. Try to get userId from initial handshake
+        const authUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+        if (authUserId) joinRoom(authUserId);
+
+        // 2. Fallback if frontend sends it slightly after connection
+        socket.on("register-user", (data) => {
+            if (data?.userId) joinRoom(data.userId);
+        });
+
         socket.on("yarn-lot-selected", (data) => {
-
-            if (data?.userId) {
-                socket.data.userId = String(data.userId);
-            }
-
+            if (data?.userId) joinRoom(data.userId);
             handleYarnLotSelection(socket, data);
         });
 
+        socket.on("notify-work-order-request", (data) => {
+            console.log("[Route] Received notify-work-order-request:", data);
+            if (!data) return;
+            notify(socket, data);
+        });
+
         socket.on("yarn-lot-cleared", (data) => {
-            console.log("Received yarn-lot-cleared:", data);
             handleYarnLotClear(socket, data);
         });
 

@@ -1,40 +1,44 @@
 /* eslint-disable react-refresh/only-export-components */
-
 import { createContext, useContext, useEffect } from 'react';
 import { io } from 'socket.io-client';
-
-// Created ONCE at module scope, not inside a component or useState
-// initializer. This is deliberate: React 18 StrictMode double-invokes
-// effects in development, which was causing the cleanup below to call
-// socket.close() — and Socket.IO does NOT auto-reconnect after an
-// explicit close(). That left the socket permanently dead after the
-// very first render cycle in dev, even though it looked like nothing
-// was wrong. Keeping the instance at module scope means it survives
-// StrictMode's mount/unmount/remount simulation untouched.
-// http://localhost:3000
+import { AuthContext } from '../../dashboard/auth/AuthContext';
 // https://erp-eyf7.onrender.com
+// http://localhost:3000
 const socket = io(import.meta.env.VITE_BACKEND_URL || 'https://erp-eyf7.onrender.com', {
     withCredentials: true,
+    autoConnect: false, // Wait for user data before connecting
 });
 
 const SocketContext = createContext(socket);
 
 export const SocketProvider = ({ children }) => {
+    const { user } = useContext(AuthContext);
+    const userId = user?.id || user?._id || user?.userId;
+
     useEffect(() => {
-        const handleConnect = () => console.log('Socket connected:', socket.id);
-        const handleDisconnect = () => console.log('Socket disconnected');
+        const handleConnect = () => {
+            console.log('[Socket] Connected:', socket.id);
+            // Fallback: force backend to register this socket to the user room
+            if (userId) socket.emit('register-user', { userId: String(userId) });
+        };
+        
+        const handleDisconnect = () => console.log('[Socket] Disconnected');
 
         socket.on('connect', handleConnect);
         socket.on('disconnect', handleDisconnect);
 
-        // Only remove these specific listeners on cleanup — do NOT close
-        // the socket here. It's a singleton meant to live for the app's
-        // lifetime, not tied to this provider's mount/unmount.
+        if (userId) {
+            socket.auth = { ...socket.auth, userId: String(userId) };
+            if (!socket.connected) socket.connect();
+        } else {
+            if (socket.connected) socket.disconnect();
+        }
+
         return () => {
             socket.off('connect', handleConnect);
             socket.off('disconnect', handleDisconnect);
         };
-    }, []);
+    }, [userId]);
 
     return (
         <SocketContext.Provider value={socket}>
@@ -43,6 +47,4 @@ export const SocketProvider = ({ children }) => {
     );
 };
 
-export const useSocket = () => {
-    return useContext(SocketContext);
-};
+export const useSocket = () => useContext(SocketContext);
