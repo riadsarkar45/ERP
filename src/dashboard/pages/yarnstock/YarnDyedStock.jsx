@@ -26,15 +26,25 @@ const IconCheck = () => (
   </svg>
 );
 
+const IconPencil = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-blue-500 shrink-0">
+    <path d="M4 20h4l10.5-10.5a2.1 2.1 0 00-3-3L5 17v3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /* ----------------------------- Column definitions -----------------------------
    `available: false` marks columns the /api/total/yd-stock feed does not currently
    supply (workOrderQty, delivery/return/received quantities, fabric width). Those
    headers are kept exactly as-is; their cells/totals render as "—" instead of a
    fabricated number. `stock` is the one real numeric figure this endpoint returns
    (mapped from `yarnDyedStock`).
+
+   `editable: true` marks columns whose cells can be double-clicked into an
+   editable input (currently NOTE and REMARKS — see EDITABLE_KEYS below).
 ------------------------------------------------------------------------------- */
 const COLUMNS = [
   { key: 'jobNumber', label: 'JOB NUMBER', width: 100, type: 'text' },
+  { key: 'orderNumber', label: 'ORDER NUMBER', width: 130, type: 'text' },
   { key: 'color', label: 'COLOR', width: 90, type: 'text' },
   { key: 'fabricComposition', label: 'FABRIC COMPOSITION', width: 160, type: 'text' },
   { key: 'fabricWidth', label: 'FABRIC WIDTH', width: 100, type: 'text', available: false },
@@ -48,10 +58,11 @@ const COLUMNS = [
   { key: 'yarnReceivedGrey', label: 'YARN RECEIVED QTY (GREY)', width: 150, type: 'number', numeric: true, available: false },
   { key: 'yarnReceivedFinish', label: 'YARN RECEIVED QTY (FINISH)', width: 160, type: 'number', numeric: true, available: false },
   { key: 'stock', label: 'STOCK', width: 90, type: 'number', numeric: true },
-  { key: 'remarks', label: 'REMARKS', width: 220, type: 'text' },
+  { key: 'remarks', label: 'REMARKS', width: 220, type: 'text', editable: true },
 ];
 
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
+const EDITABLE_KEYS = COLUMNS.filter((c) => c.editable).map((c) => c.key);
 
 /* ----------------------------- API → row mapping ----------------------------- */
 const MONTH_MAP = {
@@ -85,6 +96,7 @@ function mapApiItem(item) {
   return {
     id: item.id,
     jobNumber: item.jobNo || '—',
+    orderNumber: item.orderNo || '—',
     color: item.color || '—',
     fabricComposition: item.composition || '—',
     fabricWidth: null,
@@ -151,6 +163,50 @@ function FilterPopover({ column, values, activeSet, onApply, onClose }) {
   );
 }
 
+/* ----------------------------- Editable Cell Component -----------------------------
+   Renders plain text by default. Double-click switches it into an <input>.
+   Typing updates the row's pending edit (not yet saved); Enter commits/exits
+   edit mode, Escape reverts just this field and exits edit mode.
+------------------------------------------------------------------------------- */
+function EditableCell({ rowId, colKey, value, isEditing, onStartEdit, onChange, onCommit, onCancel }) {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={value === '—' ? '' : value ?? ''}
+        onChange={(e) => onChange(rowId, colKey, e.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); onCommit(); }
+          if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        }}
+        className="w-full px-1.5 py-1 border border-blue-500 rounded text-sm outline-none bg-blue-50/40"
+      />
+    );
+  }
+
+  return (
+    <div
+      onDoubleClick={onStartEdit}
+      title="Double-click to edit"
+      className="group flex items-center gap-1 cursor-text min-h-[1.25rem] rounded px-1 -mx-1 hover:bg-blue-50"
+    >
+      <span className="break-words">{value === '' || value === null || value === undefined ? '—' : value}</span>
+      <span className="opacity-0 group-hover:opacity-100 transition-opacity"><IconPencil /></span>
+    </div>
+  );
+}
+
 /* ----------------------------- Main Component ----------------------------- */
 const YarnDyedStock = () => {
   const [allData, setAllData] = useState([]);
@@ -163,6 +219,14 @@ const YarnDyedStock = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const axiosSecure = useAxiosPrivate();
+
+  // ---- Inline editing state ----
+  // pendingEdits: { [rowId]: { [colKey]: newValue } } — unsaved edits only.
+  const [pendingEdits, setPendingEdits] = useState({});
+  const [editingCell, setEditingCell] = useState(null); // { id, key } | null
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [saveSuccessNote, setSaveSuccessNote] = useState(null);
 
   const fmt = (num) => (num === null || num === undefined ? '—' : (Number.isFinite(num) ? num.toFixed(2) : '—'));
   const cell = (val) => (val === null || val === undefined || val === '' ? '—' : val);
@@ -284,6 +348,82 @@ const YarnDyedStock = () => {
     setOpenFilterCol(null);
   };
 
+  // ---- Inline editing handlers ----
+  const editedRowCount = Object.keys(pendingEdits).length;
+  const hasUnsavedChanges = editedRowCount > 0;
+
+  const getDisplayValue = (row, colKey) => {
+    const rowEdits = pendingEdits[row.id];
+    if (rowEdits && Object.prototype.hasOwnProperty.call(rowEdits, colKey)) return rowEdits[colKey];
+    return row[colKey];
+  };
+
+  const startEdit = (rowId, colKey) => {
+    if (!EDITABLE_KEYS.includes(colKey)) return;
+    setSaveError(null);
+    setSaveSuccessNote(null);
+    setEditingCell({ id: rowId, key: colKey });
+  };
+
+  const handleCellChange = (rowId, colKey, value) => {
+    setPendingEdits((prev) => ({
+      ...prev,
+      [rowId]: { ...prev[rowId], [colKey]: value },
+    }));
+  };
+
+  const commitCellEdit = () => {
+    setEditingCell(null);
+  };
+
+  const cancelCellEdit = () => {
+    if (editingCell) {
+      const { id, key } = editingCell;
+      setPendingEdits((prev) => {
+        if (!prev[id]) return prev;
+        const rowEdits = { ...prev[id] };
+        delete rowEdits[key];
+        const next = { ...prev };
+        if (Object.keys(rowEdits).length) next[id] = rowEdits;
+        else delete next[id];
+        return next;
+      });
+    }
+    setEditingCell(null);
+  };
+
+  const handleDiscardAll = () => {
+    setPendingEdits({});
+    setEditingCell(null);
+    setSaveError(null);
+    setSaveSuccessNote(null);
+  };
+
+  const handleSaveAll = async () => {
+    if (!hasUnsavedChanges) return;
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccessNote(null);
+    const entries = Object.entries(pendingEdits);
+    try {
+      // Persist each edited row. Adjust the endpoint/payload shape to match
+      // your actual API contract for updating a yarn-dyed-stock record.
+      await Promise.all(
+        entries.map(([rowId, changes]) => axiosSecure.put(`/api/total/yd-stock/${rowId}`, changes))
+      );
+
+      setAllData((prev) =>
+        prev.map((row) => (pendingEdits[row.id] ? { ...row, ...pendingEdits[row.id] } : row))
+      );
+      setPendingEdits({});
+      setSaveSuccessNote(`Saved ${entries.length} row${entries.length > 1 ? 's' : ''}.`);
+    } catch (err) {
+      setSaveError('Failed to save changes. Your edits are kept — please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
 
@@ -340,6 +480,43 @@ const YarnDyedStock = () => {
         </div>
       </div>
 
+      {/* SAVE BAR — appears above the table only while there are unsaved edits */}
+      {(hasUnsavedChanges || saving || saveError || saveSuccessNote) && (
+        <div className="bg-amber-50 border border-amber-200 border-b-0 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="text-sm text-amber-800 flex items-center gap-2">
+            {saving ? (
+              <span>Saving…</span>
+            ) : saveError ? (
+              <span className="text-red-600 font-medium">{saveError}</span>
+            ) : saveSuccessNote ? (
+              <span className="text-green-700 font-medium">{saveSuccessNote}</span>
+            ) : (
+              <span>
+                <strong>{editedRowCount}</strong> row{editedRowCount > 1 ? 's' : ''} with unsaved changes.
+              </span>
+            )}
+          </div>
+          {hasUnsavedChanges && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDiscardAll}
+                disabled={saving}
+                className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 text-gray-600 bg-white hover:bg-gray-100 disabled:opacity-50"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleSaveAll}
+                disabled={saving}
+                className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TABLE */}
       <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-auto" style={{ maxHeight: '65vh' }}>
@@ -378,6 +555,9 @@ const YarnDyedStock = () => {
                 paginatedData.map((item, index) => (
                   <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words font-medium">{cell(item.jobNumber)}</td>
+
+                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.orderNumber)}</td>
+
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.color)}</td>
                     <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.fabricComposition)}</td>
                     <td className="px-3 py-2 text-gray-400 border border-gray-300 break-words">{cell(item.fabricWidth)}</td>
@@ -393,7 +573,18 @@ const YarnDyedStock = () => {
                     <td className="px-3 py-2 text-gray-400 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFinish)}</td>
                     <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-bold ${item.stock !== null && item.stock < 0 ? 'text-red-600' : 'text-gray-900'}`}>{fmt(item.stock)}</td>
 
-                    <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{cell(item.remarks)}</td>
+                    <td className={`px-3 py-2 border border-gray-300 break-words ${pendingEdits[item.id]?.remarks !== undefined ? 'bg-amber-50' : ''}`}>
+                      <EditableCell
+                        rowId={item.id}
+                        colKey="remarks"
+                        value={getDisplayValue(item, 'remarks')}
+                        isEditing={editingCell?.id === item.id && editingCell?.key === 'remarks'}
+                        onStartEdit={() => startEdit(item.id, 'remarks')}
+                        onChange={handleCellChange}
+                        onCommit={commitCellEdit}
+                        onCancel={cancelCellEdit}
+                      />
+                    </td>
                   </tr>
                 ))
               ) : (
@@ -405,7 +596,7 @@ const YarnDyedStock = () => {
 
             <tfoot className="bg-gray-100 sticky bottom-0 z-20">
               <tr className="border-t-2 border-gray-400">
-                <td colSpan="7" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">Footer Sub-Total:</td>
+                <td colSpan="8" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider">Footer Sub-Total:</td>
                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.workOrderQty)}</td>
                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnDeliveryQty)}</td>
                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-400 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.delShortExcess)}</td>
