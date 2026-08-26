@@ -41,10 +41,12 @@ const Sidebar = () => {
     // Unified Yarn routes (including Yarn Dyed Movement & Stock)
     const yarnSubItems = [
         { path: "/dashboard/yarn", label: "Yarn Purchase", icon: Package },
-        { path: "/dashboard/yarn/movement", label: "Yarn Movement", icon: Package },
-        { path: "/dashboard/yarn/stock", label: "Yarn Stock", icon: Package },
+        { path: "/dashboard/spinning-yarn-movement", label: "Yarn Movement (Spinning)", icon: Package },
+        { path: "/dashboard/yarn/movement", label: "Raw Yarn Movement", icon: Package },
+        { path: "/dashboard/yarn/stock", label: "Raw Yarn Stock", icon: Package },
         { path: "/dashboard/yarndyed/movement", label: "Yarn Dyed Movement", icon: Package },
         { path: "/dashboard/yarndyed/stock", label: "Yarn Dyed Stock", icon: Package },
+        
     ];
 
     const orderSubItems = [

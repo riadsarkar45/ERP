@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 /* ----------------------------- Icons ----------------------------- */
 const IconSearch = () => (
@@ -67,13 +68,13 @@ const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
         </div>
         <p className="text-sm text-gray-600 mb-6 leading-relaxed">{message}</p>
         <div className="flex justify-end gap-3">
-          <button 
+          <button
             onClick={onCancel}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
-          <button 
+          <button
             onClick={onConfirm}
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors shadow-sm"
           >
@@ -86,13 +87,14 @@ const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
 };
 
 /* ----------------------------- Column definitions ----------------------------- */
+// NOTE: "ESTIMATED PI DATE" and "PERIOD TIME" columns have been removed per request.
 const COLUMNS = [
   {
     key: 'authorized',
     label: 'STATUS',
     width: 160,
     type: 'boolean',
-    getDisplay: (item) => (item.authorized ? 'Authorized' : 'Not Authorized'),
+    getDisplay: (item) => (item.authorized ? 'Authorized' : 'Open'),
   },
   { key: 'piNo', label: 'PI NO.', width: 100, type: 'text' },
   { key: 'piDate', label: 'PI DATE', width: 110, type: 'date' },
@@ -105,26 +107,24 @@ const COLUMNS = [
   { key: 'yarnReceivedFromSpinning', label: 'YARN RECEIVED FROM SPINNING', width: 180, type: 'number', numeric: true },
   { key: 'yarnReturnedToSpinning', label: 'YARN RETURNED TO SPINNING', width: 170, type: 'number', numeric: true },
   { key: 'pendingReceivedQty', label: 'PENDING RECEIVED QTY', width: 150, type: 'number', numeric: true },
-  { key: 'estimatedPiDate', label: 'ESTIMATED PI DATE', width: 130, type: 'date' },
-  { key: 'periodTime', label: 'PERIOD TIME', width: 110, type: 'text' },
   { key: 'remarks', label: 'REMARKS', width: 200, type: 'text' },
 ];
 
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
 
-// PI NO. through PO QTY, ESTIMATED PI DATE, and REMARKS are the double-click-to-edit fields.
-const EDITABLE_KEYS = ['piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'yarnCount', 'composition', 'poQty', 'estimatedPiDate', 'remarks'];
+// PI NO. through PO QTY, and REMARKS are the double-click-to-edit fields.
+const EDITABLE_KEYS = ['piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'yarnCount', 'composition', 'poQty', 'remarks'];
 
 // Date fields that should default to today's date when starting to edit an empty cell
-const DATE_KEYS = ['piDate', 'estimatedPiDate'];
+const DATE_KEYS = ['piDate'];
 
 /* ----------------------------- Mock Data ----------------------------- */
 const BASE_DATA = [
-  { id: 1, date: '2026-08-01', piNo: 'PI-1001', piDate: '2026-08-01', lcNo: 'LC-5001', po: 'PO-2001', supplierName: 'ABC Textiles Ltd. (Long Name Test)', yarnCount: '30s', composition: '100% Cotton Combed', poQty: 5000.00, yarnReceivedFromSpinning: 3500.50, yarnReturnedToSpinning: 150.00, pendingReceivedQty: 1349.50, estimatedPiDate: '2026-09-15', periodTime: '45 Days', remarks: 'Regular shipment with special instructions', authorized: true },
-  { id: 2, date: '2026-08-05', piNo: 'PI-1002', piDate: '2026-08-05', lcNo: 'LC-5002', po: 'PO-2002', supplierName: 'XYZ Fabrics Inc.', yarnCount: '40s', composition: '80% Cotton, 20% Polyester Blend', poQty: 7500.00, yarnReceivedFromSpinning: 5000.00, yarnReturnedToSpinning: 200.00, pendingReceivedQty: 2300.00, estimatedPiDate: '2026-09-20', periodTime: '45 Days', remarks: 'Urgent order', authorized: false },
-  { id: 3, date: '2026-07-15', piNo: 'PI-1003', piDate: '2026-07-15', lcNo: 'LC-5003', po: 'PO-2003', supplierName: 'Global Yarn Co.', yarnCount: '20s', composition: '100% Polyester', poQty: 10000.00, yarnReceivedFromSpinning: 8500.75, yarnReturnedToSpinning: 300.25, pendingReceivedQty: 1199.00, estimatedPiDate: '2026-08-30', periodTime: '45 Days', remarks: 'Monthly batch', authorized: true },
-  { id: 4, date: '2026-08-10', piNo: 'PI-1004', piDate: '2026-08-10', lcNo: 'LC-5004', po: 'PO-2004', supplierName: 'Prime Textiles', yarnCount: '24s', composition: '60% Cotton, 40% Linen', poQty: 6000.00, yarnReceivedFromSpinning: 4200.00, yarnReturnedToSpinning: 125.00, pendingReceivedQty: 1675.00, estimatedPiDate: '2026-09-25', periodTime: '45 Days', remarks: 'Special order', authorized: false },
-  { id: 5, date: '2026-07-22', piNo: 'PI-1005', piDate: '2026-07-22', lcNo: 'LC-5005', po: 'PO-2005', supplierName: 'Elite Fabrics', yarnCount: '60s', composition: '100% Silk', poQty: 2000.00, yarnReceivedFromSpinning: 1800.00, yarnReturnedToSpinning: 50.00, pendingReceivedQty: 150.00, estimatedPiDate: '2026-09-05', periodTime: '45 Days', remarks: 'Premium quality', authorized: true },
+  { id: 1, date: '2026-08-01', piNo: 'PI-1001', piDate: '2026-08-01', lcNo: 'LC-5001', po: 'PO-2001', supplierName: 'ABC Textiles Ltd. (Long Name Test)', yarnCount: '30s', composition: '100% Cotton Combed', poQty: 5000.00, yarnReceivedFromSpinning: 3500.50, yarnReturnedToSpinning: 150.00, pendingReceivedQty: 1349.50, remarks: 'Regular shipment with special instructions', authorized: true },
+  { id: 2, date: '2026-08-05', piNo: 'PI-1002', piDate: '2026-08-05', lcNo: 'LC-5002', po: 'PO-2002', supplierName: 'XYZ Fabrics Inc.', yarnCount: '40s', composition: '80% Cotton, 20% Polyester Blend', poQty: 7500.00, yarnReceivedFromSpinning: 5000.00, yarnReturnedToSpinning: 200.00, pendingReceivedQty: 2300.00, remarks: 'Urgent order', authorized: false },
+  { id: 3, date: '2026-07-15', piNo: 'PI-1003', piDate: '2026-07-15', lcNo: 'LC-5003', po: 'PO-2003', supplierName: 'Global Yarn Co.', yarnCount: '20s', composition: '100% Polyester', poQty: 10000.00, yarnReceivedFromSpinning: 8500.75, yarnReturnedToSpinning: 300.25, pendingReceivedQty: 1199.00, remarks: 'Monthly batch', authorized: true },
+  { id: 4, date: '2026-08-10', piNo: 'PI-1004', piDate: '2026-08-10', lcNo: 'LC-5004', po: 'PO-2004', supplierName: 'Prime Textiles', yarnCount: '24s', composition: '60% Cotton, 40% Linen', poQty: 6000.00, yarnReceivedFromSpinning: 4200.00, yarnReturnedToSpinning: 125.00, pendingReceivedQty: 1675.00, remarks: 'Special order', authorized: false },
+  { id: 5, date: '2026-07-22', piNo: 'PI-1005', piDate: '2026-07-22', lcNo: 'LC-5005', po: 'PO-2005', supplierName: 'Elite Fabrics', yarnCount: '60s', composition: '100% Silk', poQty: 2000.00, yarnReceivedFromSpinning: 1800.00, yarnReturnedToSpinning: 50.00, pendingReceivedQty: 150.00, remarks: 'Premium quality', authorized: true },
 ];
 
 const emptyRow = (id) => ({
@@ -141,54 +141,107 @@ const emptyRow = (id) => ({
   yarnReceivedFromSpinning: 0,
   yarnReturnedToSpinning: 0,
   pendingReceivedQty: 0,
-  estimatedPiDate: '',
-  periodTime: '',
   remarks: '',
   authorized: false,
 });
 
-/* ----------------------------- Filter Popover Component ----------------------------- */
-function FilterPopover({ column, values, activeSet, onApply, onClose }) {
+/* ----------------------------- Filter Popover Component (Excel-style) ----------------------------- */
+// Renders through a portal at a fixed screen position anchored to the funnel button.
+// This keeps the popover intact as a single box that floats above the table, instead
+// of being clipped/split by the table's scroll container or its sticky header/footer.
+const POPOVER_WIDTH = 224; // px, matches w-56
+
+function FilterPopover({ column, values, activeSet, anchorRect, onApply, onClose }) {
   const ref = useRef(null);
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState(activeSet ? new Set(activeSet) : new Set(values));
 
   useEffect(() => {
     const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [onClose]);
 
-  const visibleValues = values.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
+  if (!anchorRect) return null;
 
-  return (
-    <div ref={ref} className="absolute z-50 top-full left-0 mt-1 w-60 bg-white border border-gray-300 rounded-md shadow-lg text-gray-800 normal-case font-normal text-xs" onMouseDown={(e) => e.stopPropagation()}>
-      <div className="p-2 border-b border-gray-200">
-        <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${column.label}...`} className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none focus:border-blue-500" />
+  // Clamp horizontally so the popover never runs off the right edge of the viewport,
+  // and flip above the button if there isn't room below.
+  const spaceBelow = window.innerHeight - anchorRect.bottom;
+  const openUpward = spaceBelow < 320 && anchorRect.top > 320;
+  const left = Math.min(anchorRect.left, window.innerWidth - POPOVER_WIDTH - 8);
+  const style = openUpward
+    ? { left, bottom: window.innerHeight - anchorRect.top + 4, width: POPOVER_WIDTH }
+    : { left, top: anchorRect.bottom + 4, width: POPOVER_WIDTH };
+
+  const visibleValues = values.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
+  const allVisibleChecked = visibleValues.length > 0 && visibleValues.every((v) => draft.has(v));
+
+  const toggleSelectAll = () => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      if (allVisibleChecked) {
+        visibleValues.forEach((v) => next.delete(v));
+      } else {
+        visibleValues.forEach((v) => next.add(v));
+      }
+      return next;
+    });
+  };
+
+  const toggleValue = (v) => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      next.has(v) ? next.delete(v) : next.add(v);
+      return next;
+    });
+  };
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg text-gray-800 normal-case font-normal text-xs"
+      style={style}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="p-2">
+        <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none focus:border-blue-500" />
       </div>
-      <div className="flex justify-between px-2 py-1.5 border-b border-gray-200 text-blue-600 font-medium">
-        <button className="hover:underline" onClick={() => setDraft(new Set(values))}>Select all</button>
-        <button className="hover:underline" onClick={() => setDraft(new Set())}>Clear</button>
-      </div>
-      <div className="max-h-52 overflow-y-auto py-1">
-        {visibleValues.length === 0 && <div className="px-3 py-3 text-gray-400 italic">No matches</div>}
-        {visibleValues.map((v) => {
-          const checked = draft.has(v);
-          return (
-            <label key={v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none">
-              <span onClick={(e) => { e.preventDefault(); setDraft((prev) => { const next = new Set(prev); checked ? next.delete(v) : next.add(v); return next; }); }} className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
-                {checked && <IconCheck />}
+      <div className="mx-2 mb-2 border border-gray-200 rounded max-h-56 overflow-y-auto py-1">
+        {visibleValues.length === 0 ? (
+          <div className="px-3 py-3 text-gray-400 italic">No matches</div>
+        ) : (
+          <>
+            <label className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none font-semibold border-b border-gray-100" onClick={(e) => { e.preventDefault(); toggleSelectAll(); }}>
+              <span className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${allVisibleChecked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
+                {allVisibleChecked && <IconCheck />}
               </span>
-              <span className="truncate">{v}</span>
+              <span>(Select All)</span>
             </label>
-          );
-        })}
+            {visibleValues.map((v) => {
+              const checked = draft.has(v);
+              return (
+                <label key={v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none" onClick={(e) => { e.preventDefault(); toggleValue(v); }}>
+                  <span className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
+                    {checked && <IconCheck />}
+                  </span>
+                  <span className="truncate">{v}</span>
+                </label>
+              );
+            })}
+          </>
+        )}
       </div>
       <div className="flex justify-end gap-2 p-2 border-t border-gray-200 bg-gray-50 rounded-b-md">
         <button onClick={onClose} className="px-2.5 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-100">Cancel</button>
-        <button onClick={() => onApply(draft)} className="px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">OK</button>
+        <button onClick={() => onApply(draft)} className="px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">APPLY</button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -208,9 +261,12 @@ const PurchaseOrderStatus = () => {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
+  const [filterAnchorRect, setFilterAnchorRect] = useState(null);
+  const tableScrollRef = useRef(null);
   const [isDirty, setIsDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [editingCell, setEditingCell] = useState(null);
+  const [editingOriginal, setEditingOriginal] = useState(null);
   const [newRowIds, setNewRowIds] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: null });
 
@@ -274,9 +330,12 @@ const PurchaseOrderStatus = () => {
   };
 
   const filteredTotals = useMemo(() => calculateTotals(filteredData), [filteredData]);
+  const grandTotals = useMemo(() => calculateTotals(allData), [allData]);
 
   const handleSearch = () => {};
   const handleClear = () => { setSearchInput(''); setSelectedMonth('all'); setFilters({}); };
+
+  const closeFilter = () => { setOpenFilterCol(null); setFilterAnchorRect(null); };
 
   const applyFilter = (colKey, set) => {
     setFilters((prev) => {
@@ -285,7 +344,7 @@ const PurchaseOrderStatus = () => {
       else next[colKey] = set;
       return next;
     });
-    setOpenFilterCol(null);
+    closeFilter();
   };
 
   const updateField = (id, key, rawValue) => {
@@ -325,8 +384,11 @@ const PurchaseOrderStatus = () => {
 
   // When starting to edit a date field that is empty, pre-fill it with today's date
   const startEditing = (id, key) => {
+    const row = allData.find((r) => r.id === id);
+    // Remember the value as it was before this edit started, so Escape can restore it.
+    setEditingOriginal({ id, key, value: row ? row[key] : '' });
+
     if (DATE_KEYS.includes(key)) {
-      const row = allData.find((r) => r.id === id);
       if (row && !row[key]) {
         const today = getTodayISO();
         setAllData((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: today } : r)));
@@ -337,17 +399,30 @@ const PurchaseOrderStatus = () => {
     setEditingCell({ id, key });
   };
 
-  const stopEditing = () => setEditingCell(null);
+  const stopEditing = () => { setEditingCell(null); setEditingOriginal(null); };
   const isEditing = (id, key) => editingCell && editingCell.id === id && editingCell.key === key;
 
+  // Cancel the current edit and restore the cell to whatever it held before editing began.
+  const cancelEditing = (id, key) => {
+    if (editingOriginal && editingOriginal.id === id && editingOriginal.key === key) {
+      setAllData((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: editingOriginal.value } : r)));
+    }
+    setEditingCell(null);
+    setEditingOriginal(null);
+  };
+
   // Shared keydown handler for all editable cells:
-  // - Enter: stop editing
+  // - Enter: stop editing (keep changes)
+  // - Escape: cancel editing and restore the original value
   // - Tab: move to the next editable field (to the right) in the same row, wrapping around
   // - Shift+Tab: move to the previous editable field (to the left) in the same row, wrapping around
   const handleCellKeyDown = (e, id, key) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       stopEditing();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditing(id, key);
     } else if (e.key === 'Tab') {
       e.preventDefault();
       const currentIndex = EDITABLE_KEYS.indexOf(key);
@@ -385,7 +460,7 @@ const PurchaseOrderStatus = () => {
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
 
-      <CustomConfirmModal 
+      <CustomConfirmModal
         isOpen={deleteConfirm.isOpen}
         message="Are you sure you want to remove this newly added row? This action cannot be undone."
         onConfirm={confirmDelete}
@@ -400,19 +475,19 @@ const PurchaseOrderStatus = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg border-l-4 border-blue-600 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total PO Qty</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.poQty || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(grandTotals.poQty || 0)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-emerald-500 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Received From Spinning</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReceivedFromSpinning || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(grandTotals.yarnReceivedFromSpinning || 0)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-orange-500 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Returned To Spinning</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.yarnReturnedToSpinning || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(grandTotals.yarnReturnedToSpinning || 0)}</p>
           </div>
           <div className="bg-white rounded-lg border-l-4 border-red-500 p-4 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Pending Received Qty</p>
-            <p className="text-2xl font-bold text-gray-900">{fmt(filteredTotals.pendingReceivedQty || 0)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(grandTotals.pendingReceivedQty || 0)}</p>
           </div>
         </div>
       </div>
@@ -463,7 +538,7 @@ const PurchaseOrderStatus = () => {
 
       {/* TABLE - Scrollable container with sticky header/footer */}
       <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto overflow-y-auto max-h-[600px]">
+        <div ref={tableScrollRef} onScroll={closeFilter} className="overflow-x-auto overflow-y-auto max-h-[600px]">
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-20 bg-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
               <tr>
@@ -481,12 +556,23 @@ const PurchaseOrderStatus = () => {
                     <th key={col.key} className="relative border border-gray-300 px-2 py-3 text-left font-bold text-gray-700 uppercase text-xs align-top bg-gray-100" style={{ minWidth: col.width }}>
                       <div className="flex items-start justify-between gap-1">
                         <span className={`whitespace-normal break-words leading-tight ${col.numeric ? 'text-right w-full' : ''}`}>{col.label}</span>
-                        <button onClick={() => setOpenFilterCol(openFilterCol === col.key ? null : col.key)} className={`shrink-0 p-1 rounded mt-0.5 ${isFiltered ? 'bg-blue-100' : 'hover:bg-gray-200'}`} title={`Filter ${col.label}`}>
+                        <button
+                          onClick={(e) => {
+                            if (openFilterCol === col.key) {
+                              closeFilter();
+                            } else {
+                              setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                              setOpenFilterCol(col.key);
+                            }
+                          }}
+                          className={`shrink-0 p-1 rounded mt-0.5 ${isFiltered ? 'bg-blue-100' : 'hover:bg-gray-200'}`}
+                          title={`Filter ${col.label}`}
+                        >
                           <IconFilter active={isFiltered} />
                         </button>
                       </div>
                       {openFilterCol === col.key && (
-                        <FilterPopover column={col} values={uniqueValues[col.key]} activeSet={filters[col.key]} onApply={(set) => applyFilter(col.key, set)} onClose={() => setOpenFilterCol(null)} />
+                        <FilterPopover column={col} values={uniqueValues[col.key]} activeSet={filters[col.key]} anchorRect={filterAnchorRect} onApply={(set) => applyFilter(col.key, set)} onClose={closeFilter} />
                       )}
                     </th>
                   );
@@ -500,7 +586,7 @@ const PurchaseOrderStatus = () => {
                   const canDelete = newRowIds.has(item.id);
                   return (
                     <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
-                      
+
                       {/* Auth Checkbox Column */}
                       <td className="px-2 py-2 border border-gray-300 text-center">
                         <input
@@ -534,7 +620,7 @@ const PurchaseOrderStatus = () => {
                             className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${item.authorized ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}
                             title={item.authorized ? 'Goods can be received against this PI.' : "Goods can't be received against this PI until it is authorized."}
                           >
-                            {item.authorized ? 'Authorized' : 'Not Authorized'}
+                            {item.authorized ? 'Authorized' : 'Open'}
                           </span>
                         </div>
                       </td>
@@ -694,33 +780,10 @@ const PurchaseOrderStatus = () => {
                         )}
                       </td>
 
-                      {/* Non-editable fields */}
+                      {/* Non-editable numeric fields */}
                       <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFromSpinning)}</td>
                       <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnedToSpinning)}</td>
                       <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-semibold ${item.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.pendingReceivedQty)}</td>
-
-                      {/* Editable Estimated PI Date */}
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'estimatedPiDate')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'estimatedPiDate') ? (
-                          <input
-                            autoFocus
-                            type="date"
-                            value={item.estimatedPiDate || getTodayISO()}
-                            onChange={(e) => updateField(item.id, 'estimatedPiDate', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'estimatedPiDate')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 whitespace-nowrap">{fmtDate(item.estimatedPiDate)}</span>
-                        )}
-                      </td>
-
-                      <td className="px-3 py-2 text-gray-900 border border-gray-300 break-words">{item.periodTime}</td>
 
                       {/* Editable Remarks */}
                       <td
@@ -759,7 +822,7 @@ const PurchaseOrderStatus = () => {
                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedFromSpinning)}</td>
                 <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReturnedToSpinning)}</td>
                 <td className={`px-3 py-3 text-right text-sm font-bold border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50 ${filteredTotals.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(filteredTotals.pendingReceivedQty)}</td>
-                <td colSpan="4" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
+                <td colSpan="1" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
               </tr>
             </tfoot>
           </table>
