@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { FunnelX, Loader, Loader2, Save } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo, useContext } from "react";
+import { DownloadCloudIcon, FunnelX, Loader, Loader2, Save } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
@@ -12,6 +12,7 @@ import FilterDropdown from "../helpers/filtering/FilterDropdown";
 import useAxiosPrivate from "../hooks/UseAxiosPrivate";
 import Toast from "./Toast";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../dashboard/auth/AuthContext";
 
 export const FROZEN_COUNT = 7;
 
@@ -91,6 +92,7 @@ const AllOrders = ({ orderType }) => {
     const [deliveryIssue, setDeliveryIssue] = useState([]);
     // Pagination state, driven by getAllOrders' { pagination: { page, limit, total, totalPages } }
     const [page, setPage] = useState(1);
+    const [prepareForChallan, setPrepareChallan] = useState([])
     const [limit] = useState(10);
     const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
 
@@ -100,6 +102,7 @@ const AllOrders = ({ orderType }) => {
     // is intentionally NOT wired into the top-level full-page loader below,
     // so opening a filter dropdown no longer blanks the whole table.
     const { fetchData: fetchFilterOptions } = useFetchData();
+    const { user } = useContext(AuthContext)
     const navigate = useNavigate();
     const COLUMNS = useMemo(() => {
         const cols = [];
@@ -140,12 +143,12 @@ const AllOrders = ({ orderType }) => {
                 { header: "STYLE", width: defaultWidths[4], inputName: "styleNo" },
                 { header: "MONTH", width: defaultWidths[5], inputName: "month" },
                 { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
-                { header: "COLOR", width: 200, inputName: "bookingColor" },            
-                { header: "YARN COUNT", width: 200, inputName: "yarncount" },            
-                { header: "YARN LOT", width: 200, inputName: "yarnlot" },            
-                { header: "STICH LENGHT  ", width: 200, inputName: "stichLenght" },            
-                { header: "MACHINE DIA", width: 200, inputName: "machineDia" },            
-                { header: "SHADE %", width: 200, inputName: "shade%" },            
+                { header: "COLOR", width: 200, inputName: "bookingColor" },
+                { header: "YARN COUNT", width: 200, inputName: "yarncount" },
+                { header: "YARN LOT", width: 200, inputName: "yarnlot" },
+                { header: "STICH LENGHT  ", width: 200, inputName: "stichLenght" },
+                { header: "MACHINE DIA", width: 200, inputName: "machineDia" },
+                { header: "SHADE %", width: 200, inputName: "shade%" },
                 // { header: "ORDER QTY", width: 110, inputName: "orderQty" },
                 { header: "DYEING WORK ORDER QTY", width: 180, inputName: "workOrderQty" },
                 { header: "GREY DELIVERY", width: 140, inputName: "greyReceived" },
@@ -268,6 +271,15 @@ const AllOrders = ({ orderType }) => {
         [filters]
     );
 
+    useEffect(() => {
+        const prepareToGenerateChallans = async () => {
+            const res = await axiosPrivate.get(`/api/prepare-to-download/${Number(user?.id)}`)
+            console.log(res.data, "challans");
+            setPrepareChallan(res.data)
+        }
+        prepareToGenerateChallans();
+    }, [axiosPrivate, user?.id])
+
     // NOTE: getAllOrders now responds with { type, data, pagination }, not a raw array.
     // Filtering now happens server-side — `filters` is passed straight through
     // as a query param instead of being applied client-side afterward.
@@ -280,13 +292,15 @@ const AllOrders = ({ orderType }) => {
                     setOrders(res.data ?? []);
                     console.log(res.data, "orders data");
                     if (res.pagination) setPagination(res.pagination);
-                    console.log(res.pagination);
                 }
             })
             .finally(() => {
                 setHasLoadedOnce(true);
             });
     }, [orderType, isUpdated, page, limit, filtersParam]);
+
+
+
 
     // Lazily fetches (and caches) dropdown options for a single column, scoped
     // by every OTHER currently-active filter (cross-filtering, same behavior
@@ -534,6 +548,37 @@ const AllOrders = ({ orderType }) => {
         setFilters({});
         setFilterOptions({});
     };
+
+    const handlePDFchallanDownload = async () => {
+        try {
+            const response = await axiosPrivate.get(`/api/challan/download/${user?.id}`, {
+                responseType: "blob",
+            });
+
+            const disposition = response.headers["content-disposition"];
+            const match = disposition?.match(/filename="?([^"]+)"?/);
+            const filename = match?.[1] ?? `challans-${Date.now()}.pdf`;
+
+            const blob = new Blob([response.data], { type: "application/pdf" });
+            const blobUrl = window.URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            if (error?.response?.data instanceof Blob) {
+                const text = await error.response.data.text();
+                console.error("Challan download failed:", JSON.parse(text)?.message ?? text);
+            } else {
+                console.error("Challan download failed:", error);
+            }
+        }
+    };
     return (
         <div>
             {
@@ -555,6 +600,9 @@ const AllOrders = ({ orderType }) => {
                 }
                 {
                     Object.keys(filters).length > 0 && <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg"><FunnelX /></button>
+                }
+                {
+                    prepareForChallan?.length > 0 && <button onClick={() => handlePDFchallanDownload()} title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg flex gap-2 items-center"><DownloadCloudIcon /> Download Challan ({prepareForChallan?.length})</button>
                 }
             </div>
             <div className="mb-5 p-2 rounded-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
