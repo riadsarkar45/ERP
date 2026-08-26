@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../../database/prismaClient/prisma";
 import { challanValidation } from "../../helpers/challanValidation/challanValidation";
 import { getIO } from "../../middleware/socket.io/socket";
+import { generatePdfChallan } from "./generatePdfChallan";
 
 interface DeliveryItem {
     deliveryType: string;
@@ -133,9 +134,6 @@ export const updateJobs = async (req: Request, res: Response) => {
 
         const insert = await prisma.$transaction(
             delivers.map((delivery) => {
-                // Explicitly typed as the "unchecked" variant so Prisma resolves
-                // challanId / yarnCompId / createdBy as raw scalar FK columns,
-                // not as nested `connect` relation objects.
                 const data: Prisma.deliveriesUncheckedCreateInput = {
                     deliveryDate,
                     challanNo: challanNoNum,
@@ -148,9 +146,22 @@ export const updateJobs = async (req: Request, res: Response) => {
                     yarnCompId: checkYarnIfExist.id,
                     createdBy: userId,
                 };
-                return prisma.deliveries.create({ data });
+                return prisma.deliveries.create(
+                    {
+                        data,
+
+                        select: {
+                            id: true,
+                        }
+                    },
+
+                );
             })
         );
+
+        const lastInsertedId = Number(insert[insert.length - 1]?.id) ?? null;
+        const generateChallan = generatePdfChallan(lastInsertedId, userId)
+        console.log(generateChallan);
 
         const dbWriteEnd = process.hrtime.bigint();
         const dbWriteMs = Number(dbWriteEnd - dbWriteStart) / 1_000_000;

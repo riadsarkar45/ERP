@@ -6,6 +6,7 @@
     "@prisma/client": "^6.19.2",
     "@types/pdfkit": "^0.17.6",
     "accepts": "^2.0.0",
+    "archiver": "^8.0.0",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.2",
     "bytes": "^3.1.2",
@@ -110,6 +111,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",

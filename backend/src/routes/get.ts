@@ -27,6 +27,7 @@ import { pendingWorkOrders } from "../controllers/orders/pendingWorkOrder";
 import { generateKnittingPdfWorkOrder } from "../controllers/orders/pdfWorkOrder";
 import { allUsers } from "../controllers/users/allUser";
 import { requestedData } from "../controllers/orders/requestedData";
+import { downloadPDFchallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
 
 const getRouters = express.Router();
 
@@ -107,5 +108,9 @@ getRouters.get("/generate-pdf-work-order/:id", responseTimeMonitor, authenticate
 getRouters.get("/all-users", responseTimeMonitor, authenticate, allUsers);
 
 getRouters.get("/requested-work-data", responseTimeMonitor, authenticate, requestedData);
+
+getRouters.get("/prepare-to-download/:userId", responseTimeMonitor, authenticate, prepareToGenerate);
+
+getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, downloadPDFchallan);
 
 export default getRouters;
