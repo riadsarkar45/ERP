@@ -1,34 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
 
-const initialJobs = [
-    {
-        jobNo: "SM-26-4325-JUN",
-        remarks: "",
-        yarnRows: [
-            { factory: "FABRICARES", req: 2680, issue: 2680, knittingGrey: 2684, yarnReturn: null },
-            { factory: "SAKIB", req: 2538, issue: 2538, knittingGrey: 2529, yarnReturn: null },
-            { factory: "G ARTE", req: 2538, issue: 2538, knittingGrey: 2538, yarnReturn: null },
-            { factory: "BORAL", req: 567, issue: 567, knittingGrey: null, yarnReturn: 567 },
-            { factory: "TAIPEI", req: 567, issue: 567, knittingGrey: 566, yarnReturn: null },
-            { factory: "F R KNIT", req: 209, issue: 209, knittingGrey: 204, yarnReturn: null },
-        ],
-        dyeing1: { label: "DRESDEN DYEING", greyDelivery: 8550, greyRcvd: 8395, finishRcvd: 7765, processLoss: 0.075 },
-        dyeing2: { label: "URMEE AOP", greyDelivery: 5000, greyRcvd: 4500, finishRcvd: 4420, processLoss: 0.0178 },
-    },
-    {
-        jobNo: "SM-26-4402-JUN",
-        remarks: "Rush order",
-        yarnRows: [
-            { factory: "FABRICARES", req: 1800, issue: 1800, knittingGrey: 1795, yarnReturn: null },
-            { factory: "TAIPEI", req: 940, issue: 940, knittingGrey: 938, yarnReturn: null },
-        ],
-        dyeing1: { label: "DRESDEN DYEING", greyDelivery: 2733, greyRcvd: 2700, finishRcvd: 2510, processLoss: 0.0704 },
-        dyeing2: { label: "COLORTEX AOP", greyDelivery: 1200, greyRcvd: 1180, finishRcvd: 1150, processLoss: 0.0254 },
-    },
-];
-
+// --- Helpers ---
 const yarnBalance = (row) => (row.issue || 0) - (row.knittingGrey || 0) - (row.yarnReturn || 0);
-const dyeBalance = (d) => d.greyDelivery - d.greyRcvd;
+const dyeBalance = (d) => (d.greyDelivery || 0) - (d.greyRcvd || 0);
+const dyeProcessLoss = (d) => {
+    const delivery = d.greyDelivery || 0;
+    if (!delivery) return null;
+    return (delivery - (d.finishRcvd || 0)) / delivery;
+};
 
 const fmtNum = (n) => {
     if (n === null || n === undefined) return <span className="text-slate-300">—</span>;
@@ -37,9 +17,11 @@ const fmtNum = (n) => {
     if (n < 0) return <span className="text-rose-600 font-medium">({abs})</span>;
     return abs;
 };
+
 const fmtPct = (n) => (n === null || n === undefined ? <span className="text-slate-300">—</span> : `${(n * 100).toFixed(2)}%`);
 const rawNum = (n) => (n === null || n === undefined ? "" : String(n));
 
+// --- Column Definitions ---
 const COLUMNS = [
     { id: "jobNo", label: "Job No", width: 110, group: "yarn" },
     { id: "yarnFactory", label: "Factory Name", width: 130, group: "yarn" },
@@ -48,18 +30,19 @@ const COLUMNS = [
     { id: "knittingGrey", label: "Knitting Grey", width: 100, group: "yarn" },
     { id: "yarnReturn", label: "Yarn Return", width: 95, group: "yarn" },
     { id: "yarnBalance", label: "Balance", width: 85, group: "yarn" },
-    { id: "d1Factory", label: "Grey Issue Factory", width: 130, group: "d1" },
-    { id: "d1Delivery", label: "Grey Delivery", width: 90, group: "d1" },
-    { id: "d1Rcvd", label: "Grey Rcvd", width: 85, group: "d1" },
-    { id: "d1Balance", label: "Balance", width: 85, group: "d1" },
-    { id: "d1Finish", label: "Finish Rcvd", width: 90, group: "d1" },
-    { id: "d1Loss", label: "Process Loss", width: 85, group: "d1" },
-    { id: "d2Factory", label: "Grey Issue Factory", width: 130, group: "d2" },
-    { id: "d2Delivery", label: "Grey Delivery", width: 90, group: "d2" },
-    { id: "d2Rcvd", label: "Grey Rcvd", width: 85, group: "d2" },
-    { id: "d2Balance", label: "Balance", width: 85, group: "d2" },
-    { id: "d2Finish", label: "Finish Rcvd", width: 90, group: "d2" },
-    { id: "d2Loss", label: "Process Loss", width: 85, group: "d2" },
+    
+    { id: "dyeingFactory", label: "Dyeing Factory", width: 130, group: "dyeing" },
+    { id: "greyDelivery", label: "Grey Delivery", width: 90, group: "dyeing" },
+    { id: "greyRcvd", label: "Grey Rcvd", width: 85, group: "dyeing" },
+    { id: "dyeBalance", label: "Balance", width: 85, group: "dyeing" },
+    { id: "finishRcvd", label: "Finish Rcvd", width: 90, group: "dyeing" },
+    { id: "processLoss", label: "Process Loss", width: 85, group: "dyeing" },
+    
+    { id: "aopFactory", label: "AOP Factory", width: 130, group: "aop" },
+    { id: "sentForAop", label: "Sent For AOP", width: 90, group: "aop" },
+    { id: "receivedFromAop", label: "Rcvd From AOP", width: 90, group: "aop" },
+    { id: "aopFinishRcvd", label: "AOP Finish Rcvd", width: 90, group: "aop" },
+    
     { id: "remarks", label: "Remarks", width: 140, group: "remarks" },
 ];
 
@@ -67,7 +50,10 @@ const FROZEN_IDS = ["jobNo", "yarnFactory", "yarnReq", "yarnIssue", "knittingGre
 
 let acc = 0;
 const COL_LEFT = {};
-COLUMNS.forEach((c) => { COL_LEFT[c.id] = acc; acc += c.width; });
+COLUMNS.forEach((c) => { 
+    COL_LEFT[c.id] = acc; 
+    acc += c.width; 
+});
 const TOTAL_WIDTH = acc;
 
 const csvCell = (v) => {
@@ -75,6 +61,7 @@ const csvCell = (v) => {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+// --- Filter Component ---
 const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCol, align = "left", valueGetter }) => {
     const isOpen = openCol === colId;
     const isActive = excluded.size > 0;
@@ -93,6 +80,7 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
         next.has(val) ? next.delete(val) : next.add(val);
         setExcluded(colId, next);
     };
+    
     const toggleAll = () => setExcluded(colId, excluded.size > 0 ? new Set() : new Set(uniqueValues));
 
     return (
@@ -100,9 +88,7 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
             <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setOpenCol(isOpen ? null : colId); }}
-                className={`ml-1 inline-flex items-center justify-center w-4 h-4 rounded shrink-0 ${
-                    isActive ? "bg-amber-400 text-[#0f2544]" : "bg-slate-300 text-slate-700 hover:bg-slate-400"
-                }`}
+                className={`ml-1 inline-flex items-center justify-center w-4 h-4 rounded shrink-0 transition-colors ${isActive ? "bg-amber-400 text-[#0f2544]" : "bg-slate-300 text-slate-700 hover:bg-slate-400"}`}
                 title="Filter this column"
             >
                 <svg viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
@@ -115,26 +101,22 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
                     onClick={(e) => e.stopPropagation()}
                     className={`absolute z-50 top-6 ${align === "right" ? "right-0" : "left-0"} w-48 bg-white border border-slate-300 rounded-md shadow-lg p-2 normal-case font-normal text-slate-700`}
                 >
-                    <label className="flex items-center gap-2 px-1 py-1 text-xs font-medium border-b border-slate-200 mb-1 cursor-pointer">
-                        <input type="checkbox" checked={excluded.size === 0} onChange={toggleAll} />
+                    <label className="flex items-center gap-2 px-1 py-1 text-xs font-medium border-b border-slate-200 mb-1 cursor-pointer hover:bg-slate-50 rounded">
+                        <input type="checkbox" checked={excluded.size === 0} onChange={toggleAll} className="rounded border-slate-300 text-[#0f2544] focus:ring-[#0f2544]" />
                         Select All
                     </label>
-                    <div className="max-h-44 overflow-auto">
+                    <div className="max-h-44 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
                         {uniqueValues.map((val) => (
                             <label key={val} className="flex items-center gap-2 px-1 py-1 text-xs cursor-pointer hover:bg-slate-50 rounded">
-                                <input type="checkbox" checked={!excluded.has(val)} onChange={() => toggleValue(val)} />
+                                <input type="checkbox" checked={!excluded.has(val)} onChange={() => toggleValue(val)} className="rounded border-slate-300 text-[#0f2544] focus:ring-[#0f2544]" />
                                 <span className="truncate">{val}</span>
                             </label>
                         ))}
-                        {uniqueValues.length === 0 && <div className="px-1 py-1 text-xs text-slate-400">No values</div>}
+                        {uniqueValues.length === 0 && <div className="px-1 py-2 text-xs text-slate-400 text-center">No values</div>}
                     </div>
-                    <div className="flex justify-between mt-1.5 pt-1.5 border-t border-slate-200">
-                        <button onClick={() => setExcluded(colId, new Set())} className="text-[11px] text-slate-500 hover:text-slate-800">
-                            Clear
-                        </button>
-                        <button onClick={() => setOpenCol(null)} className="text-[11px] font-medium text-[#0f2544] hover:underline">
-                            OK
-                        </button>
+                    <div className="flex justify-between mt-2 pt-2 border-t border-slate-200">
+                        <button onClick={() => setExcluded(colId, new Set())} className="text-[11px] text-slate-500 hover:text-slate-800 font-medium">Clear</button>
+                        <button onClick={() => setOpenCol(null)} className="text-[11px] font-bold text-[#0f2544] hover:underline">OK</button>
                     </div>
                 </div>
             )}
@@ -142,17 +124,23 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
     );
 };
 
+// --- Main Component ---
 const BalanceSheet = () => {
-    const [jobs, setJobs] = useState(initialJobs);
+    const [jobs, setJobs] = useState([]);
     const [search, setSearch] = useState("");
     const [colFilters, setColFilters] = useState({});
     const [openCol, setOpenCol] = useState(null);
     const [hasUnsavedRemarks, setHasUnsavedRemarks] = useState(false);
     const [wrapText, setWrapText] = useState(false);
     const [editingCell, setEditingCell] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [isLoading, setIsLoading] = useState(true);
+    
+    const axiosSecure = useAxiosPrivate();
+    const ITEMS_PER_PAGE = 30;
 
     const setExcludedFor = (colId, set) => setColFilters((prev) => ({ ...prev, [colId]: set }));
-    
+
     const updateRemarks = (jobIdx, text) => {
         setJobs((prev) => prev.map((j, i) => (i === jobIdx ? { ...j, remarks: text } : j)));
         setHasUnsavedRemarks(true);
@@ -167,31 +155,20 @@ const BalanceSheet = () => {
         setEditingCell(jobIdx);
     };
 
+    const hasFilters = search || Object.values(colFilters).some((s) => s && s.size > 0);
+
     const filteredJobs = useMemo(() => {
         return jobs.map((job, jobIdx) => {
-            const matchesSearch = !search || 
+            const matchesSearch = !search ||
                 job.jobNo.toLowerCase().includes(search.toLowerCase()) ||
-                job.yarnRows.some(r => r.factory.toLowerCase().includes(search.toLowerCase()));
-            
+                job.yarnRows.some((r) => r.factory?.toLowerCase().includes(search.toLowerCase())) ||
+                job.dyeingRows.some((r) => r.factoryName?.toLowerCase().includes(search.toLowerCase())) ||
+                job.aopRows.some((r) => r.factoryName?.toLowerCase().includes(search.toLowerCase()));
+
             if (!matchesSearch) return null;
 
-            const jobLevelColIds = ['d1Factory', 'd2Factory', 'remarks'];
-            
-            for (const colId of jobLevelColIds) {
-                const excluded = colFilters[colId];
-                if (excluded && excluded.size > 0) {
-                    let values = [];
-                    if (colId === 'd1Factory') values = [job.dyeing1.label];
-                    else if (colId === 'd2Factory') values = [job.dyeing2.label];
-                    else if (colId === 'remarks') values = [job.remarks].filter(Boolean);
-                    
-                    if (values.every(v => excluded.has(v))) {
-                        return null;
-                    }
-                }
-            }
-
-            const filteredYarnRows = job.yarnRows.filter(row => {
+            // Filter yarn rows
+            const filteredYarnRows = job.yarnRows.filter((row) => {
                 const yarnColIds = ['yarnFactory', 'yarnReq', 'yarnIssue', 'knittingGrey', 'yarnReturn', 'yarnBalance'];
                 for (const colId of yarnColIds) {
                     const excluded = colFilters[colId];
@@ -203,23 +180,82 @@ const BalanceSheet = () => {
                         else if (colId === 'knittingGrey') val = String(row.knittingGrey ?? "");
                         else if (colId === 'yarnReturn') val = String(row.yarnReturn ?? "");
                         else if (colId === 'yarnBalance') val = String(yarnBalance(row) ?? "");
-                        
                         if (excluded.has(val)) return false;
                     }
                 }
                 return true;
             });
 
-            if (filteredYarnRows.length === 0) return null;
-            return { job: { ...job, yarnRows: filteredYarnRows }, idx: jobIdx };
+            // Filter dyeing rows
+            const filteredDyeingRows = job.dyeingRows.filter((row) => {
+                const dyeingColIds = ['dyeingFactory', 'greyDelivery', 'greyRcvd', 'dyeBalance', 'finishRcvd', 'processLoss'];
+                for (const colId of dyeingColIds) {
+                    const excluded = colFilters[colId];
+                    if (excluded && excluded.size > 0) {
+                        let val = "";
+                        if (colId === 'dyeingFactory') val = row.factoryName;
+                        else if (colId === 'greyDelivery') val = String(row.greyDelivery ?? "");
+                        else if (colId === 'greyRcvd') val = String(row.greyRcvd ?? "");
+                        else if (colId === 'dyeBalance') val = String(dyeBalance(row) ?? "");
+                        else if (colId === 'finishRcvd') val = String(row.finishRcvd ?? "");
+                        else if (colId === 'processLoss') val = String(dyeProcessLoss(row) ?? "");
+                        if (excluded.has(val)) return false;
+                    }
+                }
+                return true;
+            });
+
+            // Filter AOP rows
+            const filteredAopRows = job.aopRows.filter((row) => {
+                const aopColIds = ['aopFactory', 'sentForAop', 'receivedFromAop', 'aopFinishRcvd'];
+                for (const colId of aopColIds) {
+                    const excluded = colFilters[colId];
+                    if (excluded && excluded.size > 0) {
+                        let val = "";
+                        if (colId === 'aopFactory') val = row.factoryName;
+                        else if (colId === 'sentForAop') val = String(row.sentForAop ?? "");
+                        else if (colId === 'receivedFromAop') val = String(row.receivedFromAop ?? "");
+                        else if (colId === 'aopFinishRcvd') val = String(row.aopFinishRcvd ?? "");
+                        if (excluded.has(val)) return false;
+                    }
+                }
+                return true;
+            });
+
+            // If all specific row types are filtered out, but the job itself matched search, we still return it 
+            // so the Job No and Remarks remain visible and editable.
+            return { 
+                job: { 
+                    ...job, 
+                    yarnRows: filteredYarnRows, 
+                    dyeingRows: filteredDyeingRows, 
+                    aopRows: filteredAopRows 
+                }, 
+                idx: jobIdx 
+            };
         }).filter(Boolean);
     }, [jobs, search, colFilters]);
 
+    const displayedJobs = useMemo(() => {
+        if (hasFilters) return filteredJobs;
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE;
+        return filteredJobs.slice(startIndex, endIndex);
+    }, [filteredJobs, currentPage, hasFilters]);
+
+    const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE) || 1;
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredJobs.length);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, colFilters]);
+
     const totals = useMemo(() => {
-        const t = {
-            req: 0, issue: 0, knittingGrey: 0, yarnReturn: 0, yarnBal: 0,
-            d1Delivery: 0, d1Rcvd: 0, d1Bal: 0, d1Finish: 0,
-            d2Delivery: 0, d2Rcvd: 0, d2Bal: 0, d2Finish: 0,
+        const t = { 
+            req: 0, issue: 0, knittingGrey: 0, yarnReturn: 0, yarnBal: 0, 
+            greyDelivery: 0, greyRcvd: 0, dyeBal: 0, finishRcvd: 0, 
+            sentForAop: 0, receivedFromAop: 0, aopFinishRcvd: 0 
         };
         filteredJobs.forEach(({ job }) => {
             job.yarnRows.forEach((row) => {
@@ -229,61 +265,68 @@ const BalanceSheet = () => {
                 t.yarnReturn += row.yarnReturn || 0;
                 t.yarnBal += yarnBalance(row);
             });
-            t.d1Delivery += job.dyeing1.greyDelivery || 0;
-            t.d1Rcvd += job.dyeing1.greyRcvd || 0;
-            t.d1Bal += dyeBalance(job.dyeing1) || 0;
-            t.d1Finish += job.dyeing1.finishRcvd || 0;
-            t.d2Delivery += job.dyeing2.greyDelivery || 0;
-            t.d2Rcvd += job.dyeing2.greyRcvd || 0;
-            t.d2Bal += dyeBalance(job.dyeing2) || 0;
-            t.d2Finish += job.dyeing2.finishRcvd || 0;
+            job.dyeingRows.forEach((row) => {
+                t.greyDelivery += row.greyDelivery || 0;
+                t.greyRcvd += row.greyRcvd || 0;
+                t.dyeBal += dyeBalance(row);
+                t.finishRcvd += row.finishRcvd || 0;
+            });
+            job.aopRows.forEach((row) => {
+                t.sentForAop += row.sentForAop || 0;
+                t.receivedFromAop += row.receivedFromAop || 0;
+                t.aopFinishRcvd += row.aopFinishRcvd || 0;
+            });
         });
         return t;
     }, [filteredJobs]);
 
-    const avgLoss = (deliveryKey, rcvdKey) => {
-        const delivery = totals[deliveryKey];
-        const rcvd = totals[rcvdKey];
-        if (!delivery) return null;
-        return (delivery - rcvd) / delivery;
+    const clearAll = () => { 
+        setSearch(""); 
+        setColFilters({}); 
+        setOpenCol(null); 
+        setCurrentPage(1); 
     };
-
-    const hasFilters = search || Object.values(colFilters).some((s) => s && s.size > 0);
-    const clearAll = () => { setSearch(""); setColFilters({}); setOpenCol(null); };
 
     const exportCsv = () => {
         const header = COLUMNS.map((c) => c.label);
         const lines = [header.map(csvCell).join(",")];
 
         filteredJobs.forEach(({ job }) => {
-            job.yarnRows.forEach((row, i) => {
+            const maxRows = Math.max(job.yarnRows.length, job.dyeingRows.length, job.aopRows.length, 1);
+            
+            for (let i = 0; i < maxRows; i++) {
+                const yRow = job.yarnRows[i];
+                const dRow = job.dyeingRows[i];
+                const aRow = job.aopRows[i];
+                
                 const cells = [
                     i === 0 ? job.jobNo : "",
-                    row.factory,
-                    rawNum(row.req),
-                    rawNum(row.issue),
-                    rawNum(row.knittingGrey),
-                    rawNum(row.yarnReturn),
-                    rawNum(yarnBalance(row)),
-                    i === 0 ? job.dyeing1.label : "",
-                    i === 0 ? rawNum(job.dyeing1.greyDelivery) : "",
-                    i === 0 ? rawNum(job.dyeing1.greyRcvd) : "",
-                    i === 0 ? rawNum(dyeBalance(job.dyeing1)) : "",
-                    i === 0 ? rawNum(job.dyeing1.finishRcvd) : "",
-                    i === 0 ? rawNum(job.dyeing1.processLoss) : "",
-                    i === 0 ? job.dyeing2.label : "",
-                    i === 0 ? rawNum(job.dyeing2.greyDelivery) : "",
-                    i === 0 ? rawNum(job.dyeing2.greyRcvd) : "",
-                    i === 0 ? rawNum(dyeBalance(job.dyeing2)) : "",
-                    i === 0 ? rawNum(job.dyeing2.finishRcvd) : "",
-                    i === 0 ? rawNum(job.dyeing2.processLoss) : "",
+                    yRow?.factory ?? "",
+                    rawNum(yRow?.req),
+                    rawNum(yRow?.issue),
+                    rawNum(yRow?.knittingGrey),
+                    rawNum(yRow?.yarnReturn),
+                    yRow ? rawNum(yarnBalance(yRow)) : "",
+                    
+                    dRow?.factoryName ?? "",
+                    rawNum(dRow?.greyDelivery),
+                    rawNum(dRow?.greyRcvd),
+                    dRow ? rawNum(dyeBalance(dRow)) : "",
+                    rawNum(dRow?.finishRcvd),
+                    rawNum(dRow ? dyeProcessLoss(dRow) : null),
+                    
+                    aRow?.factoryName ?? "",
+                    rawNum(aRow?.sentForAop),
+                    rawNum(aRow?.receivedFromAop),
+                    rawNum(aRow?.aopFinishRcvd),
+                    
                     i === 0 ? job.remarks : "",
                 ];
                 lines.push(cells.map(csvCell).join(","));
-            });
+            }
         });
 
-        const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -294,58 +337,139 @@ const BalanceSheet = () => {
         URL.revokeObjectURL(url);
     };
 
-    const getColWidth = (id) => COLUMNS.find(c => c.id === id)?.width || 100;
+    const getColWidth = (id) => COLUMNS.find((c) => c.id === id)?.width || 100;
     const getColLeft = (id) => COL_LEFT[id] || 0;
     const isFrozen = (id) => FROZEN_IDS.includes(id);
 
     const getColValueGetter = (colId) => {
-        if (colId === 'yarnFactory') return (j) => j.yarnRows.map(r => r.factory);
-        if (colId === 'yarnReq') return (j) => j.yarnRows.map(r => String(r.req));
-        if (colId === 'yarnIssue') return (j) => j.yarnRows.map(r => String(r.issue));
-        if (colId === 'knittingGrey') return (j) => j.yarnRows.map(r => String(r.knittingGrey));
-        if (colId === 'yarnReturn') return (j) => j.yarnRows.map(r => String(r.yarnReturn));
-        if (colId === 'yarnBalance') return (j) => j.yarnRows.map(r => String(yarnBalance(r)));
-        if (colId === 'd1Factory') return (j) => [j.dyeing1.label];
-        if (colId === 'd1Delivery') return (j) => [String(j.dyeing1.greyDelivery)];
-        if (colId === 'd1Rcvd') return (j) => [String(j.dyeing1.greyRcvd)];
-        if (colId === 'd1Balance') return (j) => [String(dyeBalance(j.dyeing1))];
-        if (colId === 'd1Finish') return (j) => [String(j.dyeing1.finishRcvd)];
-        if (colId === 'd1Loss') return (j) => [String(j.dyeing1.processLoss)];
-        if (colId === 'd2Factory') return (j) => [j.dyeing2.label];
-        if (colId === 'd2Delivery') return (j) => [String(j.dyeing2.greyDelivery)];
-        if (colId === 'd2Rcvd') return (j) => [String(j.dyeing2.greyRcvd)];
-        if (colId === 'd2Balance') return (j) => [String(dyeBalance(j.dyeing2))];
-        if (colId === 'd2Finish') return (j) => [String(j.dyeing2.finishRcvd)];
-        if (colId === 'd2Loss') return (j) => [String(j.dyeing2.processLoss)];
+        if (colId === 'yarnFactory') return (j) => j.yarnRows.map((r) => r.factory);
+        if (colId === 'yarnReq') return (j) => j.yarnRows.map((r) => String(r.req));
+        if (colId === 'yarnIssue') return (j) => j.yarnRows.map((r) => String(r.issue));
+        if (colId === 'knittingGrey') return (j) => j.yarnRows.map((r) => String(r.knittingGrey));
+        if (colId === 'yarnReturn') return (j) => j.yarnRows.map((r) => String(r.yarnReturn));
+        if (colId === 'yarnBalance') return (j) => j.yarnRows.map((r) => String(yarnBalance(r)));
+        
+        if (colId === 'dyeingFactory') return (j) => j.dyeingRows.map((r) => r.factoryName);
+        if (colId === 'greyDelivery') return (j) => j.dyeingRows.map((r) => String(r.greyDelivery));
+        if (colId === 'greyRcvd') return (j) => j.dyeingRows.map((r) => String(r.greyRcvd));
+        if (colId === 'dyeBalance') return (j) => j.dyeingRows.map((r) => String(dyeBalance(r)));
+        if (colId === 'finishRcvd') return (j) => j.dyeingRows.map((r) => String(r.finishRcvd));
+        if (colId === 'processLoss') return (j) => j.dyeingRows.map((r) => String(dyeProcessLoss(r)));
+        
+        if (colId === 'aopFactory') return (j) => j.aopRows.map((r) => r.factoryName);
+        if (colId === 'sentForAop') return (j) => j.aopRows.map((r) => String(r.sentForAop));
+        if (colId === 'receivedFromAop') return (j) => j.aopRows.map((r) => String(r.receivedFromAop));
+        if (colId === 'aopFinishRcvd') return (j) => j.aopRows.map((r) => String(r.aopFinishRcvd));
+        
         if (colId === 'remarks') return (j) => [j.remarks].filter(Boolean);
         return () => [];
     };
 
     const cellStyle = (colId, extra = {}) => {
         const w = getColWidth(colId);
-        if (isFrozen(colId)) {
-            return { position: "sticky", left: getColLeft(colId), width: w, minWidth: w, maxWidth: w, zIndex: 10, ...extra };
-        }
+        if (isFrozen(colId)) return { position: "sticky", left: getColLeft(colId), width: w, minWidth: w, maxWidth: w, zIndex: 10, ...extra };
         return { width: w, minWidth: w, maxWidth: w, ...extra };
     };
 
     const headerCellStyle = (colId, extra = {}) => {
         const w = getColWidth(colId);
-        if (isFrozen(colId)) {
-            return { position: "sticky", left: getColLeft(colId), width: w, minWidth: w, maxWidth: w, zIndex: 30, ...extra };
-        }
-        return { width: w, minWidth: w, maxWidth: w, ...extra };
+        const isFrozenCol = isFrozen(colId);
+        return { 
+            position: "sticky", 
+            top: 0, 
+            left: isFrozenCol ? getColLeft(colId) : undefined, 
+            width: w, 
+            minWidth: w, 
+            maxWidth: w, 
+            zIndex: isFrozenCol ? 30 : 20, 
+            backgroundColor: '#f1f5f9', 
+            ...extra 
+        };
     };
+
+    useEffect(() => {
+        const fetchBalanceSheetData = async () => {
+            setIsLoading(true);
+            try {
+                const response = await axiosSecure.get("/api/balance/sheet");
+                const rawData = response.data.jobs || response.data || [];
+                
+                // Transform backend data into separate arrays for Yarn, Dyeing, and AOP
+                const transformed = rawData.map(job => {
+                    const yarnRows = [];
+                    const dyeingRows = [];
+                    const aopRows = [];
+
+                    (job.dyeingRows || []).forEach(row => {
+                        const dt = row.deliveryTypeTotals || {};
+                        const hasYarn = dt["Yarn Delivery"] || dt["Yarn Return"] || dt["Grey Fabric Received"];
+                        const hasDyeing = dt["Grey Delivery"] || dt["Grey Received"] || dt["Finish Received"] || dt["Grey Return"] || dt["Received From Compacting"] || dt["Received From Reprocess"] || dt["Received From HEAT Set"];
+                        const hasAop = dt["Sent For Aop"] || dt["Received From Aop"] || dt["AOP Finish Fabric Rcvd"] || dt["Return From Aop"];
+
+                        if (hasYarn) {
+                            yarnRows.push({
+                                factory: row.factoryName,
+                                req: row.workOrderQty || 0,
+                                issue: dt["Yarn Delivery"] || 0,
+                                knittingGrey: dt["Grey Fabric Received"] || 0,
+                                yarnReturn: dt["Yarn Return"] || 0,
+                            });
+                        }
+                        if (hasDyeing) {
+                            dyeingRows.push({
+                                factoryName: row.factoryName,
+                                greyDelivery: dt["Grey Delivery"] || 0,
+                                greyRcvd: dt["Grey Received"] || 0,
+                                finishRcvd: dt["Finish Received"] || 0,
+                                greyReturn: dt["Grey Return"] || 0,
+                                receivedFromCompacting: dt["Received From Compacting"] || 0,
+                                receivedFromReprocess: dt["Received From Reprocess"] || 0,
+                                receivedFromHeatSet: dt["Received From HEAT Set"] || 0,
+                            });
+                        }
+                        if (hasAop) {
+                            aopRows.push({
+                                factoryName: row.factoryName,
+                                sentForAop: dt["Sent For Aop"] || 0,
+                                receivedFromAop: dt["Received From Aop"] || 0,
+                                aopFinishRcvd: dt["AOP Finish Fabric Rcvd"] || 0,
+                                returnFromAop: dt["Return From Aop"] || 0,
+                            });
+                        }
+                    });
+
+                    if (yarnRows.length === 0 && dyeingRows.length === 0 && aopRows.length === 0) {
+                        yarnRows.push({ factory: "N/A", req: job.totalWorkOrderQty || 0, issue: 0, knittingGrey: 0, yarnReturn: 0 });
+                    }
+
+                    return {
+                        ...job,
+                        yarnRows,
+                        dyeingRows,
+                        aopRows,
+                        remarks: job.remarks || ""
+                    };
+                });
+
+                setJobs(transformed);
+            } catch (error) {
+                console.error("Failed to fetch balance sheet data:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchBalanceSheetData();
+    }, [axiosSecure]);
 
     return (
         <div className="p-5 bg-slate-50 min-h-full" onClick={() => setOpenCol(null)}>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-800">Yarn &amp; Dyeing Balance Sheet</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Figures in kg unless noted · {filteredJobs.length} of {jobs.length} jobs shown</p>
+                    <h2 className="text-lg font-bold text-slate-800">Yarn, Dyeing &amp; AOP Balance Sheet</h2>
+                    <p className="text-xs text-slate-500 mt-1">Figures in kg unless noted · <span className="font-semibold text-slate-700">{filteredJobs.length}</span> of <span className="font-semibold text-slate-700">{jobs.length}</span> jobs shown</p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
                         <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
@@ -355,16 +479,14 @@ const BalanceSheet = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
-                            placeholder="Search job no. or factory"
-                            className="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-md w-64 outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500/20 bg-white"
+                            placeholder="Search job no. or factory..."
+                            className="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-md w-64 outline-none focus:border-[#0f2544] focus:ring-1 focus:ring-[#0f2544]/20 bg-white transition-all"
                         />
                     </div>
 
                     <button
                         onClick={() => setWrapText(!wrapText)}
-                        className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md border ${
-                            wrapText ? "bg-slate-700 text-white border-slate-700" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-                        }`}
+                        className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md border transition-all ${wrapText ? "bg-slate-700 text-white border-slate-700 shadow-sm" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
                     >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16m-7 6h7" />
@@ -373,14 +495,14 @@ const BalanceSheet = () => {
                     </button>
 
                     {hasFilters && (
-                        <button onClick={(e) => { e.stopPropagation(); clearAll(); }} className="text-xs font-medium text-slate-500 hover:text-slate-800 px-2 py-1.5">
-                            Clear filters
+                        <button onClick={(e) => { e.stopPropagation(); clearAll(); }} className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-md transition-colors">
+                            Clear Filters
                         </button>
                     )}
 
                     <button
                         onClick={(e) => { e.stopPropagation(); exportCsv(); }}
-                        className="flex items-center gap-1.5 text-xs font-medium text-white bg-slate-700 hover:bg-slate-800 px-3 py-1.5 rounded-md"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0f2544] hover:bg-[#1a365d] px-3 py-1.5 rounded-md shadow-sm transition-colors"
                     >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
@@ -391,14 +513,14 @@ const BalanceSheet = () => {
             </div>
 
             {hasUnsavedRemarks && (
-                <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 shadow-sm animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                         <span className="text-sm font-medium text-amber-800">You have unsaved changes in the remarks.</span>
                     </div>
-                    <button 
+                    <button
                         onClick={handleSaveRemarks}
                         className="flex items-center gap-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-md transition-colors shadow-sm"
                     >
@@ -410,66 +532,78 @@ const BalanceSheet = () => {
                 </div>
             )}
 
-            <div className="overflow-auto border border-slate-300 rounded-lg shadow-sm bg-white">
+            <div className="overflow-auto border border-slate-300 rounded-lg shadow-sm bg-white relative">
+                {isLoading && (
+                    <div className="absolute inset-0 bg-white/80 z-50 flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-6 h-6 border-2 border-[#0f2544] border-t-transparent rounded-full animate-spin"></div>
+                            <span className="text-xs font-medium text-slate-500">Loading data...</span>
+                        </div>
+                    </div>
+                )}
+                
                 <table className="border-collapse tabular-nums text-[11px]" style={{ width: TOTAL_WIDTH, minWidth: TOTAL_WIDTH }}>
                     <thead>
-                        <tr className="bg-slate-200">
-                            <th 
-                                colSpan={7} 
-                                style={{ position: 'sticky', left: 0, zIndex: 40, width: getColLeft('yarnBalance') + getColWidth('yarnBalance') }}
+                        <tr>
+                            <th
+                                colSpan={7}
+                                style={{
+                                    position: 'sticky',
+                                    top: 0,
+                                    left: 0,
+                                    zIndex: 40,
+                                    width: getColLeft('yarnBalance') + getColWidth('yarnBalance'),
+                                    backgroundColor: '#e2e8f0'
+                                }}
                                 className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
                             >
-                                YARN
+                                YARN / KNITTING
                             </th>
-                            <th colSpan={6} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300">
+                            <th
+                                colSpan={6}
+                                style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }}
+                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
+                            >
                                 DYEING
                             </th>
-                            <th colSpan={6} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300">
-                                DYEING FACTORY — AOP
+                            <th
+                                colSpan={4}
+                                style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }}
+                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
+                            >
+                                AOP
                             </th>
-                            <th className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300 bg-slate-200" style={{ width: getColWidth('remarks') }}>
+                            <th
+                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
+                                style={{
+                                    position: 'sticky',
+                                    top: 0,
+                                    zIndex: 20,
+                                    width: getColWidth('remarks'),
+                                    backgroundColor: '#e2e8f0'
+                                }}
+                            >
                                 <div className="flex items-center justify-center gap-1">
                                     REMARKS
-                                    <ExcelFilter 
-                                        colId="remarks"
-                                        allJobs={jobs} 
-                                        excluded={colFilters.remarks || new Set()} 
-                                        setExcluded={setExcludedFor} 
-                                        openCol={openCol} 
-                                        setOpenCol={setOpenCol} 
-                                        align="right"
-                                        valueGetter={getColValueGetter('remarks')}
-                                    />
+                                    <ExcelFilter colId="remarks" allJobs={jobs} excluded={colFilters.remarks || new Set()} setExcluded={setExcludedFor} openCol={openCol} setOpenCol={setOpenCol} align="right" valueGetter={getColValueGetter('remarks')} />
                                 </div>
                             </th>
                         </tr>
-                        <tr className="bg-slate-100">
+                        <tr>
                             {COLUMNS.map((col) => {
                                 const isLastFrozen = col.id === 'yarnBalance';
                                 return (
                                     <th
                                         key={col.id}
-                                        style={headerCellStyle(col.id, { 
+                                        style={headerCellStyle(col.id, {
                                             borderRight: isLastFrozen ? '2px solid #94a3b8' : '1px solid #cbd5e1',
                                             borderBottom: '1px solid #cbd5e1'
                                         })}
-                                        className={`px-1 py-2 text-[10px] font-semibold uppercase bg-slate-100 border border-slate-300 ${
-                                            col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'd1Factory' || col.id === 'd2Factory' ? 'text-left' : 'text-right'
-                                        }`}
+                                        className={`px-1 py-2 text-[10px] font-semibold uppercase border border-slate-300 ${col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'dyeingFactory' || col.id === 'aopFactory' ? 'text-left' : 'text-right'}`}
                                     >
-                                        <div className={`flex items-center ${
-                                            col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'd1Factory' || col.id === 'd2Factory' ? "" : "justify-end"
-                                        } gap-1`}>
+                                        <div className={`flex items-center ${col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'dyeingFactory' || col.id === 'aopFactory' ? "" : "justify-end"} gap-1`}>
                                             {col.label}
-                                            <ExcelFilter 
-                                                colId={col.id}
-                                                allJobs={jobs} 
-                                                excluded={colFilters[col.id] || new Set()} 
-                                                setExcluded={setExcludedFor} 
-                                                openCol={openCol} 
-                                                setOpenCol={setOpenCol}
-                                                valueGetter={getColValueGetter(col.id)}
-                                            />
+                                            <ExcelFilter colId={col.id} allJobs={jobs} excluded={colFilters[col.id] || new Set()} setExcluded={setExcludedFor} openCol={openCol} setOpenCol={setOpenCol} valueGetter={getColValueGetter(col.id)} />
                                         </div>
                                     </th>
                                 );
@@ -478,120 +612,158 @@ const BalanceSheet = () => {
                     </thead>
 
                     <tbody>
-                        {filteredJobs.length === 0 && (
+                        {filteredJobs.length === 0 && !isLoading && (
                             <tr>
-                                <td colSpan={COLUMNS.length} className="px-3 py-10 text-center text-sm text-slate-400">
-                                    No jobs match the current filters.
+                                <td colSpan={COLUMNS.length} className="px-3 py-16 text-center text-sm text-slate-400">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                        </svg>
+                                        <span>No jobs match the current filters.</span>
+                                    </div>
                                 </td>
                             </tr>
                         )}
 
-                        {filteredJobs.map(({ job, idx: jobIdx }) => {
-                            const rowCount = job.yarnRows.length;
-                            return job.yarnRows.map((row, rowIdx) => (
-                                <tr key={`${jobIdx}-${rowIdx}`} className="border-b border-slate-200 hover:bg-amber-50/30">
-                                    {rowIdx === 0 && (
-                                        <td 
-                                            rowSpan={rowCount} 
-                                            style={cellStyle("jobNo")} 
-                                            className="px-1 py-1.5 border border-slate-300 align-middle text-center font-semibold text-slate-800 bg-slate-50"
-                                        >
-                                            {job.jobNo}
-                                        </td>
-                                    )}
+                        {displayedJobs.map(({ job, idx: jobIdx }) => {
+                            const maxRows = Math.max(job.yarnRows.length, job.dyeingRows.length, job.aopRows.length, 1);
 
-                                    <td 
-                                        style={cellStyle("yarnFactory")} 
-                                        className={`px-1 py-1.5 border border-slate-300 text-slate-600 bg-white text-left ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}
-                                    >
-                                        {row.factory}
-                                    </td>
-                                    <td style={cellStyle("yarnReq")} className="px-1 py-1.5 border border-slate-300 text-right bg-white">{fmtNum(row.req)}</td>
-                                    <td style={cellStyle("yarnIssue")} className="px-1 py-1.5 border border-slate-300 text-right bg-white">{fmtNum(row.issue)}</td>
-                                    <td style={cellStyle("knittingGrey")} className="px-1 py-1.5 border border-slate-300 text-right bg-white">{fmtNum(row.knittingGrey)}</td>
-                                    <td style={cellStyle("yarnReturn")} className="px-1 py-1.5 border border-slate-300 text-right bg-white">{fmtNum(row.yarnReturn)}</td>
-                                    <td style={cellStyle("yarnBalance")} className="px-1 py-1.5 border-r-2 border-r-slate-400 border-y border-slate-300 text-right bg-white">{fmtNum(yarnBalance(row))}</td>
+                            return Array.from({ length: maxRows }).map((_, rowIdx) => {
+                                const yRow = job.yarnRows[rowIdx];
+                                const dRow = job.dyeingRows[rowIdx];
+                                const aRow = job.aopRows[rowIdx];
 
-                                    {rowIdx === 0 && (
-                                        <>
-                                            <td rowSpan={rowCount} style={cellStyle("d1Factory")} className={`px-1 py-1.5 border border-slate-300 align-middle text-center bg-teal-50/30 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{job.dyeing1.label}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d1Delivery")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-teal-50/30">{fmtNum(job.dyeing1.greyDelivery)}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d1Rcvd")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-teal-50/30">{fmtNum(job.dyeing1.greyRcvd)}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d1Balance")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-teal-50/30">{fmtNum(dyeBalance(job.dyeing1))}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d1Finish")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-teal-50/30">{fmtNum(job.dyeing1.finishRcvd)}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d1Loss")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-teal-50/30">{fmtPct(job.dyeing1.processLoss)}</td>
+                                return (
+                                    <tr key={`${jobIdx}-${rowIdx}`} className="border-b border-slate-200 hover:bg-amber-50/40 transition-colors">
+                                        {rowIdx === 0 && (
+                                            <td rowSpan={maxRows} style={cellStyle("jobNo")} className="px-2 py-2 border border-slate-300 align-middle text-center font-bold text-slate-800 bg-slate-50">{job.jobNo}</td>
+                                        )}
 
-                                            <td rowSpan={rowCount} style={cellStyle("d2Factory")} className={`px-1 py-1.5 border border-slate-300 align-middle text-center bg-violet-50/30 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{job.dyeing2.label}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d2Delivery")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-violet-50/30">{fmtNum(job.dyeing2.greyDelivery)}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d2Rcvd")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-violet-50/30">{fmtNum(job.dyeing2.greyRcvd)}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d2Balance")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-violet-50/30">{fmtNum(dyeBalance(job.dyeing2))}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d2Finish")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-violet-50/30">{fmtNum(job.dyeing2.finishRcvd)}</td>
-                                            <td rowSpan={rowCount} style={cellStyle("d2Loss")} className="px-1 py-1.5 border border-slate-300 align-middle text-right bg-violet-50/30">{fmtPct(job.dyeing2.processLoss)}</td>
+                                        {/* Yarn Columns */}
+                                        <td style={cellStyle("yarnFactory")} className={`px-2 py-2 border border-slate-300 text-slate-600 bg-white text-left ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{yRow?.factory ?? ""}</td>
+                                        <td style={cellStyle("yarnReq")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.req) : ""}</td>
+                                        <td style={cellStyle("yarnIssue")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.issue) : ""}</td>
+                                        <td style={cellStyle("knittingGrey")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.knittingGrey) : ""}</td>
+                                        <td style={cellStyle("yarnReturn")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.yarnReturn) : ""}</td>
+                                        <td style={cellStyle("yarnBalance")} className="px-2 py-2 border-r-2 border-r-slate-400 border-y border-slate-300 text-right bg-white font-medium">{yRow ? fmtNum(yarnBalance(yRow)) : ""}</td>
 
-                                            <td rowSpan={rowCount} style={cellStyle("remarks")} className="px-1 py-1.5 border border-slate-300 align-middle text-center">
+                                        {/* Dyeing Columns */}
+                                        <td style={cellStyle("dyeingFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-teal-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{dRow?.factoryName ?? ""}</td>
+                                        <td style={cellStyle("greyDelivery")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyDelivery) : ""}</td>
+                                        <td style={cellStyle("greyRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>
+                                        <td style={cellStyle("dyeBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dyeBalance(dRow)) : ""}</td>
+                                        <td style={cellStyle("finishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.finishRcvd) : ""}</td>
+                                        <td style={cellStyle("processLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtPct(dyeProcessLoss(dRow)) : ""}</td>
+
+                                        {/* AOP Columns */}
+                                        <td style={cellStyle("aopFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-violet-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{aRow?.factoryName ?? ""}</td>
+                                        <td style={cellStyle("sentForAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.sentForAop) : ""}</td>
+                                        <td style={cellStyle("receivedFromAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.receivedFromAop) : ""}</td>
+                                        <td style={cellStyle("aopFinishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.aopFinishRcvd) : ""}</td>
+
+                                        {/* Remarks */}
+                                        {rowIdx === 0 && (
+                                            <td rowSpan={maxRows} style={cellStyle("remarks")} className="px-2 py-2 border border-slate-300 align-middle text-center bg-white">
                                                 {editingCell === jobIdx ? (
-                                                    <input
-                                                        type="text"
-                                                        value={job.remarks}
-                                                        onChange={(e) => updateRemarks(jobIdx, e.target.value)}
-                                                        onBlur={handleSaveRemarks}
-                                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveRemarks()}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        autoFocus
-                                                        className="w-full px-1 py-0.5 text-xs text-slate-700 border border-slate-400 rounded focus:border-slate-500 focus:ring-1 focus:ring-slate-500/20 outline-none text-center"
+                                                    <input 
+                                                        type="text" 
+                                                        value={job.remarks || ""} 
+                                                        onChange={(e) => updateRemarks(jobIdx, e.target.value)} 
+                                                        onBlur={handleSaveRemarks} 
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveRemarks()} 
+                                                        onClick={(e) => e.stopPropagation()} 
+                                                        autoFocus 
+                                                        className="w-full px-2 py-1 text-xs text-slate-700 border border-[#0f2544] rounded focus:ring-1 focus:ring-[#0f2544]/20 outline-none text-center" 
                                                     />
                                                 ) : (
                                                     <div 
-                                                        onDoubleClick={() => handleDoubleClick(jobIdx)}
-                                                        className={`cursor-pointer px-1 py-0.5 text-xs text-slate-700 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}
+                                                        onDoubleClick={() => handleDoubleClick(jobIdx)} 
+                                                        className={`cursor-pointer px-2 py-1 text-xs text-slate-700 rounded hover:bg-slate-100 transition-colors ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`} 
                                                         title="Double-click to edit"
                                                     >
                                                         {job.remarks || <span className="text-slate-400 italic text-[10px]">Double-click to edit</span>}
                                                     </div>
                                                 )}
                                             </td>
-                                        </>
-                                    )}
-                                </tr>
-                            ));
+                                        )}
+                                    </tr>
+                                );
+                            });
                         })}
                     </tbody>
 
                     {filteredJobs.length > 0 && (
                         <tfoot>
-                            <tr className="bg-slate-700 text-white font-bold text-[11px]">
-                                <td style={cellStyle("jobNo")} className="px-1 py-2 border border-slate-300 bg-slate-700 text-center">Subtotal</td>
-                                <td style={cellStyle("yarnFactory")} className="px-1 py-2 border border-slate-300 bg-slate-700"></td>
-                                <td style={cellStyle("yarnReq")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.req.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("yarnIssue")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.issue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("knittingGrey")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.knittingGrey.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("yarnReturn")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.yarnReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("yarnBalance")} className="px-1 py-2 border-r-2 border-r-slate-400 border-y border-slate-300 text-right bg-slate-700">{totals.yarnBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <tr className="bg-[#0f2544] text-white font-bold text-[11px]">
+                                <td style={cellStyle("jobNo")} className="px-2 py-3 border border-slate-600 bg-[#0f2544] text-center uppercase tracking-wide">Subtotal</td>
+                                <td style={cellStyle("yarnFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
+                                <td style={cellStyle("yarnReq")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.req.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("yarnIssue")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.issue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("knittingGrey")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.knittingGrey.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("yarnReturn")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.yarnReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("yarnBalance")} className="px-2 py-3 border-r-2 border-r-slate-400 border-y border-slate-600 text-right bg-[#0f2544]">{totals.yarnBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
 
-                                <td style={cellStyle("d1Factory")} className="px-1 py-2 border border-slate-300 bg-slate-700"></td>
-                                <td style={cellStyle("d1Delivery")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d1Delivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d1Rcvd")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d1Rcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d1Balance")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d1Bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d1Finish")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d1Finish.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d1Loss")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">
-                                    {(() => { const l = avgLoss("d1Delivery", "d1Rcvd"); return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}
-                                </td>
+                                <td style={cellStyle("dyeingFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
+                                <td style={cellStyle("greyDelivery")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyDelivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("greyRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("dyeBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("finishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.finishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("processLoss")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{(() => { const l = totals.greyDelivery ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
 
-                                <td style={cellStyle("d2Factory")} className="px-1 py-2 border border-slate-300 bg-slate-700"></td>
-                                <td style={cellStyle("d2Delivery")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d2Delivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d2Rcvd")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d2Rcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d2Balance")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d2Bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d2Finish")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">{totals.d2Finish.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("d2Loss")} className="px-1 py-2 border border-slate-300 text-right bg-slate-700">
-                                    {(() => { const l = avgLoss("d2Delivery", "d2Rcvd"); return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}
-                                </td>
+                                <td style={cellStyle("aopFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
+                                <td style={cellStyle("sentForAop")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.sentForAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("receivedFromAop")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.receivedFromAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("aopFinishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.aopFinishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
 
-                                <td style={cellStyle("remarks")} className="px-1 py-2 border border-slate-300 bg-slate-700"></td>
+                                <td style={cellStyle("remarks")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
                             </tr>
                         </tfoot>
                     )}
                 </table>
             </div>
+
+            {!hasFilters && filteredJobs.length > 0 && (
+                <div className="flex items-center justify-between mt-4 px-1">
+                    <div className="text-xs text-slate-500">
+                        Showing <span className="font-semibold text-slate-700">{startIndex + 1}</span> to <span className="font-semibold text-slate-700">{endIndex}</span> of <span className="font-semibold text-slate-700">{filteredJobs.length}</span> jobs
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            « First
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            ‹ Prev
+                        </button>
+                        
+                        <span className="text-xs font-medium text-slate-700 px-3 py-1.5 bg-slate-100 rounded-md border border-slate-200">
+                            Page {currentPage} of {totalPages}
+                        </span>
+
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next ›
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Last »
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

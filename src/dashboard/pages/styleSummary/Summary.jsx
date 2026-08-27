@@ -227,7 +227,6 @@ export default function Summary() {
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
     const scrollContainerRef = useRef(null);
-    const [wrapText, setWrapText] = useState(false);
 
     const FILTER_STORAGE_KEY = "summary_active_filters";
 
@@ -388,9 +387,9 @@ export default function Summary() {
         >
             <div className="divide-y divide-black">
                 {compBreakdown.map((cb, j) => {
-                    if (cb?.status) return <div key={j} className={`px-3 py-2 text-black italic ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                    if (cb?.status) return <div key={j} className={`px-3 py-2 text-black italic`}>_</div>;
                     const value = cb?.[key];
-                    return <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>{formatNumber(value)}</div>;
+                    return <div key={j} className={`px-3 py-2`}>{formatNumber(value)}</div>;
                 })}
             </div>
         </td>
@@ -772,18 +771,6 @@ export default function Summary() {
                 }
             `}</style>
 
-            <div className="flex items-center gap-2 mb-2">
-                <button
-                    onClick={() => setWrapText(!wrapText)}
-                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                        wrapText
-                            ? 'bg-indigo-100 border-indigo-600 text-indigo-700'
-                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                    {wrapText ? 'Unwrap Text' : 'Wrap Text'}
-                </button>
-            </div>
 
             <div
                 ref={scrollContainerRef}
@@ -863,7 +850,7 @@ export default function Summary() {
                                 <tr key={row.id || i} className="group">
 
                                     {/* 1. SALES CONTACT */}
-                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} align-middle group-hover:bg-gray-50`} style={getFrozenStyle(0)}>
+                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(0)}>
                                         {editingCells[`${row.id}-salesContact`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-salesContact`].value}
@@ -876,7 +863,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 2. BUYER */}
-                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} align-middle group-hover:bg-gray-50`} style={getFrozenStyle(1)}>
+                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(1)}>
                                         {editingCells[`${row.id}-buyerName`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-buyerName`].value}
@@ -889,7 +876,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 3. JOB NO */}
-                                    <td onDoubleClick={() => handleRedirect(row.jobNo)} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} align-middle cursor-pointer hover:text-blue-600 group-hover:bg-gray-50`} style={getFrozenStyle(2)}>
+                                    <td onDoubleClick={() => handleRedirect(row.jobNo)} className={`px-3 py-2 align-middle cursor-pointer hover:text-blue-600 group-hover:bg-gray-50`} style={getFrozenStyle(2)}>
                                         <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)}>
                                             {editingCells[`${row.id}-jobNo`] ? (
                                                 <input
@@ -904,7 +891,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 4. STYLE */}
-                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} align-middle group-hover:bg-gray-50`} style={getFrozenStyle(3)}>
+                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(3)}>
                                         {editingCells[`${row.id}-styleNo`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-styleNo`].value}
@@ -921,7 +908,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 5. PO NO */}
-                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} align-middle group-hover:bg-gray-50`} style={getFrozenStyle(4)}>
+                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(4)}>
                                         {editingCells[`${row.id}-poNo`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-poNo`].value}
@@ -941,7 +928,7 @@ export default function Summary() {
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>
+                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
                                                     {editingCells[`${cell.id}-color`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-color`].value}
@@ -960,7 +947,7 @@ export default function Summary() {
                                     <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(6)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`} title={cell.composition}>
+                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className={`px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis'`} title={cell.composition}>
                                                     {editingCells[`${cell.id}-composition`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-composition`].value}
@@ -979,7 +966,7 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getCellStyle(7)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>
+                                                <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
                                                     {editingCells[`${cell.id}-finishDia`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-finishDia`].value}
@@ -998,7 +985,7 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>
+                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
                                                     {editingCells[`${cell.id}-orderQty`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-orderQty`].value}
@@ -1017,7 +1004,7 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>
+                                                <div key={j} className={`px-3 py-2`}>
                                                     {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
                                                 </div>
                                             ))}
@@ -1027,7 +1014,7 @@ export default function Summary() {
                                     {/* 28. PROCESS LOSS % */}
                                     <td className="p-0 align-top" style={getCellStyle(27)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>{Number(row.processLoss || 0).toFixed(2)}%</div>)}
+                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2`}>{Number(row.processLoss || 0).toFixed(2)}%</div>)}
                                         </div>
                                     </td>
 
@@ -1042,7 +1029,7 @@ export default function Summary() {
                                                     <div
                                                         key={j}
                                                         onClick={() => handleEdit(cell.id, "finishRequiredQty", cell.finishRequiredQty, "styleRequirementRows")}
-                                                        className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}
+                                                        className={`px-3 py-2`}
                                                     >
                                                         {editingCells[`${cell.id}-finishRequiredQty`] ? (
                                                             <input
@@ -1065,7 +1052,7 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>
+                                                <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className={`px-3 py-2`}>
                                                     {editingCells[`${cell.id}-additional`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-additional`].value}
@@ -1086,7 +1073,7 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
-                                                <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>
+                                                <div key={j} className={`px-3 py-2`}>
                                                     {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
                                                 </div>
                                             ))}
@@ -1101,13 +1088,13 @@ export default function Summary() {
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
                                                 const cb = compBreakdown[j] || {};
-                                                if (cb.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const finishRequiredQty = cell.finishRequiredQty || 0;
                                                 const processLoss = row.processLoss || 0;
                                                 const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
                                                 const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty); const isExceeded0 = diff0 > 0;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} ${isExceeded0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
+                                                    <div key={j} className={`px-3 py-2 ${isExceeded0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
                                                         {isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2)}
                                                     </div>
                                                 );
@@ -1123,7 +1110,7 @@ export default function Summary() {
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => {
                                                 const cb = compBreakdown[j] || {};
-                                                if (cb.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
 
                                                 const delivered = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
@@ -1133,7 +1120,7 @@ export default function Summary() {
                                                 const isExcess = diff1 > 0; // Positive means excess (green), negative means short (red)
 
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} ${isExcess ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
+                                                    <div key={j} className={`px-3 py-2 ${isExcess ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
                                                         {delivered === 0 && workOrderQty === 0 ? "_" : isExcess ? `(${diff1.toFixed(2)})` : Math.abs(diff1).toFixed(2)}
                                                     </div>
                                                 );
@@ -1150,7 +1137,7 @@ export default function Summary() {
                                     {/* 19. PARTY STOCK */}
                                     <td className="p-0 align-top" style={getCellStyle(18)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>party stock</div>)}
+                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2`}>party stock</div>)}
                                         </div>
                                     </td>
 
@@ -1164,13 +1151,13 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
                                                 const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
                                                 const balance = (greyReceived + yarnReturn) - yarnDelivery;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} font-bold ${balance >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 font-bold ${balance >= 0 ? "text-green-500" : "text-red-500"}`}>
                                                         {balance === 0 ? "_" : balance.toFixed(2)}
                                                     </div>
                                                 );
@@ -1194,7 +1181,7 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const diff = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery') - getBreakdownValue(cb, 'dyeingOrder_Grey_Received') -
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
                                                 const isExceeded = diff > 0;
@@ -1202,7 +1189,7 @@ export default function Summary() {
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing') ||
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
                                                         {!hasAnyData ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
@@ -1212,10 +1199,10 @@ export default function Summary() {
 
                                     {/* 29. FINISH DELIVERY FROM AOP */}
                                     {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_For_Aop', 29)}
-                                    
+
                                     {/* 30. FABRIC RETURN FROM AOP */}
                                     {renderBreakdownCell(compBreakdown, 'aopOrder_Fabric_Return', 30)}
-                                    
+
                                     {/* 31. AFTER AOP FABRIC RCVD */}
                                     {renderBreakdownCell(compBreakdown, 'aopOrder_After_Aop_Fabric_Rcvd', 31)}
 
@@ -1226,13 +1213,13 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                                                 const diff = received - sent;
                                                 const isExceeded = diff > 0;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
                                                         {sent === 0 && received === 0 ? "_" : (isExceeded ? `(${Math.abs(diff).toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
@@ -1244,11 +1231,11 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                                                 const loss = sent > 0 ? (((sent - received) / sent) * 100).toFixed(2) : "_";
-                                                return <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>{loss === "_" ? "_" : `${loss}%`}</div>;
+                                                return <div key={j} className={`px-3 py-2`}>{loss === "_" ? "_" : `${loss}%`}</div>;
                                             })}
                                         </div>
                                     </td>
@@ -1269,14 +1256,14 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
                                                 const diff = (receivedGrey + receivedFinish) - sent;
                                                 const isExceeded = diff > 0;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'} ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
                                                         {sent === 0 && receivedGrey === 0 && receivedFinish === 0 ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
@@ -1288,12 +1275,12 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-black">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
                                                 const loss = sent > 0 ? (((sent - (receivedGrey + receivedFinish)) / sent) * 100).toFixed(2) : "_";
-                                                return <div key={j} className={`px-3 py-2 ${wrapText ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}>{loss === "_" ? "_" : `${loss}%`}</div>;
+                                                return <div key={j} className={`px-3 py-2`}>{loss === "_" ? "_" : `${loss}%`}</div>;
                                             })}
                                         </div>
                                     </td>

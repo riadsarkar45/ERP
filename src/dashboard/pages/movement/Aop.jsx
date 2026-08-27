@@ -75,6 +75,10 @@ const Aop = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    // Editing states
+    const [editingCell, setEditingCell] = useState(null); // { rowKey, colKey }
+    const [editedData, setEditedData] = useState({}); // { [rowKey]: { [colKey]: value } }
+
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
 
@@ -99,16 +103,10 @@ const Aop = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
 
-    // ── Build rows — ONE ROW PER CHALLAN (+ job + composition + color) ──
-    // Receive From Aop and Finish Receive deliveries that belong to the SAME
-    // challan/job/composition/color are merged into the SAME row (accumulated),
-    // so a challan's receive-from-aop and finish-receive both show on one line.
-    // Different challans (or different comp/color facets) never merge with
-    // each other — only deliveries sharing the same key are combined.
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
-        const rowMap = new Map(); // key -> row
-        const order = []; // preserve first-seen order of keys
+        const rowMap = new Map();
+        const order = [];
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
 
         const makeKey = (challanNo, jobNo, comp, color) => `${challanNo}|${jobNo}|${comp}|${color}`;
@@ -147,8 +145,7 @@ const Aop = () => {
 
             const type = String(dv?.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
             if (type.includes("sentforaop")) row.sentForAop += qty;
-            else if (type.includes("aopfinishfabricrcvd") || type.includes("finishfabric") || type.includes("finishreceive") ||
-            type.includes("finishreceived") || type.includes("returnfromaop")) row.finishReceiveFromAop += qty;
+            else if (type.includes("aopfinishfabricrcvd") || type.includes("finishfabric") || type.includes("finishreceive") || type.includes("finishreceived") || type.includes("returnfromaop")) row.finishReceiveFromAop += qty;
             else if (type.includes("receivedfromaop") || type.includes("receivefromaop")) row.receiveFromAop += qty;
 
             const price = Number(dv?.unitePrice || source?.unitePrice) || 0;
@@ -158,11 +155,8 @@ const Aop = () => {
             if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
         };
 
-        // Build per-color "facets" so each color becomes its own row
         const getFacets = (item) => {
             const facets = [];
-
-            // 1) Backend provides a compositions array (composition + color pairs, optional qty)
             if (Array.isArray(item?.compositions) && item.compositions.length > 0) {
                 item.compositions.forEach((c) => {
                     if (!c) return;
@@ -174,15 +168,11 @@ const Aop = () => {
                         qty: qtyNum,
                     });
                 });
-            }
-            // 2) Backend provides a merged color string ("color A, color B") — split it
-            else if (typeof item?.color === "string" && item.color.includes(", ")) {
+            } else if (typeof item?.color === "string" && item.color.includes(", ")) {
                 item.color.split(", ").map((s) => s.trim()).filter(Boolean).forEach((colorPart) => {
                     facets.push({ comp: item?.composition || "-", color: colorPart, qty: null });
                 });
             }
-
-            // 3) Fallback: single color row
             if (facets.length === 0) {
                 facets.push({ comp: item?.composition || "-", color: item?.color || "-", qty: null });
             }
@@ -194,45 +184,32 @@ const Aop = () => {
             const jobNo = extractJobNo(item) || "-";
 
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                // ── Deliveries branch: deliveries for the SAME challan/comp/color
-                // accumulate into ONE row (receive from aop + finish receive merge here) ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
-
                     const comp = dv?.composition || item?.composition || "-";
                     const color = dv?.color || item?.color || "-";
                     const row = getOrCreateRow(challanNo, jobNo, comp, color, dv);
-
                     if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
                     applyDelivery(row, dv, item);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                // ── Flat branch: expand each color facet, but facets sharing the same
-                // challan/comp/color still land on the same merged row ──
                 const facets = getFacets(item);
                 const hasFacetQty = facets.some((f) => f.qty !== null);
-
                 facets.forEach((f) => {
                     const row = getOrCreateRow(item.challanNo, jobNo, f.comp, f.color, item);
-
                     if (hasFacetQty) {
-                        // per-color quantities exist → apply only this color's qty
                         if (f.qty !== null) applyDelivery(row, { ...item, deliveryQty: f.qty }, item);
                     } else if (facets.length === 1) {
-                        // single color → behave exactly like before
                         applyDelivery(row, item, item);
                     }
-                    // (multiple colors without per-color qty → qty stays 0/"-" to avoid guessing a split)
                 });
             }
         });
 
         return order.map((key) => {
             const row = rowMap.get(key);
-            const processLoss = row.receiveFromAop > 0
-                ? ((row.receiveFromAop - row.finishReceiveFromAop) / row.receiveFromAop) * 100
-                : 0;
+            const processLoss = row.receiveFromAop > 0 ? ((row.receiveFromAop - row.finishReceiveFromAop) / row.receiveFromAop) * 100 : 0;
             return {
                 ...row,
                 billingAmount: row.receiveFromAop * row.unitePrice,
@@ -241,25 +218,55 @@ const Aop = () => {
         });
     }, [movements]);
 
+    // Merge base rows with any unsaved edits
+    const processedRows = useMemo(() => {
+        return allRows.map(row => {
+            const edits = editedData[row.rowKey] || {};
+            
+            // Helper to get value: edited > original
+            const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
+
+            const sentForAop = Number(getVal('sentForAop')) || 0;
+            const returnFromAop = Number(getVal('returnFromAop')) || 0;
+            const receiveFromAop = Number(getVal('receiveFromAop')) || 0;
+            const finishReceiveFromAop = Number(getVal('finishReceiveFromAop')) || 0;
+
+            const processLoss = receiveFromAop > 0 ? ((receiveFromAop - finishReceiveFromAop) / receiveFromAop) * 100 : 0;
+            const billingAmount = receiveFromAop * row.unitePrice;
+
+            return {
+                ...row,
+                challanNo: getVal('challanNo'),
+                fromFactory: getVal('fromFactory'),
+                toFactory: getVal('toFactory'),
+                sentForAop,
+                returnFromAop,
+                receiveFromAop,
+                finishReceiveFromAop,
+                processLoss,
+                billingAmount
+            };
+        });
+    }, [allRows, editedData]);
+
     const filterOptions = useMemo(() => {
         const opts = {};
         tableHeader.forEach((col) => {
             if (col.noFilter) return;
             const set = new Set();
-            allRows.forEach((row) => set.add(String(row[col.key] ?? "")));
+            processedRows.forEach((row) => set.add(String(row[col.key] ?? "")));
             opts[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
         });
         return opts;
-    }, [allRows]);
+    }, [processedRows]);
 
-    const filteredRows = useMemo(() => allRows.filter((row) => tableHeader.every((col) => {
+    const filteredRows = useMemo(() => processedRows.filter((row) => tableHeader.every((col) => {
         if (col.noFilter) return true;
         const selected = filters[col.key];
         if (!selected) return true;
         return selected.has(String(row[col.key] ?? ""));
-    })), [allRows, filters]);
+    })), [processedRows, filters]);
 
-    // ── Footer totals for the currently visible (filtered) rows ──
     const totals = useMemo(() => {
         const t = {
             sentForAop: 0,
@@ -275,9 +282,7 @@ const Aop = () => {
             t.finishReceiveFromAop += Number(row.finishReceiveFromAop) || 0;
             t.billingAmount += Number(row.billingAmount) || 0;
         });
-        t.processLoss = t.receiveFromAop > 0
-            ? ((t.receiveFromAop - t.finishReceiveFromAop) / t.receiveFromAop) * 100
-            : 0;
+        t.processLoss = t.receiveFromAop > 0 ? ((t.receiveFromAop - t.finishReceiveFromAop) / t.receiveFromAop) * 100 : 0;
         return t;
     }, [filteredRows]);
 
@@ -337,32 +342,130 @@ const Aop = () => {
     };
 
     const handleChallanSearch = async () => {
-        if (!search.trim()) { alert("Please enter at least one challan number."); return; }
+        if (!search.trim()) { alert("Please enter at least one challan number or job number."); return; }
         setSearchLoading(true); setSearchError(null); setPage(1);
-        const challanArray = search.split(/[\s,]+/).filter(Boolean);
+        const searchArray = search.split(/[\s,]+/).filter(Boolean);
         try {
-            const res = await axiosPublic.get("/api/aopOrder/challan/search", { params: { challans: challanArray.join(","), context: "aopOrder" } });
+            const res = await axiosPublic.get("/api/aopOrder/challan/search", { params: { challans: searchArray.join(","), context: "aopOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;
             setMovements(searchData); setTotalPages(1);
-        } catch (err) { setSearchError("Failed to search challans."); setMovements([]); }
+        } catch (err) { setSearchError("Failed to search."); setMovements([]); }
         finally { setSearchLoading(false); }
+    };
+
+    const handleCellEdit = (rowKey, colKey, value) => {
+        setEditedData(prev => ({
+            ...prev,
+            [rowKey]: {
+                ...(prev[rowKey] || {}),
+                [colKey]: value
+            }
+        }));
+    };
+
+    const handleSaveChanges = async () => {
+        try {
+            const payload = Object.entries(editedData).map(([rowKey, edits]) => ({
+                rowKey,
+                ...edits
+            }));
+            console.log("Saving edited AOP data:", payload);
+            // TODO: Replace with your actual API endpoint
+            // await axiosPublic.put("/api/aopOrder/update-bulk", { updates: payload });
+            alert("Changes saved successfully!");
+            setEditedData({});
+        } catch (error) {
+            console.error("Failed to save changes:", error);
+            alert("Failed to save changes.");
+        }
+    };
+
+    // Added challanNo, fromFactory, toFactory to editable fields
+    const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
+    const numericFields = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
+    const hasUnsavedChanges = Object.keys(editedData).length > 0;
+
+    const renderCell = (row, colKey) => {
+        const isEditing = editingCell?.rowKey === row.rowKey && editingCell?.colKey === colKey;
+        const currentValue = editedData[row.rowKey]?.[colKey] !== undefined ? editedData[row.rowKey][colKey] : row[colKey];
+        const isNumber = numericFields.includes(colKey);
+
+        if (isEditing) {
+            return (
+                <input
+                    type={isNumber ? "number" : "text"}
+                    step={isNumber ? "0.01" : undefined}
+                    value={currentValue || ""}
+                    onChange={(e) => handleCellEdit(row.rowKey, colKey, isNumber ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
+                    onBlur={() => setEditingCell(null)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
+                    autoFocus
+                    style={{ width: '100%', border: '1px solid #3b82f6', padding: '2px', textAlign: isNumber ? 'right' : 'left', boxSizing: 'border-box', outline: 'none' }}
+                />
+            );
+        }
+
+        return (
+            <div 
+                onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
+                style={{ 
+                    cursor: editableFields.includes(colKey) ? 'pointer' : 'default', 
+                    minHeight: '20px',
+                    textAlign: isNumber ? 'right' : 'center'
+                }}
+                title={editableFields.includes(colKey) ? "Click to edit" : ""}
+            >
+                {isNumber 
+                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
+                    : (currentValue || "-")
+                }
+            </div>
+        );
     };
 
     if (loading && movements.length === 0 && !searchLoading) return <div style={{ padding: 20 }}>Loading...</div>;
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
     return (
-        <div style={{ width: "100%" }}>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
-                <input style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }} placeholder="Search by Challan Nos" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }} />
-                <button style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={handleChallanSearch} disabled={searchLoading}>{searchLoading ? "Searching..." : "Search"}</button>
-                {search && <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}>Clear Search</button>}
+        <div style={{ width: "100%", padding: "20px" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
+                <input 
+                    style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }} 
+                    placeholder="Search by Challan or Job No" 
+                    value={search} 
+                    onChange={(e) => setSearch(e.target.value)} 
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }} 
+                />
+                <button style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={handleChallanSearch} disabled={searchLoading}>
+                    {searchLoading ? "Searching..." : "Search"}
+                </button>
+                {search && (
+                    <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}>
+                        Clear Search
+                    </button>
+                )}
+                
+                {hasUnsavedChanges && (
+                    <button 
+                        onClick={handleSaveChanges}
+                        style={{ background: "#10b981", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                    >
+                        Save Changes
+                    </button>
+                )}
             </div>
+            
             {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
 
-            {challanIds.length > 0 && <div style={{ marginBottom: "16px" }}><button onClick={handleGenerateBill} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md border border-blue-500">Generate Bill ({challanIds.length})</button></div>}
+            {challanIds.length > 0 && (
+                <div style={{ marginBottom: "16px" }}>
+                    <button onClick={handleGenerateBill} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md border border-blue-500">
+                        Generate Bill ({challanIds.length})
+                    </button>
+                </div>
+            )}
 
             <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -404,19 +507,25 @@ const Aop = () => {
                             <tr key={row.rowKey}>
                                 <td style={cellStyle}><input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={(e) => { const next = new Set(selectedRows); if (e.target.checked) next.add(row.rowKey); else next.delete(row.rowKey); setSelectedRows(next); }} onClick={() => handleBillPreparation(row.chId)} /></td>
                                 <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
-                                <td style={cellStyle}>{row.challanNo}</td>
+                                
+                                {/* Editable Challan No, From, To */}
+                                <td style={cellStyle}>{renderCell(row, 'challanNo')}</td>
                                 <td style={cellStyle}>{row.jobNo}</td>
                                 <td style={cellStyle}>{row.composition}</td>
                                 <td style={cellStyle}>{row.color || "-"}</td>
-                                <td style={cellStyle}>{row.fromFactory || "-"}</td>
-                                <td style={cellStyle}>{row.toFactory || "-"}</td>
-                                <td style={cellStyle}>{row.sentForAop > 0 ? Number (row.sentForAop).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.returnFromAop > 0 ? Number (row.returnFromAop).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.receiveFromAop > 0 ? Number (row.receiveFromAop).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.finishReceiveFromAop > 0 ? Number (row.finishReceiveFromAop).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{renderCell(row, 'fromFactory')}</td>
+                                <td style={cellStyle}>{renderCell(row, 'toFactory')}</td>
+                                
+                                {/* Editable AOP Fields */}
+                                <td style={cellStyle}>{renderCell(row, 'sentForAop')}</td>
+                                <td style={cellStyle}>{renderCell(row, 'returnFromAop')}</td>
+                                <td style={cellStyle}>{renderCell(row, 'receiveFromAop')}</td>
+                                <td style={cellStyle}>{renderCell(row, 'finishReceiveFromAop')}</td>
+                                
+                                {/* Calculated Fields */}
                                 <td style={cellStyle}>{row.receiveFromAop > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? Number (row.unitePrice).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.billingAmount > 0 ? Number (row.billingAmount).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
+                                <td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td>
                             </tr>
                         ))}
                         {filteredRows.length === 0 && <tr><td style={cellStyle} colSpan={tableHeader.length}>{movements.length === 0 ? "No records found." : "No rows match filters."}</td></tr>}

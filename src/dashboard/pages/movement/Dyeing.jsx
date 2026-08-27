@@ -274,9 +274,9 @@ const Dyeing = () => {
     const handleChallanSearch = async () => {
         if (!search.trim()) { alert("Please enter at least one challan number."); return; }
         setSearchLoading(true); setSearchError(null); setPage(1);
-        const challanArray = search.split(/[\s,]+/).filter(Boolean);
+        const searchArray = search.split(/[\s,]+/).filter(Boolean);
         try {
-            const res = await axiosPublic.get("/api/dyeingOrder/challan/search", { params: { challans: challanArray.join(","), context: "dyeingOrder" } });
+            const res = await axiosPublic.get("/api/dyeingOrder/challan/search", { params: { challans: searchArray.join(","), context: "dyeingOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;

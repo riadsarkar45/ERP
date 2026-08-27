@@ -28,6 +28,7 @@ import { generateKnittingPdfWorkOrder } from "../controllers/orders/pdfWorkOrder
 import { allUsers } from "../controllers/users/allUser";
 import { requestedData } from "../controllers/orders/requestedData";
 import { downloadPDFchallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
+import { balanceGlanceReport } from "../controllers/Glance/balanceGlanceReport";
 
 const getRouters = express.Router();
 
@@ -112,5 +113,7 @@ getRouters.get("/requested-work-data", responseTimeMonitor, authenticate, reques
 getRouters.get("/prepare-to-download/:userId", responseTimeMonitor, authenticate, prepareToGenerate);
 
 getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, downloadPDFchallan);
+
+getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
 
 export default getRouters;

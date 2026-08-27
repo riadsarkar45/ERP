@@ -251,9 +251,10 @@ const Knitting = () => {
     const handleChallanSearch = async () => {
         if (!search.trim()) { alert("Please enter at least one challan number."); return; }
         setSearchLoading(true); setSearchError(null);
-        const challanArray = search.split(/[\s,]+/).filter(Boolean);
+        const searchArray = search.split(/[\s,]+/).filter(Boolean);
+
         try {
-            const res = await axiosPublic.get("/api/knittingOrder/challan/search", { params: { challans: challanArray.join(","), context: "knittingOrder" } });
+            const res = await axiosPublic.get("/api/knittingOrder/challan/search", { params: { challans: searchArray.join(","), context: "knittingOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;
