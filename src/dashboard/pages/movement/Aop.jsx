@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+import { Loader } from 'lucide-react';
 
 const cellStyle = {
     border: "1px solid #999",
@@ -40,13 +42,15 @@ const pageButtonStyle = (active) => ({
     fontSize: "0.9rem",
 });
 
+// Added "ID" column to keep table alignment correct and consistent with Knitting
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true },
-    { header: "Date", width: "8%", key: "challanDate" },
+    { header: "Date", width: "7%", key: "challanDate" },
+    { header: "ID", width: "5%", key: "deliveryId", noFilter: true },
     { header: "Challan No", width: "7%", key: "challanNo" },
-    { header: "Job No", width: "10%", key: "jobNo" },
-    { header: "Composition", width: "11%", key: "composition" },
-    { header: "Color", width: "9%", key: "color" },
+    { header: "Job No", width: "9%", key: "jobNo" },
+    { header: "Composition", width: "10%", key: "composition" },
+    { header: "Color", width: "8%", key: "color" },
     { header: "From Factory", width: "7%", key: "fromFactory" },
     { header: "To Factory", width: "7%", key: "toFactory" },
     { header: "Sent For Aop", width: "6%", key: "sentForAop" },
@@ -76,11 +80,13 @@ const Aop = () => {
     const [refreshKey, setRefreshKey] = useState(0);
 
     // Editing states
+    const [isLoading, setIsLoading] = useState(false);
     const [editingCell, setEditingCell] = useState(null); // { rowKey, colKey }
     const [editedData, setEditedData] = useState({}); // { [rowKey]: { [colKey]: value } }
 
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
+    const axiosSecure = useAxiosPrivate();
 
     useEffect(() => {
         if (search) return;
@@ -117,6 +123,7 @@ const Aop = () => {
             if (!row) {
                 row = {
                     rowKey: key,
+                    deliveryId: source?.id || null, // <-- Explicitly set deliveryId
                     chId: source?.id || challanNo,
                     challanNo,
                     jobNo,
@@ -222,7 +229,7 @@ const Aop = () => {
     const processedRows = useMemo(() => {
         return allRows.map(row => {
             const edits = editedData[row.rowKey] || {};
-            
+
             // Helper to get value: edited > original
             const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
 
@@ -236,6 +243,7 @@ const Aop = () => {
 
             return {
                 ...row,
+                deliveryId: row.deliveryId, // <-- Ensure it's carried over to processed rows
                 challanNo: getVal('challanNo'),
                 fromFactory: getVal('fromFactory'),
                 toFactory: getVal('toFactory'),
@@ -365,27 +373,47 @@ const Aop = () => {
         }));
     };
 
+    // ── Fixed Save Changes Logic ──
     const handleSaveChanges = async () => {
+        setIsLoading(true);
         try {
-            const payload = Object.entries(editedData).map(([rowKey, edits]) => ({
-                rowKey,
-                ...edits
-            }));
+            const payload = Object.entries(editedData).map(([rowKey, edits]) => {
+                const originalRow = allRows.find(r => r.rowKey === rowKey);
+                return {
+                    deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey, // Guaranteed to be in payload
+                    rowKey,
+                    ...edits
+                };
+            });
+            
             console.log("Saving edited AOP data:", payload);
-            // TODO: Replace with your actual API endpoint
-            // await axiosPublic.put("/api/aopOrder/update-bulk", { updates: payload });
-            alert("Changes saved successfully!");
-            setEditedData({});
+            const update = await axiosSecure.patch("/api/edit-challan", payload);
+            
+            if (update.status === 200) {
+                alert("Changes saved successfully!");
+                setEditedData({}); // Clear local edit state
+                setRefreshKey(prev => prev + 1); // Trigger refetch of current page
+            }
         } catch (error) {
             console.error("Failed to save changes:", error);
             alert("Failed to save changes.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    // Added challanNo, fromFactory, toFactory to editable fields
     const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
     const numericFields = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
     const hasUnsavedChanges = Object.keys(editedData).length > 0;
+
+    // Helper to apply yellow background to edited cells
+    const getCellStyle = (row, colKey) => {
+        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
+        return {
+            ...cellStyle,
+            backgroundColor: isEdited ? '#fef08a' : undefined, // Yellow highlight for edited fields
+        };
+    };
 
     const renderCell = (row, colKey) => {
         const isEditing = editingCell?.rowKey === row.rowKey && editingCell?.colKey === colKey;
@@ -402,22 +430,30 @@ const Aop = () => {
                     onBlur={() => setEditingCell(null)}
                     onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
                     autoFocus
-                    style={{ width: '100%', border: '1px solid #3b82f6', padding: '2px', textAlign: isNumber ? 'right' : 'left', boxSizing: 'border-box', outline: 'none' }}
+                    style={{
+                        width: '100%',
+                        border: '1px solid #3b82f6',
+                        padding: '2px',
+                        textAlign: isNumber ? 'right' : 'left',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        backgroundColor: 'transparent' // Allows yellow bg to show through while editing
+                    }}
                 />
             );
         }
 
         return (
-            <div 
+            <div
                 onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
-                style={{ 
-                    cursor: editableFields.includes(colKey) ? 'pointer' : 'default', 
+                style={{
+                    cursor: editableFields.includes(colKey) ? 'pointer' : 'default',
                     minHeight: '20px',
                     textAlign: isNumber ? 'right' : 'center'
                 }}
                 title={editableFields.includes(colKey) ? "Click to edit" : ""}
             >
-                {isNumber 
+                {isNumber
                     ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
                     : (currentValue || "-")
                 }
@@ -431,12 +467,12 @@ const Aop = () => {
     return (
         <div style={{ width: "100%", padding: "20px" }}>
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
-                <input 
-                    style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }} 
-                    placeholder="Search by Challan or Job No" 
-                    value={search} 
-                    onChange={(e) => setSearch(e.target.value)} 
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }} 
+                <input
+                    style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }}
+                    placeholder="Search by Challan or Job No"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }}
                 />
                 <button style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={handleChallanSearch} disabled={searchLoading}>
                     {searchLoading ? "Searching..." : "Search"}
@@ -446,17 +482,30 @@ const Aop = () => {
                         Clear Search
                     </button>
                 )}
-                
+
                 {hasUnsavedChanges && (
-                    <button 
+                    <button
                         onClick={handleSaveChanges}
-                        style={{ background: "#10b981", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                        disabled={isLoading}
+                        style={{ 
+                            background: isLoading ? "#9ca3af" : "#10b981", 
+                            color: "white", 
+                            padding: "8px 16px", 
+                            borderRadius: "6px", 
+                            border: "none", 
+                            cursor: isLoading ? "not-allowed" : "pointer", 
+                            fontWeight: "bold",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px"
+                        }}
                     >
-                        Save Changes
+                        {isLoading && <span className="animate-spin"><Loader size={16} /></span>}
+                        {isLoading ? "Saving..." : "Save Changes"}
                     </button>
                 )}
             </div>
-            
+
             {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
 
             {challanIds.length > 0 && (
@@ -508,20 +557,22 @@ const Aop = () => {
                                 <td style={cellStyle}><input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={(e) => { const next = new Set(selectedRows); if (e.target.checked) next.add(row.rowKey); else next.delete(row.rowKey); setSelectedRows(next); }} onClick={() => handleBillPreparation(row.chId)} /></td>
                                 <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
                                 
-                                {/* Editable Challan No, From, To */}
-                                <td style={cellStyle}>{renderCell(row, 'challanNo')}</td>
+                                {/* ID Column is now properly populated */}
+                                <td style={cellStyle}>{row.deliveryId || "-"}</td>
+
+                                {/* Editable Fields with Yellow Highlight */}
+                                <td style={getCellStyle(row, 'challanNo')}>{renderCell(row, 'challanNo')}</td>
                                 <td style={cellStyle}>{row.jobNo}</td>
                                 <td style={cellStyle}>{row.composition}</td>
                                 <td style={cellStyle}>{row.color || "-"}</td>
-                                <td style={cellStyle}>{renderCell(row, 'fromFactory')}</td>
-                                <td style={cellStyle}>{renderCell(row, 'toFactory')}</td>
-                                
-                                {/* Editable AOP Fields */}
-                                <td style={cellStyle}>{renderCell(row, 'sentForAop')}</td>
-                                <td style={cellStyle}>{renderCell(row, 'returnFromAop')}</td>
-                                <td style={cellStyle}>{renderCell(row, 'receiveFromAop')}</td>
-                                <td style={cellStyle}>{renderCell(row, 'finishReceiveFromAop')}</td>
-                                
+                                <td style={getCellStyle(row, 'fromFactory')}>{renderCell(row, 'fromFactory')}</td>
+                                <td style={getCellStyle(row, 'toFactory')}>{renderCell(row, 'toFactory')}</td>
+
+                                <td style={getCellStyle(row, 'sentForAop')}>{renderCell(row, 'sentForAop')}</td>
+                                <td style={getCellStyle(row, 'returnFromAop')}>{renderCell(row, 'returnFromAop')}</td>
+                                <td style={getCellStyle(row, 'receiveFromAop')}>{renderCell(row, 'receiveFromAop')}</td>
+                                <td style={getCellStyle(row, 'finishReceiveFromAop')}>{renderCell(row, 'finishReceiveFromAop')}</td>
+
                                 {/* Calculated Fields */}
                                 <td style={cellStyle}>{row.receiveFromAop > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
                                 <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
@@ -533,6 +584,7 @@ const Aop = () => {
                     {filteredRows.length > 0 && (
                         <tfoot>
                             <tr>
+                                <td style={tfootCellStyle}></td>
                                 <td style={tfootCellStyle}></td>
                                 <td style={tfootCellStyle}></td>
                                 <td style={tfootCellStyle}></td>
@@ -563,4 +615,5 @@ const Aop = () => {
         </div>
     );
 };
+
 export default Aop;

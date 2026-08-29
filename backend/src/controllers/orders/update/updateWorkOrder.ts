@@ -3,13 +3,17 @@ import prisma from "../../../database/prismaClient/prisma";
 import { evaluateQtyExpression } from "../../newStyleRequirements/updateStyleRequires/evaluateQtyExpression";
 
 export const updateWorkOrder = async (req: Request, res: Response) => {
-    const { factoryName, rowId, updatedFieldName, unitePrice, workOrderQty, compId } = req.body as {
+    const { factoryName, machineDia, yarnCount, lotNo, stichLength, rowId, updatedFieldName, unitePrice, workOrderQty, compId } = req.body as {
         factoryName?: string,
         rowId: string,
         updatedFieldName: string,
         unitePrice?: number,
         workOrderQty?: number,
         compId?: string,
+        machineDia?: string,
+        yarnCount?: string,
+        lotNo?: string,
+        stichLength: string,
     }
     console.log(req.body, "body data");
 
@@ -19,9 +23,25 @@ export const updateWorkOrder = async (req: Request, res: Response) => {
         }
 
         // Fields that live on WorkOrder
-        if (updatedFieldName === "factoryName") {
-            if (factoryName === undefined) {
-                return res.status(400).send({ message: "factoryName is required", type: "error" });
+        if (
+            updatedFieldName === "factoryName" ||
+            updatedFieldName === "machineDia" ||
+            updatedFieldName === "stichLength" ||
+            updatedFieldName === "yarnCount" ||
+            updatedFieldName === "lotNo"
+        ) {
+            const fieldValues = {
+                factoryName,
+                machineDia,
+                stichLength,
+                yarnCount,
+                lotNo,
+            };
+
+            const value = fieldValues[updatedFieldName];
+
+            if (value === undefined) {
+                return res.status(400).send({ message: `${updatedFieldName} is required`, type: "error" });
             }
 
             const findWorkOrder = await prisma.workOrder.findUnique({
@@ -35,7 +55,7 @@ export const updateWorkOrder = async (req: Request, res: Response) => {
 
             await prisma.workOrder.update({
                 where: { id: Number(rowId) },
-                data: { factoryName }
+                data: { [updatedFieldName]: value }
             });
         }
 

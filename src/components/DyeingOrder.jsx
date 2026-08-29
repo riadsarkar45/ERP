@@ -170,22 +170,31 @@ const DyeingOrder = ({ orders, handleInlineEdit,handleRedirect, updatedFields, h
                                 )}
                             </td>
                             <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((col, j) => (
-                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
-                                            YARN COUNT
+                                {workOrders?.map((wo, i) => (
+                                    wo.yarnCount === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
+                                    ) : (
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.yarnCount, "workOrder", "yarnCount", 0)} className={`${innerItem}  cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "yarnCount" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="yarnCount" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : <span>{wo.yarnCount}</span>}
                                         </div>
-                                    ))
-                                )}
+                                    )
+                                ))}
                             </td>
+                            {/* COL 8 — YARN LOT */}
                             <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((col, j) => (
-                                        <div onClick={() => handleEditRowData(col.id)} key={`${i}-${j}`} className={innerItem} style={{ cursor: 'pointer' }}>
-                                            YARN LOT
+                                {workOrders?.map((wo, i) => (
+                                    wo.lotNo === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
+                                    ) : (
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.lotNo, "workOrder", "lotNo", 0)} className={`${innerItem}  cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "lotNo" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="lotNo" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : <span>{wo.lotNo}</span>}
                                         </div>
-                                    ))
-                                )}
+                                    )
+                                ))}
                             </td>
                             <td style={{  borderRight: "1px solid #000000", borderBottom: "1px solid #000000",  padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
                                 {workOrders.map((wo, i) =>

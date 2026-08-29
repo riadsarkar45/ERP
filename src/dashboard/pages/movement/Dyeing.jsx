@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+import { Loader } from 'lucide-react';
+import { tableScrollWrapStyle } from './TableStyle';
+import { useTableFilters } from './UseFilter';
+import FilterableTh from './FilterBleth';
 
 const cellStyle = { border: "1px solid #999", padding: "6px 8px", overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "middle", textAlign: "center" };
 const thStickyStyle = { ...cellStyle, position: "sticky", top: 0, zIndex: 10, background: "#f3f4f6" };
@@ -11,17 +16,18 @@ const pageButtonStyle = (active) => ({ border: "1px solid #999", background: act
 const tableHeader = [
     { header: "", width: "40px", key: "select", noFilter: true },
     { header: "Date", width: "7%", key: "challanDate" },
+    { header: "ID", width: "5%", key: "deliveryId", noFilter: true },
     { header: "Challan No", width: "7%", key: "challanNo" },
-    { header: "Job No", width: "10%", key: "jobNo" },
-    { header: "Composition", width: "12%", key: "composition" },
-    { header: "Color", width: "9%", key: "color" },
-    { header: "From Factory", width: "8%", key: "fromFactory" },
-    { header: "To Factory", width: "8%", key: "toFactory" },
-    { header: "Grey Del", width: "7%", key: "greyDelivery" },
+    { header: "Job No", width: "9%", key: "jobNo" },
+    { header: "Composition", width: "10%", key: "composition" },
+    { header: "Color", width: "8%", key: "color" },
+    { header: "From Factory", width: "7%", key: "fromFactory" },
+    { header: "To Factory", width: "7%", key: "toFactory" },
+    { header: "Grey Del", width: "6%", key: "greyDelivery" },
     { header: "Grey Ret", width: "6%", key: "greyReturn" },
-    { header: "Grey Rec", width: "7%", key: "greyReceive" },
-    { header: "Finish Rec", width: "7%", key: "finishReceive" },
-    { header: "Process Loss %", width: "7%", key: "processLoss" },
+    { header: "Grey Rec", width: "6%", key: "greyReceive" },
+    { header: "Finish Rec", width: "6%", key: "finishReceive" },
+    { header: "Process Loss %", width: "6%", key: "processLoss" },
     { header: "Price/KG", width: "6%", key: "unitePrice" },
     { header: "Billing", width: "6%", key: "billingAmount" },
 ];
@@ -29,19 +35,21 @@ const tableHeader = [
 const Dyeing = () => {
     const [movements, setMovements] = useState([]);
     const [page, setPage] = useState(1);
-    const [filters, setFilters] = useState({});
-    const [openFilterKey, setOpenFilterKey] = useState(null);
-    const [draftSelected, setDraftSelected] = useState(new Set());
     const [selectedRows, setSelectedRows] = useState(new Set());
     const [totalPages, setTotalPages] = useState(1);
-    const [filterSearch, setFilterSearch] = useState("");
     const [search, setSearch] = useState("");
     const [searchLoading, setSearchLoading] = useState(false);
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    
+    const [isLoading, setIsLoading] = useState(false);
+    const [editingCell, setEditingCell] = useState(null);
+    const [editedData, setEditedData] = useState({});
+    
     const dropdownRef = useRef(null);
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
+    const axiosSecure = useAxiosPrivate();
 
     useEffect(() => {
         if (search) return;
@@ -54,52 +62,32 @@ const Dyeing = () => {
         });
     }, [fetchData, page, refreshKey, search]);
 
-    useEffect(() => {
-        if (!openFilterKey) return;
-        const handleClick = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpenFilterKey(null); };
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, [openFilterKey]);
-
-    // ── Build rows — ONE ROW PER CHALLAN (+ job + composition + color) ──
-    // Grey Received and Finish Received deliveries that belong to the SAME
-    // challan/job/composition/color are merged into the SAME row (accumulated),
-    // so a challan's grey-received and finish-received both show on one line.
-    // Different challans (or different comp/color facets) never merge with
-    // each other — only deliveries sharing the same key are combined.
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
-        const rowMap = new Map(); // key -> row
-        const order = []; // preserve first-seen order of keys
+        const rows = [];
+        let rowCounter = 0;
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
 
-        const makeKey = (challanNo, jobNo, comp, color) => `${challanNo}|${jobNo}|${comp}|${color}`;
-
-        const getOrCreateRow = (challanNo, jobNo, comp, color, source) => {
-            const key = makeKey(challanNo, jobNo, comp, color);
-            let row = rowMap.get(key);
-            if (!row) {
-                row = {
-                    rowKey: key,
-                    chId: source?.id || challanNo,
-                    challanNo,
-                    jobNo,
-                    composition: comp || "-",
-                    color: color || "-",
-                    challanDate: source?.deliveryDate || source?.challanDate || "",
-                    toFactory: source?.toFactory || "",
-                    fromFactory: source?.fromFactory || "",
-                    greyDelivery: 0,
-                    greyReturn: 0,
-                    greyReceive: 0,
-                    finishReceive: 0,
-                    deliveryQty: 0,
-                    unitePrice: Number(source?.unitePrice) || 0,
-                };
-                rowMap.set(key, row);
-                order.push(key);
-            }
-            return row;
+        const makeRow = (challanNo, jobNo, comp, color, source, mvId, deliveryId) => {
+            rowCounter += 1;
+            return {
+                rowKey: `${challanNo}|${jobNo}|${comp}|${color}|${rowCounter}`,
+                deliveryId: deliveryId ?? source?.id ?? null,
+                chId: source?.id || challanNo,
+                challanNo,
+                jobNo,
+                composition: comp || "-",
+                color: color || "-",
+                challanDate: source?.deliveryDate || source?.challanDate || "",
+                toFactory: source?.toFactory || "",
+                fromFactory: source?.fromFactory || "",
+                greyDelivery: 0,
+                greyReturn: 0,
+                greyReceive: 0,
+                finishReceive: 0,
+                deliveryQty: 0,
+                unitePrice: Number(source?.unitePrice) || 0,
+            };
         };
 
         const applyDelivery = (row, dv, source) => {
@@ -118,11 +106,8 @@ const Dyeing = () => {
             if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
         };
 
-        // Build per-color "facets" so each color becomes its own row
         const getFacets = (item) => {
             const facets = [];
-
-            // 1) Backend provides a compositions array (composition + color pairs, optional qty)
             if (Array.isArray(item?.compositions) && item.compositions.length > 0) {
                 item.compositions.forEach((c) => {
                     if (!c) return;
@@ -134,15 +119,11 @@ const Dyeing = () => {
                         qty: qtyNum,
                     });
                 });
-            }
-            // 2) Backend provides a merged color string ("color A, color B") — split it
-            else if (typeof item?.color === "string" && item.color.includes(", ")) {
+            } else if (typeof item?.color === "string" && item.color.includes(", ")) {
                 item.color.split(", ").map((s) => s.trim()).filter(Boolean).forEach((colorPart) => {
                     facets.push({ comp: item?.composition || "-", color: colorPart, qty: null });
                 });
             }
-
-            // 3) Fallback: single color row
             if (facets.length === 0) {
                 facets.push({ comp: item?.composition || "-", color: item?.color || "-", qty: null });
             }
@@ -154,71 +135,75 @@ const Dyeing = () => {
             const jobNo = extractJobNo(item) || "-";
 
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
-                // ── Deliveries branch: deliveries for the SAME challan/comp/color
-                // accumulate into ONE row (grey received + finish received merge here) ──
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
-
                     const comp = dv?.composition || item?.composition || "-";
                     const color = dv?.color || item?.color || "-";
-                    const row = getOrCreateRow(challanNo, jobNo, comp, color, dv);
+                    const row = makeRow(challanNo, jobNo, comp, color, dv, item.id, dv.id);
                     if (item.unitePrice && !row.unitePrice) row.unitePrice = Number(item.unitePrice);
                     applyDelivery(row, dv, item);
+                    rows.push(row);
                 });
             } else if (item.challanNo !== undefined && item.challanNo !== null) {
-                // ── Flat branch: expand each color facet, but facets sharing the same
-                // challan/comp/color still land on the same merged row ──
                 const facets = getFacets(item);
                 const hasFacetQty = facets.some((f) => f.qty !== null);
-
                 facets.forEach((f) => {
-                    const row = getOrCreateRow(item.challanNo, jobNo, f.comp, f.color, item);
-
+                    const row = makeRow(item.challanNo, jobNo, f.comp, f.color, item, item.id, item.id);
                     if (hasFacetQty) {
-                        // per-color quantities exist → apply only this color's qty
                         if (f.qty !== null) applyDelivery(row, { ...item, deliveryQty: f.qty }, item);
                     } else if (facets.length === 1) {
-                        // single color → behave exactly like before
                         applyDelivery(row, item, item);
                     }
-                    // (multiple colors without per-color qty → qty stays 0/"-" to avoid guessing a split)
+                    rows.push(row);
                 });
             }
         });
 
-        return order.map((key) => {
-            const row = rowMap.get(key);
-            const processLoss = row.greyReceive > 0
-                ? ((row.greyReceive - row.finishReceive) / row.greyReceive) * 100
-                : 0;
-            return {
-                ...row,
-                billingAmount: row.greyReceive * row.unitePrice,
-                processLoss,
-            };
-        });
+        return rows.map((row) => ({
+            ...row,
+            billingAmount: row.greyReceive * row.unitePrice,
+            processLoss: row.greyReceive > 0 ? ((row.greyReceive - row.finishReceive) / row.greyReceive) * 100 : 0,
+        }));
     }, [movements]);
 
-    const filterOptions = useMemo(() => {
-        const opts = {};
-        tableHeader.forEach((col) => {
-            if (col.noFilter) return;
-            const set = new Set();
-            allRows.forEach((row) => set.add(String(row[col.key] ?? "")));
-            opts[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const processedRows = useMemo(() => {
+        return allRows.map(row => {
+            const edits = editedData[row.rowKey] || {};
+            const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
+
+            const greyDelivery = Number(getVal('greyDelivery')) || 0;
+            const greyReturn = Number(getVal('greyReturn')) || 0;
+            const greyReceive = Number(getVal('greyReceive')) || 0;
+            const finishReceive = Number(getVal('finishReceive')) || 0;
+            const unitePrice = Number(getVal('unitePrice')) || 0;
+
+            const processLoss = greyReceive > 0 ? ((greyReceive - finishReceive) / greyReceive) * 100 : 0;
+            const billingAmount = greyReceive * unitePrice;
+
+            return {
+                ...row,
+                deliveryId: row.deliveryId,
+                challanNo: getVal('challanNo'),
+                fromFactory: getVal('fromFactory'),
+                toFactory: getVal('toFactory'),
+                greyDelivery,
+                greyReturn,
+                greyReceive,
+                finishReceive,
+                unitePrice,
+                processLoss,
+                billingAmount
+            };
         });
-        return opts;
-    }, [allRows]);
+    }, [allRows, editedData]);
 
-    const filteredRows = useMemo(() => allRows.filter((row) => tableHeader.every((col) => {
-        if (col.noFilter) return true;
-        const selected = filters[col.key];
-        if (!selected) return true;
-        return selected.has(String(row[col.key] ?? ""));
-    })), [allRows, filters]);
+    const {
+        filters, openFilterKey, draftSelected, filterSearch, 
+        filterOptions, filteredRows, setFilterSearch, openFilter,
+        toggleDraftValue, toggleSelectAllDraft, applyFilter, clearFilter,
+    } = useTableFilters(processedRows, tableHeader);
 
-    // ── Footer totals for the currently visible (filtered) rows ──
     const totals = useMemo(() => {
         const t = {
             greyDelivery: 0,
@@ -250,27 +235,6 @@ const Dyeing = () => {
         return nums;
     }, [totalPages, page]);
 
-    const openFilter = (key) => {
-        if (openFilterKey === key) { setOpenFilterKey(null); return; }
-        const options = filterOptions[key] || [];
-        const current = filters[key];
-        setDraftSelected(current ? new Set(current) : new Set(options));
-        setFilterSearch("");
-        setOpenFilterKey(key);
-    };
-    const toggleDraftValue = (val) => setDraftSelected((prev) => { const next = new Set(prev); if (next.has(val)) next.delete(val); else next.add(val); return next; });
-    const toggleSelectAllDraft = (options) => setDraftSelected((prev) => (prev.size === options.length ? new Set() : new Set(options)));
-    const applyFilter = (key, options) => {
-        setFilters((prev) => {
-            const next = { ...prev };
-            if (draftSelected.size === options.length) delete next[key];
-            else next[key] = new Set(draftSelected);
-            return next;
-        });
-        setOpenFilterKey(null);
-    };
-    const clearFilter = (key) => { setFilters((prev) => { const next = { ...prev }; delete next[key]; return next; }); setOpenFilterKey(null); };
-
     const handleChallanSearch = async () => {
         if (!search.trim()) { alert("Please enter at least one challan number."); return; }
         setSearchLoading(true); setSearchError(null); setPage(1);
@@ -285,94 +249,193 @@ const Dyeing = () => {
         finally { setSearchLoading(false); }
     };
 
+    const toggleRow = (rowKey) => {
+        setSelectedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(rowKey)) next.delete(rowKey);
+            else next.add(rowKey);
+            return next;
+        });
+    };
+
+    const toggleSelectAllVisible = (checked) => {
+        setSelectedRows((prev) => {
+            const next = new Set(prev);
+            filteredRows.forEach((r) => {
+                if (checked) next.add(r.rowKey);
+                else next.delete(r.rowKey);
+            });
+            return next;
+        });
+    };
+
+    const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'greyDelivery', 'greyReturn', 'greyReceive', 'finishReceive', 'unitePrice'];
+    const numericFields = ['greyDelivery', 'greyReturn', 'greyReceive', 'finishReceive', 'unitePrice'];
+    const hasUnsavedChanges = Object.keys(editedData).length > 0;
+
+    const getCellStyle = (row, colKey) => {
+        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
+        return {
+            ...cellStyle,
+            backgroundColor: isEdited ? '#fef08a' : undefined,
+        };
+    };
+
+    const handleCellEdit = (rowKey, colKey, value) => {
+        setEditedData(prev => ({
+            ...prev,
+            [rowKey]: {
+                ...(prev[rowKey] || {}),
+                [colKey]: value
+            }
+        }));
+    };
+
+    const handleSaveChanges = async () => {
+        setIsLoading(true);
+        try {
+            const payload = Object.entries(editedData).map(([rowKey, edits]) => {
+                const originalRow = allRows.find(r => r.rowKey === rowKey);
+                return {
+                    deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey,
+                    rowKey,
+                    ...edits
+                };
+            });
+            
+            console.log("Saving edited Dyeing data:", payload);
+            const update = await axiosSecure.patch("/api/edit-challan", payload);
+            
+            if (update.status === 200) {
+                alert("Changes saved successfully!");
+                setEditedData({});
+                setRefreshKey(prev => prev + 1);
+            }
+        } catch (error) {
+            console.error("Failed to save changes:", error);
+            alert("Failed to save changes.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const renderCell = (row, colKey) => {
+        const isEditing = editingCell?.rowKey === row.rowKey && editingCell?.colKey === colKey;
+        const currentValue = editedData[row.rowKey]?.[colKey] !== undefined ? editedData[row.rowKey][colKey] : row[colKey];
+        const isNumber = numericFields.includes(colKey);
+
+        if (isEditing) {
+            return (
+                <input
+                    type={isNumber ? "number" : "text"}
+                    step={isNumber ? "0.01" : undefined}
+                    value={currentValue || ""}
+                    onChange={(e) => handleCellEdit(row.rowKey, colKey, isNumber ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
+                    onBlur={() => setEditingCell(null)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
+                    autoFocus
+                    style={{
+                        width: '100%',
+                        border: '1px solid #3b82f6',
+                        padding: '2px',
+                        textAlign: isNumber ? 'right' : 'left',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                        backgroundColor: 'transparent'
+                    }}
+                />
+            );
+        }
+
+        return (
+            <div
+                onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
+                style={{
+                    cursor: editableFields.includes(colKey) ? 'pointer' : 'default',
+                    minHeight: '20px',
+                    textAlign: isNumber ? 'right' : 'center'
+                }}
+                title={editableFields.includes(colKey) ? "Click to edit" : ""}
+            >
+                {isNumber
+                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
+                    : (currentValue || "-")
+                }
+            </div>
+        );
+    };
+
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
     if (loading && movements.length === 0 && !searchLoading) return <div style={{ padding: 20 }}>Loading...</div>;
 
     return (
-        <div style={{ width: "100%" }}>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center" }}>
+        <div style={{ width: "100%", padding: "20px" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
                 <input style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }} placeholder="Search by Challan Nos" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }} />
                 <button style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={handleChallanSearch} disabled={searchLoading}>{searchLoading ? "Searching..." : "Search"}</button>
                 {search && <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}>Clear Search</button>}
+                
+                {hasUnsavedChanges && (
+                    <button
+                        onClick={handleSaveChanges}
+                        disabled={isLoading}
+                        style={{ 
+                            background: isLoading ? "#9ca3af" : "#10b981", 
+                            color: "white", 
+                            padding: "8px 16px", 
+                            borderRadius: "6px", 
+                            border: "none", 
+                            cursor: isLoading ? "not-allowed" : "pointer", 
+                            fontWeight: "bold",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px"
+                        }}
+                    >
+                        {isLoading && <span className="animate-spin"><Loader size={16} /></span>}
+                        {isLoading ? "Saving..." : "Save Changes"}
+                    </button>
+                )}
             </div>
+            
             {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
 
-            <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
+            <div style={tableScrollWrapStyle}>
                 <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
                         <tr>
                             {tableHeader.map((th) => {
-                                if (th.noFilter) return <th key={th.key} style={{ ...thStickyStyle, width: th.width }}><input type="checkbox" checked={allVisibleSelected} onChange={(e) => { if (e.target.checked) setSelectedRows(new Set(filteredRows.map(r => r.rowKey))); else setSelectedRows(new Set()); }} /></th>;
-                                const options = filterOptions[th.key] || [];
-                                const isActive = !!filters[th.key];
-                                const isOpen = openFilterKey === th.key;
+                                if (th.noFilter) return <th key={th.key} style={{ ...thStickyStyle, width: th.width }}><input type="checkbox" checked={allVisibleSelected} onChange={(e) => toggleSelectAllVisible(e.target.checked)} /></th>;
                                 return (
-                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, overflow: "visible" }}>
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{th.header}</span>
-                                            <button onClick={() => openFilter(th.key)} style={{ border: "none", background: "none", cursor: "pointer", color: isActive ? "#2563eb" : "#666", fontSize: "0.8rem", padding: 2 }}>▾</button>
-                                        </div>
-                                        {isOpen && (
-                                            <div ref={dropdownRef} style={{ position: "absolute", top: "100%", left: 0, zIndex: 20, background: "#fff", border: "1px solid #999", borderRadius: 4, width: 200, maxHeight: 280, boxShadow: "0 2px 8px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", textAlign: "left" }}>
-                                                <div style={{ padding: 8, borderBottom: "1px solid #ddd" }}><input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Search..." autoFocus style={{ width: "100%", padding: "4px 6px", border: "1px solid #ccc", borderRadius: 4 }} /></div>
-                                                <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
-                                                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: "bold", marginBottom: 6 }}><input type="checkbox" checked={draftSelected.size === options.length && options.length > 0} onChange={() => toggleSelectAllDraft(options)} />Select All</label>
-                                                    {options.filter((val) => val.toLowerCase().includes(filterSearch.toLowerCase())).map((val) => (
-                                                        <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", padding: "2px 0" }}><input type="checkbox" checked={draftSelected.has(val)} onChange={() => toggleDraftValue(val)} />{val === "" ? "(blank)" : val}</label>
-                                                    ))}
-                                                </div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", padding: 8, borderTop: "1px solid #ddd" }}>
-                                                    <button onClick={() => clearFilter(th.key)} style={{ ...pageButtonStyle(false), fontSize: "0.75rem" }}>Clear</button>
-                                                    <button onClick={() => applyFilter(th.key, options)} style={{ ...pageButtonStyle(true), fontSize: "0.75rem" }}>Apply</button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </th>
+                                    <FilterableTh
+                                        key={th.key}
+                                        column={th}
+                                        options={filterOptions[th.key] || []}
+                                        isActive={!!filters[th.key]}
+                                        isOpen={openFilterKey === th.key}
+                                        draftSelected={draftSelected}
+                                        filterSearch={filterSearch}
+                                        onOpenFilter={openFilter}
+                                        onSearchChange={setFilterSearch}
+                                        onToggleValue={toggleDraftValue}
+                                        onToggleSelectAll={toggleSelectAllDraft}
+                                        onApply={applyFilter}
+                                        onClear={clearFilter}
+                                        dropdownRef={dropdownRef}
+                                    />
                                 );
                             })}
                         </tr>
                     </thead>
                     <tbody>
                         {filteredRows.map((row) => (
-                            <tr key={row.rowKey}>
-                                <td style={cellStyle}><input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={(e) => { const next = new Set(selectedRows); if (e.target.checked) next.add(row.rowKey); else next.delete(row.rowKey); setSelectedRows(next); }} /></td>
-                                <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
-                                <td style={cellStyle}>{row.challanNo}</td>
-                                <td style={cellStyle}>{row.jobNo}</td>
-                                <td style={cellStyle}>{row.composition}</td>
-                                <td style={cellStyle}>{row.color || "-"}</td>
-                                <td style={cellStyle}>{row.fromFactory || "-"}</td>
-                                <td style={cellStyle}>{row.toFactory || "-"}</td>
-                                <td style={cellStyle}>{row.greyDelivery > 0 ? Number(row.greyDelivery).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.greyReturn > 0 ? Number(row.greyReturn).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.greyReceive > 0 ? Number(row.greyReceive).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.finishReceive > 0 ? Number(row.finishReceive).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.greyReceive > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td>
-                            </tr>
+                            <tr key={row.rowKey}><td style={cellStyle}><input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={() => toggleRow(row.rowKey)} /></td><td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td><td style={cellStyle}>{row.deliveryId || "-"}</td><td style={getCellStyle(row, 'challanNo')}>{renderCell(row, 'challanNo')}</td><td style={cellStyle}>{row.jobNo}</td><td style={cellStyle}>{row.composition}</td><td style={cellStyle}>{row.color || "-"}</td><td style={getCellStyle(row, 'fromFactory')}>{renderCell(row, 'fromFactory')}</td><td style={getCellStyle(row, 'toFactory')}>{renderCell(row, 'toFactory')}</td><td style={getCellStyle(row, 'greyDelivery')}>{renderCell(row, 'greyDelivery')}</td><td style={getCellStyle(row, 'greyReturn')}>{renderCell(row, 'greyReturn')}</td><td style={getCellStyle(row, 'greyReceive')}>{renderCell(row, 'greyReceive')}</td><td style={getCellStyle(row, 'finishReceive')}>{renderCell(row, 'finishReceive')}</td><td style={cellStyle}>{row.greyReceive > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td><td style={getCellStyle(row, 'unitePrice')}>{renderCell(row, 'unitePrice')}</td><td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td></tr>
                         ))}
                         {filteredRows.length === 0 && <tr><td style={cellStyle} colSpan={tableHeader.length}>{movements.length === 0 ? "No records found." : "No rows match filters."}</td></tr>}
                     </tbody>
                     {filteredRows.length > 0 && (
                         <tfoot>
-                            <tr>
-                                <td style={tfootCellStyle}></td> {/* 0: select */}
-                                <td style={tfootCellStyle}></td> {/* 1: Date */}
-                                <td style={tfootCellStyle}></td> {/* 2: Challan No */}
-                                <td style={tfootCellStyle}></td> {/* 3: Job No */}
-                                <td style={tfootCellStyle}></td> {/* 4: Composition */}
-                                <td style={tfootCellStyle}></td> {/* 5: Color */}
-                                <td style={tfootCellStyle}>Total</td> {/* 6: From Factory */}
-                                <td style={tfootCellStyle}></td> {/* 7: To Factory */}
-                                <td style={tfootCellStyle}>{totals.greyDelivery > 0 ? totals.greyDelivery.toFixed(2) : "-"}</td> {/* 8: Grey Del */}
-                                <td style={tfootCellStyle}>{totals.greyReturn > 0 ? totals.greyReturn.toFixed(2) : "-"}</td> {/* 9: Grey Ret */}
-                                <td style={tfootCellStyle}>{totals.greyReceive > 0 ? totals.greyReceive.toFixed(2) : "-"}</td> {/* 10: Grey Rec */}
-                                <td style={tfootCellStyle}>{totals.finishReceive > 0 ? totals.finishReceive.toFixed(2) : "-"}</td> {/* 11: Finish Rec */}
-                                <td style={tfootCellStyle}>{totals.greyReceive > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}</td> {/* 12: Process Loss % */}
-                                <td style={tfootCellStyle}></td> {/* 13: Price/KG */}
-                                <td style={tfootCellStyle}>{totals.billingAmount > 0 ? totals.billingAmount.toFixed(2) : "-"}</td> {/* 14: Billing */}
-                            </tr>
+                            <tr><td style={tfootCellStyle}></td><td style={tfootCellStyle}></td><td style={tfootCellStyle}></td><td style={tfootCellStyle}></td><td style={tfootCellStyle}></td><td style={tfootCellStyle}></td><td style={tfootCellStyle}>Total</td><td style={tfootCellStyle}></td><td style={tfootCellStyle}></td><td style={tfootCellStyle}>{totals.greyDelivery > 0 ? totals.greyDelivery.toFixed(2) : "-"}</td><td style={tfootCellStyle}>{totals.greyReturn > 0 ? totals.greyReturn.toFixed(2) : "-"}</td><td style={tfootCellStyle}>{totals.greyReceive > 0 ? totals.greyReceive.toFixed(2) : "-"}</td><td style={tfootCellStyle}>{totals.finishReceive > 0 ? totals.finishReceive.toFixed(2) : "-"}</td><td style={tfootCellStyle}>{totals.greyReceive > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}</td><td style={tfootCellStyle}></td><td style={tfootCellStyle}>{totals.billingAmount > 0 ? totals.billingAmount.toFixed(2) : "-"}</td></tr>
                         </tfoot>
                     )}
                 </table>
@@ -387,4 +450,5 @@ const Dyeing = () => {
         </div>
     );
 };
+
 export default Dyeing;

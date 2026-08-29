@@ -137,7 +137,7 @@ const BalanceSheet = () => {
     const [isLoading, setIsLoading] = useState(true);
     
     const axiosSecure = useAxiosPrivate();
-    const ITEMS_PER_PAGE = 30;
+    const ITEMS_PER_PAGE = 10;
 
     const setExcludedFor = (colId, set) => setColFilters((prev) => ({ ...prev, [colId]: set }));
 

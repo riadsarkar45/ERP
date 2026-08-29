@@ -8,6 +8,7 @@ import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 import { requestForApproval } from "../controllers/orders/requestForApproval";
+import { editChallan } from "../controllers/movements/update.challan";
 
 const updateRouters = express.Router();
 
@@ -25,4 +26,6 @@ updateRouters.patch("/update-work-order/:workOrderId", responseTimeMonitor, auth
 updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, styleReconciliation);
 
 updateRouters.patch("/request-for-approval/:requestType/:workOrderId/:requestToId", responseTimeMonitor, authenticate, requestForApproval);
+
+updateRouters.patch("/edit-challan", responseTimeMonitor, authenticate, editChallan);
 export default updateRouters;

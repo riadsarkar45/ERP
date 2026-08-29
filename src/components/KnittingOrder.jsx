@@ -173,27 +173,59 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
                             </td>
                             {/* COL 8 — YARN COUNT */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
-                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>YARN COUNT</div>
-                                )))}
+                                {workOrders?.map((wo, i) => (
+                                    wo.yarnCount === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
+                                    ) : (
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.yarnCount, "workOrder", "yarnCount", 0)} className={`${innerItem}  cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "yarnCount" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="yarnCount" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : <span>{wo.yarnCount}</span>}
+                                        </div>
+                                    )
+                                ))}
                             </td>
                             {/* COL 8 — YARN LOT */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
-                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>YARN LOT</div>
-                                )))}
+                                {workOrders?.map((wo, i) => (
+                                    wo.lotNo === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
+                                    ) : (
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.lotNo, "workOrder", "lotNo", 0)} className={`${innerItem}  cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "lotNo" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="lotNo" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : <span>{wo.lotNo}</span>}
+                                        </div>
+                                    )
+                                ))}
                             </td>
                             {/* COL 8 — STITCH LENGTH */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
-                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>STITCH LENGHT</div>
-                                )))}
+                            <td style={plainTd(isHovered)} >
+                                {workOrders?.map((wo, i) => (
+                                    wo.stichLength === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
+                                    ) : (
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.stichLength, "workOrder", "stichLength", 0)} className={`${innerItem}  cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "stichLength" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="stichLength" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : <span>{wo.stichLength}</span>}
+                                        </div>
+                                    )
+                                ))}
                             </td>
                             {/* COL 8 — MACHINE DIA */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
-                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>MC DIA</div>
-                                )))}
+                            <td style={plainTd(isHovered)} >
+                                {workOrders?.map((wo, i) => (
+                                    wo.machineDia === "NULL" ? (
+                                        <div key={i} className={`${innerItem} text-black`}>-</div>
+                                    ) : (
+                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.machineDia, "workOrder", "machineDia", 0)} className={`${innerItem}  cursor-pointer`}>
+                                            {isEdit.updatedFieldName === "machineDia" && isEdit.rowId === wo.id ? (
+                                                <input type="text" name="machineDia" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                            ) : <span>{wo.machineDia}</span>}
+                                        </div>
+                                    )
+                                ))}
                             </td>
 
 
@@ -227,8 +259,8 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
                                 {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
                                     const workOrderQty = Number(wrk.workOrderQty) || 0;
                                     const totalYarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
-                                    const totalYarnReturn = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;                                    
-                                    const diff = workOrderQty - totalYarnDelivery+totalYarnReturn;
+                                    const totalYarnReturn = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
+                                    const diff = workOrderQty - totalYarnDelivery + totalYarnReturn;
                                     const exceeded = diff?.toFixed(2) > 0;
                                     return (
                                         <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>

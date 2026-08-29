@@ -103,6 +103,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
             prisma.jobs.findMany({
                 where,
                 // skip,
+                orderBy: {createdAt: "desc"},
 
                 take: 40,
                 select: {
@@ -121,6 +122,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             factoryName: true,
                             machineDia: true,
                             yarnCount: true,
+                            stichLength: true,
                             compositions: {
                                 select: {
                                     id: true,
