@@ -107,10 +107,6 @@ export const editChallan = async (req: Request, res: Response) => {
       data[field] = str;
     }
 
-    // ── quantity buckets (any screen) → single deliveryQty column ──
-    // Each `deliveries` row has exactly one deliveryType, so exactly one
-    // bucket should be relevant per record. Reject rather than guess if
-    // more than one arrives for the same row.
     const sentBuckets = (QTY_BUCKET_FIELDS as readonly QtyBucketField[]).filter(
       (f) => item[f] !== undefined
     );

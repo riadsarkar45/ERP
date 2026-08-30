@@ -1,6 +1,6 @@
 import { X, Save, Plus } from 'lucide-react';
 import Input from './Input';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import useAxiosPublic from '../hooks/Axios';
 import { RefreshCcw } from "lucide-react";
 import { usePostData } from '../hooks/post';
@@ -13,6 +13,9 @@ const defaultRow = () => ({
     orderQty: '',
     finishRequiredQty: '',
 });
+
+// Order of fields in each row, left -> right, matching the visible columns.
+const FIELDS = ['color', 'composition', 'finishDia', 'orderQty', 'finishRequiredQty'];
 
 const evaluateQtyExpression = (expr) => {
     if (expr === undefined || expr === null) return null;
@@ -44,7 +47,23 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
 
     const axiosPublic = useAxiosPublic();
     const { postData, loading, error } = usePostData();
-    console.log(orderInfo, "order info");
+
+    // Grid of input DOM refs, keyed by "rowIndex-fieldIndex", so arrow keys
+    // and Ctrl+D can jump/copy between cells like a spreadsheet. Rebuilt
+    // every render via the ref callback on each <input>, so it always
+    // matches the current rows/fields layout even after add/remove row.
+    const cellRefs = useRef({});
+    const cellKey = (rowIndex, fieldIndex) => `${rowIndex}-${fieldIndex}`;
+
+    const focusCell = (rowIndex, fieldIndex) => {
+        const el = cellRefs.current[cellKey(rowIndex, fieldIndex)];
+        if (el) {
+            el.focus();
+            // put cursor at the end so repeated ArrowDown/ArrowUp keeps working
+            const len = el.value ? el.value.length : 0;
+            el.setSelectionRange(len, len);
+        }
+    };
 
     const addRow = () => setRows((prev) => [...prev, defaultRow()]);
 
@@ -55,6 +74,59 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         setRows((prev) =>
             prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
         );
+
+    // Keyboard handler for a single cell input.
+    // - ArrowUp / ArrowDown: move to the same field in the row above/below.
+    // - ArrowLeft / ArrowRight: move to the previous/next field in the same
+    //   row, but only when the cursor is already at the start/end of the
+    //   text, so normal in-text cursor movement still works.
+    // - Ctrl+D (or Cmd+D on Mac): "fill down" — copies the value from the
+    //   same field in the row directly above into the current row's field,
+    //   just like Excel's fill-down shortcut.
+    const handleCellKeyDown = (e, rowIndex, fieldIndex, row) => {
+        const field = FIELDS[fieldIndex];
+        const input = e.target;
+
+        // Ctrl+D / Cmd+D — copy the cell above into this cell
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+            e.preventDefault();
+            if (rowIndex > 0) {
+                const aboveRow = rows[rowIndex - 1];
+                updateRow(row.id, field, aboveRow[field]);
+            }
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowDown': {
+                e.preventDefault();
+                focusCell(rowIndex + 1, fieldIndex);
+                break;
+            }
+            case 'ArrowUp': {
+                e.preventDefault();
+                focusCell(rowIndex - 1, fieldIndex);
+                break;
+            }
+            case 'ArrowLeft': {
+                if (input.selectionStart === 0 && input.selectionEnd === 0) {
+                    e.preventDefault();
+                    focusCell(rowIndex, fieldIndex - 1);
+                }
+                break;
+            }
+            case 'ArrowRight': {
+                const len = input.value.length;
+                if (input.selectionStart === len && input.selectionEnd === len) {
+                    e.preventDefault();
+                    focusCell(rowIndex, fieldIndex + 1);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    };
 
     // Grand totals across all rows for the numeric columns. Recomputed on
     // every render from `rows` (no separate state to keep in sync) —
@@ -87,11 +159,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         };
 
         try {
-            // const res = await axiosPublic.post("/api/new-style-requirements", payload)
-            // if (res.data.type === "success") {
-            //     axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data), setIsLoading(false) });
-
-            // }
             const res = await postData("/api/new-style-requirements", payload);
             if (res?.type === "success") {
                 axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data) });
@@ -99,14 +166,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         } catch (e) {
             console.log(e.response.data.message);
             console.log(e.response.data.type);
-            
         }
-
-
-        console.log(payload, "data converted to object");
     }
-
-    console.log(error, "error", loading, "loading");
 
     return (
         <>
@@ -114,7 +175,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             <div
                 className="fixed inset-0 bg-black bg-opacity-50 z-50 animate-fade-in"
             />
-
 
             {/* Modal */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
@@ -139,7 +199,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                         )
                     }
 
-
                     {/* Content */}
                     <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
 
@@ -147,6 +206,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                         <div className='grid grid-cols-3 gap-3'>
                             <Input
                                 label="Sales Contact"
+                                isShowOutLabel={true}
                                 type='text'
                                 name="salesContact"
                                 onChange={(e) => setOrderInfo({ ...orderInfo, salesContact: e.target.value })}
@@ -160,42 +220,43 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 name="buyerName"
                                 onChange={(e) => setOrderInfo({ ...orderInfo, buyerName: e.target.value })}
                                 value={orderInfo.buyerName}
-
+                                isShowOutLabel={true}
                                 placeholder='Buyer Name'
                                 required
                             />
                             <Input
                                 label="Job No"
+                                isShowOutLabel={true}
                                 type='text'
                                 name="jobNo"
                                 onChange={(e) => setOrderInfo({ ...orderInfo, jobNo: e.target.value })}
                                 value={orderInfo.jobNo}
-
                                 placeholder='Job No'
                                 required
                             />
                             <Input
                                 label="PO No"
+                                isShowOutLabel={true}
                                 type='text'
                                 name="poNo"
                                 onChange={(e) => setOrderInfo({ ...orderInfo, poNo: e.target.value })}
                                 value={orderInfo.poNo}
-
                                 placeholder='Po No'
                                 required
                             />
                             <Input
                                 label="Style No"
+                                isShowOutLabel={true}
                                 type='text'
                                 name="styleNo"
                                 onChange={(e) => setOrderInfo({ ...orderInfo, styleNo: e.target.value })}
                                 value={orderInfo.styleNo}
-
                                 placeholder='Style No'
                                 required
                             />
                             <Input
                                 label="Process Loss"
+                                isShowOutLabel={true}
                                 type='text'
                                 name="processLoss"
                                 onChange={(e) => setOrderInfo({ ...orderInfo, processLoss: e.target.value })}
@@ -234,7 +295,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
 
                             {/* Dynamic rows */}
                             <div className="flex flex-col gap-2">
-                                {rows.map((row) => {
+                                {rows.map((row, rowIndex) => {
                                     // Live-evaluated result of whatever's typed in
                                     // Finished Req. Qty for THIS row — recalculated
                                     // on every keystroke since it's derived, not
@@ -246,22 +307,29 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                             key={row.id}
                                             className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
                                         >
-                                            {[
-                                                { field: 'color', placeholder: 'Color' },
-                                                { field: 'composition', placeholder: 'Composition' },
-                                                { field: 'finishDia', placeholder: 'Finish Dia' },
-                                                { field: 'orderQty', placeholder: 'Order Qty' },
-                                                { field: 'finishRequiredQty', placeholder: 'e.g. 10+10+10' },
-                                            ].map(({ field, placeholder }) => (
-                                                <input
-                                                    key={field}
-                                                    type="text"
-                                                    placeholder={placeholder}
-                                                    value={row[field]}
-                                                    onChange={(e) => updateRow(row.id, field, e.target.value)}
-                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400"
-                                                />
-                                            ))}
+                                            {FIELDS.map((field, fieldIndex) => {
+                                                const placeholder =
+                                                    field === 'finishRequiredQty' ? 'e.g. 10+10+10' :
+                                                    field === 'finishDia' ? 'Finish Dia' :
+                                                    field === 'orderQty' ? 'Order Qty' :
+                                                    field === 'composition' ? 'Composition' : 'Color';
+
+                                                return (
+                                                    <input
+                                                        key={field}
+                                                        ref={(el) => {
+                                                            if (el) cellRefs.current[cellKey(rowIndex, fieldIndex)] = el;
+                                                            else delete cellRefs.current[cellKey(rowIndex, fieldIndex)];
+                                                        }}
+                                                        type="text"
+                                                        placeholder={placeholder}
+                                                        value={row[field]}
+                                                        onChange={(e) => updateRow(row.id, field, e.target.value)}
+                                                        onKeyDown={(e) => handleCellKeyDown(e, rowIndex, fieldIndex, row)}
+                                                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400"
+                                                    />
+                                                );
+                                            })}
 
                                             {/* Read-only computed output, not an
                                                 input — there's nothing to type
@@ -291,12 +359,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 })}
                             </div>
 
-                            {/* Grand total row — lines up under the Order Qty /
-                                Finished Req. Qty / Final Finish Qty columns so
-                                the person filling this out can sanity-check
-                                totals as they go, without adding up rows
-                                manually. Purely derived/display — the payload
-                                still sends each row's own values. */}
+                            {/* Grand total row */}
                             <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mt-2 px-1 pt-2 border-t border-gray-200">
                                 <span className="col-span-3 text-xs font-semibold text-gray-500 uppercase tracking-wide self-center">
                                     Grand Total
@@ -314,12 +377,11 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             </div>
                         </div>
 
-                        {/* Action buttons - original design */}
+                        {/* Action buttons */}
                         <div className="flex flex-col sm:flex-row gap-3 mt-10 border-gray-200">
                             {
                                 loading ? (
                                     <button
-                                        
                                         className="flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-all duration-200 border border-primary-600"
                                     >
                                         <Save size={18} />
