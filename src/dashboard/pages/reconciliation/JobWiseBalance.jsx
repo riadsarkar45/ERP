@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
 
 // --- Helpers ---
-const yarnBalance = (row) => (row.issue || 0) - (row.knittingGrey || 0) - (row.yarnReturn || 0);
-const dyeBalance = (d) => (d.greyDelivery || 0) - (d.greyRcvd || 0);
+const yarnBalance = (row) => (row.knittingGrey || 0) + (row.yarnReturn || 0) - (row.issue || 0);
+const dyeBalance = (d) => (d.greyRcvd ||0) + (d.greyReturn || 0) - (d.greyDelivery || 0);
 const dyeProcessLoss = (d) => {
-    const delivery = d.greyDelivery || 0;
-    if (!delivery) return null;
-    return (delivery - (d.finishRcvd || 0)) / delivery;
+    const received = d.greyRcvd || 0;
+    if (!received) return null;
+    return (received - (d.finishRcvd || 0)) / received;
+};
+
+// --- NEW: AOP Balance & Process Loss helpers (mirrors dyeing pattern) ---
+const aopBalance = (a) => (a.receivedFromAop || 0) + (a.returnFromAop || 0) - (a.sentForAop || 0);
+const aopProcessLoss = (a) => {
+    const received = a.receivedFromAop || 0;
+    if (!received) return null;
+    return (received - (a.aopFinishRcvd || 0)) / received;
 };
 
 const fmtNum = (n) => {
@@ -33,15 +41,18 @@ const COLUMNS = [
     
     { id: "dyeingFactory", label: "Dyeing Factory", width: 130, group: "dyeing" },
     { id: "greyDelivery", label: "Grey Delivery", width: 90, group: "dyeing" },
-    { id: "greyRcvd", label: "Grey Rcvd", width: 85, group: "dyeing" },
-    { id: "dyeBalance", label: "Balance", width: 85, group: "dyeing" },
+    { id: "greyReturn", label: "Grey Return", width: 90, group: "dyeing" },
+    { id: "greyRcvd", label: "Grey Rcvd", width: 85, group: "dyeing" },    
     { id: "finishRcvd", label: "Finish Rcvd", width: 90, group: "dyeing" },
+    { id: "dyeBalance", label: "Balance", width: 85, group: "dyeing" },
     { id: "processLoss", label: "Process Loss", width: 85, group: "dyeing" },
     
     { id: "aopFactory", label: "AOP Factory", width: 130, group: "aop" },
     { id: "sentForAop", label: "Sent For AOP", width: 90, group: "aop" },
     { id: "receivedFromAop", label: "Rcvd From AOP", width: 90, group: "aop" },
     { id: "aopFinishRcvd", label: "AOP Finish Rcvd", width: 90, group: "aop" },
+    { id: "aopBalance", label: "Balance", width: 85, group: "aop" },
+    { id: "aopProcessLoss", label: "Process Loss", width: 85, group: "aop" },
     
     { id: "remarks", label: "Remarks", width: 140, group: "remarks" },
 ];
@@ -55,6 +66,10 @@ COLUMNS.forEach((c) => {
     acc += c.width; 
 });
 const TOTAL_WIDTH = acc;
+
+// NEW: height of the top group-header row (YARN/KNITTING, DYEING, AOP, REMARKS),
+// so the column-name row below it can freeze right after it instead of overlapping it.
+const GROUP_HEADER_ROW_HEIGHT = 33;
 
 const csvCell = (v) => {
     const s = String(v ?? "");
@@ -188,13 +203,14 @@ const BalanceSheet = () => {
 
             // Filter dyeing rows
             const filteredDyeingRows = job.dyeingRows.filter((row) => {
-                const dyeingColIds = ['dyeingFactory', 'greyDelivery', 'greyRcvd', 'dyeBalance', 'finishRcvd', 'processLoss'];
+                const dyeingColIds = ['dyeingFactory', 'greyDelivery', 'greyReturn', 'greyRcvd', 'dyeBalance', 'finishRcvd', 'processLoss'];
                 for (const colId of dyeingColIds) {
                     const excluded = colFilters[colId];
                     if (excluded && excluded.size > 0) {
                         let val = "";
                         if (colId === 'dyeingFactory') val = row.factoryName;
                         else if (colId === 'greyDelivery') val = String(row.greyDelivery ?? "");
+                        else if (colId === 'greyReturn') val = String(row.greyReturn ?? "");
                         else if (colId === 'greyRcvd') val = String(row.greyRcvd ?? "");
                         else if (colId === 'dyeBalance') val = String(dyeBalance(row) ?? "");
                         else if (colId === 'finishRcvd') val = String(row.finishRcvd ?? "");
@@ -207,7 +223,7 @@ const BalanceSheet = () => {
 
             // Filter AOP rows
             const filteredAopRows = job.aopRows.filter((row) => {
-                const aopColIds = ['aopFactory', 'sentForAop', 'receivedFromAop', 'aopFinishRcvd'];
+                const aopColIds = ['aopFactory', 'sentForAop', 'receivedFromAop', 'aopFinishRcvd', 'aopBalance', 'aopProcessLoss'];
                 for (const colId of aopColIds) {
                     const excluded = colFilters[colId];
                     if (excluded && excluded.size > 0) {
@@ -216,6 +232,8 @@ const BalanceSheet = () => {
                         else if (colId === 'sentForAop') val = String(row.sentForAop ?? "");
                         else if (colId === 'receivedFromAop') val = String(row.receivedFromAop ?? "");
                         else if (colId === 'aopFinishRcvd') val = String(row.aopFinishRcvd ?? "");
+                        else if (colId === 'aopBalance') val = String(aopBalance(row) ?? "");
+                        else if (colId === 'aopProcessLoss') val = String(aopProcessLoss(row) ?? "");
                         if (excluded.has(val)) return false;
                     }
                 }
@@ -254,8 +272,8 @@ const BalanceSheet = () => {
     const totals = useMemo(() => {
         const t = { 
             req: 0, issue: 0, knittingGrey: 0, yarnReturn: 0, yarnBal: 0, 
-            greyDelivery: 0, greyRcvd: 0, dyeBal: 0, finishRcvd: 0, 
-            sentForAop: 0, receivedFromAop: 0, aopFinishRcvd: 0 
+            greyDelivery: 0, greyReturn: 0, greyRcvd: 0, dyeBal: 0, finishRcvd: 0, 
+            sentForAop: 0, receivedFromAop: 0, aopFinishRcvd: 0, aopBal: 0 
         };
         filteredJobs.forEach(({ job }) => {
             job.yarnRows.forEach((row) => {
@@ -267,6 +285,7 @@ const BalanceSheet = () => {
             });
             job.dyeingRows.forEach((row) => {
                 t.greyDelivery += row.greyDelivery || 0;
+                t.greyReturn += row.greyReturn || 0;
                 t.greyRcvd += row.greyRcvd || 0;
                 t.dyeBal += dyeBalance(row);
                 t.finishRcvd += row.finishRcvd || 0;
@@ -275,6 +294,7 @@ const BalanceSheet = () => {
                 t.sentForAop += row.sentForAop || 0;
                 t.receivedFromAop += row.receivedFromAop || 0;
                 t.aopFinishRcvd += row.aopFinishRcvd || 0;
+                t.aopBal += aopBalance(row);
             });
         });
         return t;
@@ -310,6 +330,7 @@ const BalanceSheet = () => {
                     
                     dRow?.factoryName ?? "",
                     rawNum(dRow?.greyDelivery),
+                    rawNum(dRow?.greyReturn),
                     rawNum(dRow?.greyRcvd),
                     dRow ? rawNum(dyeBalance(dRow)) : "",
                     rawNum(dRow?.finishRcvd),
@@ -319,6 +340,8 @@ const BalanceSheet = () => {
                     rawNum(aRow?.sentForAop),
                     rawNum(aRow?.receivedFromAop),
                     rawNum(aRow?.aopFinishRcvd),
+                    aRow ? rawNum(aopBalance(aRow)) : "",
+                    aRow ? rawNum(aopProcessLoss(aRow)) : "",
                     
                     i === 0 ? job.remarks : "",
                 ];
@@ -351,15 +374,18 @@ const BalanceSheet = () => {
         
         if (colId === 'dyeingFactory') return (j) => j.dyeingRows.map((r) => r.factoryName);
         if (colId === 'greyDelivery') return (j) => j.dyeingRows.map((r) => String(r.greyDelivery));
-        if (colId === 'greyRcvd') return (j) => j.dyeingRows.map((r) => String(r.greyRcvd));
-        if (colId === 'dyeBalance') return (j) => j.dyeingRows.map((r) => String(dyeBalance(r)));
+        if (colId === 'greyReturn') return (j) => j.dyeingRows.map((r) => String(r.greyReturn));
+        if (colId === 'greyRcvd') return (j) => j.dyeingRows.map((r) => String(r.greyRcvd));        
         if (colId === 'finishRcvd') return (j) => j.dyeingRows.map((r) => String(r.finishRcvd));
+        if (colId === 'dyeBalance') return (j) => j.dyeingRows.map((r) => String(dyeBalance(r)));
         if (colId === 'processLoss') return (j) => j.dyeingRows.map((r) => String(dyeProcessLoss(r)));
         
         if (colId === 'aopFactory') return (j) => j.aopRows.map((r) => r.factoryName);
         if (colId === 'sentForAop') return (j) => j.aopRows.map((r) => String(r.sentForAop));
         if (colId === 'receivedFromAop') return (j) => j.aopRows.map((r) => String(r.receivedFromAop));
         if (colId === 'aopFinishRcvd') return (j) => j.aopRows.map((r) => String(r.aopFinishRcvd));
+        if (colId === 'aopBalance') return (j) => j.aopRows.map((r) => String(aopBalance(r)));
+        if (colId === 'aopProcessLoss') return (j) => j.aopRows.map((r) => String(aopProcessLoss(r)));
         
         if (colId === 'remarks') return (j) => [j.remarks].filter(Boolean);
         return () => [];
@@ -376,7 +402,7 @@ const BalanceSheet = () => {
         const isFrozenCol = isFrozen(colId);
         return { 
             position: "sticky", 
-            top: 0, 
+            top: GROUP_HEADER_ROW_HEIGHT, 
             left: isFrozenCol ? getColLeft(colId) : undefined, 
             width: w, 
             minWidth: w, 
@@ -462,8 +488,8 @@ const BalanceSheet = () => {
     }, [axiosSecure]);
 
     return (
-        <div className="p-5 bg-slate-50 min-h-full" onClick={() => setOpenCol(null)}>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="p-5 bg-slate-50 h-screen flex flex-col overflow-hidden" onClick={() => setOpenCol(null)}>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3 flex-shrink-0">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800">Yarn, Dyeing &amp; AOP Balance Sheet</h2>
                     <p className="text-xs text-slate-500 mt-1">Figures in kg unless noted · <span className="font-semibold text-slate-700">{filteredJobs.length}</span> of <span className="font-semibold text-slate-700">{jobs.length}</span> jobs shown</p>
@@ -513,7 +539,7 @@ const BalanceSheet = () => {
             </div>
 
             {hasUnsavedRemarks && (
-                <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 shadow-sm animate-in fade-in slide-in-from-top-2">
+                <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 shadow-sm animate-in fade-in slide-in-from-top-2 flex-shrink-0">
                     <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -532,7 +558,7 @@ const BalanceSheet = () => {
                 </div>
             )}
 
-            <div className="overflow-auto border border-slate-300 rounded-lg shadow-sm bg-white relative">
+            <div className="overflow-auto border border-slate-300 rounded-lg shadow-sm bg-white relative flex-1 min-h-0">
                 {isLoading && (
                     <div className="absolute inset-0 bg-white/80 z-50 flex items-center justify-center">
                         <div className="flex flex-col items-center gap-2">
@@ -542,7 +568,7 @@ const BalanceSheet = () => {
                     </div>
                 )}
                 
-                <table className="border-collapse tabular-nums text-[11px]" style={{ width: TOTAL_WIDTH, minWidth: TOTAL_WIDTH }}>
+                <table className="border-collapse tabular-nums text-[11px] border border-slate-300" style={{ width: TOTAL_WIDTH, minWidth: TOTAL_WIDTH }}>
                     <thead>
                         <tr>
                             <th
@@ -560,14 +586,14 @@ const BalanceSheet = () => {
                                 YARN / KNITTING
                             </th>
                             <th
-                                colSpan={6}
+                                colSpan={7}
                                 style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }}
                                 className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
                             >
                                 DYEING
                             </th>
                             <th
-                                colSpan={4}
+                                colSpan={6}
                                 style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }}
                                 className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
                             >
@@ -650,9 +676,10 @@ const BalanceSheet = () => {
                                         {/* Dyeing Columns */}
                                         <td style={cellStyle("dyeingFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-teal-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{dRow?.factoryName ?? ""}</td>
                                         <td style={cellStyle("greyDelivery")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyDelivery) : ""}</td>
-                                        <td style={cellStyle("greyRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>
-                                        <td style={cellStyle("dyeBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dyeBalance(dRow)) : ""}</td>
+                                        <td style={cellStyle("greyReturn")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyReturn) : ""}</td>
+                                        <td style={cellStyle("greyRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>                                        
                                         <td style={cellStyle("finishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.finishRcvd) : ""}</td>
+                                        <td style={cellStyle("dyeBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dyeBalance(dRow)) : ""}</td>
                                         <td style={cellStyle("processLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtPct(dyeProcessLoss(dRow)) : ""}</td>
 
                                         {/* AOP Columns */}
@@ -660,6 +687,8 @@ const BalanceSheet = () => {
                                         <td style={cellStyle("sentForAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.sentForAop) : ""}</td>
                                         <td style={cellStyle("receivedFromAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.receivedFromAop) : ""}</td>
                                         <td style={cellStyle("aopFinishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.aopFinishRcvd) : ""}</td>
+                                        <td style={cellStyle("aopBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aopBalance(aRow)) : ""}</td>
+                                        <td style={cellStyle("aopProcessLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtPct(aopProcessLoss(aRow)) : ""}</td>
 
                                         {/* Remarks */}
                                         {rowIdx === 0 && (
@@ -705,15 +734,18 @@ const BalanceSheet = () => {
 
                                 <td style={cellStyle("dyeingFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
                                 <td style={cellStyle("greyDelivery")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyDelivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("greyRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("dyeBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("greyReturn")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("greyRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>                              
                                 <td style={cellStyle("finishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.finishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("dyeBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("processLoss")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{(() => { const l = totals.greyDelivery ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
 
                                 <td style={cellStyle("aopFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
                                 <td style={cellStyle("sentForAop")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.sentForAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("receivedFromAop")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.receivedFromAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("aopFinishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.aopFinishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("aopBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.aopBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={cellStyle("aopProcessLoss")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{(() => { const l = totals.receivedFromAop ? (totals.receivedFromAop - totals.aopFinishRcvd) / totals.receivedFromAop : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
 
                                 <td style={cellStyle("remarks")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
                             </tr>
@@ -723,7 +755,7 @@ const BalanceSheet = () => {
             </div>
 
             {!hasFilters && filteredJobs.length > 0 && (
-                <div className="flex items-center justify-between mt-4 px-1">
+                <div className="flex items-center justify-between mt-4 px-1 flex-shrink-0">
                     <div className="text-xs text-slate-500">
                         Showing <span className="font-semibold text-slate-700">{startIndex + 1}</span> to <span className="font-semibold text-slate-700">{endIndex}</span> of <span className="font-semibold text-slate-700">{filteredJobs.length}</span> jobs
                     </div>
