@@ -1,30 +1,32 @@
 import { useState, useMemo } from "react";
-import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, handleOnChange, isEdit, handleEditRowData, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
-    const [getJobIndex, setJobIndex] = useState("");
+const AopOrder = ({ 
+    orders, 
+    handleInlineEdit, 
+    handleRedirect, 
+    updatedFields, 
+    handleOnChange, 
+    isEdit, 
+    handleEditRowData, 
+    FROZEN_COUNT, 
+    currentFrozenWidths, 
+    currentFrozenLefts,
+    searchTerm = "" 
+}) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
-    // const { handleInlineEdit, changedField, handleOnChange, isEdit, handleSubmit } = InlineEdit();
 
-    const hoverColorChange = (jobId) => {
-        console.log(jobId, "job id");
-        setJobIndex(jobId);
-    };
+    const cellPad = "py-2 px-3";
 
-    // Updated innerItem to ensure proper full-width borders
-    const innerItem = "border-b border-black text-black last:border-b-0 w-full py-2 px-3";
-
-    // All td share these base styles
     const baseTd = {
         borderRight: "1px solid #000000",
         borderBottom: "1px solid #000000",
-        padding: 0, // Padding is 0 so innerItem borders align perfectly
+        padding: 0,
         textAlign: "center",
-        verticalAlign: "middle",
-        overflow: "hidden",
+        verticalAlign: "top",
     };
 
-    // Use the dynamic props passed from the parent
+    const dataTd = { ...baseTd };
+
     const stickyTd = (colIndex, isHovered) => ({
         ...baseTd,
         position: "sticky",
@@ -39,11 +41,20 @@ const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, han
         cursor: "pointer",
     });
 
+    // Helper function to get finish dia from styleRequirement
+    const getFinishDia = (wo, comp) => {
+        if (!wo?.styleRequirement?.rows || !comp) return "-";
+        
+        const matchingRow = wo.styleRequirement.rows.find(row => 
+            row.composition === comp.composition && 
+            row.color === comp.color
+        );
+        
+        return matchingRow?.finishDia || "-";
+    };
 
-    // ── TOTALS: flatten every composition across all orders/workOrders and sum the numeric fields ──
     const totals = useMemo(() => {
         const acc = {
-            // orderQty: 0,
             workOrderQty: 0,
             sentForAop: 0,
             shortExcess: 0,
@@ -57,7 +68,6 @@ const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, han
         (orders || []).forEach(job => {
             (job.workOrders || []).forEach(wo => {
                 (wo.compositions || []).forEach(comp => {
-                    // const orderQty = Number(comp.orderQty) || 0;
                     const workOrderQty = Number(comp.workOrderQty) || 0;
                     const sentForAop = Number(comp.yarnDeliveriesWithColor?.SentForAop) || 0;
                     const ReturnFromAop = Number(comp.yarnDeliveriesWithColor?.ReturnFromAop) || 0;
@@ -65,7 +75,6 @@ const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, han
                     const FinishFromAop = Number(comp.yarnDeliveriesWithColor?.AOPFinishFabricRcvd) || 0;
                     const unitePrice = Number(comp.unitePrice) || 0;
 
-                    // acc.orderQty += orderQty;
                     acc.workOrderQty += workOrderQty;
                     acc.sentForAop += sentForAop;
                     acc.shortExcess += sentForAop - workOrderQty;
@@ -106,190 +115,239 @@ const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, han
         backgroundColor: "#f3f4f6",
     };
 
+    // Filter orders based on search term
+    const filteredOrders = useMemo(() => {
+        if (!searchTerm?.trim()) return orders || [];
+        
+        const lowerSearch = searchTerm.toLowerCase();
+        
+        return (orders || []).map(job => {
+            const filteredWorkOrders = (job.workOrders || []).map(wo => {
+                const filteredComps = (wo.compositions || []).filter(comp => {
+                    const searchableValues = [
+                        job?.jobNo,
+                        wo?.factoryName,
+                        wo?.workOrderNo,
+                        wo?.styleRequirement?.buyerName,
+                        wo?.styleRequirement?.styleNo,
+                        wo?.month,
+                        comp?.composition,
+                        comp?.color,
+                        comp?.workOrderQty,
+                    ].map(val => String(val || "").toLowerCase());
+                    
+                    return searchableValues.some(val => val.includes(lowerSearch));
+                });
+                
+                return { ...wo, compositions: filteredComps };
+            }).filter(wo => wo.compositions.length > 0);
+            
+            return { ...job, workOrders: filteredWorkOrders };
+        }).filter(job => job.workOrders.length > 0);
+    }, [orders, searchTerm]);
+
+    const flatRows = useMemo(() => {
+        const out = [];
+        (filteredOrders || []).forEach((job, jobIndex) => {
+            const workOrders = job.workOrders || [];
+            const jobCompCount = workOrders.reduce(
+                (sum, wo) => sum + (wo.compositions?.length || 1),
+                0
+            ) || 1;
+            let jobRowSeen = false;
+
+            if (workOrders.length === 0) {
+                out.push({
+                    jobIndex, job, wo: null, comp: null,
+                    isFirstOfJob: true, jobRowSpan: 1,
+                    isFirstOfWo: true, woRowSpan: 1,
+                });
+                return;
+            }
+
+            workOrders.forEach((wo) => {
+                const comps = wo.compositions && wo.compositions.length > 0 ? wo.compositions : [null];
+                comps.forEach((comp, compIndex) => {
+                    out.push({
+                        jobIndex, job, wo, comp,
+                        isFirstOfJob: !jobRowSeen,
+                        jobRowSpan: jobCompCount,
+                        isFirstOfWo: compIndex === 0,
+                        woRowSpan: comps.length,
+                    });
+                    jobRowSeen = true;
+                });
+            });
+        });
+        return out;
+    }, [filteredOrders]);
+
     return (
         <>
             <tbody>
-                {orders?.map((job, jobIndex) => {
-                    const workOrders = job.workOrders || [];
+                {flatRows.map((r, rowIndex) => {
+                    const { job, wo, comp, isFirstOfJob, jobRowSpan, isFirstOfWo, woRowSpan, jobIndex } = r;
                     const isHovered = hoveredIndex === jobIndex;
+
+                    const sentForAop = Number(comp?.yarnDeliveriesWithColor?.SentForAop) || 0;
+                    const workOrderQtyNum = Number(comp?.workOrderQty) || 0;
+                    const sentDiff = sentForAop - workOrderQtyNum;
+                    const sentExceeded = sentDiff?.toFixed(2) > 0;
+
+                    const returnFromAop = Number(comp?.yarnDeliveriesWithColor?.ReturnFromAop) || 0;
+                    const receivedFromAop = Number(comp?.yarnDeliveriesWithColor?.ReceivedFromAop) || 0;
+                    const rcvdDiff = (returnFromAop + receivedFromAop) - sentForAop;
+                    const rcvdExceeded = rcvdDiff?.toFixed(2) > 0;
+
+                    const payableAmount = (Number(comp?.yarnDeliveriesWithColor?.ReceivedFromAop?.toFixed(2)) || 0) * (Number(comp?.unitePrice?.toFixed(2)) || 0);
+
+                    const currentFinishDia = getFinishDia(wo, comp);
 
                     return (
                         <tr
-                            onClick={() => hoverColorChange(jobIndex)}
-                            className={`${getJobIndex === jobIndex ? "bg-green-600 bg-opacity-15" : ""}`}
-                            key={jobIndex}
+                            key={rowIndex}
+                            onMouseEnter={() => setHoveredIndex(jobIndex)}
+                            onMouseLeave={() => setHoveredIndex(null)}
                         >
-                            <td style={stickyTd(0, isHovered)}>
-                                {workOrders?.map((wo, i) => (
-                                    wo.factoryName === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-gray-500`}>-</div>
+                            {/* MONTH (per work order) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(0, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>{wo?.month || "-"}</div>
+                                </td>
+                            )}
+
+                            {/* FACTORY NAME (per work order) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(1, isHovered)} rowSpan={woRowSpan}>
+                                    {!wo || wo.factoryName === "NULL" ? (
+                                        <div className={`${cellPad} text-gray-500`}>-</div>
                                     ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem} cursor-pointer`}>
+                                        <div onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${cellPad} cursor-pointer`}>
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                             ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
                                         </div>
-                                    )
-                                ))}
+                                    )}
+                                </td>
+                            )}
+
+                            {/* WORK ORDER NO (per work order) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(2, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>{wo?.workOrderNo || "-"}</div>
+                                </td>
+                            )}
+
+                            {/* BUYER NAME (per work order) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(3, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>{wo?.styleRequirement?.buyerName || "-"}</div>
+                                </td>
+                            )}
+
+                            {/* JOB NO (per job) */}
+                            {isFirstOfJob && (
+                                <td style={stickyTd(4, isHovered)} rowSpan={jobRowSpan}>
+                                    <div onDoubleClick={() => handleRedirect(job.jobNo)} className={cellPad}>{job.jobNo || "NO JOB FOUND"}</div>
+                                </td>
+                            )}
+                        
+
+                            {/* STYLE NO (per work order) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(5, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>{wo?.styleRequirement?.styleNo || "-"}</div>
+                                </td>
+                            )}
+
+                            {/* COLOR (per composition) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(6, isHovered)} rowSpan={woRowSpan}>
+                                <div onClick={() => handleEditRowData(comp?.id)} className={cellPad} style={{ cursor: "pointer" }}>
+                                    {comp?.color || "-"}
+                                </div>
                             </td>
-                            <td style={stickyTd(1, isHovered)}>
-                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
+                            )}
+                            
+
+                            {/* COMPOSITION (per composition) */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(7, isHovered)} rowSpan={woRowSpan}>
+                                <div className={cellPad}>{comp?.composition || "-"}</div>
                             </td>
-                            <td style={stickyTd(2, isHovered)}>
-                                {workOrders?.map((wo, i) => (
-                                    <div key={i} className={innerItem}>{wo.workOrderNo || "-"}</div>
-                                ))}
-                            </td>
-                            <td style={stickyTd(3, isHovered)}>
-                                {workOrders.map((wo, i) => (
-                                    <div key={i} className={innerItem}>{wo.styleRequirement?.buyerName || "-"}</div>
-                                ))}
-                            </td>
-                            <td style={stickyTd(4, isHovered)}>
-                                {workOrders.map((wo, i) => (
-                                    <div key={i} className={innerItem}>{wo.styleRequirement?.styleNo || "-"}</div>
-                                ))}
-                            </td>
-                            <td style={stickyTd(5, isHovered)}>
-                                {workOrders?.map((mon, i) => (
-                                    <div key={i} className={innerItem}>{mon.month || "-"}</div>
-                                ))}
+                            )}
+                            
+
+                            {/* FINISH DIA (per composition) - FIXED: uses getFinishDia */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>{currentFinishDia}</div>
                             </td>
 
-                            {/* COMPOSITION - Now uses stickyTd and proper div with innerItem */}
-                            <td style={stickyTd(6, isHovered)}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((comp, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {comp.composition || "-"}
-                                        </div>
-                                    ))
-                                )}
+                            {/* WORK ORDER QTY (per composition) */}
+                            <td style={dataTd}>
+                                <div onDoubleClick={() => wo && handleInlineEdit(wo.id, comp?.workOrderQty, "workOrder", "workOrderQty", comp?.id)} className={`${cellPad} cursor-pointer`}>
+                                    {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === comp?.id ? (
+                                        <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                    ) : comp?.workOrderQty?.toFixed(2) || "-"}
+                                </div>
                             </td>
 
-                            {/* COLOR */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((col, j) => (
-                                        <div
-                                            onClick={() => handleEditRowData(col.id)}
-                                            key={`${i}-${j}`}
-                                            className={innerItem}
-                                            style={{ cursor: 'pointer' }}
-                                        >
-                                            {col.color || "-"}
-                                        </div>
-                                    ))
-                                )}
+                            {/* SENT FOR AOP (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>{comp?.yarnDeliveriesWithColor?.SentForAop?.toFixed(2) || "-"}</div>
                             </td>
 
-
-
-
-
-                            {/* WORK ORDER QTY */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : wrk.workOrderQty?.toFixed(2) || "-"}
-
-                                    </div>
-                                )))}
+                            {/* DEL. SHORT & EXCESS (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad} style={{ color: sentExceeded ? "red" : "green", fontWeight: "bold" }}>
+                                    {sentExceeded ? sentDiff : `(${Math.abs(sentDiff?.toFixed(2))})`}
+                                </div>
                             </td>
 
-                            {/* SENT FOR AOP */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.yarnDeliveriesWithColor?.SentForAop?.toFixed(2) || "-"}
-                                        </div>
-                                    ))
-                                )}
+                            {/* RETURN FROM AOP (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>{comp?.yarnDeliveriesWithColor?.ReturnFromAop?.toFixed(2) || "-"}</div>
                             </td>
 
-                            {/* DEL. SHORT & EXCESS */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => {
-                                        const diff = (wrk.yarnDeliveriesWithColor?.SentForAop || 0) - (wrk.workOrderQty || 0);
-                                        const exceeded = diff?.toFixed(2) > 0;
-                                        return (
-                                            <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                                {exceeded ? diff : `(${Math.abs(diff?.toFixed(2))})`}
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </td>
-                            {/* RETURN FROM AOP */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.yarnDeliveriesWithColor?.ReturnFromAop?.toFixed(2) || "-"}
-                                        </div>
-                                    ))
-                                )}
+                            {/* RECEIVED FROM AOP (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>{comp?.yarnDeliveriesWithColor?.ReceivedFromAop?.toFixed(2) || "-"}</div>
                             </td>
 
-                            {/* RECEIVED FROM AOP */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.yarnDeliveriesWithColor?.ReceivedFromAop?.toFixed(2) || "-"}
-                                        </div>
-                                    ))
-                                )}
-                            </td>
-                            {/* FINISH FROM AOP */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {wrk.yarnDeliveriesWithColor?.AOPFinishFabricRcvd?.toFixed(2) || "-"}
-                                        </div>
-                                    ))
-                                )}
-                            </td>
-                            {/* DEL. SHORT & EXCESS */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => {
-                                        const diff = (wrk.yarnDeliveriesWithColor?.ReturnFromAop + wrk.yarnDeliveriesWithColor?.ReceivedFromAop || 0) - (wrk.yarnDeliveriesWithColor?.SentForAop || 0);
-                                        const exceeded = diff?.toFixed(2) > 0;
-                                        return (
-                                            <div key={`${i}-${j}`} className={innerItem} style={{ color: exceeded ? "red" : "green", fontWeight: "bold" }}>
-                                                {exceeded ? diff?.toFixed(2) : `(${Math.abs(diff?.toFixed(2))})`}
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </td>
-                            {/* UNIT PRICE */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : unt.unitePrice?.toFixed(2) || "-"}
-
-                                    </div>
-                                )))}
+                            {/* FINISH FROM AOP (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>{comp?.yarnDeliveriesWithColor?.AOPFinishFabricRcvd?.toFixed(2) || "-"}</div>
                             </td>
 
-                            {/* PAYABLE AMOUNT */}
-                            <td style={{ borderRight: "1px solid #000000", borderBottom: "1px solid #000000", padding: 0, textAlign: "center", verticalAlign: "middle", overflow: "hidden" }}>
-                                {workOrders.map((wo, i) =>
-                                    wo.compositions?.map((wrk, j) => (
-                                        <div key={`${i}-${j}`} className={innerItem}>
-                                            {(wrk.yarnDeliveriesWithColor?.ReceivedFromAop?.toFixed(2) || 0) * (wrk.unitePrice?.toFixed(2) || 0) || "-"}
-                                        </div>
-                                    ))
-                                )}
+                            {/* RCVD SHORT & EXCESS (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad} style={{ color: rcvdExceeded ? "red" : "green", fontWeight: "bold" }}>
+                                    {rcvdExceeded ? rcvdDiff?.toFixed(2) : `(${Math.abs(rcvdDiff?.toFixed(2))})`}
+                                </div>
+                            </td>
+
+                            {/* UNIT PRICE (per composition) */}
+                            <td style={dataTd}>
+                                <div onDoubleClick={() => handleInlineEdit(comp?.id, comp?.unitePrice, "workOrder", "unitePrice", comp?.id)} className={`${cellPad} cursor-pointer`}>
+                                    {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === comp?.id ? (
+                                        <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                    ) : comp?.unitePrice?.toFixed(2) || "-"}
+                                </div>
+                            </td>
+
+                            {/* PAYABLE AMOUNT (per composition) */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>{payableAmount || "-"}</div>
+                            </td>
+
+                            {/* PAID BILLING AMOUNT placeholder */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>-</div>
+                            </td>
+
+                            {/* PENDING BILLING AMOUNT placeholder */}
+                            <td style={dataTd}>
+                                <div className={cellPad}>-</div>
                             </td>
                         </tr>
                     );
@@ -301,32 +359,23 @@ const AopOrder = ({ orders, handleInlineEdit, handleRedirect, updatedFields, han
                     <td colSpan={FROZEN_COUNT} style={footerStickyLabelTd}>
                         TOTAL
                     </td>
-                    {/* COLOR — not numeric, left blank */}
-                    <td style={footerTd}></td>
-                    {/* SHADE % */}
-                    <td style={footerTd}>-</td>                   
-                    {/* WORK ORDER QTY */}
+                    <td style={footerTd}>-</td>
+                    <td style={footerTd}>-</td>
                     <td style={footerTd}>{totals.workOrderQty.toFixed(2)}</td>
-                    {/* SENT FOR AOP */}
                     <td style={footerTd}>{totals.sentForAop.toFixed(2)}</td>
-
-                    {/* DEL. SHORT & EXCESS */}
                     <td style={{ ...footerTd, color: totals.shortExcess > 0 ? "red" : "green" }}>
                         {totals.shortExcess > 0 ? totals.shortExcess : `(${Math.abs(totals.shortExcess.toFixed(2))})`}
                     </td>
-                    {/* RETURN FROM AOP */}
                     <td style={footerTd}>{totals.ReturnFromAop.toFixed(2)}</td>
-                    {/* RECEIVED FROM AOP */}
                     <td style={footerTd}>{totals.receivedFromAop.toFixed(2)}</td>
-                    {/* FINISH FROM AOP */}
                     <td style={footerTd}>{totals.FinishFromAop.toFixed(2)}</td>
-                    {/* DEL. SHORT & EXCESS */}
                     <td style={{ ...footerTd, color: totals.rcvdShortExcess > 0 ? "red" : "green" }}>
                         {totals.rcvdShortExcess > 0 ? totals.rcvdShortExcess : `(${Math.abs(totals.rcvdShortExcess.toFixed(3))})`}
                     </td>
                     <td style={footerTd}>-</td>
-                    {/* PAYABLE AMOUNT */}
                     <td style={footerTd}>{totals.payableAmount.toFixed(2)}</td>
+                    <td style={footerTd}>-</td>
+                    <td style={footerTd}>-</td>
                 </tr>
             </tfoot>
         </>

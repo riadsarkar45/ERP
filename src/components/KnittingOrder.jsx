@@ -1,19 +1,29 @@
 import { useState, useMemo } from "react";
-import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 
-// 1. Accept the NEW props from AllOrders
-const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInlineEdit, updatedFields, handleOnChange, isEdit, FROZEN_COUNT, currentFrozenWidths, currentFrozenLefts }) => {
+const KnittingOrder = ({ 
+    orders, 
+    handleEditRowData, 
+    handleRedirect, 
+    handleInlineEdit, 
+    updatedFields, 
+    handleOnChange, 
+    isEdit, 
+    FROZEN_COUNT, 
+    currentFrozenWidths, 
+    currentFrozenLefts 
+}) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
-    // const { handleInlineEdit, updatedFields, handleOnChange, isEdit, } = InlineEdit();
+    const [searchTerm, setSearchTerm] = useState("");
 
-    const innerItem = "border-b border-black text-black px-3 py-2 last:border-b-0";
+    const cellPad = "px-3 py-2";
 
     const baseTd = {
-        borderRight: "1px solid #000000",
-        borderBottom: "1px solid #000000",
+        borderRight: "1px solid #d1d5db",
+        borderBottom: "1px solid #d1d5db",
         padding: 0,
         textAlign: "center",
-        verticalAlign: "center",
+        verticalAlign: "middle",
+        boxSizing: "border-box",
     };
 
     const formatNumber = (value) => {
@@ -21,7 +31,6 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
         return num.toLocaleString("en-US");
     };
 
-    // 3. Use the dynamic props passed from the parent
     const stickyTd = (colIndex, isHovered) => ({
         ...baseTd,
         position: "sticky",
@@ -30,41 +39,49 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
         backgroundColor: isHovered ? "#bbf7d0" : "#ffffff",
         width: `${currentFrozenWidths[colIndex]}px`,
         minWidth: `${currentFrozenWidths[colIndex]}px`,
+        maxWidth: `${currentFrozenWidths[colIndex]}px`,
+        overflow: "visible",
+        textOverflow: "clip",
+        whiteSpace: "nowrap",
         boxShadow: colIndex === FROZEN_COUNT - 1 ? "2px 0 5px -1px rgba(0,0,0,0.18)" : "none",
     });
 
     const plainTd = (isHovered) => ({
         ...baseTd,
         backgroundColor: isHovered ? "#f0fdf4" : "#ffffff",
+        minWidth: "100px",
     });
 
-    // ── Footer sticky/plain cell styles (no hover state, static bg) ──
-    const footerStickyTd = (colIndex) => ({
+    // FIXED: Footer merged sticky cell - spans all frozen columns
+    const footerMergedStickyTd = (totalWidth) => ({
         ...baseTd,
         position: "sticky",
-        left: `${currentFrozenLefts[colIndex]}px`,
+        left: 0,
         bottom: 0,
-        zIndex: 4,
-        backgroundColor: "#f3f4f6",
-        width: `${currentFrozenWidths[colIndex]}px`,
-        minWidth: `${currentFrozenWidths[colIndex]}px`,
-        boxShadow: colIndex === FROZEN_COUNT - 1 ? "2px 0 5px -1px rgba(0,0,0,0.18)" : "none",
+        zIndex: 40,
+        backgroundColor: "#e5e7eb",
+        width: `${totalWidth}px`,
+        minWidth: `${totalWidth}px`,
+        maxWidth: `${totalWidth}px`,
+        overflow: "visible",
+        textOverflow: "clip",
+        whiteSpace: "nowrap",
+        boxShadow: "2px 0 5px -1px rgba(0,0,0,0.18)",
         fontWeight: 700,
+        color: "#1f2937",
+        borderTop: "2px solid #6b7280",
     });
 
+    // Footer plain cells - NOT sticky, just grey
     const footerPlainTd = {
         ...baseTd,
-        position: "sticky",
-        bottom: 0,
-        zIndex: 2,
-        backgroundColor: "#f3f4f6",
+        backgroundColor: "#e5e7eb",
         fontWeight: 700,
+        minWidth: "100px",
+        color: "#1f2937",
+        borderTop: "2px solid #6b7280",
     };
 
-
-
-    // ── Flatten every composition row (across all jobs/work orders) so
-    // totals can be computed once instead of re-walking the tree per column ──
     const totals = useMemo(() => {
         const acc = {
             orderQty: 0,
@@ -110,226 +127,388 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
             </span>
         );
     };
-    // onKeyDown={(e) => e.key === "Enter" && handleSubmit()
+
+    const getFinishDia = (wo, comp) => {
+        if (!wo?.styleRequirement?.rows || !comp) return "-";
+        
+        const matchingRow = wo.styleRequirement.rows.find(row => 
+            row.composition === comp.composition && 
+            row.color === comp.color
+        );
+        
+        return matchingRow?.finishDia || "-";
+    };
+
+    // FIXED: Filter orders based on search term
+    const filteredOrders = useMemo(() => {
+        if (!searchTerm.trim()) return orders || [];
+        
+        const lowerSearch = searchTerm.toLowerCase();
+        
+        return (orders || []).map(job => {
+            const filteredWorkOrders = (job.workOrders || []).map(wo => {
+                const filteredComps = (wo.compositions || []).filter(comp => {
+                    // Search in multiple fields
+                    const searchableValues = [
+                        job?.jobNo,
+                        wo?.factoryName,
+                        wo?.workOrderNo,
+                        wo?.styleRequirement?.buyerName,
+                        wo?.styleRequirement?.styleNo,
+                        wo?.month,
+                        comp?.composition,
+                        comp?.color,
+                        wo?.yarnCount,
+                        wo?.lotNo,
+                        wo?.stichLength,
+                        wo?.machineDia,
+                        comp?.workOrderQty,
+                    ].map(val => String(val || "").toLowerCase());
+                    
+                    return searchableValues.some(val => val.includes(lowerSearch));
+                });
+                
+                return { ...wo, compositions: filteredComps };
+            }).filter(wo => wo.compositions.length > 0);
+            
+            return { ...job, workOrders: filteredWorkOrders };
+        }).filter(job => job.workOrders.length > 0);
+    }, [orders, searchTerm]);
+
+    const flatRows = useMemo(() => {
+        const out = [];
+        (filteredOrders || []).forEach((job, jobIndex) => {
+            const workOrders = job.workOrders || [];
+            const jobCompCount = workOrders.reduce(
+                (sum, wo) => sum + (wo.compositions?.length || 1),
+                0
+            ) || 1;
+            let jobRowSeen = false;
+
+            if (workOrders.length === 0) {
+                out.push({
+                    jobIndex, job, wo: null, comp: null,
+                    isFirstOfJob: true, jobRowSpan: 1,
+                    isFirstOfWo: true, woRowSpan: 1,
+                });
+                return;
+            }
+
+            workOrders.forEach((wo) => {
+                const comps = wo.compositions && wo.compositions.length > 0 ? wo.compositions : [null];
+                comps.forEach((comp, compIndex) => {
+                    out.push({
+                        jobIndex, job, wo, comp,
+                        isFirstOfJob: !jobRowSeen,
+                        jobRowSpan: jobCompCount,
+                        isFirstOfWo: compIndex === 0,
+                        woRowSpan: comps.length,
+                    });
+                    jobRowSeen = true;
+                });
+            });
+        });
+        return out;
+    }, [filteredOrders]);
+
+    // Calculate total width of frozen columns for merged cell
+    const totalFrozenWidth = currentFrozenWidths.reduce((sum, width) => sum + width, 0);
+
+    // Search input style
+    const searchInputStyle = {
+        width: "100%",
+        padding: "4px 8px",
+        border: "1px solid #d1d5db",
+        borderRadius: "4px",
+        fontSize: "12px",
+        outline: "none",
+        boxSizing: "border-box",
+    };
+
+    const clearButtonStyle = {
+        position: "absolute",
+        right: "4px",
+        top: "50%",
+        transform: "translateY(-50%)",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        color: "#6b7280",
+        fontSize: "14px",
+        padding: "2px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    };
+
     return (
         <>
             <tbody>
-                {orders?.map((job, jobIndex) => {
-                    const workOrders = job.workOrders || [];
+                {flatRows.map((r, rowIndex) => {
+                    const { job, wo, comp, isFirstOfJob, jobRowSpan, isFirstOfWo, woRowSpan, jobIndex } = r;
                     const isHovered = hoveredIndex === jobIndex;
 
-                    return (
-                        <tr key={jobIndex} onClick={() => setHoveredIndex(jobIndex)}>
-                            {/* COL 0 — FACTORY NAME */}
-                            <td style={stickyTd(0, isHovered)}>
-                                {workOrders?.map((wo, i) => (
-                                    wo.factoryName === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-black`}>-</div>
-                                    ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`${innerItem}  cursor-pointer`}>
-                                            {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
-                                                <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
-                                        </div>
-                                    )
-                                ))}
-                            </td>
+                    const workOrderQty = Number(comp?.workOrderQty) || 0;
+                    const totalYarnDelivery = Number(comp?.yarnDeliveriesWithColor?.YarnDelivery) || 0;
+                    const totalYarnReturn = Number(comp?.yarnDeliveriesWithColor?.YarnReturn) || 0;
+                    const totalDelivered = totalYarnDelivery - totalYarnReturn || 0;
+                    const delDiff = workOrderQty - totalYarnDelivery + totalYarnReturn;
+                    const delExceeded = delDiff?.toFixed(2) > 0;
 
-                            {/* COL 1 — JOB NO */}
-                            <td style={stickyTd(1, isHovered)}>
-                                <div onDoubleClick={() => handleRedirect(job.jobNo)} className={innerItem}>{job.jobNo || "NO JOB FOUND"}</div>
-                            </td>
+                    const greyReceived = Number(comp?.yarnDeliveriesWithColor?.GreyFabricReceived) || 0;
+                    const rcvdDiff = greyReceived + totalYarnReturn - totalYarnDelivery;
+                    const rcvdExceeded = rcvdDiff.toFixed(2) < 0;
+
+                    const payablePrice = Number(comp?.unitePrice) || 0;
+                    const payableTotal = greyReceived * payablePrice;
+
+                    const currentFinishDia = getFinishDia(wo, comp);
+
+                    return (
+                        <tr key={rowIndex} onClick={() => setHoveredIndex(jobIndex)}>
+                            {/* COL 0 — MONTH */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(0, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {wo?.month || "NO MONTH NAME FOUND"}
+                                    </div>
+                                </td>
+                            )}
+                            
+                            {/* COL 1 — FACTORY NAME */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(1, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {!wo || wo.factoryName === "NULL" ? (
+                                            <span>-</span>
+                                        ) : (
+                                            <div
+                                                onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)}
+                                                className="cursor-pointer"
+                                            >
+                                                {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
+                                                    <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                                ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                </td>
+                            )}
 
                             {/* COL 2 — WORK ORDER NO */}
-                            <td style={stickyTd(2, isHovered)}>
-                                {workOrders?.map((wo, i) => (<div key={i} className={innerItem}>{wo.workOrderNo || "NO WORK ORDER FOUND"}</div>))}
-                            </td>
+                            {isFirstOfWo && (
+                                <td style={stickyTd(2, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {wo?.workOrderNo || "NO WORK ORDER FOUND"}
+                                    </div>
+                                </td>
+                            )}
 
                             {/* COL 3 — BUYER NAME */}
-                            <td style={stickyTd(3, isHovered)}>
-                                {workOrders.map((wo, i) => (<div key={i} className={innerItem}>{wo.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}</div>))}
-                            </td>
+                            {isFirstOfWo && (
+                                <td style={stickyTd(3, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {wo?.styleRequirement?.buyerName || "NO BUYER NAME FOUND"}
+                                    </div>
+                                </td>
+                            )}
 
-                            {/* COL 4 — STYLE NO */}
-                            <td style={stickyTd(4, isHovered)}>
-                                {workOrders.map((wo, i) => (<div key={i} className={innerItem}>{wo.styleRequirement?.styleNo || "NO STYLE NO FOUND"}</div>))}
-                            </td>
+                            {/* COL 4 — JOB NO */}
+                            {isFirstOfJob && (
+                                <td style={stickyTd(4, isHovered)} rowSpan={jobRowSpan}>
+                                    <div
+                                        onDoubleClick={() => handleRedirect(job.jobNo)}
+                                        className={cellPad}
+                                    >
+                                        {job.jobNo || "NO JOB FOUND"}
+                                    </div>
+                                </td>
+                            )}
 
-                            {/* COL 5 — MONTH */}
-                            <td style={stickyTd(5, isHovered)}>
-                                {workOrders?.map((mon, i) => (<div key={i} className={innerItem}>{mon.month || "NO MONTH NAME FOUND"}</div>))}
-                            </td>
+                            {/* COL 5 — STYLE NO */}
+                            {isFirstOfWo && (
+                                <td style={stickyTd(5, isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {wo?.styleRequirement?.styleNo || wo?.styleNo || "NO STYLE NO FOUND"}
+                                    </div>
+                                </td>
+                            )}
 
-                            {/* COL 6 — COMPOSITION (last frozen) */}
+                            {/* COL 6 — COLOR */}
                             <td style={stickyTd(6, isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((comp, j) => (<div key={`${i}-${j}`} className={`${innerItem}`}>{comp.composition || "-"}</div>)))}
+                                <div
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (comp?.id) {
+                                            handleEditRowData(comp.id);
+                                        }
+                                    }}
+                                    className={`${cellPad} cursor-pointer hover:text-blue-500`}
+                                >
+                                    {comp?.color || "-"}
+                                </div>
                             </td>
 
-                            {/* COL 7 — COLOR */}
+                            {/* COL 7 — COMPOSITION */}
+                            <td style={stickyTd(7, isHovered)}>
+                                <div className={cellPad}>
+                                    {comp?.composition || "-"}
+                                </div>
+                            </td>
+
+                            {/* COL 8 — FINISH DIA */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((col, j) => (
-                                    <div key={`${i}-${j}`} onClick={(e) => { e.stopPropagation(); handleEditRowData(col.id); }} className={`${innerItem} cursor-pointer hover:text-blue-500`}>{col.color || "-"}</div>
-                                )))}
-                            </td>
-                            {/* COL 8 — YARN COUNT */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders?.map((wo, i) => (
-                                    wo.yarnCount === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-black`}>-</div>
-                                    ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.yarnCount, "workOrder", "yarnCount", 0)} className={`${innerItem}  cursor-pointer`}>
-                                            {isEdit.updatedFieldName === "yarnCount" && isEdit.rowId === wo.id ? (
-                                                <input type="text" name="yarnCount" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span>{wo.yarnCount}</span>}
-                                        </div>
-                                    )
-                                ))}
-                            </td>
-                            {/* COL 8 — YARN LOT */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders?.map((wo, i) => (
-                                    wo.lotNo === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-black`}>-</div>
-                                    ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.lotNo, "workOrder", "lotNo", 0)} className={`${innerItem}  cursor-pointer`}>
-                                            {isEdit.updatedFieldName === "lotNo" && isEdit.rowId === wo.id ? (
-                                                <input type="text" name="lotNo" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span>{wo.lotNo}</span>}
-                                        </div>
-                                    )
-                                ))}
-                            </td>
-                            {/* COL 8 — STITCH LENGTH */}
-                            <td style={plainTd(isHovered)} >
-                                {workOrders?.map((wo, i) => (
-                                    wo.stichLength === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-black`}>-</div>
-                                    ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.stichLength, "workOrder", "stichLength", 0)} className={`${innerItem}  cursor-pointer`}>
-                                            {isEdit.updatedFieldName === "stichLength" && isEdit.rowId === wo.id ? (
-                                                <input type="text" name="stichLength" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span>{wo.stichLength}</span>}
-                                        </div>
-                                    )
-                                ))}
-                            </td>
-                            {/* COL 8 — MACHINE DIA */}
-                            <td style={plainTd(isHovered)} >
-                                {workOrders?.map((wo, i) => (
-                                    wo.machineDia === "NULL" ? (
-                                        <div key={i} className={`${innerItem} text-black`}>-</div>
-                                    ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.machineDia, "workOrder", "machineDia", 0)} className={`${innerItem}  cursor-pointer`}>
-                                            {isEdit.updatedFieldName === "machineDia" && isEdit.rowId === wo.id ? (
-                                                <input type="text" name="machineDia" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                            ) : <span>{wo.machineDia}</span>}
-                                        </div>
-                                    )
-                                ))}
+                                <div className={cellPad}>
+                                    {currentFinishDia}
+                                </div>
                             </td>
 
-
-
-                            {/* COL 10 — WORK ORDER QTY */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(wo.id, wrk.workOrderQty, "workOrder", "workOrderQty", wrk.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === wrk.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : wrk.workOrderQty?.toFixed(2) || "-"}
-
+                            {/* COL 9 — YARN COUNT */}
+                            {isFirstOfWo && (
+                                <td style={plainTd(isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {!wo || wo.yarnCount === "NULL" ? (
+                                            <span>-</span>
+                                        ) : (
+                                            <div
+                                                onDoubleClick={() => handleInlineEdit(wo.id, wo.yarnCount, "workOrder", "yarnCount", 0)}
+                                                className="cursor-pointer"
+                                            >
+                                                {isEdit.updatedFieldName === "yarnCount" && isEdit.rowId === wo.id ? (
+                                                    <input type="text" name="yarnCount" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                                ) : <span>{wo.yarnCount}</span>}
+                                            </div>
+                                        )}
                                     </div>
-                                )))}
-                            </td>
+                                </td>
+                            )}
 
-                            {/* COL 11 — TOTAL YARN DELIVERY */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const yarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0
-                                    const yarnReturn = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0
-                                    const total = yarnDelivery - yarnReturn || 0
-                                    return (
-                                        <div key={`${i}-${j}`} className={innerItem}>{total.toFixed(2)}</div>
-                                    )
-                                }))}
-                            </td>
-
-                            {/* COL 12 — DEL SHORT & EXCESS */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const workOrderQty = Number(wrk.workOrderQty) || 0;
-                                    const totalYarnDelivery = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
-                                    const totalYarnReturn = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
-                                    const diff = workOrderQty - totalYarnDelivery + totalYarnReturn;
-                                    const exceeded = diff?.toFixed(2) > 0;
-                                    return (
-                                        <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceeded ? "green" : "red" }}>
-                                            {exceeded ? `(${Math.abs(diff?.toFixed(2))})` : Math.abs(diff?.toFixed(2))}
-                                            {/* {workOrderQty} */}
-                                            {/* {totalYarnDelivery} */}
-                                        </div>
-                                    );
-                                }))}
-                            </td>
-
-                            {/* COL 13 — YARN RETURN */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{wrk.yarnDeliveriesWithColor?.YarnReturn?.toFixed(2) || "-"}</div>)))}
-                            </td>
-
-                            {/* COL 14 — GREY RECEIVED */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (
-                                    <div key={`${i}-${j}`} className={innerItem}>{wrk.yarnDeliveriesWithColor?.GreyFabricReceived?.toFixed(2) || "-"}</div>
-                                )))}
-                            </td>
-                            {/* COL 15 — RCVD SHORT & EXCESS */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const grey = Number(wrk.yarnDeliveriesWithColor?.GreyFabricReceived) || 0;
-                                    const ret = Number(wrk.yarnDeliveriesWithColor?.YarnReturn) || 0;
-                                    const del = Number(wrk.yarnDeliveriesWithColor?.YarnDelivery) || 0;
-                                    const diff2 = grey + ret - del;
-                                    const exceed = diff2.toFixed(2) < 0;
-                                    return (
-                                        <div key={`${i}-${j}`} className={`${innerItem} font-bold`} style={{ color: exceed ? "red" : "green" }}>
-                                            {exceed ? `(${Math.abs(diff2?.toFixed(2))})` : diff2?.toFixed(2)}
-                                        </div>
-                                    );
-                                }))}
-                            </td>
-                            {/* COL 9 — UNIT PRICE */}
-                            <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((unt, j) => (
-                                    <div key={`${i}-${j}`} onDoubleClick={() => handleInlineEdit(unt.id, unt.unitePrice, "workOrder", "unitePrice", unt.id)} className={`${innerItem} cursor-pointer`}>
-                                        {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === unt.id ? (
-                                            <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
-                                        ) : unt.unitePrice?.toFixed(2) || "-"}
-
+                            {/* COL 10 — YARN LOT */}
+                            {isFirstOfWo && (
+                                <td style={plainTd(isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {!wo || wo.lotNo === "NULL" ? (
+                                            <span>-</span>
+                                        ) : (
+                                            <div
+                                                onDoubleClick={() => handleInlineEdit(wo.id, wo.lotNo, "workOrder", "lotNo", 0)}
+                                                className="cursor-pointer"
+                                            >
+                                                {isEdit.updatedFieldName === "lotNo" && isEdit.rowId === wo.id ? (
+                                                    <input type="text" name="lotNo" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                                ) : <span>{wo.lotNo}</span>}
+                                            </div>
+                                        )}
                                     </div>
-                                )))}
+                                </td>
+                            )}
+
+                            {/* COL 11 — STITCH LENGTH */}
+                            {isFirstOfWo && (
+                                <td style={plainTd(isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {!wo || wo.stichLength === "NULL" ? (
+                                            <span>-</span>
+                                        ) : (
+                                            <div
+                                                onDoubleClick={() => handleInlineEdit(wo.id, wo.stichLength, "workOrder", "stichLength", 0)}
+                                                className="cursor-pointer"
+                                            >
+                                                {isEdit.updatedFieldName === "stichLength" && isEdit.rowId === wo.id ? (
+                                                    <input type="text" name="stichLength" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                                ) : <span>{wo.stichLength}</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                </td>
+                            )}
+
+                            {/* COL 12 — MACHINE DIA */}
+                            {isFirstOfWo && (
+                                <td style={plainTd(isHovered)} rowSpan={woRowSpan}>
+                                    <div className={cellPad}>
+                                        {!wo || wo.machineDia === "NULL" ? (
+                                            <span>-</span>
+                                        ) : (
+                                            <div
+                                                onDoubleClick={() => handleInlineEdit(wo.id, wo.machineDia, "workOrder", "machineDia", 0)}
+                                                className="cursor-pointer"
+                                            >
+                                                {isEdit.updatedFieldName === "machineDia" && isEdit.rowId === wo.id ? (
+                                                    <input type="text" name="machineDia" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                                ) : <span>{wo.machineDia}</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                </td>
+                            )}
+
+                            {/* COL 13 — WORK ORDER QTY */}
+                            <td style={plainTd(isHovered)}>
+                                <div
+                                    onDoubleClick={() => wo && handleInlineEdit(wo.id, comp?.workOrderQty, "workOrder", "workOrderQty", comp?.id)}
+                                    className={`${cellPad} cursor-pointer`}
+                                >
+                                    {isEdit.updatedFieldName === "workOrderQty" && isEdit.compId === comp?.id ? (
+                                        <input type="text" className="p-2 outline-none border rounded-md w-full" name="workOrderQty" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                    ) : comp?.workOrderQty?.toFixed(2) || "-"}
+                                </div>
                             </td>
 
-
-
-                            {/* COL 16 — PAYABLE AMOUNT */}
+                            {/* COL 14 — TOTAL YARN DELIVERY */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => {
-                                    const received = Number(wrk.yarnDeliveriesWithColor?.GreyFabricReceived) || 0;
-                                    const price = Number(wrk.unitePrice) || 0;
-                                    const total = received * price;
-                                    return (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>{total > 0 ? total.toFixed(2) : "-"}</div>);
-                                }))}
+                                <div className={cellPad}>{totalDelivered.toFixed(2)}</div>
                             </td>
 
-                            {/* COL 17 — PAID BILLING AMOUNT */}
+                            {/* COL 15 — DEL SHORT & EXCESS */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>-</div>)))}
+                                <div className={`${cellPad} font-bold`} style={{ color: delExceeded ? "green" : "red" }}>
+                                    {delExceeded ? `(${Math.abs(delDiff?.toFixed(2))})` : Math.abs(delDiff?.toFixed(2))}
+                                </div>
                             </td>
 
-                            {/* COL 18 — PENDING BILLING AMOUNT */}
+                            {/* COL 16 — YARN RETURN */}
                             <td style={plainTd(isHovered)}>
-                                {workOrders.map((wo, i) => wo.compositions?.map((wrk, j) => (<div key={`${i}-${j}`} className={`${innerItem} text-red-600 font-extrabold`}>-</div>)))}
+                                <div className={`${cellPad} text-red-600 font-extrabold`}>{comp?.yarnDeliveriesWithColor?.YarnReturn?.toFixed(2) || "-"}</div>
+                            </td>
+
+                            {/* COL 17 — GREY RECEIVED */}
+                            <td style={plainTd(isHovered)}>
+                                <div className={cellPad}>{comp?.yarnDeliveriesWithColor?.GreyFabricReceived?.toFixed(2) || "-"}</div>
+                            </td>
+
+                            {/* COL 18 — RCVD SHORT & EXCESS */}
+                            <td style={plainTd(isHovered)}>
+                                <div className={`${cellPad} font-bold`} style={{ color: rcvdExceeded ? "red" : "green" }}>
+                                    {rcvdExceeded ? `(${Math.abs(rcvdDiff?.toFixed(2))})` : rcvdDiff?.toFixed(2)}
+                                </div>
+                            </td>
+
+                            {/* COL 19 — UNIT PRICE */}
+                            <td style={plainTd(isHovered)}>
+                                <div
+                                    onDoubleClick={() => handleInlineEdit(comp?.id, comp?.unitePrice, "workOrder", "unitePrice", comp?.id)}
+                                    className={`${cellPad} cursor-pointer`}
+                                >
+                                    {isEdit.updatedFieldName === "unitePrice" && isEdit.rowId === comp?.id ? (
+                                        <input type="text" className="p-2 outline-none border rounded-md w-full" name="unitePrice" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
+                                    ) : comp?.unitePrice?.toFixed(2) || "-"}
+                                </div>
+                            </td>
+
+                            {/* COL 20 — PAYABLE AMOUNT */}
+                            <td style={plainTd(isHovered)}>
+                                <div className={`${cellPad} text-red-600 font-extrabold`}>{payableTotal > 0 ? payableTotal.toFixed(2) : "-"}</div>
+                            </td>
+
+                            {/* COL 21 — PAID BILLING AMOUNT */}
+                            <td style={plainTd(isHovered)}>
+                                <div className={`${cellPad} text-red-600 font-extrabold`}>-</div>
+                            </td>
+
+                            {/* COL 22 — PENDING BILLING AMOUNT */}
+                            <td style={plainTd(isHovered)}>
+                                <div className={`${cellPad} text-red-600 font-extrabold`}>-</div>
                             </td>
                         </tr>
                     );
@@ -338,64 +517,47 @@ const KnittingOrder = ({ orders, handleEditRowData, handleRedirect, handleInline
 
             <tfoot>
                 <tr>
-                    {/* COL 0 — TOTAL label */}
-                    <td style={footerStickyTd(0)}>
-                        <div className={innerItem}>TOTAL</div>
+                    {/* MERGED FROZEN COLUMN - TOTAL spans across all frozen columns */}
+                    <td 
+                        colSpan={FROZEN_COUNT} 
+                        style={footerMergedStickyTd(totalFrozenWidth)}
+                    >
+                        <div className={cellPad} style={{ fontWeight: 700, fontSize: "14px", textAlign: "center" }}>
+                            TOTAL
+                        </div>
                     </td>
-                    {/* COL 1 — JOB NO (blank) */}
-                    <td style={footerStickyTd(1)}><div className={innerItem}></div></td>
-                    {/* COL 2 — WORK ORDER NO (blank) */}
-                    <td style={footerStickyTd(2)}><div className={innerItem}></div></td>
-                    {/* COL 3 — BUYER NAME (blank) */}
-                    <td style={footerStickyTd(3)}><div className={innerItem}></div></td>
-                    {/* COL 4 — STYLE NO (blank) */}
-                    <td style={footerStickyTd(4)}><div className={innerItem}></div></td>
-                    {/* COL 5 — MONTH (blank) */}
-                    <td style={footerStickyTd(5)}><div className={innerItem}></div></td>
-                    {/* COL 6 — COMPOSITION (blank) */}
-                    <td style={footerStickyTd(6)}><div className={innerItem}></div></td>
 
-                    {/* COL 7 — COLOR (not numeric, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
-                    {/* COL 7 — YARN COUNT (not numeric, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
-                    {/* COL 7 — YARN LOT (not numeric, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
-                    {/* COL 7 — S.L (not numeric, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
-                    {/* COL 7 — MC DIA (not numeric, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div>-</td>
+                    {/* COL 8 — FINISH DIA (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    {/* COL 9 — YARN COUNT (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    {/* COL 10 — YARN LOT (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    {/* COL 11 — STITCH LENGTH (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    {/* COL 12 — MACHINE DIA (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
 
-                    {/* COL 8 — ORDER QTY total */}
-                    {/* <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.orderQty)}</div></td>                    */}
-
-                    {/* COL 10 — WORK ORDER QTY total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div></td>
-
-                    {/* COL 11 — TOTAL YARN DELIVERY total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div></td>
-                    {/* COL 12 — DEL SHORT & EXCESS total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(totals.delShortExcess?.toFixed(2))}</div></td>
-                    {/* COL 13 — YARN RETURN total */}
-                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div></td>
-
-                    {/* COL 14 — GREY RECEIVED total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div></td>
-
-                    {/* COL 15 — RCVD SHORT & EXCESS total */}
-                    <td style={footerPlainTd}><div className={innerItem}>{renderSigned(-totals.rcvdShortExcess?.toFixed(2)) /* exceed=red when negative, so flip sign for green/red parity with per-row logic */}</div></td>
-
-                    {/* COL 9 — UNIT PRICE (not summable, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}></div></td>
-
-                    {/* COL 16 — PAYABLE AMOUNT total */}
-                    <td style={footerPlainTd}><div className={`${innerItem} text-red-600`}>{formatNumber(totals.payableAmount.toFixed(2)) ?? "-"}</div></td>
-
-                    {/* COL 17 — PAID BILLING AMOUNT (placeholder, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}>-</div></td>
-
-                    {/* COL 18 — PENDING BILLING AMOUNT (placeholder, blank) */}
-                    <td style={footerPlainTd}><div className={innerItem}>-</div></td>
+                    {/* COL 13 — WORK ORDER QTY total */}
+                    <td style={footerPlainTd}><div className={cellPad}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div></td>
+                    {/* COL 14 — TOTAL YARN DELIVERY total */}
+                    <td style={footerPlainTd}><div className={cellPad}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div></td>
+                    {/* COL 15 — DEL SHORT & EXCESS total */}
+                    <td style={footerPlainTd}><div className={cellPad}>{renderSigned(totals.delShortExcess?.toFixed(2))}</div></td>
+                    {/* COL 16 — YARN RETURN total */}
+                    <td style={footerPlainTd}><div className={`${cellPad} text-red-600`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div></td>
+                    {/* COL 17 — GREY RECEIVED total */}
+                    <td style={footerPlainTd}><div className={cellPad}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div></td>
+                    {/* COL 18 — RCVD SHORT & EXCESS total */}
+                    <td style={footerPlainTd}><div className={cellPad}>{renderSigned(-totals.rcvdShortExcess?.toFixed(2))}</div></td>
+                    {/* COL 19 — UNIT PRICE (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}></div></td>
+                    {/* COL 20 — PAYABLE AMOUNT total */}
+                    <td style={footerPlainTd}><div className={`${cellPad} text-red-600`}>{formatNumber(totals.payableAmount.toFixed(2))}</div></td>
+                    {/* COL 21 — PAID BILLING AMOUNT (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    {/* COL 22 — PENDING BILLING AMOUNT (blank) */}
+                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
                 </tr>
             </tfoot>
         </>
