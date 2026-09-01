@@ -147,6 +147,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
                                             composition: true,
                                             orderQty: true,
                                             finishRequiredQty: true,
+                                            finishDia: true,
                                         },
                                     },
                                 },

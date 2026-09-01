@@ -322,11 +322,7 @@ export const downloadPDFchallan = async (req: Request, res: Response): Promise<v
         return;
     }
 
-    // PDF generation is heavy — cap at 50 per request as the frontend expects.
-    if (deliveries.length > 50) {
-        res.status(400).send({ message: "Cannot generate more than 50 challans at once" });
-        return;
-    }
+ 
 
     const doc = new PDFDocument(PAGE);
 

@@ -1,7 +1,9 @@
+import { useMemo } from "react";
+
 const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleInlineEdit, handleEditRowData }) => {
 
-    const cellClass = " cursor-pointer px-3 py-1.5 border-b border-gray-200 last:border-b-0";
-    const compCellClass = "hover:bg-red-500/10 hover:text-red-500 cursor-pointer px-3 py-1.5 border-gray-200 last:border-b-0";
+    const cellClass = "cursor-pointer px-3 py-1.5";
+    const compCellClass = "hover:bg-red-500/10 hover:text-red-500 cursor-pointer px-3 py-1.5";
 
     // ---- FOOTER TOTALS ----
     const allCompositions =
@@ -29,167 +31,176 @@ const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleIn
         { bookingQty: 0, workOrderQty: 0, greyReceived: 0, greyReturn: 0, finishReceived: 0, finishReturn: 0 }
     );
 
+    // ── Flatten jobs -> workOrders -> compositions into ONE real <tr> per
+    // composition line, with rowSpan for job-level (JOB NO) and
+    // work-order-level (FACTORY NAME, WORK ORDER NO, BUYER NAME, STYLE,
+    // MONTH) columns. Fixes the same border-desync bug documented in
+    // KnittingOrder.jsx — long composition/booking-color text wrapping no
+    // longer breaks alignment with the single-value columns.
+    const flatRows = useMemo(() => {
+        const out = [];
+        (orders || []).forEach((job, jobIndex) => {
+            const workOrders = job.workOrders || [];
+            const jobCompCount = workOrders.reduce(
+                (sum, wo) => sum + (wo.compositions?.length || 1),
+                0
+            ) || 1;
+            let jobRowSeen = false;
+
+            if (workOrders.length === 0) {
+                out.push({
+                    jobIndex, job, wo: null, comp: null,
+                    isFirstOfJob: true, jobRowSpan: 1,
+                    isFirstOfWo: true, woRowSpan: 1,
+                });
+                return;
+            }
+
+            workOrders.forEach((wo) => {
+                const comps = wo.compositions && wo.compositions.length > 0 ? wo.compositions : [null];
+                comps.forEach((comp, compIndex) => {
+                    out.push({
+                        jobIndex, job, wo, comp,
+                        isFirstOfJob: !jobRowSeen,
+                        jobRowSpan: jobCompCount,
+                        isFirstOfWo: compIndex === 0,
+                        woRowSpan: comps.length,
+                    });
+                    jobRowSeen = true;
+                });
+            });
+        });
+        return out;
+    }, [orders]);
+
     return (
         <>
             <tbody className="whitespace-nowrap">
-                {orders?.map((job, jobIndex) => {
+                {flatRows.map((r, rowIndex) => {
+                    const { job, wo, comp, isFirstOfJob, jobRowSpan, isFirstOfWo, woRowSpan } = r;
 
-                    const compositions =
-                        job.workOrders?.flatMap(w =>
-                            (w.compositions || []).map(c => ({
-                                ...c,
-                                _workOrder: w,
-                            }))
-                        ) || [];
+                    const yarnJobs = (wo?.yarnDyeingJobs || []).filter(
+                        y => y.composition === comp?.composition
+                    );
 
                     return (
-                        <tr key={jobIndex} className="border-b border-gray-200">
+                        <tr key={rowIndex} className="border-b border-gray-200">
 
-                            {/* FACTORY NAME */}
-                            <td>
-                                {job.workOrders.map((wo, i) => (
-                                    wo.factoryName === "NULL" ? (
-                                        <div key={i} className={`${compCellClass} text-gray-500`}>-</div>
+                            {/* FACTORY NAME (per work order) */}
+                            {isFirstOfWo && (
+                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
+                                    {!wo || wo.factoryName === "NULL" ? (
+                                        <div className={`${cellClass} text-gray-500`}>-</div>
                                     ) : (
-                                        <div key={i} onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className={`cursor-pointer`}>
+                                        <div onDoubleClick={() => handleInlineEdit(wo.id, wo.factoryName, "workOrder", "factoryName", 0)} className="cursor-pointer px-3 py-1.5">
                                             {isEdit.updatedFieldName === "factoryName" && isEdit.rowId === wo.id ? (
                                                 <input type="text" name="factoryName" className="p-2 outline-none border rounded-md w-full" value={updatedFields.currentValue} onChange={(e) => handleOnChange(e)} />
                                             ) : <span onClick={() => handleEditRowData(wo.id)}>{wo.factoryName}</span>}
                                         </div>
-                                    )
-                                ))}
-                            </td>
-                            {/* JOB NO */}
-                            <td className="border border-gray-200 px-3 py-1.5 text-sm align-top">
-                                {job.jobNo}
-                            </td>
+                                    )}
+                                </td>
+                            )}
 
-                            {/* WORK ORDER NO */}
+                            {/* JOB NO (per job) */}
+                            {isFirstOfJob && (
+                                <td className="border border-gray-200 px-3 py-1.5 text-sm align-top" rowSpan={jobRowSpan}>
+                                    {job.jobNo}
+                                </td>
+                            )}
+
+                            {/* WORK ORDER NO (per work order) */}
+                            {isFirstOfWo && (
+                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
+                                    <div className={cellClass}>{wo?.workOrderNo}</div>
+                                </td>
+                            )}
+
+                            {/* BUYER NAME (per work order) */}
+                            {isFirstOfWo && (
+                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
+                                    <div className={cellClass}>{wo?.styleRequirement?.buyerName || "-"}</div>
+                                </td>
+                            )}
+
+                            {/* STYLE (per work order) */}
+                            {isFirstOfWo && (
+                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
+                                    <div className={cellClass}>{wo?.styleNo}</div>
+                                </td>
+                            )}
+
+                            {/* MONTH (per work order) */}
+                            {isFirstOfWo && (
+                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
+                                    <div className={cellClass}>{wo?.month}</div>
+                                </td>
+                            )}
+
+                            {/* COMPOSITION (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {(job.workOrders || []).map((w, i) => (
-                                    <div key={i} className={cellClass}>{w.workOrderNo}</div>
-                                ))}
+                                <div className={compCellClass}>{comp?.composition}</div>
                             </td>
 
-                            {/* BUYER NAME */}
+                            {/* BOOKING COLOR (per composition; may itself stack multiple yarnJobs, which just grows this one row) */}
                             <td className="border border-gray-200 align-top">
-                                {(job.workOrders || []).map((w, i) => (
-                                    <div key={i} className={cellClass}>
-                                        {w.styleRequirement?.buyerName || "-"}
-                                    </div>
-                                ))}
+                                <div className={compCellClass}>
+                                    {yarnJobs.length > 0
+                                        ? yarnJobs.map((y, yi) => (
+                                            <div onClick={() => handleEditRowData(comp?.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">{y.color} y id {"=>"} {y.id}  </div>
+                                        ))
+                                        : "-"}
+                                    booking color
+                                </div>
                             </td>
 
-                            {/* STYLE */}
+                            {/* SHADE (%) (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {(job.workOrders || []).map((w, i) => (
-                                    <div key={i} className={cellClass}>{w.styleNo}</div>
-                                ))}
+                                <div onClick={() => handleEditRowData(comp?.id, comp?.id)} className={compCellClass}>
+                                    SHADE (%)
+                                </div>
                             </td>
 
-                            {/* MONTH */}
+                            {/* BOOKING QTY (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {(job.workOrders || []).map((w, i) => (
-                                    <div key={i} className={cellClass}>{w.month}</div>
-                                ))}
+                                <div className={compCellClass}>
+                                    {yarnJobs.length > 0
+                                        ? yarnJobs.map((y, yi) => (
+                                            <div onClick={() => handleEditRowData(comp?.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">
+                                                {y.qty}
+                                            </div>
+                                        ))
+                                        : "-"}
+                                </div>
                             </td>
 
-                            {/* COMPOSITION */}
+                            {/* PRICE PER KG (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.composition}</div>
-                                ))}
+                                <div className={compCellClass}>{comp?.unitePrice}</div>
                             </td>
 
-                            {/* BOOKING COLOR */}
+                            {/* WORK ORDER QTY (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => {
-                                    const yarnJobs = (c._workOrder?.yarnDyeingJobs || []).filter(
-                                        y => y.composition === c.composition
-                                    );
-                                    return (
-                                        <div key={i} className={compCellClass}>
-                                            {yarnJobs.length > 0
-                                                ? yarnJobs.map((y, yi) => (
-                                                    <div onClick={() => handleEditRowData(c.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">{y.color} y id {"=>"} {y.id}  </div>
-                                                ))
-                                                : "-"}
-
-                                            booking color
-                                        </div>
-                                    );
-                                })}
+                                <div className={compCellClass}>{comp?.yarnDeliveriesWithColor?.YarnDeliveryForYarnDye || "NOT DELIVERED YET"}</div>
                             </td>
 
-                            {/* SHADE (%) */}
+                            {/* GREY RECEIVED (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div onClick={() => handleEditRowData(c.id, c.id)} key={i} className={compCellClass}>
-                                        SHADE (%)
-                                    </div>
-                                ))}
+                                <div className={compCellClass}>{comp?.greyReceived || 0}</div>
                             </td>
 
-                            {/* BOOKING QTY */}
+                            {/* GREY RETURN (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => {
-                                    const yarnJobs = (c._workOrder?.yarnDyeingJobs || []).filter(
-                                        y => y.composition === c.composition
-                                    );
-                                    return (
-                                        <div key={i} className={compCellClass}>
-                                            {yarnJobs.length > 0
-                                                ? yarnJobs.map((y, yi) => (
-                                                    <div onClick={() => handleEditRowData(c.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">
-                                                        {y.qty}
-                                                    </div>
-                                                ))
-                                                : "-"}
-                                        </div>
-                                    );
-                                })}
+                                <div className={compCellClass}>{comp?.greyReturn || 0}</div>
                             </td>
 
-                            {/* PRICE PER KG */}
+                            {/* FINISH RECEIVED (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.unitePrice}</div>
-                                ))}
+                                <div className={compCellClass}>{comp?.finishReceived || 0}</div>
                             </td>
 
-                            {/* WORK ORDER QTY */}
+                            {/* FINISH RETURN (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.yarnDeliveriesWithColor.YarnDeliveryForYarnDye || "NOT DELIVERED YET"}</div>
-                                ))}
-                            </td>
-
-                            {/* GREY RECEIVED */}
-                            <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.greyReceived || 0}</div>
-                                ))}
-                            </td>
-
-                            {/* GREY RETURN */}
-                            <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.greyReturn || 0}</div>
-                                ))}
-                            </td>
-
-                            {/* FINISH RECEIVED */}
-                            <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.finishReceived || 0}</div>
-                                ))}
-                            </td>
-
-                            {/* FINISH RETURN */}
-                            <td className="border border-gray-200 align-top">
-                                {compositions.map((c, i) => (
-                                    <div key={i} className={compCellClass}>{c.finishReturn || 0}</div>
-                                ))}
+                                <div className={compCellClass}>{comp?.finishReturn || 0}</div>
                             </td>
 
                         </tr>

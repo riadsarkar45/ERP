@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useContext } from "react";
-import { DownloadCloudIcon, FunnelX, Loader, Loader2, Save } from "lucide-react";
+import { DownloadCloudIcon, FunnelX, Loader, Loader2, Save, Search, X } from "lucide-react";
 import useAxiosPublic from "../hooks/Axios";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
@@ -14,12 +14,8 @@ import Toast from "./Toast";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../dashboard/auth/AuthContext";
 
-export const FROZEN_COUNT = 7;
+export const FROZEN_COUNT = 8;
 
-// Must mirror the backend FIELD_MAP keys in workOrderFilters.ts — only raw DB
-// columns can be filtered server-side. Computed/aggregate columns (delivery
-// sums, balances, etc.) aren't real fields until calculateYarnCompStat runs,
-// so they're excluded here rather than sending a filter the backend rejects.
 const FILTERABLE_COLUMNS = new Set([
     "jobNo",
     "factoryName",
@@ -46,11 +42,6 @@ const getSavedWidths = (type, defaultWidths) => {
     return defaultWidths;
 };
 
-// Filters are persisted per orderType (tab) so switching between
-// Knitting/Dyeing/Yarn-Dye/AOP doesn't leak one tab's filters into another,
-// and returning to a tab (or navigating away and back) restores what was set.
-// sessionStorage clears when the tab closes — swap for localStorage below if
-// you want filters to survive closing the browser entirely.
 const getSavedFilters = (type) => {
     try {
         const saved = sessionStorage.getItem(`workOrderFilters_${type}`);
@@ -61,17 +52,17 @@ const getSavedFilters = (type) => {
     }
 };
 
+const clearCachedColumnWidths = (type) => {
+    localStorage.removeItem(`tableColumnWidths_${type}`);
+};
+
 const AllOrders = ({ orderType }) => {
     const axiosPublic = useAxiosPublic();
     const axiosPrivate = useAxiosPrivate();
-    const [jobId, setJobId] = useState(0);
+    const [jobId, setJobId] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
-    // True once the very first successful orders fetch completes — used to
-    // distinguish "first load" (full-page loader is fine) from "refetching
-    // because filters/page changed" (should NOT blank the existing table).
     const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-    // Keyed by yarnId -> { [yarnId]: { deliveryQty, challanNo, deliveryType, date, ... } }
     const [changedField, setChangedField] = useState({});
     const [styleNo, setStyleNo] = useState("");
     const [deliveries, setDeliveries] = useState({});
@@ -79,50 +70,48 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
-    // Active filters: { [columnName]: string[] of selected values }
-    // Initialized from sessionStorage so a saved filter set for this
-    // orderType survives remounts (tab switches, navigating away and back).
+    // NEW: Search state
+    const [searchTerm, setSearchTerm] = useState("");
+    const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
+
     const [filters, setFilters] = useState(() => getSavedFilters(orderType));
-    // Cached dropdown options per column, fetched from /filter-options as dropdowns open.
     const [filterOptions, setFilterOptions] = useState({});
     const [filterOptionsLoading, setFilterOptionsLoading] = useState({});
 
     const [duplicateChallan, setDuplicateChallan] = useState([]);
     const [challanIssue, setChallanIssue] = useState([]);
     const [deliveryIssue, setDeliveryIssue] = useState([]);
-    // Pagination state, driven by getAllOrders' { pagination: { page, limit, total, totalPages } }
     const [page, setPage] = useState(1);
-    const [prepareForChallan, setPrepareChallan] = useState([])
+    const [prepareForChallan, setPrepareChallan] = useState([]);
+    const [isChallanDowloading, setIsChallanDownloading] = useState({ isLoading: false, isError: null })
     const [limit] = useState(10);
     const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
 
     const { handleInlineEdit, changedField: updatedFields, toastType, toastMessage, setShowToast, showToast, isInlineEditingLoading, handleOnChange, isEdit, isUpdated, handleEditedSubmit } = InlineEdit();
     const { fetchData, error, loading } = useFetchData();
-    // Separate instance for filter-options requests — its own `loading` state
-    // is intentionally NOT wired into the top-level full-page loader below,
-    // so opening a filter dropdown no longer blanks the whole table.
     const { fetchData: fetchFilterOptions } = useFetchData();
-    const { user } = useContext(AuthContext)
+    const { user } = useContext(AuthContext);
     const navigate = useNavigate();
+
     const COLUMNS = useMemo(() => {
         const cols = [];
-        const defaultWidths = [160, 80, 120, 180, 180, 100, 260];
+        const defaultWidths = [120, 270, 160, 220, 300, 200, 400, 290];
 
         if (orderType === "knittingOrder") {
             cols.push(
-                { header: "FACTORY NAME", width: defaultWidths[0], inputName: "factoryName" },
-                { header: "JOB NO.", width: defaultWidths[1], inputName: "jobNo" },
+                { header: "MONTH", width: defaultWidths[0], inputName: "month" },
+                { header: "FACTORY NAME", width: defaultWidths[1], inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: defaultWidths[2], inputName: "workOrderNo" },
-                { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
-                { header: "STYLE", width: defaultWidths[4], inputName: "styleNo" },
-                { header: "MONTH", width: defaultWidths[5], inputName: "month" },
-                { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
-                { header: "COLOR", width: 200, inputName: "color" },
-                { header: "YARN COUNT", width: 200, inputName: "yarnCount" },
+                { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },                
+                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },            
+                { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },                
+                { header: "COLOR", width: defaultWidths[6], inputName: "color" },
+                { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
+                { header: "FINISH DIA", width: 120, inputName: "finishdia" },
+                { header: "YARN COUNT", width: 160, inputName: "yarnCount" },
                 { header: "YARN LOT", width: 200, inputName: "yarnLot" },
                 { header: "STITCH LENGHT", width: 200, inputName: "stitchLength" },
                 { header: "M/C DIA", width: 200, inputName: "m/cDia" },
-                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },               
                 { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
                 { header: "YARN DELIVERY", width: 140, inputName: "totalYarnDelivery" },
                 { header: "DEL. SHORT & EXCESS", width: 150 },
@@ -136,20 +125,20 @@ const AllOrders = ({ orderType }) => {
             );
         } else if (orderType === "dyeingOrder") {
             cols.push(
-                { header: "FACTORY NAME", width: defaultWidths[0], inputName: "factoryName" },
-                { header: "JOB NO.", width: defaultWidths[1], inputName: "jobNo" },
+                { header: "MONTH", width: defaultWidths[0], inputName: "month" },
+                { header: "FACTORY NAME", width: defaultWidths[1], inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: defaultWidths[2], inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
-                { header: "STYLE", width: defaultWidths[4], inputName: "styleNo" },
-                { header: "MONTH", width: defaultWidths[5], inputName: "month" },
-                { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
-                { header: "COLOR", width: 200, inputName: "bookingColor" },
+                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },
+                { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
+                { header: "COLOR", width: defaultWidths[6], inputName: "bookingColor" },                
+                { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
+                { header: "FINISH DIA", width: 150, inputName: "finishdia" },
                 { header: "YARN COUNT", width: 200, inputName: "yarncount" },
                 { header: "YARN LOT", width: 200, inputName: "yarnlot" },
                 { header: "STICH LENGHT  ", width: 200, inputName: "stichLenght" },
                 { header: "MACHINE DIA", width: 200, inputName: "machineDia" },
                 { header: "SHADE %", width: 200, inputName: "shade%" },
-                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },
                 { header: "DYEING WORK ORDER QTY", width: 180, inputName: "workOrderQty" },
                 { header: "GREY DELIVERY", width: 140, inputName: "greyReceived" },
                 { header: "DELIVERY SHORT & EXCESS", width: 180, inputName: "greyReceived" },
@@ -166,16 +155,16 @@ const AllOrders = ({ orderType }) => {
             );
         } else if (orderType === "yarnDyeingOrder") {
             cols.push(
-                { header: "FACTORY NAME", width: defaultWidths[0], inputName: "factoryName" },
-                { header: "JOB NO.", width: defaultWidths[1], inputName: "jobNo" },
+                { header: "MONTH", width: defaultWidths[0], inputName: "month" },
+                { header: "FACTORY NAME", width: defaultWidths[1], inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: defaultWidths[2], inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
-                { header: "STYLE", width: defaultWidths[4], inputName: "styleNo" },
-                { header: "MONTH", width: defaultWidths[5], inputName: "month" },
-                { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
-                { header: "BOOKING COLOR", width: 200, inputName: "bookingColor" },
+                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },              
+                { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
+                { header: "BOOKING COLOR", width: defaultWidths[6], inputName: "bookingColor" },
+                { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
+                { header: "FINISH DIA", width: 150, inputName: "finishDia" },                
                 { header: "SHADE (%)", width: 200, inputName: "shade(%)" },
-                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },
                 { header: "COLOR WISE ORDER QTY", width: 180, inputName: "orderColor" },
                 { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
                 { header: "YARN DELIVERY FOR Y/D", width: 170, inputName: "yarnDeliveryForYd" },
@@ -188,15 +177,15 @@ const AllOrders = ({ orderType }) => {
             );
         } else if (orderType === "aopOrder") {
             cols.push(
-                { header: "FACTORY NAME", width: defaultWidths[0], inputName: "factoryName" },
-                { header: "JOB NO.", width: defaultWidths[1], inputName: "jobNo" },
+                { header: "MONTH", width: defaultWidths[0], inputName: "month" },
+                { header: "FACTORY NAME", width: defaultWidths[1], inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: defaultWidths[2], inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
-                { header: "STYLE", width: defaultWidths[4], inputName: "styleNo" },
-                { header: "MONTH", width: defaultWidths[5], inputName: "month" },
-                { header: "COMPOSITION", width: defaultWidths[6], inputName: "composition" },
-                { header: "COLOR", width: 200, inputName: "color" },
-                // { header: "ORDER QTY", width: 110, inputName: "orderQty" },                
+                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },
+                { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
+                { header: "COLOR", width: defaultWidths[6], inputName: "color" },
+                { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
+                { header: "FINISH DIA", width: 200, inputName: "finishDia" },               
                 { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
                 { header: "SENT FOR AOP", width: 140, inputName: "totalYarnDelivery" },
                 { header: "DEL. SHORT & EXCESS", width: 150 },
@@ -217,6 +206,7 @@ const AllOrders = ({ orderType }) => {
         const defaultWidths = COLUMNS.map(c => c.width);
         return getSavedWidths(orderType, defaultWidths);
     });
+
     const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
     useEffect(() => {
@@ -224,8 +214,6 @@ const AllOrders = ({ orderType }) => {
         catch (e) { console.error("Error saving column widths:", e); }
     }, [columnWidths, orderType]);
 
-    // Persist filters to sessionStorage any time they change (including the
-    // orderType they belong to, in case orderType changes in the same tick).
     useEffect(() => {
         try {
             sessionStorage.setItem(`workOrderFilters_${orderType}`, JSON.stringify(filters));
@@ -236,11 +224,8 @@ const AllOrders = ({ orderType }) => {
 
     useEffect(() => {
         const defaultWidths = COLUMNS.map(c => c.width);
-        setColumnWidths(getSavedWidths(orderType, defaultWidths));
-        // Restore this tab's saved filters instead of wiping them — this
-        // effect fires on every orderType switch (COLUMNS depends on
-        // orderType), so without this, switching tabs and coming back used
-        // to reset filters to {} every time.
+        clearCachedColumnWidths(orderType);
+        setColumnWidths(defaultWidths);
         setFilters(getSavedFilters(orderType));
         setFilterOptions({});
     }, [COLUMNS]);
@@ -251,17 +236,11 @@ const AllOrders = ({ orderType }) => {
         return [...acc, acc[i - 1] + currentFrozenWidths[i - 1]];
     }, []);
 
-    // Reset to page 1 whenever orderType changes (switching tabs shouldn't keep an old page number).
-    // Also reset hasLoadedOnce so switching tabs shows the full-page loader again
-    // (a fresh order type is effectively a fresh view, unlike filtering/paging
-    // within the same view).
     useEffect(() => {
         setPage(1);
         setHasLoadedOnce(false);
     }, [orderType]);
 
-    // Reset to page 1 whenever filters change, so you don't get stranded on a
-    // page number that no longer exists for the new (smaller) filtered set.
     useEffect(() => {
         setPage(1);
     }, [filters]);
@@ -273,16 +252,18 @@ const AllOrders = ({ orderType }) => {
 
     useEffect(() => {
         const prepareToGenerateChallans = async () => {
-            const res = await axiosPrivate.get(`/api/prepare-to-download/${Number(user?.id)}`)
-            console.log(res.data, "challans");
-            setPrepareChallan(res.data)
+            try {
+                const res = await axiosPrivate.get(`/api/prepare-to-download/${Number(user?.id)}`);
+                setPrepareChallan(res.data);
+            } catch (err) {
+                console.error("Failed to fetch challan prep data:", err);
+            }
+        };
+        if (user?.id) {
+            prepareToGenerateChallans();
         }
-        prepareToGenerateChallans();
-    }, [axiosPrivate, user?.id])
+    }, [axiosPrivate, user?.id]);
 
-    // NOTE: getAllOrders now responds with { type, data, pagination }, not a raw array.
-    // Filtering now happens server-side — `filters` is passed straight through
-    // as a query param instead of being applied client-side afterward.
     useEffect(() => {
         fetchData(`/api/work-order/${orderType}`, {
             params: { page, limit, filters: filtersParam }
@@ -290,7 +271,6 @@ const AllOrders = ({ orderType }) => {
             .then(res => {
                 if (res) {
                     setOrders(res.data ?? []);
-                    console.log(res.data, "orders data");
                     if (res.pagination) setPagination(res.pagination);
                 }
             })
@@ -299,12 +279,6 @@ const AllOrders = ({ orderType }) => {
             });
     }, [orderType, isUpdated, page, limit, filtersParam]);
 
-
-
-
-    // Lazily fetches (and caches) dropdown options for a single column, scoped
-    // by every OTHER currently-active filter (cross-filtering, same behavior
-    // as the old client-side getDropdownOptions).
     const loadFilterOptions = useCallback((columnName) => {
         if (!FILTERABLE_COLUMNS.has(columnName)) return;
 
@@ -325,16 +299,10 @@ const AllOrders = ({ orderType }) => {
             });
     }, [orderType, filters, fetchFilterOptions]);
 
-    // Re-fetch options for any column whose dropdown is already open/cached
-    // whenever a *different* filter changes, so cross-filtering stays correct
-    // (e.g. narrowing by factoryName should shrink the color dropdown too).
     useEffect(() => {
         Object.keys(filterOptions).forEach(columnName => {
             if (FILTERABLE_COLUMNS.has(columnName)) loadFilterOptions(columnName);
         });
-        // Only re-run when the actual filter values change, not when
-        // loadFilterOptions itself is recreated from filters changing —
-        // that would loop. filtersParam is a stable string snapshot of filters.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filtersParam, orderType]);
 
@@ -352,10 +320,7 @@ const AllOrders = ({ orderType }) => {
     };
 
     if (error) return <div className="p-4 bg-red-100 text-red-700 rounded">Something went wrong</div>;
-    // Only show the full-page loader on the very first load. After that,
-    // `loading` still flips true on every filter/page change, but the table
-    // should stay visible — an in-place indicator (added near the table below)
-    // covers that case instead of unmounting the whole view.
+
     if (loading && !hasLoadedOnce) {
         return (
             <div className="flex items-center justify-center h-full py-10">
@@ -365,45 +330,22 @@ const AllOrders = ({ orderType }) => {
     }
     const isRefetching = loading && hasLoadedOnce;
 
-    const startColumnResize = (e, colIndex) => {
-        e.preventDefault(); e.stopPropagation();
-        const startX = e.pageX; const startWidth = columnWidths[colIndex];
-        const onMouseMove = (moveEvent) => {
-            const newWidth = Math.max(80, startWidth + (moveEvent.pageX - startX));
-            setColumnWidths(prev => {
-                if (prev[colIndex] === newWidth) return prev;
-                const newWidths = [...prev]; newWidths[colIndex] = newWidth; return newWidths;
-            });
-        };
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = ''; document.body.style.userSelect = '';
-        };
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-    };
-
-    // handle deliveries
-    const handleEditRowData = async (workOrderIds) => {
+    const handleEditRowData = async (id) => {
+        const singleWorkOrderId = Array.isArray(id) ? id[0] : id;
         setLoadingDeliveries(true);
         setIsEditing(true);
-        setJobId(workOrderIds);
+        setJobId(singleWorkOrderId);
         setChangedField({});
         setDuplicateChallan([]);
         setChallanIssue([]);
 
         fetchData(`/api/deliveries/${orderType}`, {
-            params: { workOrderIds: workOrderIds }
+            params: { workOrderIds: singleWorkOrderId }
         })
             .then(data => {
                 if (data) {
-                    console.log(data, "deliveries data");
                     setDeliveries(data);
-                    setWorkOrderId(workOrderIds);
-                    // Removed the old `setStyleNo(styleNo)` no-op (set state to itself).
-                    // If styleNo should come from the fetched data, wire it up here instead.
+                    setWorkOrderId(singleWorkOrderId);
                 }
             })
             .catch(error => {
@@ -429,24 +371,12 @@ const AllOrders = ({ orderType }) => {
 
         setChangedField(prev => {
             const rowPrev = prev[yarnId] || {};
-            const updatedRow = {
-                ...rowPrev,
-                [name]: value,
-            };
+            const updatedRow = { ...rowPrev, [name]: value };
 
-            // Only backfill a default date when the field being edited ISN'T
-            // "date" itself. Previously this ran unconditionally AFTER
-            // `[name]: value`, so when name === "date" it re-set date back to
-            // rowPrev.date (or today), overwriting the value the user just
-            // picked. That's what made the date field look "stuck".
             if (name !== "date" && updatedRow.date === undefined) {
                 updatedRow.date = new Date().toISOString().split("T")[0];
             }
 
-            // The delivery type flip changes which side ("to"/"from") should be
-            // this work order's own factory. Any previously typed toFactory/
-            // fromFactory values were for the OLD direction and are now stale —
-            // drop them so the submit-time fallback recomputes the correct side.
             if (name === "deliveryType") {
                 delete updatedRow.toFactory;
                 delete updatedRow.fromFactory;
@@ -467,26 +397,23 @@ const AllOrders = ({ orderType }) => {
         });
     };
 
-    // Inside AllOrders.jsx
     const handleSubmit = async (yarnId, workOrderId, overridePayload = null) => {
         setIsLoading(true);
         setChallanIssue([]);
         setDeliveryIssue([]);
-        // Use overridePayload if provided (from Deliveries.jsx), otherwise fall back to changedField
         const payload = overridePayload || changedField[yarnId] || {};
+        const singleWorkOrderId = Array.isArray(workOrderId) ? workOrderId[0] : workOrderId;
 
         try {
             const update = await axiosPrivate.patch(
                 `/api/update-order`,
                 payload,
-                { params: { yarnId, workOrderId } }
+                { params: { yarnId, workOrderId: singleWorkOrderId } }
             );
 
             if (update.status === 200) {
                 setChallanIssue([{ message: "Delivery Added", type: "success" }]);
 
-                // Wait for both refetches to finish before releasing the loading state,
-                // and catch failures individually so one bad refetch doesn't kill the other.
                 await Promise.all([
                     fetchData(`/api/work-order/${orderType}`, {
                         params: { page, limit, filters: filtersParam }
@@ -507,7 +434,7 @@ const AllOrders = ({ orderType }) => {
                         }),
 
                     fetchData(`/api/deliveries/${orderType}`, {
-                        params: { workOrderIds: Array.isArray(jobId) ? jobId.join(',') : jobId }
+                        params: { workOrderIds: singleWorkOrderId }
                     })
                         .then((dev) => {
                             setDeliveries(dev);
@@ -528,9 +455,7 @@ const AllOrders = ({ orderType }) => {
                 });
             }
         } catch (e) {
-            // Guard against network errors / cancelled requests where e.response is undefined
             console.log(e.response?.data ?? e.message ?? e);
-
             const errorPayload = e.response?.data;
             setDeliveryIssue(
                 Array.isArray(errorPayload)
@@ -544,6 +469,7 @@ const AllOrders = ({ orderType }) => {
             setIsLoading(false);
         }
     };
+
     const handleClearFilters = () => {
         setFilters({});
         setFilterOptions({});
@@ -551,6 +477,7 @@ const AllOrders = ({ orderType }) => {
 
     const handlePDFchallanDownload = async () => {
         try {
+            setIsChallanDownloading({ isLoading: true, isError: false })
             const response = await axiosPrivate.get(`/api/challan/download/${user?.id}`, {
                 responseType: "blob",
             });
@@ -568,43 +495,189 @@ const AllOrders = ({ orderType }) => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-
+            setIsChallanDownloading({ isLoading: false, isError: false })
             window.URL.revokeObjectURL(blobUrl);
         } catch (error) {
             if (error?.response?.data instanceof Blob) {
                 const text = await error.response.data.text();
                 console.error("Challan download failed:", JSON.parse(text)?.message ?? text);
+                setIsChallanDownloading({ isLoading: false, isError: true })
             } else {
                 console.error("Challan download failed:", error);
             }
         }
     };
+
+    // SEARCH BAR HANDLERS
+    const handleSearchInputChange = (e) => {
+        setSearchTerm(e.target.value);
+    };
+
+    const handleSearchKeyDown = (e) => {
+        // Enter key - Apply search
+        if (e.key === 'Enter') {
+            setAppliedSearchTerm(searchTerm);
+        }
+        // Escape key - Clear search
+        if (e.key === 'Escape') {
+            setSearchTerm("");
+            setAppliedSearchTerm("");
+        }
+    };
+
+    const handleClearSearch = () => {
+        setSearchTerm("");
+        setAppliedSearchTerm("");
+    };
+
+    // SEARCH BAR STYLES
+    const searchBarContainerStyle = {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        marginBottom: "12px",
+        padding: "8px 12px",
+        backgroundColor: "#ffffff",
+        borderRadius: "8px",
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+    };
+
+    const searchInputWrapperStyle = {
+        position: "relative",
+        flex: 1,
+    };
+
+    const searchInputStyle = {
+        width: "100%",
+        padding: "10px 40px 10px 40px",
+        border: "1px solid #d1d5db",
+        borderRadius: "6px",
+        fontSize: "14px",
+        outline: "none",
+        transition: "border-color 0.2s",
+        boxSizing: "border-box",
+    };
+
+    const searchIconStyle = {
+        position: "absolute",
+        left: "12px",
+        top: "50%",
+        transform: "translateY(-50%)",
+        color: "#9ca3af",
+        pointerEvents: "none",
+    };
+
+    const clearSearchButtonStyle = {
+        position: "absolute",
+        right: "8px",
+        top: "50%",
+        transform: "translateY(-50%)",
+        background: "#f3f4f6",
+        border: "none",
+        borderRadius: "50%",
+        cursor: "pointer",
+        color: "#6b7280",
+        padding: "4px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "24px",
+        height: "24px",
+        transition: "background-color 0.2s",
+        ':hover': {
+            backgroundColor: "#e5e7eb"
+        }
+    };
+
+    const searchLabelStyle = {
+        fontSize: "13px",
+        fontWeight: 600,
+        color: "#374151",
+        whiteSpace: "nowrap",
+    };
+
     return (
         <div>
-            {
-                showToast && (
-                    <Toast
-                        message={toastMessage}
-                        type={toastType}
-                        onClose={() => setShowToast(false)}
-                        duration={3000}
+            {showToast && (
+                <Toast
+                    message={toastMessage}
+                    type={toastType}
+                    onClose={() => setShowToast(false)}
+                    duration={3000}
+                />
+            )}
+            
+            {/* SEARCH BAR ABOVE TABLE */}
+            <div style={searchBarContainerStyle}>
+                <span style={searchLabelStyle}>Search:</span>
+                <div style={searchInputWrapperStyle}>
+                    <Search size={18} style={searchIconStyle} />
+                    <input
+                        type="text"
+                        placeholder="Search by job no, factory, buyer, style, color, composition..."
+                        value={searchTerm}
+                        onChange={handleSearchInputChange}
+                        onKeyDown={handleSearchKeyDown}
+                        style={searchInputStyle}
                     />
-                )
-            }
-            <div className="flex gap-2">
-                {
-                    isEdit.isEditing && <button onClick={() => handleEditedSubmit()} title="Save Changes" className="bg-blue-700 text-white rounded-md p-2 text-lg"><Save /></button>
-                }
-                {
-                    isInlineEditingLoading && <button title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg"><Loader /></button>
-                }
-                {
-                    Object.keys(filters).length > 0 && <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg"><FunnelX /></button>
-                }
-                {
-                    prepareForChallan?.length > 0 && <button onClick={() => handlePDFchallanDownload()} title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg flex gap-2 items-center"><DownloadCloudIcon /> Download Challan ({prepareForChallan?.length})</button>
-                }
+                    {(searchTerm || appliedSearchTerm) && (
+                        <button
+                            onClick={handleClearSearch}
+                            style={clearSearchButtonStyle}
+                            title="Clear search (Esc)"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
             </div>
+
+            <div className="flex gap-2 mb-4">
+                {isEdit?.isEditing && (
+                    <button onClick={() => handleEditedSubmit()} title="Save Changes" className="bg-blue-700 text-white rounded-md p-2 text-lg">
+                        <Save />
+                    </button>
+                )}
+                {isInlineEditingLoading && (
+                    <button title="Saving..." className="bg-blue-700 text-white rounded-md p-2 text-lg cursor-wait">
+                        <Loader />
+                    </button>
+                )}
+                {Object.keys(filters).length > 0 && (
+                    <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-blue-700 text-white rounded-md p-2 text-lg">
+                        <FunnelX />
+                    </button>
+                )}
+                {isChallanDowloading.isLoading === false && prepareForChallan?.length > 0 && (
+                    <button onClick={() => handlePDFchallanDownload()} title="Download Challan" className="bg-blue-700 text-white rounded-md p-2 text-lg flex gap-2 items-center">
+                        <DownloadCloudIcon /> Download Challan ({prepareForChallan?.length})
+                    </button>
+                )}
+
+                {(isChallanDowloading.isLoading ||
+                    isChallanDowloading.isError !== null) && (
+                        <button
+                            title="Download Status"
+                            className={`${isChallanDowloading.isError
+                                    ? "bg-red-400 text-red-700"
+                                    : "bg-blue-700 text-white"
+                                } rounded-md p-2 text-lg flex gap-2 items-center`}
+                        >
+                            {isChallanDowloading.isLoading && (
+                                <span className="animate-spin">
+                                    <Loader />
+                                </span>
+                            )}
+
+                            {isChallanDowloading.isLoading === true
+                                ? "Downloading..."
+                                : isChallanDowloading.isError === true
+                                    && "Download Failed"}
+                        </button>
+                    )}
+            </div>
+
             <div className="mb-5 p-2 rounded-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {(!orders || orders.length < 1) && !isRefetching && <div>No order found</div>}
                 {isRefetching && (
@@ -616,7 +689,55 @@ const AllOrders = ({ orderType }) => {
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200">
-                <div style={{ position: "relative", overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}>
+                <div
+                    className="order-table-wrapper"
+                    style={{ position: "relative", overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}
+                >
+                    <style>{`
+                        .order-table-wrapper table { 
+                            width: max-content !important; 
+                            table-layout: auto !important; 
+                            border-collapse: separate !important;
+                            border-spacing: 0 !important;
+                        }
+                        
+                        .order-table-wrapper th,
+                        .order-table-wrapper td {
+                            text-align: center !important;
+                            vertical-align: middle !important;
+                            padding: 8px 12px !important;
+                            box-sizing: border-box !important;
+                            border-bottom: 1px solid #d1d5db !important;
+                            border-right: 1px solid #d1d5db !important;
+                        }
+
+                        /* FROZEN COLUMNS */
+                        .order-table-wrapper th:nth-child(-n+8),
+                        .order-table-wrapper td:nth-child(-n+8) {
+                            white-space: nowrap !important;
+                            width: var(--col-width) !important;
+                            min-width: var(--col-width) !important;
+                            max-width: var(--col-width) !important;
+                            overflow: visible !important;
+                            text-overflow: clip !important;
+                        }
+
+                        .order-table-wrapper th:nth-child(-n+8) {
+                            background-color: #f3f4f6 !important;
+                            z-index: 20 !important;
+                        }
+                        .order-table-wrapper td:nth-child(-n+8) {
+                            background-color: #ffffff !important;
+                            z-index: 10 !important;
+                        }
+
+                        .order-table-wrapper th:nth-child(n+9),
+                        .order-table-wrapper td:nth-child(n+9) {
+                            white-space: nowrap !important;
+                            min-width: 100px !important;
+                        }
+                    `}</style>
+
                     {isEditing && (
                         <Modal
                             workOrderId={workOrderId}
@@ -637,10 +758,14 @@ const AllOrders = ({ orderType }) => {
                         />
                     )}
 
-                    <table style={{ width: "max-content", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
+                    <table>
                         <colgroup>
                             {COLUMNS.map((col, i) => (
-                                <col key={i} style={{ width: `${columnWidths[i]}px` }} />
+                                <col key={i} style={{
+                                    width: `${columnWidths[i]}px`,
+                                    minWidth: `${columnWidths[i]}px`,
+                                    maxWidth: `${columnWidths[i]}px`
+                                }} />
                             ))}
                         </colgroup>
 
@@ -648,23 +773,41 @@ const AllOrders = ({ orderType }) => {
                             <tr>
                                 {COLUMNS.map((col, i) => {
                                     const isFilterable = col.inputName && FILTERABLE_COLUMNS.has(col.inputName);
+                                    const isFrozen = i < FROZEN_COUNT;
                                     return (
                                         <th
                                             key={i}
                                             style={{
-                                                position: "sticky", top: 0,
-                                                left: i < FROZEN_COUNT ? `${currentFrozenLefts[i]}px` : "auto",
-                                                zIndex: i < FROZEN_COUNT ? 20 : 10,
+                                                position: "sticky",
+                                                top: 0,
+                                                left: isFrozen ? `${currentFrozenLefts[i]}px` : "auto",
+                                                zIndex: isFrozen ? 20 : 10,
                                                 backgroundColor: "#f3f4f6",
-                                                width: `${columnWidths[i]}px`, minWidth: `${columnWidths[i]}px`,
-                                                borderRight: "1px solid #d1d5db", borderBottom: "2px solid #9ca3af",
-                                                padding: "8px 12px", textAlign: "left", fontWeight: 600, fontSize: 13, color: "#374151",
-                                                whiteSpace: "nowrap", boxShadow: i === FROZEN_COUNT - 1 ? "2px 0 5px -1px rgba(0,0,0,0.18)" : "none",
-                                                overflow: "visible", boxSizing: "border-box",
+                                                borderRight: "1px solid #d1d5db",
+                                                borderBottom: "2px solid #9ca3af",
+                                                boxShadow: i === FROZEN_COUNT - 1 ? "2px 0 5px -1px rgba(0,0,0,0.18)" : "none",
+                                                boxSizing: "border-box",
+                                                '--col-width': `${columnWidths[i]}px`,
                                             }}
                                         >
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{col.header}</span>
+                                            <div style={{
+                                                display: "flex",
+                                                justifyContent: "center",
+                                                alignItems: "center",
+                                                width: "100%",
+                                                overflow: "visible",
+                                                textOverflow: "clip",
+                                                whiteSpace: "nowrap"
+                                            }}>
+                                                <span style={{
+                                                    textAlign: "center",
+                                                    whiteSpace: "nowrap",
+                                                    overflow: "visible",
+                                                    textOverflow: "clip",
+                                                    flex: 1,
+                                                    fontWeight: 600,
+                                                    fontSize: "13px",
+                                                }}>{col.header}</span>
                                                 {isFilterable && (
                                                     <FilterDropdown
                                                         columnName={col.inputName}
@@ -678,16 +821,6 @@ const AllOrders = ({ orderType }) => {
                                                     />
                                                 )}
                                             </div>
-
-                                            <div
-                                                onMouseDown={(e) => startColumnResize(e, i)}
-                                                style={{
-                                                    position: 'absolute', top: 0, right: '-4px', width: '8px', height: '100%',
-                                                    cursor: 'col-resize', zIndex: 100, backgroundColor: 'transparent', transition: 'background-color 0.2s',
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.8)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                            />
                                         </th>
                                     );
                                 })}
@@ -696,6 +829,7 @@ const AllOrders = ({ orderType }) => {
 
                         {orderType === "yarnDyeingOrder" && <YarnDyeOrders
                             orders={orders}
+                            searchTerm={appliedSearchTerm}
                             handleEditRowData={handleEditRowData}
                             FROZEN_COUNT={FROZEN_COUNT}
                             currentFrozenWidths={currentFrozenWidths}
@@ -705,9 +839,11 @@ const AllOrders = ({ orderType }) => {
                             handleOnChange={handleOnChange}
                             handleInlineEdit={handleInlineEdit}
                             handleRedirect={handleRedirect}
+                            columnWidths={columnWidths}
                         />}
                         {orderType === "knittingOrder" && <KnittingOrder
                             orders={orders}
+                            searchTerm={appliedSearchTerm}
                             setJobId={setJobId}
                             handleEditRowData={handleEditRowData}
                             FROZEN_COUNT={FROZEN_COUNT}
@@ -717,9 +853,12 @@ const AllOrders = ({ orderType }) => {
                             handleOnChange={handleOnChange}
                             handleInlineEdit={handleInlineEdit}
                             handleRedirect={handleRedirect}
-                            currentFrozenLefts={currentFrozenLefts} />}
+                            currentFrozenLefts={currentFrozenLefts}
+                            columnWidths={columnWidths}
+                        />}
                         {orderType === "dyeingOrder" && <DyeingOrder
                             orders={orders}
+                            searchTerm={appliedSearchTerm}
                             handleEditRowData={handleEditRowData}
                             updatedFields={updatedFields}
                             isEdit={isEdit}
@@ -728,9 +867,13 @@ const AllOrders = ({ orderType }) => {
                             FROZEN_COUNT={FROZEN_COUNT}
                             currentFrozenWidths={currentFrozenWidths}
                             handleRedirect={handleRedirect}
-                            currentFrozenLefts={currentFrozenLefts} />}
+                            currentFrozenLefts={currentFrozenLefts}
+                            columnWidths={columnWidths}
+                        />}
                         {orderType === "aopOrder" &&
-                            <AopOrder orders={orders}
+                            <AopOrder
+                                orders={orders}
+                                searchTerm={appliedSearchTerm}
                                 handleEditRowData={handleEditRowData}
                                 setJobId={setJobId}
                                 FROZEN_COUNT={FROZEN_COUNT}
@@ -740,12 +883,12 @@ const AllOrders = ({ orderType }) => {
                                 isEdit={isEdit}
                                 handleInlineEdit={handleInlineEdit}
                                 handleRedirect={handleRedirect}
-                                currentFrozenLefts={currentFrozenLefts} />}
+                                currentFrozenLefts={currentFrozenLefts}
+                                columnWidths={columnWidths}
+                            />}
                     </table>
                 </div>
             </div>
-
-
         </div>
     );
 };
