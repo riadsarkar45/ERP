@@ -37,6 +37,7 @@ import BalanceSheet from "../dashboard/pages/reconciliation/JobWiseBalance";
 import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/PendingWorkOrder";
 import RequestedOrders from "../dashboard/pages/pendingWorkders/RequestedOrders";
 import MovementSpinning from "../dashboard/pages/yarnstock/MovementSpinning";
+import ProductionSummary from "../dashboard/pages/production/ProductionSummary";
 
 const routers = createBrowserRouter([
     {
@@ -199,6 +200,10 @@ const routers = createBrowserRouter([
                     {
                         path: "spinning-yarn-movement",
                         element: <MovementSpinning/>
+                    },
+                    {
+                        path: "productionsummary",
+                        element: <ProductionSummary/>
                     },
                 ]
             }
