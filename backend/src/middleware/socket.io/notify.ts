@@ -9,7 +9,11 @@ interface QueuedNotification {
 }
 
 const MAX_QUEUED_PER_USER = 20; // cap so an offline user doesn't accumulate unbounded notifications
+const FLUSH_DELAY_MS = 15_000; // wait for client to mount/attach listener before flushing backlog
+const BETWEEN_NOTIF_DELAY_MS = 2_000; // stagger multiple queued notifications so they don't all land at once
+
 const pendingNotifications = new Map<string, QueuedNotification[]>(); // key: `${receiverUserId}`
+const pendingFlushTimers = new Map<string, NodeJS.Timeout>(); // key: `${receiverUserId}`
 
 function queueNotification(userId: string, notif: QueuedNotification) {
   const existing = pendingNotifications.get(userId) ?? [];
@@ -29,6 +33,11 @@ export const notify = (socket: any, data: any) => {
     }
 
     const io = getIO();
+    if (!io) {
+        console.warn("[Notify] Aborted: io is not initialized.");
+        return;
+    }
+
     const receiverIdStr = String(receiverUserId);
     const roomName = `user:${receiverIdStr}`;
 
@@ -55,19 +64,59 @@ export const notify = (socket: any, data: any) => {
     io.to(roomName).emit("work-order-approval-request", payload);
 };
 
-// Call this the moment a user's socket joins their room, so anything that
-// piled up while they were offline gets delivered instantly on (re)connect.
+// Emits queued notifications one at a time, BETWEEN_NOTIF_DELAY_MS apart,
+// instead of dumping them all in the same tick. Re-checks room membership
+// before each emit in case the user disconnects partway through.
+function drainQueue(userIdStr: string, notifications: QueuedNotification[], index: number) {
+    if (index >= notifications.length) {
+        pendingNotifications.delete(userIdStr);
+        return;
+    }
+
+    const io = getIO();
+    if (!io) return;
+
+    const roomName = `user:${userIdStr}`;
+    const room = io.sockets.adapter.rooms.get(roomName);
+
+    if (!room || room.size === 0) {
+        // Disconnected mid-drain — leave whatever's left (from this index on) queued.
+        pendingNotifications.set(userIdStr, notifications.slice(index));
+        console.warn(`[Notify] User ${userIdStr} disconnected mid-flush — ${notifications.length - index} notification(s) left queued.`);
+        return;
+    }
+
+    io.to(roomName).emit("work-order-approval-request", notifications[index]);
+
+    setTimeout(() => {
+        drainQueue(userIdStr, notifications, index + 1);
+    }, BETWEEN_NOTIF_DELAY_MS);
+}
+
+// Call this the moment a user's socket joins their room. Waits FLUSH_DELAY_MS
+// before starting to flush so the client has time to mount and attach its
+// listener, then emits any queued notifications one at a time, spaced
+// BETWEEN_NOTIF_DELAY_MS apart.
 export const flushPendingNotifications = (userId: string | number) => {
   const userIdStr = String(userId);
-  const notifications = pendingNotifications.get(userIdStr);
-  if (!notifications || notifications.length === 0) return;
 
-  const io = getIO();
-  if (!io) return;
+  // If a flush is already scheduled for this user (e.g. rapid reconnects),
+  // don't stack timers — just let the existing one run.
+  if (pendingFlushTimers.has(userIdStr)) return;
 
-  const roomName = `user:${userIdStr}`;
-  for (const notif of notifications) {
-    io.to(roomName).emit("work-order-approval-request", notif);
-  }
-  pendingNotifications.delete(userIdStr);
+  const timer = setTimeout(() => {
+    pendingFlushTimers.delete(userIdStr);
+
+    const notifications = pendingNotifications.get(userIdStr);
+    if (!notifications || notifications.length === 0) return;
+
+    console.log(`[Notify] Flushing ${notifications.length} queued notification(s) for user ${userIdStr}, spaced ${BETWEEN_NOTIF_DELAY_MS}ms apart.`);
+
+    // Take a snapshot so new notifications queued during the drain (e.g. a
+    // fresh notify() call while flushing) aren't accidentally consumed twice.
+    pendingNotifications.delete(userIdStr);
+    drainQueue(userIdStr, notifications, 0);
+  }, FLUSH_DELAY_MS);
+
+  pendingFlushTimers.set(userIdStr, timer);
 };
