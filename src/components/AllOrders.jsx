@@ -31,15 +31,38 @@ const FILTERABLE_COLUMNS = new Set([
     "bookingColor",
 ]);
 
-const getSavedWidths = (type, defaultWidths) => {
-    try {
-        const saved = localStorage.getItem(`tableColumnWidths_${type}`);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length === defaultWidths.length) return parsed;
-        }
-    } catch (e) { console.error("Error loading column widths:", e); }
-    return defaultWidths;
+// ---- Responsive column scaling (replaces the old localStorage width cache) ----
+// Breakpoints are bucketed on purpose so a resize doesn't fire on every pixel
+// (that would thrash the layout and reset the table constantly).
+const getScaleForWidth = (width) => {
+    if (width >= 1600) return 1;
+    if (width >= 1440) return 0.9;
+    if (width >= 1280) return 0.8;
+    if (width >= 1100) return 0.72;
+    return 0.65; // small laptops (~1024px and narrower)
+};
+
+const useViewportScale = () => {
+    const [scale, setScale] = useState(() =>
+        typeof window === "undefined" ? 1 : getScaleForWidth(window.innerWidth)
+    );
+
+    useEffect(() => {
+        let timeout;
+        const onResize = () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                setScale(getScaleForWidth(window.innerWidth));
+            }, 150);
+        };
+        window.addEventListener("resize", onResize);
+        return () => {
+            window.removeEventListener("resize", onResize);
+            clearTimeout(timeout);
+        };
+    }, []);
+
+    return scale;
 };
 
 const getSavedFilters = (type) => {
@@ -50,10 +73,6 @@ const getSavedFilters = (type) => {
         console.error("Error loading filters:", e);
         return {};
     }
-};
-
-const clearCachedColumnWidths = (type) => {
-    localStorage.removeItem(`tableColumnWidths_${type}`);
 };
 
 const AllOrders = ({ orderType }) => {
@@ -70,7 +89,7 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
-    // NEW: Search state
+    // Search state
     const [searchTerm, setSearchTerm] = useState("");
     const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
 
@@ -93,35 +112,39 @@ const AllOrders = ({ orderType }) => {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
 
+    const scale = useViewportScale();
+    // 70px floor keeps text from clipping badly at the smallest breakpoint
+    const w = useCallback((px) => Math.max(70, Math.round(px * scale)), [scale]);
+
     const COLUMNS = useMemo(() => {
         const cols = [];
-        const defaultWidths = [120, 270, 160, 220, 300, 200, 400, 290];
+        const defaultWidths = [120, 270, 160, 220, 300, 200, 400, 290].map(w);
 
         if (orderType === "knittingOrder") {
             cols.push(
                 { header: "MONTH", width: defaultWidths[0], inputName: "month" },
                 { header: "FACTORY NAME", width: defaultWidths[1], inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: defaultWidths[2], inputName: "workOrderNo" },
-                { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },                
-                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },            
-                { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },                
+                { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
+                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },
+                { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
                 { header: "COLOR", width: defaultWidths[6], inputName: "color" },
                 { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
-                { header: "FINISH DIA", width: 120, inputName: "finishdia" },
-                { header: "YARN COUNT", width: 160, inputName: "yarnCount" },
-                { header: "YARN LOT", width: 200, inputName: "yarnLot" },
-                { header: "STITCH LENGHT", width: 200, inputName: "stitchLength" },
-                { header: "M/C DIA", width: 200, inputName: "m/cDia" },
-                { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
-                { header: "YARN DELIVERY", width: 140, inputName: "totalYarnDelivery" },
-                { header: "DEL. SHORT & EXCESS", width: 150 },
-                { header: "YARN RETURN RECEIVED", width: 160 },
-                { header: "GREY RECEIVED", width: 140 },
-                { header: "RCVD SHORT & EXCESS", width: 150 },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "PAYABLE AMOUNT", width: 140 },
-                { header: "PAID BILLING AMOUNT", width: 150 },
-                { header: "PENDING BILLING AMOUNT", width: 160 },
+                { header: "FINISH DIA", width: w(120), inputName: "finishdia" },
+                { header: "YARN COUNT", width: w(160), inputName: "yarnCount" },
+                { header: "YARN LOT", width: w(200), inputName: "yarnLot" },
+                { header: "STITCH LENGHT", width: w(200), inputName: "stitchLength" },
+                { header: "M/C DIA", width: w(200), inputName: "m/cDia" },
+                { header: "WORK ORDER QTY", width: w(140), inputName: "workOrderQty" },
+                { header: "YARN DELIVERY", width: w(140), inputName: "totalYarnDelivery" },
+                { header: "DEL. SHORT & EXCESS", width: w(150) },
+                { header: "YARN RETURN RECEIVED", width: w(160) },
+                { header: "GREY RECEIVED", width: w(140) },
+                { header: "RCVD SHORT & EXCESS", width: w(150) },
+                { header: "PRICE PER KG", width: w(120), inputName: "unitePrice" },
+                { header: "PAYABLE AMOUNT", width: w(140) },
+                { header: "PAID BILLING AMOUNT", width: w(150) },
+                { header: "PENDING BILLING AMOUNT", width: w(160) },
             );
         } else if (orderType === "dyeingOrder") {
             cols.push(
@@ -131,27 +154,27 @@ const AllOrders = ({ orderType }) => {
                 { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
                 { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },
                 { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
-                { header: "COLOR", width: defaultWidths[6], inputName: "bookingColor" },                
+                { header: "COLOR", width: defaultWidths[6], inputName: "bookingColor" },
                 { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
-                { header: "FINISH DIA", width: 150, inputName: "finishdia" },
-                { header: "YARN COUNT", width: 200, inputName: "yarncount" },
-                { header: "YARN LOT", width: 200, inputName: "yarnlot" },
-                { header: "STICH LENGHT  ", width: 200, inputName: "stichLenght" },
-                { header: "MACHINE DIA", width: 200, inputName: "machineDia" },
-                { header: "SHADE %", width: 200, inputName: "shade%" },
-                { header: "DYEING WORK ORDER QTY", width: 180, inputName: "workOrderQty" },
-                { header: "GREY DELIVERY", width: 140, inputName: "greyReceived" },
-                { header: "DELIVERY SHORT & EXCESS", width: 180, inputName: "greyReceived" },
-                { header: "GREY RETURN RECEIVE", width: 160, inputName: "greyReturn" },
-                { header: "GREY RECEIVED FROM DYEING", width: 190, inputName: "greyReturn" },
-                { header: "FINISH FABRIC RECEIVED", width: 170, inputName: "greyReturn" },
-                { header: "BALANCE", width: 110, inputName: "greyReturn" },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "TOTAL SENT FOR COMPACTING", width: 190, inputName: "sentForCompacting" },
-                { header: "TOTAL RECEIVED FROM COMPACTING", width: 210, inputName: "receivedFromCompacting" },
-                { header: "TOTAL BILLING AMOUNT", width: 170, inputName: "unitePrice" },
-                { header: "PAYABLE AMOUNT", width: 140, inputName: "unitePrice" },
-                { header: "PENDING BILLING AMOUNT", width: 170, inputName: "unitePrice" },
+                { header: "FINISH DIA", width: w(150), inputName: "finishdia" },
+                { header: "YARN COUNT", width: w(200), inputName: "yarncount" },
+                { header: "YARN LOT", width: w(200), inputName: "yarnlot" },
+                { header: "STICH LENGHT  ", width: w(200), inputName: "stichLenght" },
+                { header: "MACHINE DIA", width: w(200), inputName: "machineDia" },
+                { header: "SHADE %", width: w(200), inputName: "shade%" },
+                { header: "DYEING WORK ORDER QTY", width: w(180), inputName: "workOrderQty" },
+                { header: "GREY DELIVERY", width: w(140), inputName: "greyReceived" },
+                { header: "DELIVERY SHORT & EXCESS", width: w(180), inputName: "greyReceived" },
+                { header: "GREY RETURN RECEIVE", width: w(160), inputName: "greyReturn" },
+                { header: "GREY RECEIVED FROM DYEING", width: w(190), inputName: "greyReturn" },
+                { header: "FINISH FABRIC RECEIVED", width: w(170), inputName: "greyReturn" },
+                { header: "BALANCE", width: w(110), inputName: "greyReturn" },
+                { header: "PRICE PER KG", width: w(120), inputName: "unitePrice" },
+                { header: "TOTAL SENT FOR COMPACTING", width: w(190), inputName: "sentForCompacting" },
+                { header: "TOTAL RECEIVED FROM COMPACTING", width: w(210), inputName: "receivedFromCompacting" },
+                { header: "TOTAL BILLING AMOUNT", width: w(170), inputName: "unitePrice" },
+                { header: "PAYABLE AMOUNT", width: w(140), inputName: "unitePrice" },
+                { header: "PENDING BILLING AMOUNT", width: w(170), inputName: "unitePrice" },
             );
         } else if (orderType === "yarnDyeingOrder") {
             cols.push(
@@ -159,21 +182,21 @@ const AllOrders = ({ orderType }) => {
                 { header: "FACTORY NAME", width: defaultWidths[1], inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: defaultWidths[2], inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: defaultWidths[3], inputName: "buyerName" },
-                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },              
+                { header: "JOB NO.", width: defaultWidths[4], inputName: "jobNo" },
                 { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
                 { header: "BOOKING COLOR", width: defaultWidths[6], inputName: "bookingColor" },
                 { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
-                { header: "FINISH DIA", width: 150, inputName: "finishDia" },                
-                { header: "SHADE (%)", width: 200, inputName: "shade(%)" },
-                { header: "COLOR WISE ORDER QTY", width: 180, inputName: "orderColor" },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "YARN DELIVERY FOR Y/D", width: 170, inputName: "yarnDeliveryForYd" },
-                { header: "DEL.SHORT & EXCESS", width: 160 },
-                { header: "YARN RETURN RECEIVED", width: 170, inputName: "yarnReturnReceived" },
-                { header: "YARN RECEIVED FROM Y/D", width: 180, inputName: "greyReceivedFromYd" },
-                { header: "FINISH YARN RECEIVED", width: 170, inputName: "finishReceived" },
-                { header: "FINISH RETURN", width: 140, inputName: "finishReturn" },
-                { header: "YARN STOCK", width: 130 },
+                { header: "FINISH DIA", width: w(150), inputName: "finishDia" },
+                { header: "SHADE (%)", width: w(200), inputName: "shade(%)" },
+                { header: "COLOR WISE ORDER QTY", width: w(180), inputName: "orderColor" },
+                { header: "PRICE PER KG", width: w(120), inputName: "unitePrice" },
+                { header: "YARN DELIVERY FOR Y/D", width: w(170), inputName: "yarnDeliveryForYd" },
+                { header: "DEL.SHORT & EXCESS", width: w(160) },
+                { header: "YARN RETURN RECEIVED", width: w(170), inputName: "yarnReturnReceived" },
+                { header: "YARN RECEIVED FROM Y/D", width: w(180), inputName: "greyReceivedFromYd" },
+                { header: "FINISH YARN RECEIVED", width: w(170), inputName: "finishReceived" },
+                { header: "FINISH RETURN", width: w(140), inputName: "finishReturn" },
+                { header: "YARN STOCK", width: w(130) },
             );
         } else if (orderType === "aopOrder") {
             cols.push(
@@ -185,34 +208,32 @@ const AllOrders = ({ orderType }) => {
                 { header: "STYLE", width: defaultWidths[5], inputName: "styleNo" },
                 { header: "COLOR", width: defaultWidths[6], inputName: "color" },
                 { header: "COMPOSITION", width: defaultWidths[7], inputName: "composition" },
-                { header: "FINISH DIA", width: 200, inputName: "finishDia" },               
-                { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
-                { header: "SENT FOR AOP", width: 140, inputName: "totalYarnDelivery" },
-                { header: "DEL. SHORT & EXCESS", width: 150 },
-                { header: "RETURN FROM AOP", width: 150 },
-                { header: "RECEIVED FROM AOP", width: 150 },
-                { header: "FINISH AFTER AOP", width: 150 },
-                { header: "PARTY BALANCE", width: 170 },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "PAYABLE AMOUNT", width: 140 },
-                { header: "PAID BILLING AMOUNT", width: 150 },
-                { header: "PENDING BILLING AMOUNT", width: 160 },
+                { header: "FINISH DIA", width: w(200), inputName: "finishDia" },
+                { header: "WORK ORDER QTY", width: w(140), inputName: "workOrderQty" },
+                { header: "SENT FOR AOP", width: w(140), inputName: "totalYarnDelivery" },
+                { header: "DEL. SHORT & EXCESS", width: w(150) },
+                { header: "RETURN FROM AOP", width: w(150) },
+                { header: "RECEIVED FROM AOP", width: w(150) },
+                { header: "FINISH AFTER AOP", width: w(150) },
+                { header: "PARTY BALANCE", width: w(170) },
+                { header: "PRICE PER KG", width: w(120), inputName: "unitePrice" },
+                { header: "PAYABLE AMOUNT", width: w(140) },
+                { header: "PAID BILLING AMOUNT", width: w(150) },
+                { header: "PENDING BILLING AMOUNT", width: w(160) },
             );
         }
         return cols;
-    }, [orderType]);
+    }, [orderType, w]);
 
-    const [columnWidths, setColumnWidths] = useState(() => {
-        const defaultWidths = COLUMNS.map(c => c.width);
-        return getSavedWidths(orderType, defaultWidths);
-    });
-
-    const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
+    // No more localStorage cache — columnWidths is just COLUMNS' widths, kept in
+    // state only so header/col/body all read from one array during a render pass.
+    const [columnWidths, setColumnWidths] = useState(() => COLUMNS.map(c => c.width));
 
     useEffect(() => {
-        try { localStorage.setItem(`tableColumnWidths_${orderType}`, JSON.stringify(columnWidths)); }
-        catch (e) { console.error("Error saving column widths:", e); }
-    }, [columnWidths, orderType]);
+        setColumnWidths(COLUMNS.map(c => c.width));
+    }, [COLUMNS]);
+
+    const handleRedirect = (jobNumber) => navigate(`/dashboard/new-order/${jobNumber}`);
 
     useEffect(() => {
         try {
@@ -223,12 +244,9 @@ const AllOrders = ({ orderType }) => {
     }, [filters, orderType]);
 
     useEffect(() => {
-        const defaultWidths = COLUMNS.map(c => c.width);
-        clearCachedColumnWidths(orderType);
-        setColumnWidths(defaultWidths);
         setFilters(getSavedFilters(orderType));
         setFilterOptions({});
-    }, [COLUMNS]);
+    }, [orderType]);
 
     const currentFrozenWidths = columnWidths.slice(0, FROZEN_COUNT);
     const currentFrozenLefts = currentFrozenWidths.reduce((acc, w, i) => {
@@ -514,11 +532,9 @@ const AllOrders = ({ orderType }) => {
     };
 
     const handleSearchKeyDown = (e) => {
-        // Enter key - Apply search
         if (e.key === 'Enter') {
             setAppliedSearchTerm(searchTerm);
         }
-        // Escape key - Clear search
         if (e.key === 'Escape') {
             setSearchTerm("");
             setAppliedSearchTerm("");
@@ -585,9 +601,6 @@ const AllOrders = ({ orderType }) => {
         width: "24px",
         height: "24px",
         transition: "background-color 0.2s",
-        ':hover': {
-            backgroundColor: "#e5e7eb"
-        }
     };
 
     const searchLabelStyle = {
@@ -607,7 +620,7 @@ const AllOrders = ({ orderType }) => {
                     duration={3000}
                 />
             )}
-            
+
             {/* SEARCH BAR ABOVE TABLE */}
             <div style={searchBarContainerStyle}>
                 <span style={searchLabelStyle}>Search:</span>
