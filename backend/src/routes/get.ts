@@ -44,7 +44,7 @@ getRouters.get("/audits", responseTimeMonitor, apiLimiter, authenticate, authori
 
 getRouters.get("/jobs", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getAllJobs);
 
-getRouters.get("/styles", responseTimeMonitor, apiLimiter, styleRequirements);
+getRouters.get("/styles", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
 
 getRouters.get("/styles/:jobNo", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
 
