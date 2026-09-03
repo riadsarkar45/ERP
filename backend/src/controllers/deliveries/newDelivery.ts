@@ -160,7 +160,7 @@ export const updateJobs = async (req: Request, res: Response) => {
         );
 
         const lastInsertedId = Number(insert[insert.length - 1]?.id) ?? null;
-        const generateChallan = generatePdfChallan(lastInsertedId, userId)
+        const generateChallan = generatePdfChallan(checkYarnIfExist?.id, lastInsertedId, userId)
         console.log(generateChallan);
 
         const dbWriteEnd = process.hrtime.bigint();

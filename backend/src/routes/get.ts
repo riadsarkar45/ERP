@@ -27,7 +27,7 @@ import { pendingWorkOrders } from "../controllers/orders/pendingWorkOrder";
 import { generateKnittingPdfWorkOrder } from "../controllers/orders/pdfWorkOrder";
 import { allUsers } from "../controllers/users/allUser";
 import { requestedData } from "../controllers/orders/requestedData";
-import { downloadPDFchallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
+import { downloadChallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
 import { balanceGlanceReport } from "../controllers/Glance/balanceGlanceReport";
 
 const getRouters = express.Router();
@@ -44,7 +44,7 @@ getRouters.get("/audits", responseTimeMonitor, apiLimiter, authenticate, authori
 
 getRouters.get("/jobs", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getAllJobs);
 
-getRouters.get("/styles", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
+getRouters.get("/styles", responseTimeMonitor, apiLimiter, styleRequirements);
 
 getRouters.get("/styles/:jobNo", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
 
@@ -112,7 +112,7 @@ getRouters.get("/requested-work-data", responseTimeMonitor, authenticate, reques
 
 getRouters.get("/prepare-to-download/:userId", responseTimeMonitor, authenticate, prepareToGenerate);
 
-getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, downloadPDFchallan);
+getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, downloadChallan);
 
 getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
 

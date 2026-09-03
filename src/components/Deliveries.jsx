@@ -256,83 +256,116 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
     });
   };
 
+  // Builds the submit payload for a single row. Returns { error } if the
+  // row is invalid, or { payload } if it's ready to submit. Pure — does
+  // not call handleSubmit and does not short-circuit the caller's loop,
+  // so the caller can validate every row before submitting any of them.
+  const buildRowPayload = (row) => {
+    const rowChangedField = changedField?.[row.yarnId] || {};
+    const group = groupedRows[row.workOrderId];
+
+    if (!rowChangedField.deliveryType) {
+      return { error: `Please select a Delivery Type for ${row.composition}` };
+    }
+    if (!rowChangedField.deliveryQty || Number(rowChangedField.deliveryQty) <= 0) {
+      return { error: `Please enter a valid Quantity for ${row.composition}` };
+    }
+
+    const parsedQty = Number(rowChangedField.deliveryQty);
+    const parsedFinishQty = rowChangedField.finishReceivedQty ? Number(rowChangedField.finishReceivedQty) : 0;
+
+    let finalDeliveries = [];
+    if (rowChangedField.deliveries && rowChangedField.deliveries.length > 0) {
+      finalDeliveries = rowChangedField.deliveries.map((d) => ({
+        deliveryType: d.deliveryType,
+        qty: d.qty ? Number(d.qty) : 0,
+      }));
+    } else {
+      finalDeliveries = [
+        { deliveryType: rowChangedField.deliveryType, qty: parsedQty },
+        ...(parsedFinishQty > 0
+          ? [{
+              deliveryType: rowChangedField.deliveryType === "Aop Grey Received" ? "Finish Received From Aop" : "Finish Received",
+              qty: parsedFinishQty,
+            }]
+          : []),
+      ];
+    }
+
+    // Same computation as getDefaultFactories/DeliveryRowInputs — kept as
+    // one function so display and submit can never disagree.
+    const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
+    const groupFactoryName = group?.factoryName || row.factoryName || "";
+    const defaults = getDefaultFactories(isReturnOrReceive, groupFactoryName);
+
+    const fullPayload = {
+      ...rowChangedField,
+      toFactory: rowChangedField.toFactory ?? defaults.toFactory,
+      fromFactory: rowChangedField.fromFactory ?? defaults.fromFactory,
+      date: rowChangedField.date || new Date().toISOString().split("T")[0],
+      challanNo: rowChangedField.challanNo || "",
+      deliveryType: rowChangedField.deliveryType,
+      deliveryQty: parsedQty,
+      finishReceivedQty: parsedFinishQty,
+      deliveries: finalDeliveries,
+    };
+
+    // Compacting/Reprocess/HEAT Set are internal process steps, not
+    // factory-to-factory movements — skip the required-field checks
+    // below for these types. The fields are still sent (possibly as
+    // empty strings from `defaults`), just no longer block submit.
+    const factoryOptional = isFactoryOptional(rowChangedField.deliveryType);
+
+    if (!factoryOptional && !fullPayload.toFactory) {
+      return {
+        error: !groupFactoryName
+          ? `This work order has no factory name on record, so "To Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
+          : `Please enter a To Factory for ${row.composition}`,
+      };
+    }
+    if (!factoryOptional && !fullPayload.fromFactory) {
+      return {
+        error: !groupFactoryName
+          ? `This work order has no factory name on record, so "From Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
+          : `Please enter a From Factory for ${row.composition}`,
+      };
+    }
+
+    return { payload: fullPayload };
+  };
+
+  // FIXED: previously this looped rows and called `return` on the first
+  // invalid row, which aborted the ENTIRE function — any row after the
+  // first bad one (including already-valid ones) never got submitted at
+  // all. That's why submitting multiple compositions only ever produced
+  // one delivery: only the first row (if valid) made it to handleSubmit.
+  //
+  // Now: validate every selected row first (pass 1), collect every error.
+  // If anything is invalid, submit NOTHING and show every problem at once
+  // so the user can fix them all in one pass. Only once every row is
+  // valid do we actually submit (pass 2), one composition at a time.
   const handleGlobalSubmit = async () => {
     const rowsToSubmit = visibleRows.filter((r) => openYarnIds.has(r.yarnId));
 
+    const errors = [];
+    const payloadsByYarnId = {};
+
     for (const row of rowsToSubmit) {
-      const rowChangedField = changedField?.[row.yarnId] || {};
-      const group = groupedRows[row.workOrderId];
-
-      if (!rowChangedField.deliveryType) {
-        alert(`Please select a Delivery Type for ${row.composition}`);
-        return;
-      }
-      if (!rowChangedField.deliveryQty || Number(rowChangedField.deliveryQty) <= 0) {
-        alert(`Please enter a valid Quantity for ${row.composition}`);
-        return;
-      }
-
-      const parsedQty = Number(rowChangedField.deliveryQty);
-      const parsedFinishQty = rowChangedField.finishReceivedQty ? Number(rowChangedField.finishReceivedQty) : 0;
-
-      let finalDeliveries = [];
-      if (rowChangedField.deliveries && rowChangedField.deliveries.length > 0) {
-        finalDeliveries = rowChangedField.deliveries.map(d => ({
-          deliveryType: d.deliveryType,
-          qty: d.qty ? Number(d.qty) : 0
-        }));
+      const result = buildRowPayload(row);
+      if (result.error) {
+        errors.push(result.error);
       } else {
-        finalDeliveries = [
-          { deliveryType: rowChangedField.deliveryType, qty: parsedQty },
-          ...(parsedFinishQty > 0 ? [{
-            deliveryType: rowChangedField.deliveryType === "Aop Grey Received" ? "Finish Received From Aop" : "Finish Received",
-            qty: parsedFinishQty
-          }] : [])
-        ];
+        payloadsByYarnId[row.yarnId] = result.payload;
       }
+    }
 
-      // Same computation as getDefaultFactories/DeliveryRowInputs — kept as
-      // one function so display and submit can never disagree.
-      const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
-      const groupFactoryName = group?.factoryName || row.factoryName || "";
-      const defaults = getDefaultFactories(isReturnOrReceive, groupFactoryName);
+    if (errors.length > 0) {
+      alert(errors.join("\n"));
+      return;
+    }
 
-      const fullPayload = {
-        ...rowChangedField,
-        toFactory: rowChangedField.toFactory ?? defaults.toFactory,
-        fromFactory: rowChangedField.fromFactory ?? defaults.fromFactory,
-        date: rowChangedField.date || new Date().toISOString().split("T")[0],
-        challanNo: rowChangedField.challanNo || "",
-        deliveryType: rowChangedField.deliveryType,
-        deliveryQty: parsedQty,
-        finishReceivedQty: parsedFinishQty,
-        deliveries: finalDeliveries
-      };
-
-      // Compacting/Reprocess/HEAT Set are internal process steps, not
-      // factory-to-factory movements — skip the required-field checks
-      // below for these types. The fields are still sent (possibly as
-      // empty strings from `defaults`), just no longer block submit.
-      const factoryOptional = isFactoryOptional(rowChangedField.deliveryType);
-
-      if (!factoryOptional && !fullPayload.toFactory) {
-        alert(
-          !groupFactoryName
-            ? `This work order has no factory name on record, so "To Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
-            : `Please enter a To Factory for ${row.composition}`
-        );
-        return;
-      }
-      if (!factoryOptional && !fullPayload.fromFactory) {
-        alert(
-          !groupFactoryName
-            ? `This work order has no factory name on record, so "From Factory" couldn't be auto-filled for ${row.composition}. Please type it in manually, or fix the factory name on the work order.`
-            : `Please enter a From Factory for ${row.composition}`
-        );
-        return;
-      }
-
-      await handleSubmit(row.yarnId, row.workOrderId, fullPayload);
+    for (const row of rowsToSubmit) {
+      await handleSubmit(row.yarnId, row.workOrderId, payloadsByYarnId[row.yarnId]);
     }
   };
 
