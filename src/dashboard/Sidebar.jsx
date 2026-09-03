@@ -144,6 +144,7 @@ const Sidebar = () => {
 
     const navItems = [
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
+        { path: "/dashboard/productionsummary", label: "Production Summary", icon: PlusCircle },
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
         { path: "/dashboard/requested-work-orders", label: "Work Order Requests", icon: EqualApproximately },
