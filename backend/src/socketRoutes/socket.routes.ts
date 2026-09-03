@@ -1,7 +1,7 @@
-import { downloadableChallans } from "../middleware/socket.io/downloadableChallans";
 import { handleYarnLotSelection, handleYarnLotClear, handleYarnLotDisconnect } from "../middleware/socket.io/handleYarnLotSelection";
 import { notify } from "../middleware/socket.io/notify";
 import { getIO } from "../middleware/socket.io/socket";
+import { flushPendingAlerts } from "../middleware/socket.io/ipBlockAlert";
 
 export const initSocketRoutes = () => {
     const io = getIO();
@@ -14,6 +14,7 @@ export const initSocketRoutes = () => {
             socket.data.userId = id;
             socket.join(`user:${id}`);
             console.log(`✅ User ${id} joined room user:${id}`);
+            flushPendingAlerts(id); // deliver anything queued while this user was offline
         };
 
         // 1. Try to get userId from initial handshake
