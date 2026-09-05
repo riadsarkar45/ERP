@@ -46,7 +46,6 @@ const Sidebar = () => {
         { path: "/dashboard/yarn/stock", label: "Raw Yarn Stock", icon: Package },
         { path: "/dashboard/yarndyed/movement", label: "Yarn Dyed Movement", icon: Package },
         { path: "/dashboard/yarndyed/stock", label: "Yarn Dyed Stock", icon: Package },
-        
     ];
 
     const orderSubItems = [
@@ -73,6 +72,27 @@ const Sidebar = () => {
         { path: "/dashboard/mis/glance", label: "At A Glance (Stock)", icon: FileText },
     ];
 
+    // NEW: Daily Production Sub Items
+    const dailyProductionSubItems = [
+        { path: "/dashboard/productionsummary", label: "Summary", icon: PlusCircle },
+        { path: "/dashboard/daily-production/cutting", label: "Cutting", icon: Package },
+        { path: "/dashboard/daily-production/sewing", label: "Sewing", icon: Package },
+        { path: "/dashboard/daily-production/finishing", label: "Finishing", icon: Package },
+        { path: "/dashboard/daily-production/export", label: "Export", icon: Package },
+    ];
+
+    // Split standalone nav items to place Daily Production dropdown in the correct order
+    const topNavItems = [
+        { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
+        
+    ];
+
+    const bottomNavItems = [
+        { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
+        { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
+        { path: "/dashboard/requested-work-orders", label: "Work Order Requests", icon: EqualApproximately },
+    ];
+
     // Dropdown open states
     const [isYarnOpen, setIsYarnOpen] = useState(
         () => yarnSubItems.some(item => item.path === location.pathname)
@@ -93,6 +113,10 @@ const Sidebar = () => {
 
     const [isMisOpen, setIsMisOpen] = useState(
         () => misSubItems.some(item => item.path === location.pathname)
+    );
+
+    const [isDailyProductionOpen, setIsDailyProductionOpen] = useState(
+        () => dailyProductionSubItems.some(item => item.path === location.pathname)
     );
 
     function ThreadIcon({ size = 16 }) {
@@ -142,20 +166,13 @@ const Sidebar = () => {
         );
     }
 
-    const navItems = [
-        { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
-        { path: "/dashboard/productionsummary", label: "Production Summary", icon: PlusCircle },
-        { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
-        { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
-        { path: "/dashboard/requested-work-orders", label: "Work Order Requests", icon: EqualApproximately },
-    ];
-
     // Active checks for highlighting parent dropdowns
     const isYarnActive = yarnSubItems.some(item => isActive(item.path));
     const isOrdersActive = orderSubItems.some(item => isActive(item.path));
     const isMovementActive = movementSubItems.some(item => isActive(item.path)) || othersSubItems.some(item => isActive(item.path));
     const isOthersActive = othersSubItems.some(item => isActive(item.path));
     const isMisActive = misSubItems.some(item => isActive(item.path));
+    const isDailyProductionActive = dailyProductionSubItems.some(item => isActive(item.path));
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -168,7 +185,8 @@ const Sidebar = () => {
         }
         if (path.includes('style-requirement')) return { title: 'Style And Requirement' };
         if (path.includes('audits')) return { title: 'All Audits' };
-        if (path.includes('cutting')) return { title: 'Daily Fabric Cutting Report' };
+        // Prevented collision with new daily-production/cutting route
+        if (path.includes('cutting') && !path.includes('daily-production')) return { title: 'Daily Fabric Cutting Report' };
         if (path.includes('new-user')) return { title: 'Add New User' };
         if (path.includes('party-wise-view')) return { title: 'Manage Party Wise View' };
         if (path.includes('management-view')) return { title: 'Manage Management View' };
@@ -201,10 +219,19 @@ const Sidebar = () => {
             '/dashboard/mis/glance': { title: 'MIS - AOP', subtitle: 'At A Glance' },
         };
 
+        // NEW: Daily Production Route Map
+        const dailyProductionRouteMap = {
+            '/dashboard/daily-production/cutting': { title: 'Daily Cutting', subtitle: 'Daily cutting production report' },
+            '/dashboard/daily-production/sewing': { title: 'Daily Sewing', subtitle: 'Daily sewing production report' },
+            '/dashboard/daily-production/finishing': { title: 'Daily Finishing', subtitle: 'Daily finishing production report' },
+            '/dashboard/daily-production/export': { title: 'Daily Export', subtitle: 'Daily export production report' },
+        };
+
         return (
             routeMap[path] ||
             movementRouteMap[path] ||
             misRouteMap[path] ||
+            dailyProductionRouteMap[path] ||
             { title: 'Dashboard', subtitle: 'Welcome back, System Admin' }
         );
     };
@@ -349,8 +376,65 @@ const Sidebar = () => {
                             )}
                         </li>
 
-                        {/* Standalone Nav Items */}
-                        {navItems.map((item) => {
+                        {/* Standalone Nav Items (Top) */}
+                        {topNavItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                                <li key={item.path}>
+                                    <Link
+                                        to={item.path}
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive(item.path) ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                            } ${isCollapsed ? 'justify-center' : ''}`}
+                                        title={isCollapsed ? item.label : ''}
+                                    >
+                                        <Icon size={20} className="shrink-0" />
+                                        {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
+                                    </Link>
+                                </li>
+                            );
+                        })}
+
+                        {/* NEW: Daily Production Dropdown */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsDailyProductionOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isDailyProductionActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'Production' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <PlusCircle size={20} className="shrink-0" />
+                                    {!isCollapsed && <span className="font-medium text-sm">Production</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    isDailyProductionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {isDailyProductionOpen && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {dailyProductionSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+
+                        {/* Standalone Nav Items (Bottom) */}
+                        {bottomNavItems.map((item) => {
                             const Icon = item.icon;
                             return (
                                 <li key={item.path}>
