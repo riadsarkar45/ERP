@@ -38,6 +38,11 @@ import NotApprovedWorkOrder from "../dashboard/pages/pendingWorkders/PendingWork
 import RequestedOrders from "../dashboard/pages/pendingWorkders/RequestedOrders";
 import MovementSpinning from "../dashboard/pages/yarnstock/MovementSpinning";
 import ProductionSummary from "../dashboard/pages/production/ProductionSummary";
+import DailyProduction from "../dashboard/pages/production/DailyProduction";
+import DailyCutting from "../dashboard/pages/production/DailyCutting";
+import DailySewing from "../dashboard/pages/production/DailySewing";
+import DailyFinishing from "../dashboard/pages/production/DailyFinishing";
+import DailyExport from "../dashboard/pages/production/DailyExport";
 
 const routers = createBrowserRouter([
     {
@@ -204,6 +209,26 @@ const routers = createBrowserRouter([
                     {
                         path: "productionsummary",
                         element: <ProductionSummary/>
+                    },
+                    {
+                        path: "daily-production",
+                        element: <DailyProduction/>
+                    },
+                    {
+                        path: "daily-production/cutting",
+                        element: <DailyCutting/>
+                    },
+                    {
+                        path: "daily-production/sewing",
+                        element: <DailySewing/>
+                    },
+                    {
+                        path: "daily-production/finishing",
+                        element: <DailyFinishing/>
+                    },
+                    {
+                        path: "daily-production/export",
+                        element: <DailyExport/>
                     },
                 ]
             }
