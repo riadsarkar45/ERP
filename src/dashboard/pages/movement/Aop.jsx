@@ -123,7 +123,7 @@ const Aop = () => {
             if (!row) {
                 row = {
                     rowKey: key,
-                    deliveryId: source?.id || null, // <-- Explicitly set deliveryId
+                    deliveryId: source?.id || null, 
                     chId: source?.id || challanNo,
                     challanNo,
                     jobNo,
@@ -230,7 +230,6 @@ const Aop = () => {
         return allRows.map(row => {
             const edits = editedData[row.rowKey] || {};
 
-            // Helper to get value: edited > original
             const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
 
             const sentForAop = Number(getVal('sentForAop')) || 0;
@@ -243,7 +242,7 @@ const Aop = () => {
 
             return {
                 ...row,
-                deliveryId: row.deliveryId, // <-- Ensure it's carried over to processed rows
+                deliveryId: row.deliveryId, 
                 challanNo: getVal('challanNo'),
                 fromFactory: getVal('fromFactory'),
                 toFactory: getVal('toFactory'),
@@ -262,18 +261,63 @@ const Aop = () => {
         tableHeader.forEach((col) => {
             if (col.noFilter) return;
             const set = new Set();
-            processedRows.forEach((row) => set.add(String(row[col.key] ?? "")));
-            opts[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            processedRows.forEach((row) => {
+                // Group Date column by Month (YYYY-MM)
+                if (col.key === 'challanDate') {
+                    try {
+                        const d = new Date(row.challanDate);
+                        if (!isNaN(d.getTime())) {
+                            const y = d.getFullYear();
+                            const m = String(d.getMonth() + 1).padStart(2, '0');
+                            set.add(`${y}-${m}`);
+                        } else {
+                            set.add(String(row.challanDate || ""));
+                        }
+                    } catch (e) {
+                        set.add(String(row.challanDate || ""));
+                    }
+                } else {
+                    set.add(String(row[col.key] ?? ""));
+                }
+            });
+            
+            // Sort Date descending, others alphabetically/numerically
+            if (col.key === 'challanDate') {
+                opts[col.key] = Array.from(set).sort((a, b) => b.localeCompare(a)); 
+            } else {
+                opts[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            }
         });
         return opts;
     }, [processedRows]);
 
-    const filteredRows = useMemo(() => processedRows.filter((row) => tableHeader.every((col) => {
-        if (col.noFilter) return true;
-        const selected = filters[col.key];
-        if (!selected) return true;
-        return selected.has(String(row[col.key] ?? ""));
-    })), [processedRows, filters]);
+    const filteredRows = useMemo(() => processedRows.filter((row) => {
+        return tableHeader.every((col) => {
+            if (col.noFilter) return true;
+            const selected = filters[col.key];
+            if (!selected) return true;
+
+            // Match Date by Month
+            if (col.key === 'challanDate') {
+                let rowMonth = "";
+                try {
+                    const d = new Date(row.challanDate);
+                    if (!isNaN(d.getTime())) {
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        rowMonth = `${y}-${m}`;
+                    } else {
+                        rowMonth = String(row.challanDate || "");
+                    }
+                } catch (e) {
+                    rowMonth = String(row.challanDate || "");
+                }
+                return selected.has(rowMonth);
+            }
+
+            return selected.has(String(row[col.key] ?? ""));
+        });
+    }), [processedRows, filters]);
 
     const totals = useMemo(() => {
         const t = {
@@ -373,14 +417,13 @@ const Aop = () => {
         }));
     };
 
-    // ── Fixed Save Changes Logic ──
     const handleSaveChanges = async () => {
         setIsLoading(true);
         try {
             const payload = Object.entries(editedData).map(([rowKey, edits]) => {
                 const originalRow = allRows.find(r => r.rowKey === rowKey);
                 return {
-                    deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey, // Guaranteed to be in payload
+                    deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey, 
                     rowKey,
                     ...edits
                 };
@@ -389,10 +432,10 @@ const Aop = () => {
             console.log("Saving edited AOP data:", payload);
             const update = await axiosSecure.patch("/api/edit-challan", payload);
             
-            if (update.status === 200) {
+            if (update.status === 20) {
                 alert("Changes saved successfully!");
-                setEditedData({}); // Clear local edit state
-                setRefreshKey(prev => prev + 1); // Trigger refetch of current page
+                setEditedData({}); 
+                setRefreshKey(prev => prev + 1); 
             }
         } catch (error) {
             console.error("Failed to save changes:", error);
@@ -402,16 +445,61 @@ const Aop = () => {
         }
     };
 
+    const handleExport = () => {
+        if (filteredRows.length === 0) {
+            alert("No data to export.");
+            return;
+        }
+        
+        const headers = tableHeader.filter(h => h.key !== 'select').map(h => h.header);
+        
+        const rows = filteredRows.map(row => {
+            return tableHeader.filter(h => h.key !== 'select').map(h => {
+                let val = row[h.key];
+                if (h.key === 'challanDate' && val) {
+                    try {
+                        const d = new Date(val);
+                        if (!isNaN(d.getTime())) {
+                            val = d.toISOString().split('T')[0]; 
+                        }
+                    } catch(e) {}
+                }
+                if (val === null || val === undefined) return "";
+                let str = String(val);
+                if (str.includes('"')) {
+                    str = '"' + str.replace(/"/g, '""') + '"';
+                } else if (str.includes(',') || str.includes('\n')) {
+                    str = '"' + str + '"';
+                }
+                return str;
+            });
+        });
+
+        const csvContent = [
+            headers.join(","),
+            ...rows.map(r => r.join(","))
+        ].join("\n");
+
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `AOP_Report_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
     const numericFields = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
     const hasUnsavedChanges = Object.keys(editedData).length > 0;
 
-    // Helper to apply yellow background to edited cells
     const getCellStyle = (row, colKey) => {
         const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
         return {
             ...cellStyle,
-            backgroundColor: isEdited ? '#fef08a' : undefined, // Yellow highlight for edited fields
+            backgroundColor: isEdited ? '#fef08a' : undefined, 
         };
     };
 
@@ -437,7 +525,7 @@ const Aop = () => {
                         textAlign: isNumber ? 'right' : 'left',
                         boxSizing: 'border-box',
                         outline: 'none',
-                        backgroundColor: 'transparent' // Allows yellow bg to show through while editing
+                        backgroundColor: 'transparent' 
                     }}
                 />
             );
@@ -482,6 +570,11 @@ const Aop = () => {
                         Clear Search
                     </button>
                 )}
+
+                {/* Export Option */}
+                <button style={{ background: "#8b5cf6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "bold" }} onClick={handleExport}>
+                    Export
+                </button>
 
                 {hasUnsavedChanges && (
                     <button
@@ -536,9 +629,29 @@ const Aop = () => {
                                                 <div style={{ padding: 8, borderBottom: "1px solid #ddd" }}><input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Search..." autoFocus style={{ width: "100%", padding: "4px 6px", border: "1px solid #ccc", borderRadius: 4 }} /></div>
                                                 <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
                                                     <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: "bold", marginBottom: 6 }}><input type="checkbox" checked={draftSelected.size === options.length && options.length > 0} onChange={() => toggleSelectAllDraft(options)} />Select All</label>
-                                                    {options.filter((val) => val.toLowerCase().includes(filterSearch.toLowerCase())).map((val) => (
-                                                        <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", padding: "2px 0" }}><input type="checkbox" checked={draftSelected.has(val)} onChange={() => toggleDraftValue(val)} />{val === "" ? "(blank)" : val}</label>
-                                                    ))}
+                                                    {options.filter((val) => {
+                                                        let displayVal = val;
+                                                        // Format YYYY-MM to readable Month Year for filtering display
+                                                        if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                                                            const [y, m] = val.split('-');
+                                                            const d = new Date(Number(y), Number(m) - 1);
+                                                            displayVal = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                                                        }
+                                                        return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
+                                                    }).map((val) => {
+                                                        let displayVal = val;
+                                                        if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                                                            const [y, m] = val.split('-');
+                                                            const d = new Date(Number(y), Number(m) - 1);
+                                                            displayVal = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                                                        }
+                                                        return (
+                                                            <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", padding: "2px 0" }}>
+                                                                <input type="checkbox" checked={draftSelected.has(val)} onChange={() => toggleDraftValue(val)} />
+                                                                {displayVal === "" ? "(blank)" : displayVal}
+                                                            </label>
+                                                        );
+                                                    })}
                                                 </div>
                                                 <div style={{ display: "flex", justifyContent: "space-between", padding: 8, borderTop: "1px solid #ddd" }}>
                                                     <button onClick={() => clearFilter(th.key)} style={{ ...pageButtonStyle(false), fontSize: "0.75rem" }}>Clear</button>
@@ -557,10 +670,8 @@ const Aop = () => {
                                 <td style={cellStyle}><input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={(e) => { const next = new Set(selectedRows); if (e.target.checked) next.add(row.rowKey); else next.delete(row.rowKey); setSelectedRows(next); }} onClick={() => handleBillPreparation(row.chId)} /></td>
                                 <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
                                 
-                                {/* ID Column is now properly populated */}
                                 <td style={cellStyle}>{row.deliveryId || "-"}</td>
 
-                                {/* Editable Fields with Yellow Highlight */}
                                 <td style={getCellStyle(row, 'challanNo')}>{renderCell(row, 'challanNo')}</td>
                                 <td style={cellStyle}>{row.jobNo}</td>
                                 <td style={cellStyle}>{row.composition}</td>
@@ -573,7 +684,6 @@ const Aop = () => {
                                 <td style={getCellStyle(row, 'receiveFromAop')}>{renderCell(row, 'receiveFromAop')}</td>
                                 <td style={getCellStyle(row, 'finishReceiveFromAop')}>{renderCell(row, 'finishReceiveFromAop')}</td>
 
-                                {/* Calculated Fields */}
                                 <td style={cellStyle}>{row.receiveFromAop > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
                                 <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
                                 <td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td>
