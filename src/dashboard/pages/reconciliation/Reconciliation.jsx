@@ -22,14 +22,47 @@ const ShortExcess = ({ value }) => {
     );
 };
 
-const STICKY_COL_WIDTHS = [50, 170, 250, 300, 100, 150];
+// Column layout (sticky columns): 0 = select, 1 = Date Of Reconciliation, 2 = Job No,
+// 3 = Color, 4 = Composition, 5 = Order Qty, 6 = Manufacturing Unit
+const STICKY_COL_WIDTHS = [50, 140, 170, 250, 300, 100, 150];
 const STICKY_LEFT_OFFSETS = STICKY_COL_WIDTHS.reduce((acc, w, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + STICKY_COL_WIDTHS[i - 1]);
     return acc;
 }, []);
 const LAST_STICKY_INDEX = STICKY_COL_WIDTHS.length - 1;
 
-const FIXED_COLUMN_COUNT = 25;
+const FIXED_COLUMN_COUNT = 26;
+
+// Treats a literal "NULL" string (how blanks are sometimes persisted by the API)
+// the same as an actual blank value, and normalizes case/whitespace so filter
+// selections reliably match table values (this is what was breaking the
+// Manufacturing Unit filter).
+const normalizeFilterVal = (v) => {
+    if (v === null || v === undefined) return "";
+    const s = String(v).trim();
+    if (s.toUpperCase() === "NULL") return "";
+    return s.toLowerCase();
+};
+
+const formatDateDisplay = (value) => {
+    if (!value || value === "NULL") return "-";
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const monthKeyFromDate = (value) => {
+    if (!value || value === "NULL") return null;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const formatMonthLabel = (key) => {
+    const [y, m] = key.split("-");
+    const d = new Date(Number(y), Number(m) - 1, 1);
+    return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+};
 
 const Reconciliation = () => {
     const axiosPrivate = useAxiosPrivate();
@@ -42,6 +75,9 @@ const Reconciliation = () => {
     const [dropdownOptions, setDropdownOptions] = useState([]);
     const [tempSelected, setTempSelected] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState("");
+
+    const [monthFilter, setMonthFilter] = useState("ALL");
+    const [monthFilterOpen, setMonthFilterOpen] = useState(false);
 
     const [editingJobNo, setEditingJobNo] = useState(null);
     const [editValues, setEditValues] = useState({});
@@ -59,7 +95,7 @@ const Reconciliation = () => {
     const WRAPPED_COL_WIDTH = 120;
     const wrapClass = "whitespace-normal break-words";
     const cellClass = `px-3 py-2.5 text-sm text-slate-800 border-b border-black text-center align-middle ${wrapClass}`;
-    
+
     const cellStyle = {
         borderRight: "1px solid #000000",
         width: WRAPPED_COL_WIDTH,
@@ -77,7 +113,7 @@ const Reconciliation = () => {
     });
 
     const YARN_TABLE_HEADERS = [
-        "", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "MANUFACTURING UNIT",
+        "", "DATE OF RECONCILIATION", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "MANUFACTURING UNIT",
         "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY",
         "SHORT & EXCESS",
         "YARN RETURN", "GREY RECEIVED",
@@ -93,10 +129,10 @@ const Reconciliation = () => {
     ];
 
     const FILTERABLE_COLS = {
-        1: { key: "jobNo", label: "JOB NO" },
-        2: { key: "color", label: "COLOR" },
-        3: { key: "composition", label: "COMPOSITION" },
-        5: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
+        2: { key: "jobNo", label: "JOB NO" },
+        3: { key: "color", label: "COLOR" },
+        4: { key: "composition", label: "COMPOSITION" },
+        6: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
     };
 
     const TRAILING_FIELDS = useMemo(() => [
@@ -136,40 +172,70 @@ const Reconciliation = () => {
 
     useEffect(() => { fetchFilteredData(); }, [fetchFilteredData]);
 
+    // Reconciliation date lives at the job level (one value per job, edited once
+    // alongside the other job-level actions), falling back to the first
+    // component's saved reconciliation record if the job object itself doesn't
+    // carry it.
+    const getJobReconciliationDate = (job) =>
+        job?.dateOfReconciliation ?? job?.rows?.[0]?.reconciliation?.dateOfReconciliation ?? null;
+
+    // ---------- MONTH OPTIONS (derived from the loaded data) ----------
+    const availableMonths = useMemo(() => {
+        const set = new Set();
+        reportData.forEach((job) => {
+            const key = monthKeyFromDate(getJobReconciliationDate(job));
+            if (key) set.add(key);
+        });
+        return Array.from(set).sort().reverse();
+    }, [reportData]);
+
     // ---------- CLIENT-SIDE FILTERING FALLBACK ----------
     const processedReportData = useMemo(() => {
         const filterKeys = Object.keys(activeFilters);
-        if (filterKeys.length === 0) return reportData;
+        const hasColumnFilters = filterKeys.length > 0;
+        const hasMonthFilter = monthFilter !== "ALL";
+
+        if (!hasColumnFilters && !hasMonthFilter) return reportData;
 
         return reportData.reduce((acc, job) => {
+            if (hasMonthFilter) {
+                const key = monthKeyFromDate(getJobReconciliationDate(job));
+                if (key !== monthFilter) return acc;
+            }
+
+            if (!hasColumnFilters) {
+                acc.push(job);
+                return acc;
+            }
+
             const comps = job?.rows || [];
             const compBreakDown = job?.compBreakdown || [];
-            
+
             const filteredComps = [];
             const filteredCompBreakDown = [];
-            
+
             comps.forEach((com, idx) => {
                 let matchesAllFilters = true;
-                
+
                 for (const key of filterKeys) {
                     const values = activeFilters[key];
                     if (!values || values.length === 0) continue;
-                    
+
                     let val = "";
                     if (key === "jobNo") val = String(job.jobNo ?? "");
                     else if (key === "color") val = String(com?.color ?? "");
                     else if (key === "composition") val = String(com?.composition ?? "");
                     else if (key === "manufacturingUnite") val = String(com?.reconciliation?.manufacturingUnite ?? "");
-                    
-                    const normalizedVal = val.trim().toLowerCase();
-                    const hasMatch = values.some(v => String(v).trim().toLowerCase() === normalizedVal);
-                    
+
+                    const normalizedVal = normalizeFilterVal(val);
+                    const hasMatch = values.some(v => normalizeFilterVal(v) === normalizedVal);
+
                     if (!hasMatch) {
                         matchesAllFilters = false;
                         break;
                     }
                 }
-                
+
                 if (matchesAllFilters) {
                     filteredComps.push(com);
                     if (compBreakDown[idx]) {
@@ -177,13 +243,13 @@ const Reconciliation = () => {
                     }
                 }
             });
-            
+
             if (filteredComps.length > 0) {
                 acc.push({ ...job, rows: filteredComps, compBreakdown: filteredCompBreakDown });
             }
             return acc;
         }, []);
-    }, [reportData, activeFilters]);
+    }, [reportData, activeFilters, monthFilter]);
 
     const openFilterDropdown = async (colIndex) => {
         if (openFilterCol === colIndex) { setOpenFilterCol(null); return; }
@@ -263,7 +329,7 @@ const Reconciliation = () => {
 
     useEffect(() => {
         if (!selectedCell) return;
-        const key = selectedCell.colIndex <= 1
+        const key = selectedCell.colIndex <= 2
             ? `col${selectedCell.colIndex}-job${flatRows[selectedCell.rowIndex]?.jobNo}`
             : `row${selectedCell.rowIndex}-col${selectedCell.colIndex}`;
         const el = cellRefs.current.get(key);
@@ -273,7 +339,7 @@ const Reconciliation = () => {
     }, [selectedCell, flatRows]);
 
     const cellRefKey = (rowIndex, colIndex) =>
-        colIndex <= 1 ? `col${colIndex}-job${flatRows[rowIndex]?.jobNo}` : `row${rowIndex}-col${colIndex}`;
+        colIndex <= 2 ? `col${colIndex}-job${flatRows[rowIndex]?.jobNo}` : `row${rowIndex}-col${colIndex}`;
 
     const registerCellRef = (rowIndex, colIndex) => (el) => {
         const key = cellRefKey(rowIndex, colIndex);
@@ -283,7 +349,7 @@ const Reconciliation = () => {
 
     const isCellSelected = (rowIndex, colIndex) => {
         if (!selectedCell) return false;
-        if (colIndex <= 1) {
+        if (colIndex <= 2) {
             return selectedCell.colIndex === colIndex && flatRows[selectedCell.rowIndex]?.jobNo === flatRows[rowIndex]?.jobNo;
         }
         return selectedCell.rowIndex === rowIndex && selectedCell.colIndex === colIndex;
@@ -313,9 +379,10 @@ const Reconciliation = () => {
         const tag = target.tagName;
         const isTextInput = tag === "INPUT" && target.type === "text";
         const isNumberInput = tag === "INPUT" && target.type === "number";
+        const isDateInput = tag === "INPUT" && target.type === "date";
         const isTextarea = tag === "TEXTAREA";
 
-        if (isNumberInput) return;
+        if (isNumberInput || isDateInput) return;
 
         if (isTextInput || isTextarea) {
             if (e.key === "ArrowUp" || e.key === "ArrowDown") return;
@@ -343,11 +410,18 @@ const Reconciliation = () => {
         setEditValues(prev => ({ ...prev, [`${jobNo}-${subRowIdx}-${fieldKey}`]: value }));
     };
 
+    const handleJobFieldChange = (jobNo, fieldKey, value) => {
+        setEditValues(prev => ({ ...prev, [`${jobNo}-${fieldKey}`]: value }));
+    };
+
     const handleStartEdit = (jobNo, job) => {
         if (editingJobNo !== null) return;
         const comps = job?.rows || [];
         const subRowCount = getSubRowCount(job);
         const initialValues = {};
+
+        const existingDate = getJobReconciliationDate(job);
+        initialValues[`${jobNo}-dateOfReconciliation`] = existingDate ? String(existingDate).slice(0, 10) : "";
 
         for (let i = 0; i < subRowCount; i++) {
             const reconciliation = comps[i]?.reconciliation || {};
@@ -461,7 +535,11 @@ const Reconciliation = () => {
 
             rows.push(rowPayload);
         }
-        return { jobNo: job.jobNo, rows };
+
+        const rawDate = editValues[`${jobNo}-dateOfReconciliation`];
+        const dateOfReconciliation = rawDate !== undefined ? rawDate : (getJobReconciliationDate(job) || "");
+
+        return { jobNo: job.jobNo, dateOfReconciliation, rows };
     };
 
     const toggleJobSelection = (jobNo) => {
@@ -474,7 +552,7 @@ const Reconciliation = () => {
     };
 
     const allSelected = processedReportData.length > 0 && processedReportData.every(job => selectedJobs.has(job.jobNo));
-    
+
     const toggleAllSelection = () => {
         if (allSelected) {
             setSelectedJobs(new Set());
@@ -544,6 +622,7 @@ const Reconciliation = () => {
 
     const isLoading = isDataLoading;
     const activeFilterEntries = Object.entries(activeFilters);
+    const hasAnyFilters = activeFilterEntries.length > 0 || monthFilter !== "ALL";
 
     const footerTotals = useMemo(() => {
         const totals = {
@@ -635,6 +714,44 @@ const Reconciliation = () => {
                         </button>
                     </Link>
 
+                    {/* Month-wise filter (filters by Date Of Reconciliation) */}
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setMonthFilterOpen(o => !o)}
+                            className={`inline-flex items-center gap-2 px-4 py-2 border border-black rounded-lg shadow-sm text-sm font-medium transition-colors ${monthFilter !== "ALL" ? "bg-indigo-50 text-indigo-700" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                        >
+                            <ListFilter size={16} />
+                            {monthFilter === "ALL" ? "All Months" : formatMonthLabel(monthFilter)}
+                        </button>
+                        {monthFilterOpen && (
+                            <div className="absolute top-full mt-2 left-0 w-56 bg-white rounded-lg shadow-xl ring-1 ring-black/20 z-50 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                                <div className="max-h-64 overflow-y-auto py-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setMonthFilter("ALL"); setMonthFilterOpen(false); }}
+                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 transition-colors ${monthFilter === "ALL" ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-700"}`}
+                                    >
+                                        All Months
+                                    </button>
+                                    {availableMonths.length === 0 && (
+                                        <div className="px-4 py-3 text-xs text-slate-400 text-center">No reconciliation dates yet</div>
+                                    )}
+                                    {availableMonths.map(key => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => { setMonthFilter(key); setMonthFilterOpen(false); }}
+                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 transition-colors ${monthFilter === key ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-slate-700"}`}
+                                        >
+                                            {formatMonthLabel(key)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {selectedJobs.size > 0 && (
                         <button onClick={handleGlobalSubmit} disabled={savingJob} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <CloudCog size={16} />
@@ -644,9 +761,17 @@ const Reconciliation = () => {
                 </div>
             </div>
 
-            {activeFilterEntries.length > 0 && (
+            {hasAnyFilters && (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider mr-2">Active Filters:</span>
+                    {monthFilter !== "ALL" && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-300">
+                            MONTH: <span className="font-bold">{formatMonthLabel(monthFilter)}</span>
+                            <button onClick={() => setMonthFilter("ALL")} className="ml-1 hover:text-indigo-900 transition-colors">
+                                <X size={14} />
+                            </button>
+                        </span>
+                    )}
                     {activeFilterEntries.map(([key, values]) => {
                         const colDef = Object.values(FILTERABLE_COLS).find(c => c.key === key);
                         return (
@@ -658,7 +783,7 @@ const Reconciliation = () => {
                             </span>
                         );
                     })}
-                    <button onClick={() => setActiveFilters({})} className="text-xs text-slate-500 hover:text-rose-600 underline ml-2 transition-colors">
+                    <button onClick={() => { setActiveFilters({}); setMonthFilter("ALL"); }} className="text-xs text-slate-500 hover:text-rose-600 underline ml-2 transition-colors">
                         Clear all
                     </button>
                 </div>
@@ -679,7 +804,7 @@ const Reconciliation = () => {
                                     const hasActiveFilter = activeFilters[FILTERABLE_COLS[I]?.key]?.length > 0;
                                     const isSticky = I <= LAST_STICKY_INDEX;
                                     const isLastSticky = I === LAST_STICKY_INDEX;
-                                    const hasRightBorder = I === 1 || isLastSticky;
+                                    const hasRightBorder = I === 2 || isLastSticky;
                                     const showFilterIcon = I !== 0;
 
                                     return (
@@ -715,7 +840,7 @@ const Reconciliation = () => {
                                                 )}
 
                                                 {openFilterCol === I && isFilterable && (
-                                                    <div className={`absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl ring-1 ring-black/20 z-50 overflow-hidden text-left normal-case font-normal ${I === 1 ? "left-0" : I >= YARN_TABLE_HEADERS.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2"}`} onClick={(e) => e.stopPropagation()}>
+                                                    <div className={`absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl ring-1 ring-black/20 z-50 overflow-hidden text-left normal-case font-normal ${I === 2 ? "left-0" : I >= YARN_TABLE_HEADERS.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2"}`} onClick={(e) => e.stopPropagation()}>
                                                         <div className="p-3 border-b border-black">
                                                             <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full text-sm border border-black rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
                                                         </div>
@@ -732,7 +857,7 @@ const Reconciliation = () => {
                                                                 visibleOptions.map(val => (
                                                                     <label key={val} className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-indigo-50 transition-colors">
                                                                         <input type="checkbox" checked={tempSelected.has(val)} onChange={() => toggleValue(val)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                                                                        <span className="text-sm text-slate-700 truncate">{val || "(Blank)"}</span>
+                                                                        <span className="text-sm text-slate-700 truncate">{normalizeFilterVal(val) === "" ? "(Blank)" : val}</span>
                                                                     </label>
                                                                 ))
                                                             )}
@@ -824,9 +949,34 @@ const Reconciliation = () => {
                                             {isFirstRow && (
                                                 <td
                                                     rowSpan={subRowCount}
-                                                    className={`sticky z-10 px-3 py-3 border-b border-black text-center align-middle ${isEditingThisJob ? "border-l-4 border-l-indigo-600" : ""} ${selectedCellClass(rowFlatIndex, 1)}`}
-                                                    style={stickyCellStyle(1, stickyBg, true)}
+                                                    className={`sticky z-10 px-3 py-3 border-b border-black text-center align-middle ${selectedCellClass(rowFlatIndex, 1)}`}
+                                                    style={stickyCellStyle(1, stickyBg, false)}
                                                     {...cellProps(rowFlatIndex, 1)}
+                                                >
+                                                    <div className="flex items-center justify-center h-full">
+                                                        {isEditingThisJob ? (
+                                                            <input
+                                                                type="date"
+                                                                className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-black rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                                                disabled={savingJob}
+                                                                value={editValues[`${jobNo}-dateOfReconciliation`] ?? ""}
+                                                                onChange={(e) => handleJobFieldChange(jobNo, "dateOfReconciliation", e.target.value)}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-sm font-medium text-slate-700">
+                                                                {formatDateDisplay(getJobReconciliationDate(job))}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
+
+                                            {isFirstRow && (
+                                                <td
+                                                    rowSpan={subRowCount}
+                                                    className={`sticky z-10 px-3 py-3 border-b border-black text-center align-middle ${isEditingThisJob ? "border-l-4 border-l-indigo-600" : ""} ${selectedCellClass(rowFlatIndex, 2)}`}
+                                                    style={stickyCellStyle(2, stickyBg, true)}
+                                                    {...cellProps(rowFlatIndex, 2)}
                                                 >
                                                     <div className="flex flex-col items-center justify-center gap-3 h-full">
                                                         <span className="text-sm font-bold text-slate-900">{jobNo || "-"}</span>
@@ -848,17 +998,17 @@ const Reconciliation = () => {
                                                 </td>
                                             )}
 
-                                            <td className={`${stickyBodyClass(2)} ${selectedCellClass(rowFlatIndex, 2)}`} style={stickyCellStyle(2, stickyBg)} {...cellProps(rowFlatIndex, 2)}>
+                                            <td className={`${stickyBodyClass(3)} ${selectedCellClass(rowFlatIndex, 3)}`} style={stickyCellStyle(3, stickyBg)} {...cellProps(rowFlatIndex, 3)}>
                                                 <div className="flex items-center justify-center h-full">{com?.color || "-"}</div>
                                             </td>
-                                            <td className={`${stickyBodyClass(3)} ${selectedCellClass(rowFlatIndex, 3)}`} style={stickyCellStyle(3, stickyBg)} {...cellProps(rowFlatIndex, 3)}>
+                                            <td className={`${stickyBodyClass(4)} ${selectedCellClass(rowFlatIndex, 4)}`} style={stickyCellStyle(4, stickyBg)} {...cellProps(rowFlatIndex, 4)}>
                                                 <div className="flex items-center justify-center h-full">{com?.composition || "-"}</div>
                                             </td>
-                                            <td className={`${stickyBodyClass(4)} ${selectedCellClass(rowFlatIndex, 4)}`} style={stickyCellStyle(4, stickyBg)} {...cellProps(rowFlatIndex, 4)}>
+                                            <td className={`${stickyBodyClass(5)} ${selectedCellClass(rowFlatIndex, 5)}`} style={stickyCellStyle(5, stickyBg)} {...cellProps(rowFlatIndex, 5)}>
                                                 <div className="flex items-center justify-center h-full">{com?.orderQty ?? "-"}</div>
                                             </td>
 
-                                            <td className={`${stickyBodyClass(5)} ${selectedCellClass(rowFlatIndex, 5)}`} style={stickyCellStyle(5, stickyBg, true)} {...cellProps(rowFlatIndex, 5)}>
+                                            <td className={`${stickyBodyClass(6)} ${selectedCellClass(rowFlatIndex, 6)}`} style={stickyCellStyle(6, stickyBg, true)} {...cellProps(rowFlatIndex, 6)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
                                                         <input
@@ -877,64 +1027,64 @@ const Reconciliation = () => {
                                                 </div>
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 6)}`} style={cellStyle} {...cellProps(rowFlatIndex, 6)}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 7)}`} style={cellStyle} {...cellProps(rowFlatIndex, 7)}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 8)}`} style={cellStyle} {...cellProps(rowFlatIndex, 8)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 7)}`} style={cellStyle} {...cellProps(rowFlatIndex, 7)}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 8)}`} style={cellStyle} {...cellProps(rowFlatIndex, 8)}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>
                                                 {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
                                                     ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 11)}`} style={cellStyle} {...cellProps(rowFlatIndex, 11)}>
                                                 {comp?.knittingOrder_Yarn_Return && !isNaN(Number(comp.knittingOrder_Yarn_Return))
                                                     ? Number(comp.knittingOrder_Yarn_Return).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 11)}`} style={cellStyle} {...cellProps(rowFlatIndex, 11)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>
                                                 {comp?.knittingOrder_Grey_Fabric_Received && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received))
                                                     ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 13)}`} style={cellStyle} {...cellProps(rowFlatIndex, 13)}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 13)}`} style={cellStyle} {...cellProps(rowFlatIndex, 13)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 14)}`} style={cellStyle} {...cellProps(rowFlatIndex, 14)}>
                                                 {comp?.dyeingOrder_Grey_Delivery && !isNaN(Number(comp.dyeingOrder_Grey_Delivery))
                                                     ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 14)}`} style={cellStyle} {...cellProps(rowFlatIndex, 14)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 15)}`} style={cellStyle} {...cellProps(rowFlatIndex, 15)}>
                                                 {comp?.dyeingOrder_Grey_Return && !isNaN(Number(comp.dyeingOrder_Grey_Return))
                                                     ? Number(comp.dyeingOrder_Grey_Return).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 15)}`} style={cellStyle} {...cellProps(rowFlatIndex, 15)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 16)}`} style={cellStyle} {...cellProps(rowFlatIndex, 16)}>
                                                 {comp?.dyeingOrder_Grey_Received && !isNaN(Number(comp.dyeingOrder_Grey_Received))
                                                     ? Number(comp.dyeingOrder_Grey_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 16)}`} style={cellStyle} {...cellProps(rowFlatIndex, 16)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 17)}`} style={cellStyle} {...cellProps(rowFlatIndex, 17)}>
                                                 {comp?.dyeingOrder_Finish_Received && !isNaN(Number(comp.dyeingOrder_Finish_Received))
                                                     ? Number(comp.dyeingOrder_Finish_Received).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 17)}`} style={cellStyle} {...cellProps(rowFlatIndex, 17)}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 18)}`} style={cellStyle} {...cellProps(rowFlatIndex, 18)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 18)}`} style={cellStyle} {...cellProps(rowFlatIndex, 18)}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 19)}`} style={cellStyle} {...cellProps(rowFlatIndex, 19)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 19)}`} style={cellStyle} {...cellProps(rowFlatIndex, 19)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>
                                                 {comp?.aopOrder_Sent_for_AOP && !isNaN(Number(comp.aopOrder_Sent_for_AOP))
                                                     ? Number(comp.aopOrder_Sent_for_AOP).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>
                                                 {comp?.aopOrder_Return_From_Aop && !isNaN(Number(comp.aopOrder_Return_From_Aop))
                                                     ? Number(comp.aopOrder_Return_From_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>
                                                 {comp?.aopOrder_Received_From_Aop && !isNaN(Number(comp.aopOrder_Received_From_Aop))
                                                     ? Number(comp.aopOrder_Received_From_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 23)}`} style={cellStyle} {...cellProps(rowFlatIndex, 23)}>
                                                 {comp?.aopOrder_AOP_Finish_Fabric_Rcvd && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd))
                                                     ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 23)}`} style={cellStyle} {...cellProps(rowFlatIndex, 23)}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 24)}`} style={cellStyle} {...cellProps(rowFlatIndex, 24)}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 24)}`} style={cellStyle} {...cellProps(rowFlatIndex, 24)}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 25)}`} style={cellStyle} {...cellProps(rowFlatIndex, 25)}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
 
                                             {TRAILING_FIELDS.map((field, idx) => {
                                                 const colIndex = FIXED_COLUMN_COUNT + idx;
@@ -996,17 +1146,18 @@ const Reconciliation = () => {
                             <tfoot className="sticky bottom-0 z-20 bg-white">
                                 <tr>
                                     <td className="sticky bottom-0 left-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle" style={stickyCellStyle(0, "#e2e8f0", false)} />
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle text-xs font-extrabold uppercase tracking-wider text-slate-700" style={stickyCellStyle(1, "#e2e8f0", true)}>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle" style={stickyCellStyle(1, "#e2e8f0", false)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle text-xs font-extrabold uppercase tracking-wider text-slate-700" style={stickyCellStyle(2, "#e2e8f0", true)}>
                                         Sub-Total
                                     </td>
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(2, "#e2e8f0")} />
                                     <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(3, "#e2e8f0")} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(4, "#e2e8f0")} />
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...stickyCellStyle(4, "#e2e8f0", false), borderTop: "2px solid #000000" }}>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...stickyCellStyle(5, "#e2e8f0", false), borderTop: "2px solid #000000" }}>
                                         {footerTotals.orderQty.toFixed(2)}
                                     </td>
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(5, "#e2e8f0", true)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-black" style={stickyCellStyle(6, "#e2e8f0", true)} />
 
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
                                         {footerTotals.finishRequiredQty.toFixed(2)}
