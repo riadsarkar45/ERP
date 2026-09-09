@@ -14,6 +14,7 @@ import Toast from "./Toast";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../dashboard/auth/AuthContext";
 
+
 export const FROZEN_COUNT = 8;
 
 const FILTERABLE_COLUMNS = new Set([
@@ -807,7 +808,7 @@ const AllOrders = ({ orderType }) => {
                         /* ========================================== */
                         .filter-dropdown-container * {
                             color: #000000 !important;
-                            font-weight: 600 !important;
+                            font-weight: 400 !important;
                             font-size: 14px !important;
                             text-shadow: none !important;
                             -webkit-font-smoothing: antialiased;

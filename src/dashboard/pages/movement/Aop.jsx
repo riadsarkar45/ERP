@@ -3,66 +3,118 @@ import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
-import { Loader } from 'lucide-react';
+import { Loader, Search, Download, Save, Filter, X } from 'lucide-react';
+
+// --- Modern Design System & Styles ---
+const theme = {
+    colors: {
+        primary: '#3b82f6',
+        primaryHover: '#2563eb',
+        success: '#10b981',
+        successHover: '#059669',
+        danger: '#ef4444',
+        warning: '#fef08a',
+        bgPage: '#ffffff',
+        bgHeader: '#54e86a',
+        bgFooter: '#f1f5f9',
+        bgHover: '#f1f5f9',
+        border: '#10b981',
+        borderDark: '#cbd5e1',
+        textMain: '#0f172a',
+        textMuted: '#64748b',
+        white: '#ffffff',
+    },
+    shadows: {
+        sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    },
+    radius: '8px',
+};
 
 const cellStyle = {
-    border: "1px solid #999",
-    padding: "6px 8px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
+    padding: "12px 16px",
+    borderBottom: `2px solid ${theme.colors.border}`,
+    borderRight: `2px solid ${theme.colors.border}`,
+    fontSize: "0.875rem",
+    color: theme.colors.textMain,
     verticalAlign: "middle",
-    textAlign: "center",
+    textAlign: "left",
+    transition: "background-color 0.15s ease",
+    whiteSpace: "normal",       // ENABLE WRAP TEXT
+    wordWrap: "break-word",     // ENABLE WRAP TEXT
+    wordBreak: "break-word",    // ENABLE WRAP TEXT
+    lineHeight: "1.4",
 };
 
 const thStickyStyle = {
     ...cellStyle,
     position: "sticky",
     top: 0,
-    zIndex: 10,
-    background: "#f3f4f6",
+    zIndex: 30,
+    background: theme.colors.bgHeader,
+    fontWeight: 700,            // BOLD HEADER
+    fontSize: "0.75rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: theme.colors.textMuted,
+    borderBottom: `3px solid ${theme.colors.borderDark}`,
+    boxShadow: theme.shadows.sm,
 };
 
 const tfootCellStyle = {
     ...cellStyle,
     position: "sticky",
     bottom: 0,
-    zIndex: 10,
-    background: "#f3f4f6",
+    zIndex: 30,
+    background: theme.colors.bgFooter,
     fontWeight: 700,
+    borderTop: `2px solid ${theme.colors.borderDark}`,
+    borderBottom: "none",
+    color: theme.colors.textMain,
 };
 
 const pageButtonStyle = (active) => ({
-    border: "2px solid #999",
-    background: active ? "#333" : "#fff",
-    color: active ? "#fff" : "#333",
-    padding: "4px 10px",
-    margin: "0 px",
-    borderRadius: 4,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "36px",
+    height: "36px",
+    padding: "0 12px",
+    margin: "0 2px",
+    borderRadius: "6px",
+    border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`,
+    background: active ? theme.colors.primary : theme.colors.white,
+    color: active ? theme.colors.white : theme.colors.textMain,
     cursor: "pointer",
-    fontSize: "0.9rem",
+    fontSize: "0.875rem",
+    fontWeight: active ? 600 : 400,
+    transition: "all 0.2s ease",
+    boxShadow: active ? theme.shadows.sm : "none",
 });
 
-// Added "ID" column to keep table alignment correct and consistent with Knitting
+// Column definitions (Frozen properties removed)
 const tableHeader = [
-    { header: "", width: "40px", key: "select", noFilter: true },
-    { header: "Date", width: "7%", key: "challanDate" },
-    { header: "ID", width: "5%", key: "deliveryId", noFilter: true },
-    { header: "Challan No", width: "7%", key: "challanNo" },
-    { header: "Job No", width: "9%", key: "jobNo" },
-    { header: "Composition", width: "10%", key: "composition" },
-    { header: "Color", width: "8%", key: "color" },
-    { header: "From Factory", width: "7%", key: "fromFactory" },
-    { header: "To Factory", width: "7%", key: "toFactory" },
-    { header: "Sent For Aop", width: "6%", key: "sentForAop" },
-    { header: "Return From Aop", width: "6%", key: "returnFromAop" },
-    { header: "Receive From Aop", width: "6%", key: "receiveFromAop" },
-    { header: "Finish Receive", width: "6%", key: "finishReceiveFromAop" },
-    { header: "Process Loss %", width: "6%", key: "processLoss" },
-    { header: "Price/KG", width: "6%", key: "unitePrice" },
-    { header: "Billing", width: "6%", key: "billingAmount" },
+    { header: "", width: "50px", key: "select", noFilter: true },
+    { header: "Date", width: "110px", key: "challanDate" },
+    { header: "ID", width: "80px", key: "deliveryId", noFilter: true },
+    { header: "Challan No", width: "120px", key: "challanNo" },
+    { header: "Job No", width: "140px", key: "jobNo" },
+    { header: "Composition", width: "190px", key: "composition" },
+    { header: "Color", width: "165px", key: "color" },
+    { header: "From Factory", width: "130px", key: "fromFactory" },
+    { header: "To Factory", width: "130px", key: "toFactory" },
+    { header: "Sent For Aop", width: "110px", key: "sentForAop" },
+    { header: "Return From Aop", width: "120px", key: "returnFromAop" },
+    { header: "Receive From Aop", width: "120px", key: "receiveFromAop" },
+    { header: "Finish Receive", width: "120px", key: "finishReceiveFromAop" },
+    { header: "Process Loss %", width: "110px", key: "processLoss" },
+    { header: "Price/KG", width: "100px", key: "unitePrice" },
+    { header: "Billing", width: "120px", key: "billingAmount" },
 ];
 
 const Aop = () => {
+    // --- ALL STATE AT TOP LEVEL (Rules of Hooks) ---
     const [movements, setMovements] = useState([]);
     const [page, setPage] = useState(1);
     const [filters, setFilters] = useState({});
@@ -79,10 +131,12 @@ const Aop = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    // Editing states
     const [isLoading, setIsLoading] = useState(false);
-    const [editingCell, setEditingCell] = useState(null); // { rowKey, colKey }
-    const [editedData, setEditedData] = useState({}); // { [rowKey]: { [colKey]: value } }
+    const [editingCell, setEditingCell] = useState(null);
+    const [editedData, setEditedData] = useState({});
+    
+    // Hover state at top level
+    const [hoveredRow, setHoveredRow] = useState(null);
 
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
@@ -114,7 +168,6 @@ const Aop = () => {
         const rowMap = new Map();
         const order = [];
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
-
         const makeKey = (challanNo, jobNo, comp, color) => `${challanNo}|${jobNo}|${comp}|${color}`;
 
         const getOrCreateRow = (challanNo, jobNo, comp, color, source) => {
@@ -123,7 +176,7 @@ const Aop = () => {
             if (!row) {
                 row = {
                     rowKey: key,
-                    deliveryId: source?.id || null, 
+                    deliveryId: source?.id || null,
                     chId: source?.id || challanNo,
                     challanNo,
                     jobNo,
@@ -149,7 +202,6 @@ const Aop = () => {
         const applyDelivery = (row, dv, source) => {
             const qty = Number(dv?.deliveryQty ?? dv?.totalQty) || 0;
             row.deliveryQty += qty;
-
             const type = String(dv?.deliveryType || "").toLowerCase().replace(/[\s_-]+/g, "");
             if (type.includes("sentforaop")) row.sentForAop += qty;
             else if (type.includes("aopfinishfabricrcvd") || type.includes("finishfabric") || type.includes("finishreceive") || type.includes("finishreceived") || type.includes("returnfromaop")) row.finishReceiveFromAop += qty;
@@ -169,27 +221,20 @@ const Aop = () => {
                     if (!c) return;
                     const qtyRaw = c?.qty ?? c?.quantity ?? c?.deliveryQty ?? c?.totalQty ?? c?.weight ?? c?.kg ?? null;
                     const qtyNum = (qtyRaw !== null && qtyRaw !== "" && !isNaN(Number(qtyRaw))) ? Number(qtyRaw) : null;
-                    facets.push({
-                        comp: c?.composition || item?.composition || "-",
-                        color: c?.color || item?.color || "-",
-                        qty: qtyNum,
-                    });
+                    facets.push({ comp: c?.composition || item?.composition || "-", color: c?.color || item?.color || "-", qty: qtyNum });
                 });
             } else if (typeof item?.color === "string" && item.color.includes(", ")) {
                 item.color.split(", ").map((s) => s.trim()).filter(Boolean).forEach((colorPart) => {
                     facets.push({ comp: item?.composition || "-", color: colorPart, qty: null });
                 });
             }
-            if (facets.length === 0) {
-                facets.push({ comp: item?.composition || "-", color: item?.color || "-", qty: null });
-            }
+            if (facets.length === 0) facets.push({ comp: item?.composition || "-", color: item?.color || "-", qty: null });
             return facets;
         };
 
         movements.forEach((item) => {
             if (!item) return;
             const jobNo = extractJobNo(item) || "-";
-
             if (Array.isArray(item.deliveries) && item.deliveries.length > 0) {
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
@@ -217,41 +262,24 @@ const Aop = () => {
         return order.map((key) => {
             const row = rowMap.get(key);
             const processLoss = row.receiveFromAop > 0 ? ((row.receiveFromAop - row.finishReceiveFromAop) / row.receiveFromAop) * 100 : 0;
-            return {
-                ...row,
-                billingAmount: row.receiveFromAop * row.unitePrice,
-                processLoss,
-            };
+            return { ...row, billingAmount: row.receiveFromAop * row.unitePrice, processLoss };
         });
     }, [movements]);
 
-    // Merge base rows with any unsaved edits
     const processedRows = useMemo(() => {
         return allRows.map(row => {
             const edits = editedData[row.rowKey] || {};
-
             const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
-
             const sentForAop = Number(getVal('sentForAop')) || 0;
             const returnFromAop = Number(getVal('returnFromAop')) || 0;
             const receiveFromAop = Number(getVal('receiveFromAop')) || 0;
             const finishReceiveFromAop = Number(getVal('finishReceiveFromAop')) || 0;
-
             const processLoss = receiveFromAop > 0 ? ((receiveFromAop - finishReceiveFromAop) / receiveFromAop) * 100 : 0;
             const billingAmount = receiveFromAop * row.unitePrice;
-
             return {
-                ...row,
-                deliveryId: row.deliveryId, 
-                challanNo: getVal('challanNo'),
-                fromFactory: getVal('fromFactory'),
-                toFactory: getVal('toFactory'),
-                sentForAop,
-                returnFromAop,
-                receiveFromAop,
-                finishReceiveFromAop,
-                processLoss,
-                billingAmount
+                ...row, deliveryId: row.deliveryId, challanNo: getVal('challanNo'),
+                fromFactory: getVal('fromFactory'), toFactory: getVal('toFactory'),
+                sentForAop, returnFromAop, receiveFromAop, finishReceiveFromAop, processLoss, billingAmount
             };
         });
     }, [allRows, editedData]);
@@ -262,31 +290,17 @@ const Aop = () => {
             if (col.noFilter) return;
             const set = new Set();
             processedRows.forEach((row) => {
-                // Group Date column by Month (YYYY-MM)
                 if (col.key === 'challanDate') {
                     try {
                         const d = new Date(row.challanDate);
-                        if (!isNaN(d.getTime())) {
-                            const y = d.getFullYear();
-                            const m = String(d.getMonth() + 1).padStart(2, '0');
-                            set.add(`${y}-${m}`);
-                        } else {
-                            set.add(String(row.challanDate || ""));
-                        }
-                    } catch (e) {
-                        set.add(String(row.challanDate || ""));
-                    }
-                } else {
-                    set.add(String(row[col.key] ?? ""));
-                }
+                        if (!isNaN(d.getTime())) set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                        else set.add(String(row.challanDate || ""));
+                    } catch (e) { set.add(String(row.challanDate || "")); }
+                } else set.add(String(row[col.key] ?? ""));
             });
-            
-            // Sort Date descending, others alphabetically/numerically
-            if (col.key === 'challanDate') {
-                opts[col.key] = Array.from(set).sort((a, b) => b.localeCompare(a)); 
-            } else {
-                opts[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-            }
+            opts[col.key] = col.key === 'challanDate'
+                ? Array.from(set).sort((a, b) => b.localeCompare(a))
+                : Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
         });
         return opts;
     }, [processedRows]);
@@ -296,37 +310,21 @@ const Aop = () => {
             if (col.noFilter) return true;
             const selected = filters[col.key];
             if (!selected) return true;
-
-            // Match Date by Month
             if (col.key === 'challanDate') {
                 let rowMonth = "";
                 try {
                     const d = new Date(row.challanDate);
-                    if (!isNaN(d.getTime())) {
-                        const y = d.getFullYear();
-                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                        rowMonth = `${y}-${m}`;
-                    } else {
-                        rowMonth = String(row.challanDate || "");
-                    }
-                } catch (e) {
-                    rowMonth = String(row.challanDate || "");
-                }
+                    if (!isNaN(d.getTime())) rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    else rowMonth = String(row.challanDate || "");
+                } catch (e) { rowMonth = String(row.challanDate || ""); }
                 return selected.has(rowMonth);
             }
-
             return selected.has(String(row[col.key] ?? ""));
         });
     }), [processedRows, filters]);
 
     const totals = useMemo(() => {
-        const t = {
-            sentForAop: 0,
-            returnFromAop: 0,
-            receiveFromAop: 0,
-            finishReceiveFromAop: 0,
-            billingAmount: 0,
-        };
+        const t = { sentForAop: 0, returnFromAop: 0, receiveFromAop: 0, finishReceiveFromAop: 0, billingAmount: 0 };
         filteredRows.forEach((row) => {
             t.sentForAop += Number(row.sentForAop) || 0;
             t.returnFromAop += Number(row.returnFromAop) || 0;
@@ -408,13 +406,7 @@ const Aop = () => {
     };
 
     const handleCellEdit = (rowKey, colKey, value) => {
-        setEditedData(prev => ({
-            ...prev,
-            [rowKey]: {
-                ...(prev[rowKey] || {}),
-                [colKey]: value
-            }
-        }));
+        setEditedData(prev => ({ ...prev, [rowKey]: { ...(prev[rowKey] || {}), [colKey]: value } }));
     };
 
     const handleSaveChanges = async () => {
@@ -422,64 +414,38 @@ const Aop = () => {
         try {
             const payload = Object.entries(editedData).map(([rowKey, edits]) => {
                 const originalRow = allRows.find(r => r.rowKey === rowKey);
-                return {
-                    deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey, 
-                    rowKey,
-                    ...edits
-                };
+                return { deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey, rowKey, ...edits };
             });
-            
             console.log("Saving edited AOP data:", payload);
             const update = await axiosSecure.patch("/api/edit-challan", payload);
-            
             if (update.status === 20) {
                 alert("Changes saved successfully!");
-                setEditedData({}); 
-                setRefreshKey(prev => prev + 1); 
+                setEditedData({});
+                setRefreshKey(prev => prev + 1);
             }
         } catch (error) {
             console.error("Failed to save changes:", error);
             alert("Failed to save changes.");
-        } finally {
-            setIsLoading(false);
-        }
+        } finally { setIsLoading(false); }
     };
 
     const handleExport = () => {
-        if (filteredRows.length === 0) {
-            alert("No data to export.");
-            return;
-        }
-        
+        if (filteredRows.length === 0) { alert("No data to export."); return; }
         const headers = tableHeader.filter(h => h.key !== 'select').map(h => h.header);
-        
         const rows = filteredRows.map(row => {
             return tableHeader.filter(h => h.key !== 'select').map(h => {
                 let val = row[h.key];
                 if (h.key === 'challanDate' && val) {
-                    try {
-                        const d = new Date(val);
-                        if (!isNaN(d.getTime())) {
-                            val = d.toISOString().split('T')[0]; 
-                        }
-                    } catch(e) {}
+                    try { const d = new Date(val); if (!isNaN(d.getTime())) val = d.toISOString().split('T')[0]; } catch (e) { }
                 }
                 if (val === null || val === undefined) return "";
                 let str = String(val);
-                if (str.includes('"')) {
-                    str = '"' + str.replace(/"/g, '""') + '"';
-                } else if (str.includes(',') || str.includes('\n')) {
-                    str = '"' + str + '"';
-                }
+                if (str.includes('"')) str = '"' + str.replace(/"/g, '""') + '"';
+                else if (str.includes(',') || str.includes('\n')) str = '"' + str + '"';
                 return str;
             });
         });
-
-        const csvContent = [
-            headers.join(","),
-            ...rows.map(r => r.join(","))
-        ].join("\n");
-
+        const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -495,12 +461,20 @@ const Aop = () => {
     const numericFields = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
     const hasUnsavedChanges = Object.keys(editedData).length > 0;
 
-    const getCellStyle = (row, colKey) => {
-        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
+    // Simplified cell style generator (Frozen logic removed)
+    const getCellBaseStyle = (row, idx) => {
+        const isHovered = hoveredRow === row.rowKey;
+        let bg = isHovered ? theme.colors.bgHover : (idx % 2 === 0 ? theme.colors.white : '#fafbfc');
+        
         return {
             ...cellStyle,
-            backgroundColor: isEdited ? '#fef08a' : undefined, 
+            backgroundColor: bg,
         };
+    };
+
+    const getEditedCellStyle = (row, colKey) => {
+        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
+        return isEdited ? { backgroundColor: theme.colors.warning } : {};
     };
 
     const renderCell = (row, colKey) => {
@@ -519,13 +493,11 @@ const Aop = () => {
                     onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
                     autoFocus
                     style={{
-                        width: '100%',
-                        border: '1px solid #3b82f6',
-                        padding: '2px',
-                        textAlign: isNumber ? 'right' : 'left',
-                        boxSizing: 'border-box',
-                        outline: 'none',
-                        backgroundColor: 'transparent' 
+                        width: '100%', height: '100%', border: `2px solid ${theme.colors.primary}`,
+                        borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem',
+                        textAlign: isNumber ? 'right' : 'left', boxSizing: 'border-box',
+                        outline: 'none', backgroundColor: theme.colors.white, margin: '-4px -8px',
+                        fontFamily: 'inherit', whiteSpace: 'normal', wordBreak: 'break-word'
                     }}
                 />
             );
@@ -535,9 +507,11 @@ const Aop = () => {
             <div
                 onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
                 style={{
-                    cursor: editableFields.includes(colKey) ? 'pointer' : 'default',
-                    minHeight: '20px',
-                    textAlign: isNumber ? 'right' : 'center'
+                    minHeight: '20px', textAlign: isNumber ? 'right' : 'left',
+                    fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal',
+                    opacity: currentValue ? 1 : 0.5,
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
                 }}
                 title={editableFields.includes(colKey) ? "Click to edit" : ""}
             >
@@ -549,72 +523,160 @@ const Aop = () => {
         );
     };
 
-    if (loading && movements.length === 0 && !searchLoading) return <div style={{ padding: 20 }}>Loading...</div>;
+    if (loading && movements.length === 0 && !searchLoading) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.colors.textMuted, fontFamily: 'inherit' }}>
+                <Loader size={24} className="animate-spin" style={{ marginRight: 10 }} /> Loading data...
+            </div>
+        );
+    }
+
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
     return (
-        <div style={{ width: "100%", padding: "20px" }}>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", alignItems: "center", flexWrap: "wrap" }}>
-                <input
-                    style={{ border: "1px solid #93c5fd", padding: "8px 12px", borderRadius: "6px", minWidth: "250px", outline: "none" }}
-                    placeholder="Search by Challan or Job No"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }}
-                />
-                <button style={{ background: "#3b82f6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={handleChallanSearch} disabled={searchLoading}>
+        <div style={{ width: "100%", padding: "24px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: theme.colors.textMain }}>
+            
+            {/* Toolbar */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ position: 'relative', flex: '0 1 320px' }}>
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.colors.textMuted }} />
+                    <input
+                        style={{
+                            width: '100%', border: `1px solid ${theme.colors.border}`, padding: "10px 12px 10px 36px",
+                            borderRadius: theme.radius, outline: "none", fontSize: '0.875rem', transition: 'border-color 0.2s',
+                            boxSizing: 'border-box', fontFamily: 'inherit'
+                        }}
+                        placeholder="Search Challan or Job No..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleChallanSearch(); }}
+                        onFocus={(e) => e.target.style.borderColor = theme.colors.primary}
+                        onBlur={(e) => e.target.style.borderColor = theme.colors.border}
+                    />
+                </div>
+
+                <button
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: theme.colors.primary, color: theme.colors.white,
+                        padding: "10px 20px", borderRadius: theme.radius, border: "none",
+                        cursor: searchLoading ? "not-allowed" : "pointer", fontSize: '0.875rem', fontWeight: 500,
+                        opacity: searchLoading ? 0.7 : 1, transition: 'background 0.2s', fontFamily: 'inherit'
+                    }}
+                    onClick={handleChallanSearch} disabled={searchLoading}
+                >
+                    {searchLoading ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
                     {searchLoading ? "Searching..." : "Search"}
                 </button>
+
                 {search && (
-                    <button style={{ background: "#e5e7eb", color: "#374151", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer" }} onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}>
-                        Clear Search
+                    <button
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: theme.colors.white, color: theme.colors.textMuted,
+                            padding: "10px 20px", borderRadius: theme.radius,
+                            border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontFamily: 'inherit'
+                        }}
+                        onClick={() => { setSearch(""); setSearchError(null); setPage(1); setRefreshKey(prev => prev + 1); }}
+                    >
+                        <X size={16} /> Clear
                     </button>
                 )}
 
-                {/* Export Option */}
-                <button style={{ background: "#8b5cf6", color: "white", padding: "8px 16px", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "bold" }} onClick={handleExport}>
-                    Export
+                <div style={{ flex: 1 }} />
+
+                <button
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: theme.colors.white, color: theme.colors.textMain,
+                        padding: "10px 20px", borderRadius: theme.radius,
+                        border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit'
+                    }}
+                    onClick={handleExport}
+                >
+                    <Download size={16} /> Export CSV
                 </button>
 
                 {hasUnsavedChanges && (
                     <button
                         onClick={handleSaveChanges}
                         disabled={isLoading}
-                        style={{ 
-                            background: isLoading ? "#9ca3af" : "#10b981", 
-                            color: "white", 
-                            padding: "8px 16px", 
-                            borderRadius: "6px", 
-                            border: "none", 
-                            cursor: isLoading ? "not-allowed" : "pointer", 
-                            fontWeight: "bold",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px"
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                            background: isLoading ? theme.colors.textMuted : theme.colors.success,
+                            color: theme.colors.white, padding: "10px 24px", borderRadius: theme.radius,
+                            border: "none", cursor: isLoading ? "not-allowed" : "pointer",
+                            fontSize: '0.875rem', fontWeight: 600, boxShadow: theme.shadows.sm, fontFamily: 'inherit'
                         }}
                     >
-                        {isLoading && <span className="animate-spin"><Loader size={16} /></span>}
+                        {isLoading ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
                         {isLoading ? "Saving..." : "Save Changes"}
                     </button>
                 )}
             </div>
 
-            {searchError && <div style={{ padding: "10px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", marginBottom: "12px" }}>{searchError}</div>}
+            {/* Error Banner */}
+            {searchError && (
+                <div style={{
+                    padding: "12px 16px", color: "#991b1b", background: "#fef2f2",
+                    border: "1px solid #fecaca", borderRadius: theme.radius, marginBottom: "16px",
+                    fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit'
+                }}>
+                    <X size={16} /> {searchError}
+                </div>
+            )}
 
+            {/* Bill Generation Bar */}
             {challanIds.length > 0 && (
-                <div style={{ marginBottom: "16px" }}>
-                    <button onClick={handleGenerateBill} className="bg-blue-800 bg-opacity-25 text-blue-500 p-2 rounded-md border border-blue-500">
-                        Generate Bill ({challanIds.length})
+                <div style={{
+                    marginBottom: "16px", padding: "12px 16px", background: "#eff6ff",
+                    border: "1px solid #bfdbfe", borderRadius: theme.radius,
+                    display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'inherit'
+                }}>
+                    <span style={{ fontSize: '0.875rem', color: '#1e40af', fontWeight: 500 }}>
+                        {challanIds.length} challan{challanIds.length > 1 ? 's' : ''} selected
+                    </span>
+                    <button
+                        onClick={handleGenerateBill}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: '#1e40af', color: theme.colors.white,
+                            padding: "8px 16px", borderRadius: '6px', border: "none",
+                            cursor: "pointer", fontSize: '0.8rem', fontWeight: 600, fontFamily: 'inherit'
+                        }}
+                    >
+                        Generate Bill PDF
                     </button>
                 </div>
             )}
 
-            <div style={{ width: "100%", maxHeight: "85vh", overflow: "auto", border: "1px solid #999" }}>
-                <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
+            {/* Table Container */}
+            <div style={{
+                width: "100%", maxHeight: "calc(100vh - 220px)", overflow: "auto",
+                border: `1px solid ${theme.colors.border}`, borderRadius: theme.radius,
+                boxShadow: theme.shadows.md, background: theme.colors.white
+            }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
                     <thead>
                         <tr>
                             {tableHeader.map((th) => {
-                                if (th.noFilter) return <th key={th.key} style={{ ...thStickyStyle, width: th.width }}><input type="checkbox" checked={allVisibleSelected} onChange={(e) => { if (e.target.checked) setSelectedRows(new Set(filteredRows.map(r => r.rowKey))); else setSelectedRows(new Set()); }} /></th>;
+                                if (th.noFilter) {
+                                    return (
+                                        <th key={th.key} style={{ ...thStickyStyle, width: th.width, textAlign: 'center' }}>
+                                            {th.key === 'select' ? (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allVisibleSelected}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) setSelectedRows(new Set(filteredRows.map(r => r.rowKey)));
+                                                        else setSelectedRows(new Set());
+                                                    }}
+                                                    style={{ accentColor: theme.colors.primary, cursor: 'pointer', width: 16, height: 16 }}
+                                                />
+                                            ) : th.header}
+                                        </th>
+                                    );
+                                }
                                 const options = filterOptions[th.key] || [];
                                 const isActive = !!filters[th.key];
                                 const isOpen = openFilterKey === th.key;
@@ -622,40 +684,97 @@ const Aop = () => {
                                     <th key={th.key} style={{ ...thStickyStyle, width: th.width, overflow: "visible" }}>
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
                                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{th.header}</span>
-                                            <button onClick={() => openFilter(th.key)} style={{ border: "none", background: "none", cursor: "pointer", color: isActive ? "#2563eb" : "#666", fontSize: "0.8rem", padding: 2 }}>▾</button>
+                                            <button
+                                                onClick={() => openFilter(th.key)}
+                                                style={{
+                                                    border: "none", background: isActive ? theme.colors.primary : "transparent",
+                                                    color: isActive ? theme.colors.white : theme.colors.textMuted,
+                                                    cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
+                                                    display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
+                                                }}
+                                            >
+                                                <Filter size={12} />
+                                            </button>
                                         </div>
+
                                         {isOpen && (
-                                            <div ref={dropdownRef} style={{ position: "absolute", top: "100%", left: 0, zIndex: 20, background: "#fff", border: "1px solid #999", borderRadius: 4, width: 200, maxHeight: 280, boxShadow: "0 2px 8px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", textAlign: "left" }}>
-                                                <div style={{ padding: 8, borderBottom: "1px solid #ddd" }}><input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Search..." autoFocus style={{ width: "100%", padding: "4px 6px", border: "1px solid #ccc", borderRadius: 4 }} /></div>
-                                                <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px" }}>
-                                                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: "bold", marginBottom: 6 }}><input type="checkbox" checked={draftSelected.size === options.length && options.length > 0} onChange={() => toggleSelectAllDraft(options)} />Select All</label>
-                                                    {options.filter((val) => {
-                                                        let displayVal = val;
-                                                        // Format YYYY-MM to readable Month Year for filtering display
-                                                        if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                                            const [y, m] = val.split('-');
-                                                            const d = new Date(Number(y), Number(m) - 1);
-                                                            displayVal = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-                                                        }
-                                                        return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
-                                                    }).map((val) => {
-                                                        let displayVal = val;
-                                                        if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                                            const [y, m] = val.split('-');
-                                                            const d = new Date(Number(y), Number(m) - 1);
-                                                            displayVal = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-                                                        }
-                                                        return (
-                                                            <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", padding: "2px 0" }}>
-                                                                <input type="checkbox" checked={draftSelected.has(val)} onChange={() => toggleDraftValue(val)} />
-                                                                {displayVal === "" ? "(blank)" : displayVal}
-                                                            </label>
-                                                        );
-                                                    })}
+                                            <div ref={dropdownRef} style={{
+                                                position: "absolute", top: "100%", left: 0, zIndex: 50,
+                                                background: theme.colors.white, border: `1px solid ${theme.colors.border}`,
+                                                borderRadius: theme.radius, width: 240, maxHeight: 320,
+                                                boxShadow: theme.shadows.lg, display: "flex", flexDirection: "column",
+                                                textAlign: "left", marginTop: 4, fontFamily: 'inherit'
+                                            }}>
+                                                <div style={{ padding: "10px 12px", borderBottom: `1px solid ${theme.colors.border}` }}>
+                                                    <input
+                                                        type="text" value={filterSearch}
+                                                        onChange={(e) => setFilterSearch(e.target.value)}
+                                                        placeholder="Filter values..." autoFocus
+                                                        style={{
+                                                            width: "100%", padding: "8px 10px",
+                                                            border: `1px solid ${theme.colors.border}`, borderRadius: '6px',
+                                                            fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit'
+                                                        }}
+                                                    />
                                                 </div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", padding: 8, borderTop: "1px solid #ddd" }}>
-                                                    <button onClick={() => clearFilter(th.key)} style={{ ...pageButtonStyle(false), fontSize: "0.75rem" }}>Clear</button>
-                                                    <button onClick={() => applyFilter(th.key, options)} style={{ ...pageButtonStyle(true), fontSize: "0.75rem" }}>Apply</button>
+                                                <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
+                                                    <label style={{
+                                                        display: "flex", alignItems: "center", gap: 8,
+                                                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
+                                                        color: theme.colors.textMuted, cursor: 'pointer'
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={draftSelected.size === options.length && options.length > 0}
+                                                            onChange={() => toggleSelectAllDraft(options)}
+                                                            style={{ accentColor: theme.colors.primary }}
+                                                        />
+                                                        Select All ({options.length})
+                                                    </label>
+                                                    <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: 6 }}>
+                                                        {options.filter((val) => {
+                                                            let displayVal = val;
+                                                            if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                                                                const [y, m] = val.split('-');
+                                                                displayVal = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+                                                            }
+                                                            return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
+                                                        }).map((val) => {
+                                                            let displayVal = val;
+                                                            if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                                                                const [y, m] = val.split('-');
+                                                                displayVal = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+                                                            }
+                                                            return (
+                                                                <label key={val} style={{
+                                                                    display: "flex", alignItems: "center", gap: 8,
+                                                                    fontSize: "0.8rem", padding: "4px 0", cursor: 'pointer',
+                                                                    borderRadius: '4px'
+                                                                }}>
+                                                                    <input
+                                                                        type="checkbox" checked={draftSelected.has(val)}
+                                                                        onChange={() => toggleDraftValue(val)}
+                                                                        style={{ accentColor: theme.colors.primary }}
+                                                                    />
+                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                        {displayVal === "" ? "(blank)" : displayVal}
+                                                                    </span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                                <div style={{
+                                                    display: "flex", justifyContent: "space-between", gap: 8,
+                                                    padding: "10px 12px", borderTop: `1px solid ${theme.colors.border}`,
+                                                    background: theme.colors.bgHeader, borderRadius: `0 0 ${theme.radius} ${theme.radius}`
+                                                }}>
+                                                    <button onClick={() => clearFilter(th.key)} style={{
+                                                        ...pageButtonStyle(false), fontSize: "0.75rem", padding: '6px 14px', height: 'auto', fontFamily: 'inherit'
+                                                    }}>Clear</button>
+                                                    <button onClick={() => applyFilter(th.key, options)} style={{
+                                                        ...pageButtonStyle(true), fontSize: "0.75rem", padding: '6px 14px', height: 'auto', fontFamily: 'inherit'
+                                                    }}>Apply</button>
                                                 </div>
                                             </div>
                                         )}
@@ -665,61 +784,161 @@ const Aop = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredRows.map((row) => (
-                            <tr key={row.rowKey}>
-                                <td style={cellStyle}><input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={(e) => { const next = new Set(selectedRows); if (e.target.checked) next.add(row.rowKey); else next.delete(row.rowKey); setSelectedRows(next); }} onClick={() => handleBillPreparation(row.chId)} /></td>
-                                <td style={cellStyle}>{row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}</td>
-                                
-                                <td style={cellStyle}>{row.deliveryId || "-"}</td>
+                        {filteredRows.map((row, idx) => (
+                            <tr
+                                key={row.rowKey}
+                                onMouseEnter={() => setHoveredRow(row.rowKey)}
+                                onMouseLeave={() => setHoveredRow(null)}
+                            >
+                                {tableHeader.map((th) => {
+                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...getEditedCellStyle(row, th.key) };
 
-                                <td style={getCellStyle(row, 'challanNo')}>{renderCell(row, 'challanNo')}</td>
-                                <td style={cellStyle}>{row.jobNo}</td>
-                                <td style={cellStyle}>{row.composition}</td>
-                                <td style={cellStyle}>{row.color || "-"}</td>
-                                <td style={getCellStyle(row, 'fromFactory')}>{renderCell(row, 'fromFactory')}</td>
-                                <td style={getCellStyle(row, 'toFactory')}>{renderCell(row, 'toFactory')}</td>
+                                    if (th.key === 'select') {
+                                        return (
+                                            <td key={th.key} style={{ ...baseStyle, textAlign: 'center' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedRows.has(row.rowKey)}
+                                                    onChange={(e) => {
+                                                        const next = new Set(selectedRows);
+                                                        if (e.target.checked) next.add(row.rowKey); else next.delete(row.rowKey);
+                                                        setSelectedRows(next);
+                                                    }}
+                                                    onClick={() => handleBillPreparation(row.chId)}
+                                                    style={{ accentColor: theme.colors.primary, cursor: 'pointer', width: 16, height: 16 }}
+                                                />
+                                            </td>
+                                        );
+                                    }
 
-                                <td style={getCellStyle(row, 'sentForAop')}>{renderCell(row, 'sentForAop')}</td>
-                                <td style={getCellStyle(row, 'returnFromAop')}>{renderCell(row, 'returnFromAop')}</td>
-                                <td style={getCellStyle(row, 'receiveFromAop')}>{renderCell(row, 'receiveFromAop')}</td>
-                                <td style={getCellStyle(row, 'finishReceiveFromAop')}>{renderCell(row, 'finishReceiveFromAop')}</td>
+                                    if (th.key === 'challanDate') {
+                                        return (
+                                            <td key={th.key} style={baseStyle}>
+                                                <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                                    {row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}
+                                                </span>
+                                            </td>
+                                        );
+                                    }
 
-                                <td style={cellStyle}>{row.receiveFromAop > 0 ? Number(row.processLoss).toFixed(2) + "%" : "-"}</td>
-                                <td style={cellStyle}>{row.unitePrice > 0 ? Number(row.unitePrice).toFixed(2) : "-"}</td>
-                                <td style={cellStyle}>{row.billingAmount > 0 ? Number(row.billingAmount).toFixed(2) : "-"}</td>
+                                    if (th.key === 'deliveryId') {
+                                        return (
+                                            <td key={th.key} style={{ ...baseStyle, color: theme.colors.textMuted, fontSize: '0.8rem' }}>
+                                                {row.deliveryId || "-"}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (th.key === 'color') {
+                                        return (
+                                            <td key={th.key} style={baseStyle}>
+                                                {row.color && row.color !== "-" ? (
+                                                    <span style={{
+                                                        display: 'inline-block', padding: '2px 10px', borderRadius: '12px',
+                                                        background: '#f1f5f9', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'normal', wordBreak: 'break-word'
+                                                    }}>{row.color}</span>
+                                                ) : "-"}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (th.key === 'processLoss') {
+                                        return (
+                                            <td key={th.key} style={baseStyle}>
+                                                {row.receiveFromAop > 0 ? (
+                                                    <span style={{
+                                                        color: Number(row.processLoss) > 5 ? '#dc2626' : theme.colors.textMain,
+                                                        fontWeight: Number(row.processLoss) > 5 ? 600 : 400,
+                                                        fontVariantNumeric: 'tabular-nums', whiteSpace: 'normal', wordBreak: 'break-word'
+                                                    }}>
+                                                        {Number(row.processLoss).toFixed(2)}%
+                                                    </span>
+                                                ) : "-"}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (th.key === 'unitePrice' || th.key === 'billingAmount') {
+                                        return (
+                                            <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: 'tabular-nums', fontWeight: th.key === 'billingAmount' ? 600 : 400 }}>
+                                                {row[th.key] > 0 ? Number(row[th.key]).toFixed(2) : "-"}
+                                            </td>
+                                        );
+                                    }
+
+                                    if (th.key === 'jobNo' || th.key === 'composition') {
+                                        return (
+                                            <td key={th.key} style={baseStyle}>
+                                                <span style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}</span>
+                                            </td>
+                                        );
+                                    }
+
+                                    return (
+                                        <td key={th.key} style={baseStyle}>
+                                            {renderCell(row, th.key)}
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         ))}
-                        {filteredRows.length === 0 && <tr><td style={cellStyle} colSpan={tableHeader.length}>{movements.length === 0 ? "No records found." : "No rows match filters."}</td></tr>}
+                        {filteredRows.length === 0 && (
+                            <tr>
+                                <td style={{ ...cellStyle, textAlign: 'center', padding: 40, color: theme.colors.textMuted, whiteSpace: 'normal' }} colSpan={tableHeader.length}>
+                                    {movements.length === 0 ? "No records found." : "No rows match the current filters."}
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                     {filteredRows.length > 0 && (
                         <tfoot>
                             <tr>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}>Total</td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}>{totals.sentForAop > 0 ? totals.sentForAop.toFixed(2) : "-"}</td>
-                                <td style={tfootCellStyle}>{totals.returnFromAop > 0 ? totals.returnFromAop.toFixed(2) : "-"}</td>
-                                <td style={tfootCellStyle}>{totals.receiveFromAop > 0 ? totals.receiveFromAop.toFixed(2) : "-"}</td>
-                                <td style={tfootCellStyle}>{totals.finishReceiveFromAop > 0 ? totals.finishReceiveFromAop.toFixed(2) : "-"}</td>
-                                <td style={tfootCellStyle}>{totals.receiveFromAop > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}</td>
-                                <td style={tfootCellStyle}></td>
-                                <td style={tfootCellStyle}>{totals.billingAmount > 0 ? totals.billingAmount.toFixed(2) : "-"}</td>
+                                {tableHeader.map((th) => {
+                                    if (th.key === 'composition') {
+                                        return <td key={th.key} style={{ ...tfootCellStyle, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>Total</td>;
+                                    }
+                                    if (['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop', 'billingAmount'].includes(th.key)) {
+                                        return (
+                                            <td key={th.key} style={{ ...tfootCellStyle, fontVariantNumeric: 'tabular-nums', fontWeight: th.key === 'billingAmount' ? 800 : 700 }}>
+                                                {totals[th.key] > 0 ? totals[th.key].toFixed(2) : "-"}
+                                            </td>
+                                        );
+                                    }
+                                    if (th.key === 'processLoss') {
+                                        return (
+                                            <td key={th.key} style={{ ...tfootCellStyle, fontVariantNumeric: 'tabular-nums' }}>
+                                                {totals.receiveFromAop > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}
+                                            </td>
+                                        );
+                                    }
+                                    return <td key={th.key} style={tfootCellStyle}></td>;
+                                })}
                             </tr>
                         </tfoot>
                     )}
                 </table>
             </div>
+
+            {/* Pagination */}
             {!search && totalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
-                    <button style={pageButtonStyle(false)} onClick={() => goToPage(page - 1)} disabled={page === 1}>Prev</button>
-                    {pageNumbers.map((p, i) => p === "..." ? <span key={`e-${i}`} style={{ margin: "0 4px" }}>...</span> : <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>{p}</button>)}
-                    <button style={pageButtonStyle(false)} onClick={() => goToPage(page + 1)} disabled={page === totalPages}>Next</button>
+                <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
+                    <button
+                        style={{ ...pageButtonStyle(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                        onClick={() => goToPage(page - 1)} disabled={page === 1}
+                    >
+                        Prev
+                    </button>
+                    {pageNumbers.map((p, i) =>
+                        p === "..."
+                            ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span>
+                            : <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>{p}</button>
+                    )}
+                    <button
+                        style={{ ...pageButtonStyle(false), opacity: page === totalPages ? 0.4 : 1, cursor: page === totalPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                        onClick={() => goToPage(page + 1)} disabled={page === totalPages}
+                    >
+                        Next
+                    </button>
                 </div>
             )}
         </div>
