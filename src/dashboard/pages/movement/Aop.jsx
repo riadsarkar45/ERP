@@ -3,7 +3,7 @@ import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
-import { Loader, Search, Download, Save, Filter, X } from 'lucide-react';
+import { Loader, Search, Download, Save, Filter, X, Calendar, ChevronDown, Check } from 'lucide-react';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -15,13 +15,13 @@ const theme = {
         danger: '#ef4444',
         warning: '#fef08a',
         bgPage: '#ffffff',
-        bgHeader: '#54e86a',
-        bgFooter: '#f1f5f9',
+        bgHeader: '#f5d8c9',
+        bgFooter: '#f5d8c9',
         bgHover: '#f1f5f9',
         border: '#10b981',
         borderDark: '#cbd5e1',
         textMain: '#0f172a',
-        textMuted: '#64748b',
+        textMuted: '#0f172a',
         white: '#ffffff',
     },
     shadows: {
@@ -39,12 +39,13 @@ const cellStyle = {
     fontSize: "0.875rem",
     color: theme.colors.textMain,
     verticalAlign: "middle",
-    textAlign: "left",
+    textAlign: "center",
     transition: "background-color 0.15s ease",
-    whiteSpace: "normal",       // ENABLE WRAP TEXT
-    wordWrap: "break-word",     // ENABLE WRAP TEXT
-    wordBreak: "break-word",    // ENABLE WRAP TEXT
-    lineHeight: "1.4",
+    whiteSpace: "normal",
+    wordWrap: "break-word",
+    wordBreak: "break-word",
+    lineHeight: "1.2",
+    backgroundClip: "padding-box",
 };
 
 const thStickyStyle = {
@@ -53,13 +54,19 @@ const thStickyStyle = {
     top: 0,
     zIndex: 30,
     background: theme.colors.bgHeader,
-    fontWeight: 700,            // BOLD HEADER
-    fontSize: "0.75rem",
+    fontWeight: 600,
+    fontSize: "0.80rem",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     color: theme.colors.textMuted,
     borderBottom: `3px solid ${theme.colors.borderDark}`,
     boxShadow: theme.shadows.sm,
+    whiteSpace: "normal",
+    wordWrap: "break-word",
+    wordBreak: "break-word",
+    verticalAlign: "middle",
+    textAlign: "center",
+    backgroundClip: "padding-box",
 };
 
 const tfootCellStyle = {
@@ -72,6 +79,8 @@ const tfootCellStyle = {
     borderTop: `2px solid ${theme.colors.borderDark}`,
     borderBottom: "none",
     color: theme.colors.textMain,
+    textAlign: "center",
+    backgroundClip: "padding-box",
 };
 
 const pageButtonStyle = (active) => ({
@@ -93,17 +102,16 @@ const pageButtonStyle = (active) => ({
     boxShadow: active ? theme.shadows.sm : "none",
 });
 
-// Column definitions (Frozen properties removed)
+// Column definitions
 const tableHeader = [
     { header: "", width: "50px", key: "select", noFilter: true },
     { header: "Date", width: "110px", key: "challanDate" },
-    { header: "ID", width: "80px", key: "deliveryId", noFilter: true },
     { header: "Challan No", width: "120px", key: "challanNo" },
     { header: "Job No", width: "140px", key: "jobNo" },
-    { header: "Composition", width: "190px", key: "composition" },
-    { header: "Color", width: "165px", key: "color" },
-    { header: "From Factory", width: "130px", key: "fromFactory" },
-    { header: "To Factory", width: "130px", key: "toFactory" },
+    { header: "Composition", width: "320px", key: "composition" },
+    { header: "Color", width: "260px", key: "color" },
+    { header: "From Factory", width: "180px", key: "fromFactory" },
+    { header: "To Factory", width: "190px", key: "toFactory" },
     { header: "Sent For Aop", width: "110px", key: "sentForAop" },
     { header: "Return From Aop", width: "120px", key: "returnFromAop" },
     { header: "Receive From Aop", width: "120px", key: "receiveFromAop" },
@@ -113,8 +121,60 @@ const tableHeader = [
     { header: "Billing", width: "120px", key: "billingAmount" },
 ];
 
+// ===== FROZEN COLUMNS =====
+const FROZEN_COLUMN_KEYS = ['select', 'challanDate', 'challanNo', 'jobNo', 'composition'];
+const FROZEN_LAST_KEY = FROZEN_COLUMN_KEYS[FROZEN_COLUMN_KEYS.length - 1];
+
+const FROZEN_LEFT_OFFSETS = (() => {
+    const offsets = {};
+    let cumulative = 0;
+    tableHeader.forEach((th) => {
+        if (FROZEN_COLUMN_KEYS.includes(th.key)) {
+            offsets[th.key] = cumulative;
+            cumulative += parseInt(th.width, 10) || 0;
+        }
+    });
+    return offsets;
+})();
+
+const getFrozenStyle = (key, area = 'body') => {
+    if (!FROZEN_COLUMN_KEYS.includes(key)) return {};
+    const left = FROZEN_LEFT_OFFSETS[key] ?? 0;
+    const isLast = key === FROZEN_LAST_KEY;
+    const zIndex = (area === 'header' || area === 'footer') ? 40 : 5;
+    const style = {
+        position: 'sticky',
+        left: `${left}px`,
+        zIndex,
+        backgroundClip: 'padding-box',
+    };
+    if (isLast) {
+        style.borderRight = `3px solid ${theme.colors.borderDark}`;
+        style.boxShadow = '6px 0 8px -4px rgba(15, 23, 42, 0.18)';
+    }
+    return style;
+};
+// ===== END FROZEN COLUMNS =====
+
+// Helper: extract YYYY-MM from any date value
+const getMonthKey = (dateVal) => {
+    if (!dateVal) return "";
+    try {
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return "";
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    } catch (e) {
+        return "";
+    }
+};
+
+const formatMonthLabel = (key) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
+    const [y, m] = key.split('-');
+    return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
+};
+
 const Aop = () => {
-    // --- ALL STATE AT TOP LEVEL (Rules of Hooks) ---
     const [movements, setMovements] = useState([]);
     const [page, setPage] = useState(1);
     const [filters, setFilters] = useState({});
@@ -123,6 +183,7 @@ const Aop = () => {
     const [filterSearch, setFilterSearch] = useState("");
     const [selectedRows, setSelectedRows] = useState(new Set());
     const dropdownRef = useRef(null);
+    const monthDropdownRef = useRef(null);
     const [totalPages, setTotalPages] = useState(1);
     const [challanIds, setChallanIds] = useState([]);
 
@@ -134,8 +195,13 @@ const Aop = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [editingCell, setEditingCell] = useState(null);
     const [editedData, setEditedData] = useState({});
-    
-    // Hover state at top level
+
+    // Excel-like Month Filter States
+    const [selectedMonths, setSelectedMonths] = useState(new Set());
+    const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
+    const [monthDraftSelected, setMonthDraftSelected] = useState(new Set());
+    const [monthSearch, setMonthSearch] = useState("");
+
     const [hoveredRow, setHoveredRow] = useState(null);
 
     const { fetchData, loading } = useFetchData();
@@ -162,6 +228,18 @@ const Aop = () => {
         document.addEventListener("mousedown", handleClick);
         return () => document.removeEventListener("mousedown", handleClick);
     }, [openFilterKey]);
+
+    useEffect(() => {
+        if (!monthDropdownOpen) return;
+        const handleClick = (e) => {
+            if (monthDropdownRef.current && !monthDropdownRef.current.contains(e.target)) {
+                setMonthDropdownOpen(false);
+                setMonthSearch("");
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [monthDropdownOpen]);
 
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
@@ -284,6 +362,35 @@ const Aop = () => {
         });
     }, [allRows, editedData]);
 
+    const monthOptions = useMemo(() => {
+        const set = new Set();
+        processedRows.forEach((row) => {
+            const key = getMonthKey(row.challanDate);
+            if (key) set.add(key);
+        });
+        return Array.from(set).sort((a, b) => b.localeCompare(a));
+    }, [processedRows]);
+
+    // Clean up selected months if they no longer exist in data
+    useEffect(() => {
+        if (selectedMonths.size > 0) {
+            const validMonths = new Set(monthOptions);
+            const filtered = new Set([...selectedMonths].filter(m => validMonths.has(m)));
+            if (filtered.size !== selectedMonths.size) {
+                setSelectedMonths(filtered);
+            }
+        }
+    }, [monthOptions, selectedMonths]);
+
+    const filteredMonthOptions = useMemo(() => {
+        if (!monthSearch.trim()) return monthOptions;
+        const q = monthSearch.toLowerCase();
+        return monthOptions.filter((m) => {
+            const label = formatMonthLabel(m).toLowerCase();
+            return label.includes(q) || m.includes(q);
+        });
+    }, [monthOptions, monthSearch]);
+
     const filterOptions = useMemo(() => {
         const opts = {};
         tableHeader.forEach((col) => {
@@ -306,6 +413,12 @@ const Aop = () => {
     }, [processedRows]);
 
     const filteredRows = useMemo(() => processedRows.filter((row) => {
+        // Excel-like Month Filter Logic
+        if (selectedMonths.size > 0) {
+            const rowMonth = getMonthKey(row.challanDate);
+            if (!rowMonth || !selectedMonths.has(rowMonth)) return false;
+        }
+        
         return tableHeader.every((col) => {
             if (col.noFilter) return true;
             const selected = filters[col.key];
@@ -321,7 +434,7 @@ const Aop = () => {
             }
             return selected.has(String(row[col.key] ?? ""));
         });
-    }), [processedRows, filters]);
+    }), [processedRows, filters, selectedMonths]);
 
     const totals = useMemo(() => {
         const t = { sentForAop: 0, returnFromAop: 0, receiveFromAop: 0, finishReceiveFromAop: 0, billingAmount: 0 };
@@ -366,6 +479,49 @@ const Aop = () => {
         setOpenFilterKey(null);
     };
     const clearFilter = (key) => { setFilters((prev) => { const next = { ...prev }; delete next[key]; return next; }); setOpenFilterKey(null); };
+
+    // ===== MONTH FILTER EXCEL-LIKE BEHAVIOR =====
+    const openMonthFilter = () => {
+        if (monthDropdownOpen) {
+            setMonthDropdownOpen(false);
+            setMonthSearch("");
+            return;
+        }
+        // Initialize draft with current selection, or all options if none selected
+        if (selectedMonths.size > 0) {
+            setMonthDraftSelected(new Set(selectedMonths));
+        } else {
+            setMonthDraftSelected(new Set(monthOptions));
+        }
+        setMonthSearch("");
+        setMonthDropdownOpen(true);
+    };
+
+    const toggleMonthDraftValue = (val) => {
+        setMonthDraftSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(val)) next.delete(val);
+            else next.add(val);
+            return next;
+        });
+    };
+
+    const toggleSelectAllMonths = () => {
+        setMonthDraftSelected(prev => (prev.size === monthOptions.length ? new Set() : new Set(monthOptions)));
+    };
+
+    const applyMonthFilter = () => {
+        setSelectedMonths(new Set(monthDraftSelected));
+        setMonthDropdownOpen(false);
+        setMonthSearch("");
+    };
+
+    const clearMonthFilter = () => {
+        setSelectedMonths(new Set());
+        setMonthDropdownOpen(false);
+        setMonthSearch("");
+    };
+    // ==============================================
 
     const handleBillPreparation = (challanId) => {
         if (challanIds.includes(challanId)) setChallanIds((prev) => prev.filter(id => id !== challanId));
@@ -418,7 +574,7 @@ const Aop = () => {
             });
             console.log("Saving edited AOP data:", payload);
             const update = await axiosSecure.patch("/api/edit-challan", payload);
-            if (update.status === 20) {
+            if (update.status === 200) {
                 alert("Changes saved successfully!");
                 setEditedData({});
                 setRefreshKey(prev => prev + 1);
@@ -461,11 +617,38 @@ const Aop = () => {
     const numericFields = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
     const hasUnsavedChanges = Object.keys(editedData).length > 0;
 
-    // Simplified cell style generator (Frozen logic removed)
+    // ===== CLEAR-ALL FILTERS =====
+    const hasActiveFilters =
+        Object.keys(filters || {}).length > 0 ||
+        (selectedMonths && selectedMonths.size > 0) ||
+        !!search;
+
+    const handleClearAllFilters = () => {
+        // Clear column filters
+        setFilters({});
+        setOpenFilterKey(null);
+        setFilterSearch("");
+        setDraftSelected(new Set());
+
+        // Clear month filter
+        setSelectedMonths(new Set());
+        setMonthDraftSelected(new Set());
+        setMonthDropdownOpen(false);
+        setMonthSearch("");
+
+        // Clear search
+        if (search) {
+            setSearch("");
+            setSearchError(null);
+            setPage(1);
+            setRefreshKey(prev => prev + 1);
+        }
+    };
+    // =============================
+
     const getCellBaseStyle = (row, idx) => {
         const isHovered = hoveredRow === row.rowKey;
         let bg = isHovered ? theme.colors.bgHover : (idx % 2 === 0 ? theme.colors.white : '#fafbfc');
-        
         return {
             ...cellStyle,
             backgroundColor: bg,
@@ -495,7 +678,7 @@ const Aop = () => {
                     style={{
                         width: '100%', height: '100%', border: `2px solid ${theme.colors.primary}`,
                         borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem',
-                        textAlign: isNumber ? 'right' : 'left', boxSizing: 'border-box',
+                        textAlign: 'center', boxSizing: 'border-box',
                         outline: 'none', backgroundColor: theme.colors.white, margin: '-4px -8px',
                         fontFamily: 'inherit', whiteSpace: 'normal', wordBreak: 'break-word'
                     }}
@@ -507,7 +690,7 @@ const Aop = () => {
             <div
                 onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
                 style={{
-                    minHeight: '20px', textAlign: isNumber ? 'right' : 'left',
+                    minHeight: '20px', textAlign: 'center',
                     fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal',
                     opacity: currentValue ? 1 : 0.5,
                     whiteSpace: 'normal',
@@ -535,7 +718,7 @@ const Aop = () => {
 
     return (
         <div style={{ width: "100%", padding: "24px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: theme.colors.textMain }}>
-            
+
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ position: 'relative', flex: '0 1 320px' }}>
@@ -583,6 +766,213 @@ const Aop = () => {
                     </button>
                 )}
 
+                {/* ===== EXCEL-LIKE MONTH FILTER TAB ===== */}
+                {monthOptions.length > 0 && (
+                    <div ref={monthDropdownRef} style={{ position: 'relative' }}>
+                        <button
+                            onClick={openMonthFilter}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 8,
+                                background: theme.colors.white,
+                                color: selectedMonths.size > 0 ? theme.colors.primary : theme.colors.textMain,
+                                padding: "10px 16px",
+                                borderRadius: theme.radius,
+                                border: `1px solid ${selectedMonths.size > 0 ? theme.colors.primary : theme.colors.border}`,
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                fontWeight: 500,
+                                fontFamily: 'inherit',
+                                minWidth: 200,
+                                justifyContent: 'space-between',
+                                transition: 'all 0.15s ease'
+                            }}
+                            title="Filter by month"
+                        >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <Calendar size={16} />
+                                {selectedMonths.size === 0 ? "All Months" : 
+                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) : 
+                                 `${selectedMonths.size} Months Selected`}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {/* Filter Clear Tab appears when month filter is active */}
+                                {selectedMonths.size > 0 && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            clearMonthFilter();
+                                        }}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: theme.colors.primary,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            padding: 2,
+                                            borderRadius: '50%',
+                                            transition: 'background 0.15s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.background = '#eff6ff'}
+                                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                        title="Clear month filter"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                                <ChevronDown
+                                    size={16}
+                                    style={{
+                                        transition: 'transform 0.2s ease',
+                                        transform: monthDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                                    }}
+                                />
+                            </div>
+                        </button>
+
+                        {monthDropdownOpen && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 6px)',
+                                    left: 0,
+                                    zIndex: 60,
+                                    background: theme.colors.white,
+                                    border: `1px solid ${theme.colors.border}`,
+                                    borderRadius: theme.radius,
+                                    width: 260,
+                                    maxHeight: 360,
+                                    boxShadow: theme.shadows.lg,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    fontFamily: 'inherit',
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                <div style={{ padding: "10px 12px", borderBottom: `1px solid ${theme.colors.border}` }}>
+                                    <input
+                                        type="text"
+                                        value={monthSearch}
+                                        onChange={(e) => setMonthSearch(e.target.value)}
+                                        placeholder="Search months..."
+                                        autoFocus
+                                        style={{
+                                            width: "100%",
+                                            padding: "8px 10px",
+                                            border: `1px solid ${theme.colors.border}`,
+                                            borderRadius: '6px',
+                                            fontSize: '0.8rem',
+                                            outline: 'none',
+                                            boxSizing: 'border-box',
+                                            fontFamily: 'inherit'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+                                    <label style={{
+                                        display: "flex", alignItems: "center", gap: 8,
+                                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
+                                        color: theme.colors.textMuted, cursor: 'pointer'
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={monthDraftSelected.size === monthOptions.length && monthOptions.length > 0}
+                                            onChange={toggleSelectAllMonths}
+                                            style={{ accentColor: theme.colors.primary, width: 16, height: 16 }}
+                                        />
+                                        Select All ({monthOptions.length})
+                                    </label>
+                                    <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: 6 }}>
+                                        {filteredMonthOptions.length === 0 && (
+                                            <div style={{ padding: '12px 0', fontSize: '0.8rem', color: theme.colors.textMuted, textAlign: 'center' }}>
+                                                No months found
+                                            </div>
+                                        )}
+                                        {filteredMonthOptions.map((m) => {
+                                            const isChecked = monthDraftSelected.has(m);
+                                            return (
+                                                <label key={m} style={{
+                                                    display: "flex", alignItems: "center", gap: 8,
+                                                    fontSize: "0.85rem", padding: "6px 0", cursor: 'pointer',
+                                                    borderRadius: '4px'
+                                                }}>
+                                                    <input
+                                                        type="checkbox" 
+                                                        checked={isChecked}
+                                                        onChange={() => toggleMonthDraftValue(m)}
+                                                        style={{ accentColor: theme.colors.primary, width: 16, height: 16 }}
+                                                    />
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {formatMonthLabel(m)}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div style={{
+                                    display: "flex", justifyContent: "space-between", gap: 8,
+                                    padding: "10px 12px", borderTop: `1px solid ${theme.colors.border}`,
+                                    background: theme.colors.bgHeader
+                                }}>
+                                    <button 
+                                        onClick={clearMonthFilter} 
+                                        style={{
+                                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                            background: theme.colors.white, color: theme.colors.textMain,
+                                            border: `1px solid ${theme.colors.border}`, borderRadius: '6px',
+                                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, padding: '6px 0', fontFamily: 'inherit'
+                                        }}
+                                    >
+                                        Clear
+                                    </button>
+                                    <button 
+                                        onClick={applyMonthFilter} 
+                                        style={{
+                                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                            background: theme.colors.primary, color: theme.colors.white,
+                                            border: 'none', borderRadius: '6px',
+                                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, padding: '6px 0', fontFamily: 'inherit'
+                                        }}
+                                    >
+                                        Apply
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {/* ===== END MONTH FILTER TAB ===== */}
+
+                {/* ===== CLEAR ALL FILTERS BUTTON ===== */}
+                {hasActiveFilters && (
+                    <button
+                        onClick={handleClearAllFilters}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: '#fef2f2',
+                            color: '#b91c1c',
+                            padding: "10px 16px",
+                            borderRadius: theme.radius,
+                            border: '1px solid #fecaca',
+                            cursor: "pointer",
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            fontFamily: 'inherit',
+                            transition: 'all 0.15s ease',
+                            boxShadow: theme.shadows.sm
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; }}
+                        title="Clear all active filters"
+                    >
+                        <X size={16} /> Clear All Filters
+                    </button>
+                )}
+                {/* ===== END CLEAR ALL FILTERS BUTTON ===== */}
+
                 <div style={{ flex: 1 }} />
 
                 <button
@@ -615,7 +1005,6 @@ const Aop = () => {
                 )}
             </div>
 
-            {/* Error Banner */}
             {searchError && (
                 <div style={{
                     padding: "12px 16px", color: "#991b1b", background: "#fef2f2",
@@ -626,7 +1015,6 @@ const Aop = () => {
                 </div>
             )}
 
-            {/* Bill Generation Bar */}
             {challanIds.length > 0 && (
                 <div style={{
                     marginBottom: "16px", padding: "12px 16px", background: "#eff6ff",
@@ -654,15 +1042,17 @@ const Aop = () => {
             <div style={{
                 width: "100%", maxHeight: "calc(100vh - 220px)", overflow: "auto",
                 border: `1px solid ${theme.colors.border}`, borderRadius: theme.radius,
-                boxShadow: theme.shadows.md, background: theme.colors.white
+                boxShadow: theme.shadows.md, background: theme.colors.white,
+                position: 'relative',
             }}>
-                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
+                <table style={{ width: "100%", minWidth: "1600px", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
                     <thead>
                         <tr>
                             {tableHeader.map((th) => {
+                                const frozen = getFrozenStyle(th.key, 'header');
                                 if (th.noFilter) {
                                     return (
-                                        <th key={th.key} style={{ ...thStickyStyle, width: th.width, textAlign: 'center' }}>
+                                        <th key={th.key} style={{ ...thStickyStyle, width: th.width, ...frozen }}>
                                             {th.key === 'select' ? (
                                                 <input
                                                     type="checkbox"
@@ -681,9 +1071,15 @@ const Aop = () => {
                                 const isActive = !!filters[th.key];
                                 const isOpen = openFilterKey === th.key;
                                 return (
-                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, overflow: "visible" }}>
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{th.header}</span>
+                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, overflow: "visible", ...frozen }}>
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                            <span style={{
+                                                overflow: "visible",
+                                                whiteSpace: "normal",
+                                                wordBreak: "break-word",
+                                                textAlign: "center",
+                                                flex: 1
+                                            }}>{th.header}</span>
                                             <button
                                                 onClick={() => openFilter(th.key)}
                                                 style={{
@@ -699,7 +1095,7 @@ const Aop = () => {
 
                                         {isOpen && (
                                             <div ref={dropdownRef} style={{
-                                                position: "absolute", top: "100%", left: 0, zIndex: 50,
+                                                position: "absolute", top: "100%", left: 0, zIndex: 100,
                                                 background: theme.colors.white, border: `1px solid ${theme.colors.border}`,
                                                 borderRadius: theme.radius, width: 240, maxHeight: 320,
                                                 boxShadow: theme.shadows.lg, display: "flex", flexDirection: "column",
@@ -791,11 +1187,12 @@ const Aop = () => {
                                 onMouseLeave={() => setHoveredRow(null)}
                             >
                                 {tableHeader.map((th) => {
-                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...getEditedCellStyle(row, th.key) };
+                                    const frozen = getFrozenStyle(th.key, 'body');
+                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...getEditedCellStyle(row, th.key), ...frozen };
 
                                     if (th.key === 'select') {
                                         return (
-                                            <td key={th.key} style={{ ...baseStyle, textAlign: 'center' }}>
+                                            <td key={th.key} style={baseStyle}>
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedRows.has(row.rowKey)}
@@ -817,14 +1214,6 @@ const Aop = () => {
                                                 <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                                                     {row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}
                                                 </span>
-                                            </td>
-                                        );
-                                    }
-
-                                    if (th.key === 'deliveryId') {
-                                        return (
-                                            <td key={th.key} style={{ ...baseStyle, color: theme.colors.textMuted, fontSize: '0.8rem' }}>
-                                                {row.deliveryId || "-"}
                                             </td>
                                         );
                                     }
@@ -884,8 +1273,10 @@ const Aop = () => {
                         ))}
                         {filteredRows.length === 0 && (
                             <tr>
-                                <td style={{ ...cellStyle, textAlign: 'center', padding: 40, color: theme.colors.textMuted, whiteSpace: 'normal' }} colSpan={tableHeader.length}>
-                                    {movements.length === 0 ? "No records found." : "No rows match the current filters."}
+                                <td style={{ ...cellStyle, padding: 40, color: theme.colors.textMuted, whiteSpace: 'normal' }} colSpan={tableHeader.length}>
+                                    {movements.length === 0
+                                        ? "No records found."
+                                        : "No rows match the current filters."}
                                 </td>
                             </tr>
                         )}
@@ -894,24 +1285,25 @@ const Aop = () => {
                         <tfoot>
                             <tr>
                                 {tableHeader.map((th) => {
+                                    const frozen = getFrozenStyle(th.key, 'footer');
                                     if (th.key === 'composition') {
-                                        return <td key={th.key} style={{ ...tfootCellStyle, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>Total</td>;
+                                        return <td key={th.key} style={{ ...tfootCellStyle, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', ...frozen }}>Total</td>;
                                     }
                                     if (['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop', 'billingAmount'].includes(th.key)) {
                                         return (
-                                            <td key={th.key} style={{ ...tfootCellStyle, fontVariantNumeric: 'tabular-nums', fontWeight: th.key === 'billingAmount' ? 800 : 700 }}>
+                                            <td key={th.key} style={{ ...tfootCellStyle, fontVariantNumeric: 'tabular-nums', fontWeight: th.key === 'billingAmount' ? 800 : 700, ...frozen }}>
                                                 {totals[th.key] > 0 ? totals[th.key].toFixed(2) : "-"}
                                             </td>
                                         );
                                     }
                                     if (th.key === 'processLoss') {
                                         return (
-                                            <td key={th.key} style={{ ...tfootCellStyle, fontVariantNumeric: 'tabular-nums' }}>
+                                            <td key={th.key} style={{ ...tfootCellStyle, fontVariantNumeric: 'tabular-nums', ...frozen }}>
                                                 {totals.receiveFromAop > 0 ? totals.processLoss.toFixed(2) + "%" : "-"}
                                             </td>
                                         );
                                     }
-                                    return <td key={th.key} style={tfootCellStyle}></td>;
+                                    return <td key={th.key} style={{ ...tfootCellStyle, ...frozen }}></td>;
                                 })}
                             </tr>
                         </tfoot>
@@ -919,7 +1311,6 @@ const Aop = () => {
                 </table>
             </div>
 
-            {/* Pagination */}
             {!search && totalPages > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
                     <button
