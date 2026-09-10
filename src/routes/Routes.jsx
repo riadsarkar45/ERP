@@ -43,6 +43,8 @@ import DailyCutting from "../dashboard/pages/production/DailyCutting";
 import DailySewing from "../dashboard/pages/production/DailySewing";
 import DailyFinishing from "../dashboard/pages/production/DailyFinishing";
 import DailyExport from "../dashboard/pages/production/DailyExport";
+import HeatSet from "../dashboard/pages/movement/others/HeatSet";
+import Trumble from "../dashboard/pages/movement/others/Trumble";
 
 const routers = createBrowserRouter([
     {
@@ -229,6 +231,14 @@ const routers = createBrowserRouter([
                     {
                         path: "daily-production/export",
                         element: <DailyExport/>
+                    },
+                    {
+                        // path: "heat-set",
+                        // element: <HeatSet/>
+                    },
+                    {
+                        // path: "trumble",
+                        // element: <Trumble/>
                     },
                 ]
             }
