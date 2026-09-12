@@ -56,11 +56,16 @@ export const downloadChallan = async (req: Request, res: Response) => {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ message: "Access Denied" });
 
+        // DIAGNOSTIC: confirm the in-memory queue actually has entries on this instance.
+        // If this logs empty on Render but not locally, the in-memory array is the bug
+        // (multi-instance / restart wiping it) — see note at bottom of file.
+        console.log(`[downloadChallan] yarnAndUserIds size at request time: ${yarnAndUserIds.length}`);
+
         /* ---------- DATA FETCH ---------- */
         const findYarnsForChallan = await Promise.all(
             yarnAndUserIds.map(async (challan) => {
                 const { yarnId } = challan;
-                return await prisma.composition.findMany({
+                const rows = await prisma.composition.findMany({
                     where: { id: { in: [yarnId] } },
                     select: {
                         id: true,
@@ -101,6 +106,19 @@ export const downloadChallan = async (req: Request, res: Response) => {
                         },
                     },
                 });
+
+                // DIAGNOSTIC: this is the exact line to watch. If `styleRequirementRow` is
+                // null/undefined here on Render, the problem is upstream in the DB/link,
+                // not in the PDF rendering code below.
+                rows.forEach((r) => {
+                    console.log(
+                        `[downloadChallan] compositionId=${r.id} styleRequirementRow=${JSON.stringify(
+                            r.styleRequirementRow
+                        )}`
+                    );
+                });
+
+                return rows;
             })
         );
 
@@ -314,3 +332,17 @@ export const downloadChallan = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Error generating PDF", error });
     }
 };
+
+/**
+ * PRODUCTION RISK NOTE (not directly the jobNo bug, but likely to bite you next):
+ *
+ * `yarnAndUserIds` is a plain in-memory array. On Render this is unsafe once you have
+ * more than one instance, or the service restarts/spins down (common on free/starter
+ * plans) — data pushed by `generatePdfChallan` on one process can be gone by the time
+ * `downloadChallan` runs. Locally, a single long-lived dev server hides this entirely.
+ *
+ * If the diagnostic log above ever shows `yarnAndUserIds size: 0` on Render for a
+ * user who definitely queued a challan, that's this problem, and the fix is to persist
+ * pending challans in the DB (e.g. a `PendingChallan` table keyed by userId) instead of
+ * an in-memory array.
+ */

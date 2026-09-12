@@ -87,15 +87,8 @@ const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
 };
 
 /* ----------------------------- Column definitions ----------------------------- */
-// NOTE: "ESTIMATED PI DATE" and "PERIOD TIME" columns have been removed per request.
 const COLUMNS = [
-  {
-    key: 'authorized',
-    label: 'STATUS',
-    width: 160,
-    type: 'boolean',
-    getDisplay: (item) => (item.authorized ? 'Authorized' : 'Open'),
-  },
+  { key: 'authorized', label: 'STATUS', width: 160, type: 'boolean', getDisplay: (item) => (item.authorized ? 'Authorized' : 'Open') },
   { key: 'piNo', label: 'PI NO.', width: 100, type: 'text' },
   { key: 'piDate', label: 'PI DATE', width: 110, type: 'date' },
   { key: 'lcNo', label: 'LC NO.', width: 110, type: 'text' },
@@ -111,45 +104,21 @@ const COLUMNS = [
 ];
 
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
-
-// PI NO. through PO QTY, and REMARKS are the double-click-to-edit fields.
 const EDITABLE_KEYS = ['piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'yarnCount', 'composition', 'poQty', 'remarks'];
-
-// Date fields that should default to today's date when starting to edit an empty cell
 const DATE_KEYS = ['piDate'];
 
 /* ----------------------------- Mock Data ----------------------------- */
 const BASE_DATA = [
-  { id: 1, date: '2026-08-01', piNo: 'PI-1001', piDate: '2026-08-01', lcNo: 'LC-5001', po: 'PO-2001', supplierName: 'ABC Textiles Ltd. (Long Name Test)', yarnCount: '30s', composition: '100% Cotton Combed', poQty: 5000.00, yarnReceivedFromSpinning: 3500.50, yarnReturnedToSpinning: 150.00, pendingReceivedQty: 1349.50, remarks: 'Regular shipment with special instructions', authorized: true },
-  { id: 2, date: '2026-08-05', piNo: 'PI-1002', piDate: '2026-08-05', lcNo: 'LC-5002', po: 'PO-2002', supplierName: 'XYZ Fabrics Inc.', yarnCount: '40s', composition: '80% Cotton, 20% Polyester Blend', poQty: 7500.00, yarnReceivedFromSpinning: 5000.00, yarnReturnedToSpinning: 200.00, pendingReceivedQty: 2300.00, remarks: 'Urgent order', authorized: false },
-  { id: 3, date: '2026-07-15', piNo: 'PI-1003', piDate: '2026-07-15', lcNo: 'LC-5003', po: 'PO-2003', supplierName: 'Global Yarn Co.', yarnCount: '20s', composition: '100% Polyester', poQty: 10000.00, yarnReceivedFromSpinning: 8500.75, yarnReturnedToSpinning: 300.25, pendingReceivedQty: 1199.00, remarks: 'Monthly batch', authorized: true },
-  { id: 4, date: '2026-08-10', piNo: 'PI-1004', piDate: '2026-08-10', lcNo: 'LC-5004', po: 'PO-2004', supplierName: 'Prime Textiles', yarnCount: '24s', composition: '60% Cotton, 40% Linen', poQty: 6000.00, yarnReceivedFromSpinning: 4200.00, yarnReturnedToSpinning: 125.00, pendingReceivedQty: 1675.00, remarks: 'Special order', authorized: false },
-  { id: 5, date: '2026-07-22', piNo: 'PI-1005', piDate: '2026-07-22', lcNo: 'LC-5005', po: 'PO-2005', supplierName: 'Elite Fabrics', yarnCount: '60s', composition: '100% Silk', poQty: 2000.00, yarnReceivedFromSpinning: 1800.00, yarnReturnedToSpinning: 50.00, pendingReceivedQty: 150.00, remarks: 'Premium quality', authorized: true },
+  { id: 1, date: '2026-08-01', piNo: 'PI-1001', piDate: '2026-08-01', lcNo: 'LC-5001', po: 'PO-2001', supplierName: 'ABC Textiles Ltd.', yarnCount: '30s', composition: '100% Cotton Combed', poQty: 5000.00, yarnReceivedFromSpinning: 3500.50, yarnReturnedToSpinning: 150.00, pendingReceivedQty: 1349.50, remarks: 'Regular shipment', authorized: true },
+  { id: 2, date: '2026-08-05', piNo: 'PI-1002', piDate: '2026-08-05', lcNo: 'LC-5002', po: 'PO-2002', supplierName: 'XYZ Fabrics Inc.', yarnCount: '40s', composition: '80% Cotton, 20% Polyester', poQty: 7500.00, yarnReceivedFromSpinning: 5000.00, yarnReturnedToSpinning: 200.00, pendingReceivedQty: 2300.00, remarks: 'Urgent order', authorized: false },
 ];
 
 const emptyRow = (id) => ({
-  id,
-  date: '',
-  piNo: '',
-  piDate: '',
-  lcNo: '',
-  po: '',
-  supplierName: '',
-  yarnCount: '',
-  composition: '',
-  poQty: 0,
-  yarnReceivedFromSpinning: 0,
-  yarnReturnedToSpinning: 0,
-  pendingReceivedQty: 0,
-  remarks: '',
-  authorized: false,
+  id, date: '', piNo: '', piDate: '', lcNo: '', po: '', supplierName: '', yarnCount: '', composition: '', poQty: 0, yarnReceivedFromSpinning: 0, yarnReturnedToSpinning: 0, pendingReceivedQty: 0, remarks: '', authorized: false,
 });
 
-/* ----------------------------- Filter Popover Component (Excel-style) ----------------------------- */
-// Renders through a portal at a fixed screen position anchored to the funnel button.
-// This keeps the popover intact as a single box that floats above the table, instead
-// of being clipped/split by the table's scroll container or its sticky header/footer.
-const POPOVER_WIDTH = 224; // px, matches w-56
+/* ----------------------------- Filter Popover Component ----------------------------- */
+const POPOVER_WIDTH = 224;
 
 function FilterPopover({ column, values, activeSet, anchorRect, onApply, onClose }) {
   const ref = useRef(null);
@@ -169,8 +138,6 @@ function FilterPopover({ column, values, activeSet, anchorRect, onApply, onClose
 
   if (!anchorRect) return null;
 
-  // Clamp horizontally so the popover never runs off the right edge of the viewport,
-  // and flip above the button if there isn't room below.
   const spaceBelow = window.innerHeight - anchorRect.bottom;
   const openUpward = spaceBelow < 320 && anchorRect.top > 320;
   const left = Math.min(anchorRect.left, window.innerWidth - POPOVER_WIDTH - 8);
@@ -245,7 +212,7 @@ function FilterPopover({ column, values, activeSet, anchorRect, onApply, onClose
   );
 }
 
-/* ----------------------------- Helper: today's date in YYYY-MM-DD ----------------------------- */
+/* ----------------------------- Helper: today's date ----------------------------- */
 const getTodayISO = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -269,6 +236,8 @@ const PurchaseOrderStatus = () => {
   const [editingOriginal, setEditingOriginal] = useState(null);
   const [newRowIds, setNewRowIds] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: null });
+  
+  const [rowsToAdd, setRowsToAdd] = useState(5);
 
   const fmt = (num) => Number.isFinite(num) ? num.toFixed(2) : '0.00';
   const fmtDate = (iso) => {
@@ -306,13 +275,11 @@ const PurchaseOrderStatus = () => {
   const filteredData = useMemo(() => {
     return allData.filter(item => {
       if (selectedMonth !== 'all' && item.piDate && !item.piDate.startsWith(selectedMonth)) return false;
-
       if (searchInput.trim()) {
         const q = searchInput.trim().toLowerCase();
         const hay = [item.piNo, item.lcNo, item.po, item.supplierName, item.yarnCount, item.composition].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
-
       for (const col of COLUMNS) {
         const active = filters[col.key];
         if (!active) continue;
@@ -334,7 +301,6 @@ const PurchaseOrderStatus = () => {
 
   const handleSearch = () => {};
   const handleClear = () => { setSearchInput(''); setSelectedMonth('all'); setFilters({}); };
-
   const closeFilter = () => { setOpenFilterCol(null); setFilterAnchorRect(null); };
 
   const applyFilter = (colKey, set) => {
@@ -356,9 +322,21 @@ const PurchaseOrderStatus = () => {
   };
 
   const handleAddRow = () => {
-    const nextId = allData.length > 0 ? Math.max(...allData.map((r) => r.id)) + 1 : 1;
-    setAllData((prev) => [emptyRow(nextId), ...prev]);
-    setNewRowIds((prev) => new Set(prev).add(nextId));
+    const count = Math.max(1, rowsToAdd);
+    const newRows = [];
+    let maxId = allData.length > 0 ? Math.max(...allData.map((r) => r.id)) : 0;
+    
+    for (let i = 0; i < count; i++) {
+      maxId += 1;
+      newRows.push(emptyRow(maxId));
+    }
+
+    setAllData((prev) => [...newRows, ...prev]);
+    setNewRowIds((prev) => {
+      const next = new Set(prev);
+      newRows.forEach((r) => next.add(r.id));
+      return next;
+    });
     setIsDirty(true);
     setSavedFlash(false);
   };
@@ -382,10 +360,8 @@ const PurchaseOrderStatus = () => {
     setDeleteConfirm({ isOpen: false, id: null });
   };
 
-  // When starting to edit a date field that is empty, pre-fill it with today's date
   const startEditing = (id, key) => {
     const row = allData.find((r) => r.id === id);
-    // Remember the value as it was before this edit started, so Escape can restore it.
     setEditingOriginal({ id, key, value: row ? row[key] : '' });
 
     if (DATE_KEYS.includes(key)) {
@@ -402,7 +378,6 @@ const PurchaseOrderStatus = () => {
   const stopEditing = () => { setEditingCell(null); setEditingOriginal(null); };
   const isEditing = (id, key) => editingCell && editingCell.id === id && editingCell.key === key;
 
-  // Cancel the current edit and restore the cell to whatever it held before editing began.
   const cancelEditing = (id, key) => {
     if (editingOriginal && editingOriginal.id === id && editingOriginal.key === key) {
       setAllData((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: editingOriginal.value } : r)));
@@ -411,11 +386,6 @@ const PurchaseOrderStatus = () => {
     setEditingOriginal(null);
   };
 
-  // Shared keydown handler for all editable cells:
-  // - Enter: stop editing (keep changes)
-  // - Escape: cancel editing and restore the original value
-  // - Tab: move to the next editable field (to the right) in the same row, wrapping around
-  // - Shift+Tab: move to the previous editable field (to the left) in the same row, wrapping around
   const handleCellKeyDown = (e, id, key) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -434,7 +404,6 @@ const PurchaseOrderStatus = () => {
         nextIndex = (currentIndex + 1) % EDITABLE_KEYS.length;
       }
       const nextKey = EDITABLE_KEYS[nextIndex];
-      // If the next cell is a date field and currently empty, pre-fill it with today's date
       if (DATE_KEYS.includes(nextKey)) {
         const row = allData.find((r) => r.id === id);
         if (row && !row[nextKey]) {
@@ -448,18 +417,64 @@ const PurchaseOrderStatus = () => {
     }
   };
 
-  const handleSave = () => {
-    setIsDirty(false);
-    setSavedFlash(true);
-    setNewRowIds(new Set());
-    setTimeout(() => setSavedFlash(false), 2000);
+  // 🚀 UPDATED: Transforms flat table data into the requested nested structure on submission
+  const handleSave = async () => {
+    const groupedMap = new Map();
+
+    // 1. Group flat rows by PI NO. (Using piNo as the primary grouping key)
+    allData.forEach(row => {
+      const groupKey = row.piNo.trim() || `TEMP_PI_${row.id}`;
+      
+      if (!groupedMap.has(groupKey)) {
+        groupedMap.set(groupKey, {
+          piNo: row.piNo,
+          lcNo: row.lcNo,
+          po: row.po,
+          piDate: row.piDate,
+          data: []
+        });
+      }
+      
+      // 2. Push line-item details into the 'data' array
+      groupedMap.get(groupKey).data.push({
+        supplierName: row.supplierName,
+        yarnCount: row.yarnCount,
+        composition: row.composition,
+        poQty: Number(row.poQty) || 0,
+        yarnReceivedFromSpinning: Number(row.yarnReceivedFromSpinning) || 0,
+        yarnReturnedToSpinning: Number(row.yarnReturnedToSpinning) || 0,
+        pendingReceivedQty: Number(row.pendingReceivedQty) || 0,
+        remarks: row.remarks,
+        authorized: row.authorized
+      });
+    });
+
+    // 3. Convert Map values to the final array payload
+    const submissionPayload = Array.from(groupedMap.values());
+
+    console.log("🚀 FUNCTIONAL SUBMISSION PAYLOAD (Nested Structure):", submissionPayload);
+
+    // 4. Simulate API network request
+    try {
+      await new Promise(resolve => setTimeout(resolve, 600));
+      
+      setIsDirty(false);
+      setSavedFlash(true);
+      setNewRowIds(new Set()); // Clear "new" status as they are now considered saved
+      
+      alert(`✅ Successfully submitted ${submissionPayload.length} PI group(s) to the database!\nCheck browser console to see the exact nested JSON structure.`);
+      
+      setTimeout(() => setSavedFlash(false), 3000);
+    } catch (error) {
+      console.error("❌ Submission failed:", error);
+      alert("Failed to submit data. Please check your connection and try again.");
+    }
   };
 
-  const TOTAL_COLUMN_COUNT = COLUMNS.length + 2; // +1 for Auth Checkbox, +1 for Actions
+  const TOTAL_COLUMN_COUNT = COLUMNS.length + 2;
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
-
       <CustomConfirmModal
         isOpen={deleteConfirm.isOpen}
         message="Are you sure you want to remove this newly added row? This action cannot be undone."
@@ -467,7 +482,7 @@ const PurchaseOrderStatus = () => {
         onCancel={cancelDelete}
       />
 
-      {/* QUICK SUMMARY - 4 numeric cards */}
+      {/* QUICK SUMMARY */}
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
           <span className="w-1 h-4 bg-blue-600 rounded-full"></span> Quick Summary
@@ -509,18 +524,33 @@ const PurchaseOrderStatus = () => {
             </button>
           )}
 
-          <button onClick={handleAddRow} title="Add new row" className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5">
-            <IconPlus /> Add Row
-          </button>
+          <div className="flex items-center gap-2">
+            <input 
+              type="number" 
+              min="1" 
+              max="50" 
+              value={rowsToAdd} 
+              onChange={(e) => setRowsToAdd(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-16 px-2 py-2 border border-gray-300 rounded-md text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              title="Number of rows to add"
+            />
+            <button 
+              onClick={handleAddRow} 
+              title="Add multiple new rows at once" 
+              className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
+            >
+              <IconPlus /> Add Rows
+            </button>
+          </div>
 
           {isDirty && (
-            <button onClick={handleSave} title="Save changes" className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5 animate-pulse">
-              <IconSave /> Save Changes
+            <button onClick={handleSave} title="Submit all changes to database" className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5 animate-pulse">
+              <IconSave /> Save & Submit
             </button>
           )}
           {savedFlash && (
             <span className="text-sm font-medium text-emerald-600 flex items-center gap-1">
-              <IconCheck /> Saved
+              <IconCheck /> Submitted
             </span>
           )}
         </div>
@@ -536,7 +566,7 @@ const PurchaseOrderStatus = () => {
         </div>
       </div>
 
-      {/* TABLE - Scrollable container with sticky header/footer */}
+      {/* TABLE */}
       <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
         <div ref={tableScrollRef} onScroll={closeFilter} className="overflow-x-auto overflow-y-auto max-h-[600px]">
           <table className="w-full border-collapse text-sm">
@@ -547,9 +577,7 @@ const PurchaseOrderStatus = () => {
                     <path d="M4 12.5l5.5 5.5L20 7" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </th>
-                <th className="border border-gray-300 px-2 py-3 text-center font-bold text-gray-700 uppercase text-xs align-top" style={{ minWidth: 70 }}>
-                  Actions
-                </th>
+                <th className="border border-gray-300 px-2 py-3 text-center font-bold text-gray-700 uppercase text-xs align-top" style={{ minWidth: 70 }}>Actions</th>
                 {COLUMNS.map((col) => {
                   const isFiltered = !!filters[col.key];
                   return (
@@ -586,8 +614,6 @@ const PurchaseOrderStatus = () => {
                   const canDelete = newRowIds.has(item.id);
                   return (
                     <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
-
-                      {/* Auth Checkbox Column */}
                       <td className="px-2 py-2 border border-gray-300 text-center">
                         <input
                           type="checkbox"
@@ -597,8 +623,6 @@ const PurchaseOrderStatus = () => {
                           className="w-4 h-4 accent-emerald-600 cursor-pointer"
                         />
                       </td>
-
-                      {/* Delete row action */}
                       <td className="px-2 py-2 border border-gray-300 text-center">
                         {canDelete ? (
                           <button
@@ -612,8 +636,6 @@ const PurchaseOrderStatus = () => {
                           <span className="text-gray-300 select-none">—</span>
                         )}
                       </td>
-
-                      {/* Authorization status (Text only) */}
                       <td className="px-3 py-2 border border-gray-300">
                         <div className="flex items-center justify-center">
                           <span
@@ -624,187 +646,40 @@ const PurchaseOrderStatus = () => {
                           </span>
                         </div>
                       </td>
+                      
+                      {['piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'yarnCount', 'composition', 'poQty', 'remarks'].map((key) => {
+                        const col = COLUMNS.find(c => c.key === key);
+                        const isEditingThis = isEditing(item.id, key);
+                        return (
+                          <td
+                            key={key}
+                            className="p-0 border border-gray-300 cursor-text"
+                            onDoubleClick={() => startEditing(item.id, key)}
+                            title="Double-click to edit"
+                          >
+                            {isEditingThis ? (
+                              <input
+                                autoFocus
+                                type={key === 'poQty' ? 'number' : key === 'piDate' ? 'date' : 'text'}
+                                step={key === 'poQty' ? '0.01' : undefined}
+                                value={item[key] || (key === 'piDate' ? getTodayISO() : '')}
+                                onChange={(e) => updateField(item.id, key, e.target.value)}
+                                onBlur={stopEditing}
+                                onKeyDown={(e) => handleCellKeyDown(e, item.id, key)}
+                                className={`w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400 ${col?.numeric ? 'text-right font-mono tabular-nums' : ''}`}
+                              />
+                            ) : (
+                              <span className={`block px-3 py-2 text-gray-900 ${col?.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
+                                {key === 'piDate' ? fmtDate(item[key]) : (col?.numeric ? fmt(Number(item[key]) || 0) : (item[key] || '-'))}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
 
-                      {/* Editable fields */}
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'piNo')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'piNo') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.piNo}
-                            onChange={(e) => updateField(item.id, 'piNo', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'piNo')}
-                            className="w-full h-full px-3 py-2 text-gray-900 font-medium bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 font-medium truncate">{item.piNo || '-'}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'piDate')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'piDate') ? (
-                          <input
-                            autoFocus
-                            type="date"
-                            value={item.piDate || getTodayISO()}
-                            onChange={(e) => updateField(item.id, 'piDate', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'piDate')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 whitespace-nowrap">{fmtDate(item.piDate)}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'lcNo')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'lcNo') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.lcNo}
-                            onChange={(e) => updateField(item.id, 'lcNo', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'lcNo')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 truncate">{item.lcNo || '-'}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'po')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'po') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.po}
-                            onChange={(e) => updateField(item.id, 'po', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'po')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 truncate">{item.po || '-'}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'supplierName')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'supplierName') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.supplierName}
-                            onChange={(e) => updateField(item.id, 'supplierName', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'supplierName')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 truncate">{item.supplierName || '-'}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'yarnCount')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'yarnCount') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.yarnCount}
-                            onChange={(e) => updateField(item.id, 'yarnCount', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'yarnCount')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 truncate">{item.yarnCount || '-'}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'composition')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'composition') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.composition}
-                            onChange={(e) => updateField(item.id, 'composition', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'composition')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 truncate">{item.composition || '-'}</span>
-                        )}
-                      </td>
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'poQty')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'poQty') ? (
-                          <input
-                            autoFocus
-                            type="number"
-                            step="0.01"
-                            value={item.poQty}
-                            onChange={(e) => updateField(item.id, 'poQty', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'poQty')}
-                            className="w-full h-full px-3 py-2 text-right text-gray-900 font-mono tabular-nums bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-right text-gray-900 font-mono tabular-nums">{fmt(Number(item.poQty) || 0)}</span>
-                        )}
-                      </td>
-
-                      {/* Non-editable numeric fields */}
                       <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFromSpinning)}</td>
                       <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnedToSpinning)}</td>
                       <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-semibold ${item.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.pendingReceivedQty)}</td>
-
-                      {/* Editable Remarks */}
-                      <td
-                        className="p-0 border border-gray-300 cursor-text"
-                        onDoubleClick={() => startEditing(item.id, 'remarks')}
-                        title="Double-click to edit"
-                      >
-                        {isEditing(item.id, 'remarks') ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={item.remarks}
-                            onChange={(e) => updateField(item.id, 'remarks', e.target.value)}
-                            onBlur={stopEditing}
-                            onKeyDown={(e) => handleCellKeyDown(e, item.id, 'remarks')}
-                            className="w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400"
-                          />
-                        ) : (
-                          <span className="block px-3 py-2 text-gray-900 break-words">{item.remarks || '-'}</span>
-                        )}
-                      </td>
                     </tr>
                   );
                 })

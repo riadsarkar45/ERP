@@ -36,7 +36,7 @@ model WorkOrder {
   jobId                     Int?
   factoryName               String                     @default("NULL")
   yarnCount                 String                     @default("NULL")
-  stichLength                String                     @default("NULL")
+  stichLength               String                     @default("NULL")
   machineDia                String                     @default("NULL")
   createdBy                 Int                        @default(1)
   user                      user?                      @relation("WorkOrderCreatedBy", fields: [createdBy], references: [id])
@@ -310,4 +310,25 @@ model workOrderApprovalRequest {
   workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
   toUser      user       @relation("RequestTo", fields: [requestTo], references: [id])
   byUser      user       @relation("RequestedBy", fields: [requestedBy], references: [id])
+}
+
+model yarnPurchasePi {
+  id                    Int                     @id @default(autoincrement())
+  piNo                  String                  @unique
+  lcNo                  String
+  piDate                DateTime
+  yarnPurchasePiDetails yarnPurchasePiDetails[]
+}
+
+model yarnPurchasePiDetails {
+  id           Int            @id @default(autoincrement())
+  piId         Int
+  pi           yarnPurchasePi @relation(fields: [piId], references: [id])
+  count        String
+  composition  String
+  color        String
+  lotNo        String
+  qty          Float
+  price        Float          @default(0.0)
+  supplierName String
 }
