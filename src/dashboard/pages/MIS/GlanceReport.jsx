@@ -7,7 +7,7 @@ import KnittingGlance from "./KnittingGlance";
 import MISGlanceReport from "../../../components/MISGlanceReport";
 
 const BORDER_COLOR = "#aeb7c2";
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 40;
 
 // ── Excel-style filter dropdown (inline, same file) ─────────────────────────
 const ExcelFilterDropdown = ({ allValues, selectedValues, onApply }) => {
@@ -118,7 +118,7 @@ const ExcelFilterDropdown = ({ allValues, selectedValues, onApply }) => {
                         ))}
                     </div>
 
-                    <div className="flex justify-between gap-2 p-2 border-t border-gray-200">
+                    <div className="flex justify-between gap-2 p-2 border-t border-green-600">
                         <button
                             onClick={handleClear}
                             className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded"
@@ -156,45 +156,48 @@ const GlanceReport = () => {
     let COLUMNS = [];
     if (selectOrderType === "knittingOrder") {
         COLUMNS.push(
-            { header: "JOB NO.", width: 120, filterable: true },
-            { header: "KNITTING WORK ORDER QTY", width: 220 },
-            { header: "YARN DELIVERY", width: 140 },
-            { header: "SHORT & EXCESS", width: 140 },
-            { header: "YARN DEL. (%)", width: 140 },
-            { header: "GREY RECEIVED", width: 140 },
-            { header: "YARN RETURN", width: 140 },
-            { header: "PARTY STOCK", width: 140 },
-            { header: "RECEIVED (%)", width: 140 },
+            { header: "JOB NO.", width: 150, filterable: true },
+            { header: "KNITTING WORK ORDER QTY", width: 150 },
+            { header: "YARN DELIVERY", width: 120 },
+            { header: "SHORT & EXCESS", width: 120 },
+            { header: "YARN DEL. (%)", width: 120 },
+            { header: "GREY RECEIVED", width: 120 },
+            { header: "YARN RETURN", width: 120 },
+            { header: "PARTY STOCK", width: 120 },
+            { header: "RECEIVED (%)", width: 120 },
+            { header: "FOLLOW-UP NOTE", width: 200 },
         );
     }
     if (selectOrderType === "dyeingOrder") {
         COLUMNS.push(
-            { header: "JOB NO.", width: 120, filterable: true },
-            { header: "DYEING WORK ORDER QTY", width: 220 },
-            { header: "GREY DELIVERY", width: 140 },
-            { header: "GREY DEV SHORT & EXCESS", width: 140 },
-            { header: "DELIVERY (%)", width: 140 },
-            { header: "GREY RETURN", width: 140 },
-            { header: "GREY RECEIVE", width: 140 },
-            { header: "FINISH RECEIVE", width: 140 },
-            { header: "PROCESS LOSS", width: 140 },
-            { header: "PARTY STOCK", width: 180 },
-            { header: "RECEIVED (%)", width: 140 },
+            { header: "JOB NO.", width: 150, filterable: true },
+            { header: "DYEING WORK ORDER QTY", width: 150 },
+            { header: "GREY DELIVERY", width: 120 },
+            { header: "GREY DEV SHORT & EXCESS", width: 120 },
+            { header: "DELIVERY (%)", width: 120 },
+            { header: "GREY RETURN", width: 120 },
+            { header: "GREY RECEIVE", width: 120 },
+            { header: "FINISH RECEIVE", width: 120 },
+            { header: "PROCESS LOSS", width: 120 },
+            { header: "PARTY STOCK", width: 120 },
+            { header: "RECEIVED (%)", width: 120 },
+            { header: "FOLLOW-UP NOTE", width: 200 },
         );
     }
     if (selectOrderType === "aopOrder") {
         COLUMNS.push(
-            { header: "JOB NO.", width: 120, filterable: true },
-            { header: "AOP WORK ORDER QTY", width: 220 },
-            { header: "SENT FOR AOP", width: 140 },
-            { header: "DEL.SHORT & EXCESS", width: 140 },
-            { header: "DELIVERY (%)", width: 140 },
-            { header: "RECEIVE FROM AOP", width: 140 },
-            { header: "FINISH RECEIVED FROM AOP", width: 140 },
-            { header: "RETURN FROM AOP", width: 140 },
-            { header: "PROCESS LOSS", width: 180 },
-            { header: "PARTY STOCK", width: 140 },
-            { header: "RECEIVED (%)", width: 140 },
+            { header: "JOB NO.", width: 150, filterable: true },
+            { header: "AOP WORK ORDER QTY", width: 150 },
+            { header: "SENT FOR AOP", width: 120 },
+            { header: "DEL.SHORT & EXCESS", width: 120 },
+            { header: "DELIVERY (%)", width: 120 },
+            { header: "RECEIVE FROM AOP", width: 120 },
+            { header: "FINISH RECEIVED FROM AOP", width: 120 },
+            { header: "RETURN FROM AOP", width: 120 },
+            { header: "PROCESS LOSS", width: 120 },
+            { header: "PARTY STOCK", width: 120 },
+            { header: "RECEIVED (%)", width: 120 },
+            { header: "FOLLOW-UP NOTE", width: 200 },
         );
     }
 
@@ -245,7 +248,7 @@ const GlanceReport = () => {
     return (
         <div>
             {/* Tabs */}
-            <div className="flex gap-2 border-b border-gray-300 pb-2 mb-4">
+            <div className="flex gap-2 border-b border-green-300 pb-2 mb-4">
                 {partyViews.map((v, i) => (
                     <button
                         key={i}
@@ -264,7 +267,7 @@ const GlanceReport = () => {
                     </button>
                 )}
                 {selectedJobNos.length > 0 && (
-                    <span className="ml-2 self-center text-xs text-gray-500">
+                    <span className="ml-2 self-center text-xs text-black">
                         Filtered: {selectedJobNos.length} job{selectedJobNos.length > 1 ? "s" : ""} selected
                     </span>
                 )}
@@ -272,7 +275,7 @@ const GlanceReport = () => {
 
 
             {/* ERP Table */}
-            <div style={{ border: `2px solid ${BORDER_COLOR}`, background: "#fff", borderRadius: "4px" }}>
+            <div style={{ border: `3px solid ${BORDER_COLOR}`, background: "#fff", borderRadius: "4px" }}>
                 <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}>
                     <table style={{ width: "100%", minWidth: "1500px", tableLayout: "fixed", borderCollapse: "collapse", borderSpacing: 0, background: "#fff" }}>
                         <colgroup>
@@ -288,7 +291,7 @@ const GlanceReport = () => {
                                         key={index}
                                         style={{
                                             position: "sticky", top: 0, zIndex: 5,
-                                            border: `1px solid ${BORDER_COLOR}`, borderBottom: `2px solid ${BORDER_COLOR}`,
+                                            border: `2px solid ${BORDER_COLOR}`, borderBottom: `2px solid ${BORDER_COLOR}`,
                                             backgroundColor: "#f3f4f6", padding: "10px 8px", textAlign: "center",
                                             fontSize: "12px", fontWeight: 600, color: "#374151",
                                         }}
