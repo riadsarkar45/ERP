@@ -567,9 +567,9 @@ const AllOrders = ({ orderType }) => {
 
     /* ============ EXCEL / MACRO-SHEET LOOK ============ */
     const searchBarContainerStyle = {
-        display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px",
-        padding: "8px 12px", backgroundColor: "#217346", borderRadius: "8px",
-        border: "1px solid #14532D", boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px",
+        padding: "8px", backgroundColor: "#217346", borderRadius: "8px",
+        border: "1px solid #14532D", boxShadow: "2px 4px rgba(0,0,0,0.1)",
     };
     const fxBadgeStyle = {
         background: "linear-gradient(180deg,#2E8B5F,#217346)",
@@ -668,7 +668,7 @@ const AllOrders = ({ orderType }) => {
     };
 
     const filterIconStyle = {
-        color: "#0F172A",
+        color: "#271294",
         marginRight: "4px",
     };
 
@@ -686,7 +686,7 @@ const AllOrders = ({ orderType }) => {
                 <Toast message={toastMessage} type={toastType} onClose={() => setShowToast(false)} duration={3000} />
             )}
 
-            {/* Formula-bar style search */}
+            {/* Formula-bar style search
             <div style={searchBarContainerStyle}>
                 <span style={fxBadgeStyle} title="Search (formula bar)">fx</span>
                 <div style={searchInputWrapperStyle}>
@@ -705,9 +705,9 @@ const AllOrders = ({ orderType }) => {
                         </button>
                     )}
                 </div>
-            </div>
+            </div> */}
 
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-0.5">
                 {isEdit?.isEditing && (
                     <button onClick={() => handleEditedSubmit()} title="Save Changes" className="bg-blue-700 text-white rounded-md p-2 text-lg">
                         <Save />
@@ -719,7 +719,7 @@ const AllOrders = ({ orderType }) => {
                     </button>
                 )}
                 {Object.keys(filters).length > 0 && (
-                    <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-red-600 text-white rounded-md p-2 text-lg flex items-center gap-2">
+                    <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-pink-600 text-white rounded-md p-2 text-lg flex items-center gap-2">
                         <FunnelX /> Clear Filters
                     </button>
                 )}
@@ -774,7 +774,7 @@ const AllOrders = ({ orderType }) => {
                             );
                         })}
                     </div>
-                    <button
+                    {/* <button
                         onClick={handleClearFilters}
                         style={clearAllFiltersButtonStyle}
                         title="Clear all filters"
@@ -783,7 +783,7 @@ const AllOrders = ({ orderType }) => {
                     >
                         <X size={14} strokeWidth={3} />
                         Clear All
-                    </button>
+                    </button> */}
                 </div>
             )}
 
@@ -837,6 +837,7 @@ const AllOrders = ({ orderType }) => {
                         .filter-dropdown-container button[class*="OK"] {
                             color: #ffffff !important;
                         }
+                    
 
                         /* ================= EXCEL / MACRO SHEET GRID ================= */
                         .order-table-wrapper table {
@@ -887,10 +888,10 @@ const AllOrders = ({ orderType }) => {
 
                         /* ---- EXCEL-STYLE HEADER BAND ---- */
                         .order-table-wrapper thead th {
-                            background: linear-gradient(180deg, #2E8B5F 0%, #217346 55%, #1B5E3B 100%) !important;
+                            background: linear-gradient(#6b7280 10%) !important;
                             color: #ffffff !important;
                             font-weight: 700 !important;
-                            font-size: 11.5px !important;
+                            font-size: 12px !important;
                             letter-spacing: .45px !important;
                             text-transform: uppercase !important;
                             border-right: 1px solid #1B5E3B !important;
