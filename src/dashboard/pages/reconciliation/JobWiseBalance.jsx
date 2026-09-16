@@ -3,14 +3,13 @@ import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
 
 // --- Helpers ---
 const yarnBalance = (row) => (row.knittingGrey || 0) + (row.yarnReturn || 0) - (row.issue || 0);
-const dyeBalance = (d) => (d.greyRcvd ||0) + (d.greyReturn || 0) - (d.greyDelivery || 0);
+const dyeBalance = (d) => (d.greyRcvd || 0) + (d.greyReturn || 0) - (d.greyDelivery || 0);
 const dyeProcessLoss = (d) => {
     const received = d.greyRcvd || 0;
     if (!received) return null;
     return (received - (d.finishRcvd || 0)) / received;
 };
 
-// --- NEW: AOP Balance & Process Loss helpers (mirrors dyeing pattern) ---
 const aopBalance = (a) => (a.receivedFromAop || 0) + (a.returnFromAop || 0) - (a.sentForAop || 0);
 const aopProcessLoss = (a) => {
     const received = a.receivedFromAop || 0;
@@ -27,7 +26,6 @@ const fmtNum = (n) => {
 };
 
 const fmtPct = (n) => (n === null || n === undefined ? <span className="text-slate-300">—</span> : `${(n * 100).toFixed(2)}%`);
-const rawNum = (n) => (n === null || n === undefined ? "" : String(n));
 
 // --- Column Definitions ---
 const COLUMNS = [
@@ -38,22 +36,22 @@ const COLUMNS = [
     { id: "knittingGrey", label: "Knitting Grey", width: 100, group: "yarn" },
     { id: "yarnReturn", label: "Yarn Return", width: 95, group: "yarn" },
     { id: "yarnBalance", label: "Balance", width: 85, group: "yarn" },
-    
+
     { id: "dyeingFactory", label: "Dyeing Factory", width: 130, group: "dyeing" },
     { id: "greyDelivery", label: "Grey Delivery", width: 90, group: "dyeing" },
     { id: "greyReturn", label: "Grey Return", width: 90, group: "dyeing" },
-    { id: "greyRcvd", label: "Grey Rcvd", width: 85, group: "dyeing" },    
+    { id: "greyRcvd", label: "Grey Rcvd", width: 85, group: "dyeing" },
     { id: "finishRcvd", label: "Finish Rcvd", width: 90, group: "dyeing" },
     { id: "dyeBalance", label: "Balance", width: 85, group: "dyeing" },
     { id: "processLoss", label: "Process Loss", width: 85, group: "dyeing" },
-    
+
     { id: "aopFactory", label: "AOP Factory", width: 130, group: "aop" },
     { id: "sentForAop", label: "Sent For AOP", width: 90, group: "aop" },
     { id: "receivedFromAop", label: "Rcvd From AOP", width: 90, group: "aop" },
     { id: "aopFinishRcvd", label: "AOP Finish Rcvd", width: 90, group: "aop" },
     { id: "aopBalance", label: "Balance", width: 85, group: "aop" },
     { id: "aopProcessLoss", label: "Process Loss", width: 85, group: "aop" },
-    
+
     { id: "remarks", label: "Remarks", width: 140, group: "remarks" },
 ];
 
@@ -61,19 +59,32 @@ const FROZEN_IDS = ["jobNo", "yarnFactory", "yarnReq", "yarnIssue", "knittingGre
 
 let acc = 0;
 const COL_LEFT = {};
-COLUMNS.forEach((c) => { 
-    COL_LEFT[c.id] = acc; 
-    acc += c.width; 
+COLUMNS.forEach((c) => {
+    COL_LEFT[c.id] = acc;
+    acc += c.width;
 });
 const TOTAL_WIDTH = acc;
 
-// NEW: height of the top group-header row (YARN/KNITTING, DYEING, AOP, REMARKS),
-// so the column-name row below it can freeze right after it instead of overlapping it.
 const GROUP_HEADER_ROW_HEIGHT = 33;
 
-const csvCell = (v) => {
-    const s = String(v ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+// --- Lazy ExcelJS loader from CDN (avoids Vite resolution + npm install) ---
+const EXCELJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+let excelJsPromise = null;
+const loadExcelJS = () => {
+    if (typeof window !== "undefined" && window.ExcelJS) return Promise.resolve(window.ExcelJS);
+    if (excelJsPromise) return excelJsPromise;
+    excelJsPromise = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = EXCELJS_CDN;
+        s.async = true;
+        s.onload = () => {
+            if (window.ExcelJS) resolve(window.ExcelJS);
+            else reject(new Error("ExcelJS failed to attach to window"));
+        };
+        s.onerror = () => reject(new Error("Failed to load ExcelJS from CDN"));
+        document.head.appendChild(s);
+    });
+    return excelJsPromise;
 };
 
 // --- Filter Component ---
@@ -95,7 +106,7 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
         next.has(val) ? next.delete(val) : next.add(val);
         setExcluded(colId, next);
     };
-    
+
     const toggleAll = () => setExcluded(colId, excluded.size > 0 ? new Set() : new Set(uniqueValues));
 
     return (
@@ -139,6 +150,18 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
     );
 };
 
+// --- Excel border presets (ExcelJS) ---
+const EXCEL_THIN_BORDER = {
+    top: { style: "thin", color: { argb: "FF94A3B8" } },
+    left: { style: "thin", color: { argb: "FF94A3B8" } },
+    bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+    right: { style: "thin", color: { argb: "FF94A3B8" } },
+};
+const EXCEL_YARN_SEPARATOR_BORDER = {
+    ...EXCEL_THIN_BORDER,
+    right: { style: "medium", color: { argb: "FF64748B" } },
+};
+
 // --- Main Component ---
 const BalanceSheet = () => {
     const [jobs, setJobs] = useState([]);
@@ -150,7 +173,8 @@ const BalanceSheet = () => {
     const [editingCell, setEditingCell] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
-    
+    const [isExporting, setIsExporting] = useState(false);
+
     const axiosSecure = useAxiosPrivate();
     const ITEMS_PER_PAGE = 10;
 
@@ -182,7 +206,6 @@ const BalanceSheet = () => {
 
             if (!matchesSearch) return null;
 
-            // Filter yarn rows
             const filteredYarnRows = job.yarnRows.filter((row) => {
                 const yarnColIds = ['yarnFactory', 'yarnReq', 'yarnIssue', 'knittingGrey', 'yarnReturn', 'yarnBalance'];
                 for (const colId of yarnColIds) {
@@ -201,7 +224,6 @@ const BalanceSheet = () => {
                 return true;
             });
 
-            // Filter dyeing rows
             const filteredDyeingRows = job.dyeingRows.filter((row) => {
                 const dyeingColIds = ['dyeingFactory', 'greyDelivery', 'greyReturn', 'greyRcvd', 'dyeBalance', 'finishRcvd', 'processLoss'];
                 for (const colId of dyeingColIds) {
@@ -221,7 +243,6 @@ const BalanceSheet = () => {
                 return true;
             });
 
-            // Filter AOP rows
             const filteredAopRows = job.aopRows.filter((row) => {
                 const aopColIds = ['aopFactory', 'sentForAop', 'receivedFromAop', 'aopFinishRcvd', 'aopBalance', 'aopProcessLoss'];
                 for (const colId of aopColIds) {
@@ -240,16 +261,9 @@ const BalanceSheet = () => {
                 return true;
             });
 
-            // If all specific row types are filtered out, but the job itself matched search, we still return it 
-            // so the Job No and Remarks remain visible and editable.
-            return { 
-                job: { 
-                    ...job, 
-                    yarnRows: filteredYarnRows, 
-                    dyeingRows: filteredDyeingRows, 
-                    aopRows: filteredAopRows 
-                }, 
-                idx: jobIdx 
+            return {
+                job: { ...job, yarnRows: filteredYarnRows, dyeingRows: filteredDyeingRows, aopRows: filteredAopRows },
+                idx: jobIdx
             };
         }).filter(Boolean);
     }, [jobs, search, colFilters]);
@@ -257,23 +271,20 @@ const BalanceSheet = () => {
     const displayedJobs = useMemo(() => {
         if (hasFilters) return filteredJobs;
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
-        return filteredJobs.slice(startIndex, endIndex);
+        return filteredJobs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
     }, [filteredJobs, currentPage, hasFilters]);
 
     const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE) || 1;
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredJobs.length);
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, colFilters]);
+    useEffect(() => { setCurrentPage(1); }, [search, colFilters]);
 
     const totals = useMemo(() => {
-        const t = { 
-            req: 0, issue: 0, knittingGrey: 0, yarnReturn: 0, yarnBal: 0, 
-            greyDelivery: 0, greyReturn: 0, greyRcvd: 0, dyeBal: 0, finishRcvd: 0, 
-            sentForAop: 0, receivedFromAop: 0, aopFinishRcvd: 0, aopBal: 0 
+        const t = {
+            req: 0, issue: 0, knittingGrey: 0, yarnReturn: 0, yarnBal: 0,
+            greyDelivery: 0, greyReturn: 0, greyRcvd: 0, dyeBal: 0, finishRcvd: 0,
+            sentForAop: 0, receivedFromAop: 0, aopFinishRcvd: 0, aopBal: 0
         };
         filteredJobs.forEach(({ job }) => {
             job.yarnRows.forEach((row) => {
@@ -300,64 +311,226 @@ const BalanceSheet = () => {
         return t;
     }, [filteredJobs]);
 
-    const clearAll = () => { 
-        setSearch(""); 
-        setColFilters({}); 
-        setOpenCol(null); 
-        setCurrentPage(1); 
+    const clearAll = () => {
+        setSearch("");
+        setColFilters({});
+        setOpenCol(null);
+        setCurrentPage(1);
     };
 
-    const exportCsv = () => {
-        const header = COLUMNS.map((c) => c.label);
-        const lines = [header.map(csvCell).join(",")];
+    // ---------- EXCEL EXPORT (borders + merges via CDN-loaded ExcelJS) ----------
+    const exportExcel = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        try {
+            const ExcelJS = await loadExcelJS();
 
-        filteredJobs.forEach(({ job }) => {
-            const maxRows = Math.max(job.yarnRows.length, job.dyeingRows.length, job.aopRows.length, 1);
-            
-            for (let i = 0; i < maxRows; i++) {
-                const yRow = job.yarnRows[i];
-                const dRow = job.dyeingRows[i];
-                const aRow = job.aopRows[i];
-                
-                const cells = [
-                    i === 0 ? job.jobNo : "",
-                    yRow?.factory ?? "",
-                    rawNum(yRow?.req),
-                    rawNum(yRow?.issue),
-                    rawNum(yRow?.knittingGrey),
-                    rawNum(yRow?.yarnReturn),
-                    yRow ? rawNum(yarnBalance(yRow)) : "",
-                    
-                    dRow?.factoryName ?? "",
-                    rawNum(dRow?.greyDelivery),
-                    rawNum(dRow?.greyReturn),
-                    rawNum(dRow?.greyRcvd),
-                    dRow ? rawNum(dyeBalance(dRow)) : "",
-                    rawNum(dRow?.finishRcvd),
-                    rawNum(dRow ? dyeProcessLoss(dRow) : null),
-                    
-                    aRow?.factoryName ?? "",
-                    rawNum(aRow?.sentForAop),
-                    rawNum(aRow?.receivedFromAop),
-                    rawNum(aRow?.aopFinishRcvd),
-                    aRow ? rawNum(aopBalance(aRow)) : "",
-                    aRow ? rawNum(aopProcessLoss(aRow)) : "",
-                    
-                    i === 0 ? job.remarks : "",
-                ];
-                lines.push(cells.map(csvCell).join(","));
-            }
-        });
+            const wb = new ExcelJS.Workbook();
+            wb.creator = "Balance Sheet";
+            wb.created = new Date();
 
-        const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `balance-sheet-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+            const ws = wb.addWorksheet("Balance Sheet", {
+                views: [{
+                    state: "frozen",
+                    xSplit: FROZEN_IDS.length,
+                    ySplit: 2,
+                    activeCell: "H3"
+                }],
+                pageSetup: {
+                    orientation: "landscape",
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 0,
+                    paperSize: 9,
+                    margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+                }
+            });
+
+            // Column widths
+            COLUMNS.forEach((col, i) => {
+                ws.getColumn(i + 1).width = Math.max(9, Math.round(col.width / 7));
+            });
+
+            const isTextCol = (id) =>
+                id === "jobNo" || id === "yarnFactory" || id === "dyeingFactory" ||
+                id === "aopFactory" || id === "remarks";
+
+            const groupFillFor = (group) => {
+                if (group === "dyeing") return "FFF0FDFA";
+                if (group === "aop") return "FFF5F3FF";
+                return "FFFFFFFF";
+            };
+
+            // Row 1 — Group headers
+            const groupHeaderRow = ws.addRow([
+                "YARN / KNITTING", "", "", "", "", "", "",
+                "DYEING", "", "", "", "", "", "",
+                "AOP", "", "", "", "", "",
+                "REMARKS"
+            ]);
+            groupHeaderRow.height = 22;
+            ws.mergeCells(1, 1, 1, 7);
+            ws.mergeCells(1, 8, 1, 14);
+            ws.mergeCells(1, 15, 1, 20);
+
+            groupHeaderRow.eachCell({ includeEmpty: true }, (cell) => {
+                cell.font = { bold: true, size: 11, color: { argb: "FF0F2544" } };
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+                cell.border = EXCEL_THIN_BORDER;
+            });
+
+            // Row 2 — Column headers
+            const headerRow = ws.addRow(COLUMNS.map((c) => c.label));
+            headerRow.height = 26;
+            headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const col = COLUMNS[colNumber - 1];
+                const textLeft = isTextCol(col.id);
+                cell.font = { bold: true, size: 10, color: { argb: "FF0F2544" } };
+                cell.alignment = { horizontal: textLeft ? "left" : "right", vertical: "middle", wrapText: true };
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+                cell.border = EXCEL_THIN_BORDER;
+            });
+
+            // Data rows
+            filteredJobs.forEach(({ job }) => {
+                const maxRows = Math.max(job.yarnRows.length, job.dyeingRows.length, job.aopRows.length, 1);
+                const jobStartRow = ws.rowCount + 1;
+
+                for (let i = 0; i < maxRows; i++) {
+                    const yRow = job.yarnRows[i];
+                    const dRow = job.dyeingRows[i];
+                    const aRow = job.aopRows[i];
+
+                    const cells = [
+                        i === 0 ? (job.jobNo ?? "") : "",
+                        yRow ? (yRow.factory ?? "") : "",
+                        yRow ? (yRow.req ?? 0) : "",
+                        yRow ? (yRow.issue ?? 0) : "",
+                        yRow ? (yRow.knittingGrey ?? 0) : "",
+                        yRow ? (yRow.yarnReturn ?? 0) : "",
+                        yRow ? yarnBalance(yRow) : "",
+
+                        dRow ? (dRow.factoryName ?? "") : "",
+                        dRow ? (dRow.greyDelivery ?? 0) : "",
+                        dRow ? (dRow.greyReturn ?? 0) : "",
+                        dRow ? (dRow.greyRcvd ?? 0) : "",
+                        dRow ? (dRow.finishRcvd ?? 0) : "",
+                        dRow ? dyeBalance(dRow) : "",
+                        dRow ? (dyeProcessLoss(dRow) ?? "") : "",
+
+                        aRow ? (aRow.factoryName ?? "") : "",
+                        aRow ? (aRow.sentForAop ?? 0) : "",
+                        aRow ? (aRow.receivedFromAop ?? 0) : "",
+                        aRow ? (aRow.aopFinishRcvd ?? 0) : "",
+                        aRow ? aopBalance(aRow) : "",
+                        aRow ? (aopProcessLoss(aRow) ?? "") : "",
+
+                        i === 0 ? (job.remarks ?? "") : ""
+                    ];
+
+                    const row = ws.addRow(cells);
+                    row.height = 20;
+
+                    COLUMNS.forEach((col, idx) => {
+                        const cell = row.getCell(idx + 1);
+                        const textLeft = isTextCol(col.id);
+                        const isPct = col.id === "processLoss" || col.id === "aopProcessLoss";
+
+                        cell.border = col.id === "yarnBalance" ? EXCEL_YARN_SEPARATOR_BORDER : EXCEL_THIN_BORDER;
+                        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: groupFillFor(col.group) } };
+
+                        if (isPct) {
+                            cell.numFmt = "0.00%";
+                            cell.alignment = { horizontal: "right", vertical: "middle" };
+                        } else if (textLeft) {
+                            cell.alignment = {
+                                horizontal: col.id === "jobNo" ? "center" : "left",
+                                vertical: "middle",
+                                wrapText: col.id === "remarks"
+                            };
+                        } else {
+                            cell.numFmt = "#,##0.00";
+                            cell.alignment = { horizontal: "right", vertical: "middle" };
+                        }
+                    });
+                }
+
+                const jobEndRow = ws.rowCount;
+
+                // Merge Job No column across this job's rows
+                if (jobEndRow > jobStartRow) {
+                    ws.mergeCells(jobStartRow, 1, jobEndRow, 1);
+                    ws.mergeCells(jobStartRow, COLUMNS.length, jobEndRow, COLUMNS.length);
+                }
+
+                const jobNoCell = ws.getCell(jobStartRow, 1);
+                jobNoCell.font = { bold: true, color: { argb: "FF0F2544" } };
+                jobNoCell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+                jobNoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+
+                const remarksCell = ws.getCell(jobStartRow, COLUMNS.length);
+                remarksCell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+            });
+
+            // Subtotal row
+            const dyeLossTotal = totals.greyDelivery
+                ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null;
+            const aopLossTotal = totals.receivedFromAop
+                ? (totals.receivedFromAop - totals.aopFinishRcvd) / totals.receivedFromAop : null;
+
+            const subtotalRow = ws.addRow([
+                "Subtotal", "",
+                totals.req, totals.issue, totals.knittingGrey, totals.yarnReturn, totals.yarnBal,
+                "",
+                totals.greyDelivery, totals.greyReturn, totals.greyRcvd, totals.finishRcvd,
+                totals.dyeBal, dyeLossTotal,
+                "",
+                totals.sentForAop, totals.receivedFromAop, totals.aopFinishRcvd, totals.aopBal,
+                aopLossTotal,
+                ""
+            ]);
+            subtotalRow.height = 24;
+
+            subtotalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const col = COLUMNS[colNumber - 1];
+                const textLeft = isTextCol(col.id);
+                const isPct = col.id === "processLoss" || col.id === "aopProcessLoss";
+
+                cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F2544" } };
+                cell.border = col.id === "yarnBalance" ? EXCEL_YARN_SEPARATOR_BORDER : EXCEL_THIN_BORDER;
+
+                if (isPct) {
+                    cell.numFmt = "0.00%";
+                    cell.alignment = { horizontal: "right", vertical: "middle" };
+                } else if (textLeft) {
+                    cell.alignment = { horizontal: col.id === "jobNo" ? "center" : "left", vertical: "middle" };
+                } else {
+                    cell.numFmt = "#,##0.00";
+                    cell.alignment = { horizontal: "right", vertical: "middle" };
+                }
+            });
+
+            // Download
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `balance-sheet-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Excel export failed:", err);
+            alert("Excel export failed. Please check your internet connection (ExcelJS is loaded from CDN on first export).");
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const getColWidth = (id) => COLUMNS.find((c) => c.id === id)?.width || 100;
@@ -371,22 +544,22 @@ const BalanceSheet = () => {
         if (colId === 'knittingGrey') return (j) => j.yarnRows.map((r) => String(r.knittingGrey));
         if (colId === 'yarnReturn') return (j) => j.yarnRows.map((r) => String(r.yarnReturn));
         if (colId === 'yarnBalance') return (j) => j.yarnRows.map((r) => String(yarnBalance(r)));
-        
+
         if (colId === 'dyeingFactory') return (j) => j.dyeingRows.map((r) => r.factoryName);
         if (colId === 'greyDelivery') return (j) => j.dyeingRows.map((r) => String(r.greyDelivery));
         if (colId === 'greyReturn') return (j) => j.dyeingRows.map((r) => String(r.greyReturn));
-        if (colId === 'greyRcvd') return (j) => j.dyeingRows.map((r) => String(r.greyRcvd));        
+        if (colId === 'greyRcvd') return (j) => j.dyeingRows.map((r) => String(r.greyRcvd));
         if (colId === 'finishRcvd') return (j) => j.dyeingRows.map((r) => String(r.finishRcvd));
         if (colId === 'dyeBalance') return (j) => j.dyeingRows.map((r) => String(dyeBalance(r)));
         if (colId === 'processLoss') return (j) => j.dyeingRows.map((r) => String(dyeProcessLoss(r)));
-        
+
         if (colId === 'aopFactory') return (j) => j.aopRows.map((r) => r.factoryName);
         if (colId === 'sentForAop') return (j) => j.aopRows.map((r) => String(r.sentForAop));
         if (colId === 'receivedFromAop') return (j) => j.aopRows.map((r) => String(r.receivedFromAop));
         if (colId === 'aopFinishRcvd') return (j) => j.aopRows.map((r) => String(r.aopFinishRcvd));
         if (colId === 'aopBalance') return (j) => j.aopRows.map((r) => String(aopBalance(r)));
         if (colId === 'aopProcessLoss') return (j) => j.aopRows.map((r) => String(aopProcessLoss(r)));
-        
+
         if (colId === 'remarks') return (j) => [j.remarks].filter(Boolean);
         return () => [];
     };
@@ -400,16 +573,14 @@ const BalanceSheet = () => {
     const headerCellStyle = (colId, extra = {}) => {
         const w = getColWidth(colId);
         const isFrozenCol = isFrozen(colId);
-        return { 
-            position: "sticky", 
-            top: GROUP_HEADER_ROW_HEIGHT, 
-            left: isFrozenCol ? getColLeft(colId) : undefined, 
-            width: w, 
-            minWidth: w, 
-            maxWidth: w, 
-            zIndex: isFrozenCol ? 30 : 20, 
-            backgroundColor: '#f1f5f9', 
-            ...extra 
+        return {
+            position: "sticky",
+            top: GROUP_HEADER_ROW_HEIGHT,
+            left: isFrozenCol ? getColLeft(colId) : undefined,
+            width: w, minWidth: w, maxWidth: w,
+            zIndex: isFrozenCol ? 30 : 20,
+            backgroundColor: '#f1f5f9',
+            ...extra
         };
     };
 
@@ -419,8 +590,7 @@ const BalanceSheet = () => {
             try {
                 const response = await axiosSecure.get("/api/balance/sheet");
                 const rawData = response.data.jobs || response.data || [];
-                
-                // Transform backend data into separate arrays for Yarn, Dyeing, and AOP
+
                 const transformed = rawData.map(job => {
                     const yarnRows = [];
                     const dyeingRows = [];
@@ -468,13 +638,7 @@ const BalanceSheet = () => {
                         yarnRows.push({ factory: "N/A", req: job.totalWorkOrderQty || 0, issue: 0, knittingGrey: 0, yarnReturn: 0 });
                     }
 
-                    return {
-                        ...job,
-                        yarnRows,
-                        dyeingRows,
-                        aopRows,
-                        remarks: job.remarks || ""
-                    };
+                    return { ...job, yarnRows, dyeingRows, aopRows, remarks: job.remarks || "" };
                 });
 
                 setJobs(transformed);
@@ -527,19 +691,29 @@ const BalanceSheet = () => {
                     )}
 
                     <button
-                        onClick={(e) => { e.stopPropagation(); exportCsv(); }}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0f2544] hover:bg-[#1a365d] px-3 py-1.5 rounded-md shadow-sm transition-colors"
+                        onClick={(e) => { e.stopPropagation(); exportExcel(); }}
+                        disabled={isExporting || filteredJobs.length === 0}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0f2544] hover:bg-[#1a365d] px-3 py-1.5 rounded-md shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-                        </svg>
-                        Export CSV
+                        {isExporting ? (
+                            <>
+                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                Exporting...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                                </svg>
+                                Export Excel
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
 
             {hasUnsavedRemarks && (
-                <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 shadow-sm animate-in fade-in slide-in-from-top-2 flex-shrink-0">
+                <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 shadow-sm flex-shrink-0">
                     <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -567,17 +741,14 @@ const BalanceSheet = () => {
                         </div>
                     </div>
                 )}
-                
+
                 <table className="border-collapse tabular-nums text-[11px] border border-slate-300" style={{ width: TOTAL_WIDTH, minWidth: TOTAL_WIDTH }}>
                     <thead>
                         <tr>
                             <th
                                 colSpan={7}
                                 style={{
-                                    position: 'sticky',
-                                    top: 0,
-                                    left: 0,
-                                    zIndex: 40,
+                                    position: 'sticky', top: 0, left: 0, zIndex: 40,
                                     width: getColLeft('yarnBalance') + getColWidth('yarnBalance'),
                                     backgroundColor: '#e2e8f0'
                                 }}
@@ -585,29 +756,15 @@ const BalanceSheet = () => {
                             >
                                 YARN / KNITTING
                             </th>
-                            <th
-                                colSpan={7}
-                                style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }}
-                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
-                            >
+                            <th colSpan={7} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300">
                                 DYEING
                             </th>
-                            <th
-                                colSpan={6}
-                                style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }}
-                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
-                            >
+                            <th colSpan={6} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300">
                                 AOP
                             </th>
                             <th
                                 className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
-                                style={{
-                                    position: 'sticky',
-                                    top: 0,
-                                    zIndex: 20,
-                                    width: getColWidth('remarks'),
-                                    backgroundColor: '#e2e8f0'
-                                }}
+                                style={{ position: 'sticky', top: 0, zIndex: 20, width: getColWidth('remarks'), backgroundColor: '#e2e8f0' }}
                             >
                                 <div className="flex items-center justify-center gap-1">
                                     REMARKS
@@ -665,7 +822,6 @@ const BalanceSheet = () => {
                                             <td rowSpan={maxRows} style={cellStyle("jobNo")} className="px-2 py-2 border border-slate-300 align-middle text-center font-bold text-slate-800 bg-slate-50">{job.jobNo}</td>
                                         )}
 
-                                        {/* Yarn Columns */}
                                         <td style={cellStyle("yarnFactory")} className={`px-2 py-2 border border-slate-300 text-slate-600 bg-white text-left ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{yRow?.factory ?? ""}</td>
                                         <td style={cellStyle("yarnReq")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.req) : ""}</td>
                                         <td style={cellStyle("yarnIssue")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.issue) : ""}</td>
@@ -673,16 +829,14 @@ const BalanceSheet = () => {
                                         <td style={cellStyle("yarnReturn")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.yarnReturn) : ""}</td>
                                         <td style={cellStyle("yarnBalance")} className="px-2 py-2 border-r-2 border-r-slate-400 border-y border-slate-300 text-right bg-white font-medium">{yRow ? fmtNum(yarnBalance(yRow)) : ""}</td>
 
-                                        {/* Dyeing Columns */}
                                         <td style={cellStyle("dyeingFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-teal-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{dRow?.factoryName ?? ""}</td>
                                         <td style={cellStyle("greyDelivery")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyDelivery) : ""}</td>
                                         <td style={cellStyle("greyReturn")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyReturn) : ""}</td>
-                                        <td style={cellStyle("greyRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>                                        
+                                        <td style={cellStyle("greyRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>
                                         <td style={cellStyle("finishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.finishRcvd) : ""}</td>
                                         <td style={cellStyle("dyeBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dyeBalance(dRow)) : ""}</td>
                                         <td style={cellStyle("processLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtPct(dyeProcessLoss(dRow)) : ""}</td>
 
-                                        {/* AOP Columns */}
                                         <td style={cellStyle("aopFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-violet-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{aRow?.factoryName ?? ""}</td>
                                         <td style={cellStyle("sentForAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.sentForAop) : ""}</td>
                                         <td style={cellStyle("receivedFromAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.receivedFromAop) : ""}</td>
@@ -690,24 +844,23 @@ const BalanceSheet = () => {
                                         <td style={cellStyle("aopBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aopBalance(aRow)) : ""}</td>
                                         <td style={cellStyle("aopProcessLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtPct(aopProcessLoss(aRow)) : ""}</td>
 
-                                        {/* Remarks */}
                                         {rowIdx === 0 && (
                                             <td rowSpan={maxRows} style={cellStyle("remarks")} className="px-2 py-2 border border-slate-300 align-middle text-center bg-white">
                                                 {editingCell === jobIdx ? (
-                                                    <input 
-                                                        type="text" 
-                                                        value={job.remarks || ""} 
-                                                        onChange={(e) => updateRemarks(jobIdx, e.target.value)} 
-                                                        onBlur={handleSaveRemarks} 
-                                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveRemarks()} 
-                                                        onClick={(e) => e.stopPropagation()} 
-                                                        autoFocus 
-                                                        className="w-full px-2 py-1 text-xs text-slate-700 border border-[#0f2544] rounded focus:ring-1 focus:ring-[#0f2544]/20 outline-none text-center" 
+                                                    <input
+                                                        type="text"
+                                                        value={job.remarks || ""}
+                                                        onChange={(e) => updateRemarks(jobIdx, e.target.value)}
+                                                        onBlur={handleSaveRemarks}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveRemarks()}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        autoFocus
+                                                        className="w-full px-2 py-1 text-xs text-slate-700 border border-[#0f2544] rounded focus:ring-1 focus:ring-[#0f2544]/20 outline-none text-center"
                                                     />
                                                 ) : (
-                                                    <div 
-                                                        onDoubleClick={() => handleDoubleClick(jobIdx)} 
-                                                        className={`cursor-pointer px-2 py-1 text-xs text-slate-700 rounded hover:bg-slate-100 transition-colors ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`} 
+                                                    <div
+                                                        onDoubleClick={() => handleDoubleClick(jobIdx)}
+                                                        className={`cursor-pointer px-2 py-1 text-xs text-slate-700 rounded hover:bg-slate-100 transition-colors ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}
                                                         title="Double-click to edit"
                                                     >
                                                         {job.remarks || <span className="text-slate-400 italic text-[10px]">Double-click to edit</span>}
@@ -735,7 +888,7 @@ const BalanceSheet = () => {
                                 <td style={cellStyle("dyeingFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
                                 <td style={cellStyle("greyDelivery")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyDelivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("greyReturn")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("greyRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>                              
+                                <td style={cellStyle("greyRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("finishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.finishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("dyeBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={cellStyle("processLoss")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{(() => { const l = totals.greyDelivery ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
@@ -760,39 +913,11 @@ const BalanceSheet = () => {
                         Showing <span className="font-semibold text-slate-700">{startIndex + 1}</span> to <span className="font-semibold text-slate-700">{endIndex}</span> of <span className="font-semibold text-slate-700">{filteredJobs.length}</span> jobs
                     </div>
                     <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => setCurrentPage(1)}
-                            disabled={currentPage === 1}
-                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            « First
-                        </button>
-                        <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            ‹ Prev
-                        </button>
-                        
-                        <span className="text-xs font-medium text-slate-700 px-3 py-1.5 bg-slate-100 rounded-md border border-slate-200">
-                            Page {currentPage} of {totalPages}
-                        </span>
-
-                        <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Next ›
-                        </button>
-                        <button
-                            onClick={() => setCurrentPage(totalPages)}
-                            disabled={currentPage === totalPages}
-                            className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Last »
-                        </button>
+                        <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">« First</button>
+                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">‹ Prev</button>
+                        <span className="text-xs font-medium text-slate-700 px-3 py-1.5 bg-slate-100 rounded-md border border-slate-200">Page {currentPage} of {totalPages}</span>
+                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next ›</button>
+                        <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-md bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Last »</button>
                     </div>
                 </div>
             )}

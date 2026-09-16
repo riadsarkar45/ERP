@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
-import { RefreshCcw, AlignJustify, ListFilter, X, Edit3, Save, XCircle, CloudCog } from 'lucide-react';
+import { RefreshCcw, AlignJustify, ListFilter, X, Edit3, Save, XCircle, CloudCog, Download } from 'lucide-react';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 import { Link } from 'react-router-dom';
 
@@ -22,8 +22,6 @@ const ShortExcess = ({ value }) => {
     );
 };
 
-// Column layout (sticky columns): 0 = select, 1 = Date Of Reconciliation, 2 = Job No,
-// 3 = Color, 4 = Composition, 5 = Order Qty, 6 = Manufacturing Unit
 const STICKY_COL_WIDTHS = [50, 140, 170, 250, 300, 100, 150];
 const STICKY_LEFT_OFFSETS = STICKY_COL_WIDTHS.reduce((acc, w, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + STICKY_COL_WIDTHS[i - 1]);
@@ -33,10 +31,6 @@ const LAST_STICKY_INDEX = STICKY_COL_WIDTHS.length - 1;
 
 const FIXED_COLUMN_COUNT = 26;
 
-// Treats a literal "NULL" string (how blanks are sometimes persisted by the API)
-// the same as an actual blank value, and normalizes case/whitespace so filter
-// selections reliably match table values (this is what was breaking the
-// Manufacturing Unit filter).
 const normalizeFilterVal = (v) => {
     if (v === null || v === undefined) return "";
     const s = String(v).trim();
@@ -49,6 +43,17 @@ const formatDateDisplay = (value) => {
     const d = new Date(value);
     if (isNaN(d.getTime())) return "-";
     return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const toDateInputValue = (value) => {
+    if (!value || value === "NULL") return "";
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
 };
 
 const monthKeyFromDate = (value) => {
@@ -64,12 +69,88 @@ const formatMonthLabel = (key) => {
     return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 };
 
+// ---------- Stable row key (survives filtering) ----------
+const getRowKey = (com, fallbackIndex) => {
+    if (com && com.id !== undefined && com.id !== null && com.id !== "") return String(com.id);
+    return `idx-${fallbackIndex}`;
+};
+
+// ---------- localStorage helpers ----------
+// NOTE: `lsGet` returns:
+//   - null  → key was never set (fall through to server)
+//   - ""    → user explicitly cleared the value (must be respected)
+//   - text  → cached value (overlay)
+const LS_KEYS = {
+    remarks: (jobNo, rowKey) => `reconciliation_remarks_${jobNo}_${rowKey}`,
+    date: (jobNo) => `reconciliation_date_${jobNo}`,
+    manuUnit: (jobNo, rowKey) => `reconciliation_manuUnit_${jobNo}_${rowKey}`,
+};
+
+const lsGet = (key) => {
+    try { return localStorage.getItem(key); } catch { return null; }
+};
+const lsSet = (key, value) => {
+    try {
+        if (value === null || value === undefined) localStorage.removeItem(key);
+        else localStorage.setItem(key, String(value));
+    } catch { /* ignore */ }
+};
+
+// ---------- ExcelJS lazy CDN loader ----------
+const EXCELJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+let excelJsPromise = null;
+const loadExcelJS = () => {
+    if (typeof window !== "undefined" && window.ExcelJS) return Promise.resolve(window.ExcelJS);
+    if (excelJsPromise) return excelJsPromise;
+    excelJsPromise = new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = EXCELJS_CDN;
+        s.async = true;
+        s.onload = () => {
+            if (window.ExcelJS) resolve(window.ExcelJS);
+            else reject(new Error("ExcelJS failed to attach to window"));
+        };
+        s.onerror = () => reject(new Error("Failed to load ExcelJS from CDN"));
+        document.head.appendChild(s);
+    });
+    return excelJsPromise;
+};
+
+// ---------- Excel borders ----------
+const XL_BORDER = {
+    top: { style: "thin", color: { argb: "FF94A3B8" } },
+    left: { style: "thin", color: { argb: "FF94A3B8" } },
+    bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+    right: { style: "thin", color: { argb: "FF94A3B8" } },
+};
+const XL_BORDER_HEADER = {
+    top: { style: "thin", color: { argb: "FF64748B" } },
+    left: { style: "thin", color: { argb: "FF64748B" } },
+    bottom: { style: "medium", color: { argb: "FF0F172A" } },
+    right: { style: "thin", color: { argb: "FF64748B" } },
+};
+const XL_BORDER_SUBTOTAL = {
+    top: { style: "medium", color: { argb: "FF0F172A" } },
+    left: { style: "thin", color: { argb: "FF64748B" } },
+    bottom: { style: "medium", color: { argb: "FF0F172A" } },
+    right: { style: "thin", color: { argb: "FF64748B" } },
+};
+
+const NUMFMT_NUMBER = '0.00';
+const NUMFMT_SHORT_EXCESS = '[Green]+0.00;[Red]-0.00;0.00';
+const NUMFMT_PCT_1 = '0.0"%"';
+const NUMFMT_PCT_2 = '0.00"%"';
+
+const SHORT_EXCESS_FIXED_COLS = new Set([10, 13, 19, 25]);
+const PERCENT_FIXED_COLS_1DP = new Set([18, 24]);
+
 const Reconciliation = () => {
     const axiosPrivate = useAxiosPrivate();
 
     const [activeFilters, setActiveFilters] = useState({});
     const [reportData, setReportData] = useState([]);
     const [isDataLoading, setIsDataLoading] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     const [openFilterCol, setOpenFilterCol] = useState(null);
     const [dropdownOptions, setDropdownOptions] = useState([]);
@@ -125,15 +206,18 @@ const Reconciliation = () => {
         "RECEIVED SHORT & EXCESS", "CUTTING TO SEWING", "NOT POSSIBLE TO INPUT", "REJECTED CUT PANEL FOUND",
         "SEWING INPUT", "INPUT SHORT/EXCESS", "SEWING OUTPUT", "OUTPUT SHORT/EXCESS", "FINISH INPUT",
         "FINISH OUTPUT", "SHORT/EXCESS", "PACKING INPUT", "PACKING OUTPUT", "SHIPPED QTY", "SHIPMENT EXCESS/SHORT",
-        "PLANNED LEFTOVER", "PHYSICAL FOUND LEFTOVER", "% PHYSICAL FOUND", "LEFT OVER SHORT/EX"
+        "PLANNED LEFTOVER", "PHYSICAL FOUND LEFTOVER", "% PHYSICAL FOUND", "LEFT OVER SHORT/EX", "REMARKS"
     ];
 
     const FILTERABLE_COLS = {
+        1: { key: "dateOfReconciliation", label: "DATE OF RECONCILIATION" },
         2: { key: "jobNo", label: "JOB NO" },
         3: { key: "color", label: "COLOR" },
         4: { key: "composition", label: "COMPOSITION" },
         6: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
     };
+
+    const JOB_LEVEL_FILTER_KEYS = new Set(["dateOfReconciliation"]);
 
     const TRAILING_FIELDS = useMemo(() => [
         { key: "fabricIssueCuttingDept", type: "input" }, { key: "fabricIssuedShortExcess", type: "FORMULA" },
@@ -150,6 +234,7 @@ const Reconciliation = () => {
         { key: "shippedQty", type: "input" }, { key: "excessShort", type: "FORMULA" },
         { key: "plannedLeftOverQty", type: "FORMULA" }, { key: "physicalFoundLeftOver", type: "input" },
         { key: "percentPhysicalFoundLeftover", type: "FORMULA" }, { key: "leftOverShortExcess", type: "FORMULA" },
+        { key: "remarks", type: "input" },
     ], []);
 
     const TOTAL_COLS = FIXED_COLUMN_COUNT + TRAILING_FIELDS.length;
@@ -172,24 +257,48 @@ const Reconciliation = () => {
 
     useEffect(() => { fetchFilteredData(); }, [fetchFilteredData]);
 
-    // Reconciliation date lives at the job level (one value per job, edited once
-    // alongside the other job-level actions), falling back to the first
-    // component's saved reconciliation record if the job object itself doesn't
-    // carry it.
     const getJobReconciliationDate = (job) =>
         job?.dateOfReconciliation ?? job?.rows?.[0]?.reconciliation?.dateOfReconciliation ?? null;
 
-    // ---------- MONTH OPTIONS (derived from the loaded data) ----------
+    // ----- Effective values (localStorage overlay) -----
+    // Return localStorage value even when "" (means user explicitly cleared).
+    const getEffectiveDateRaw = useCallback((jobNo, job) => {
+        const localDate = lsGet(LS_KEYS.date(jobNo));
+        if (localDate !== null) return localDate;
+        return getJobReconciliationDate(job);
+    }, []);
+
+    const getEffectiveManuUnit = useCallback((jobNo, com, fallbackIndex) => {
+        const rowKey = getRowKey(com, fallbackIndex);
+        const localUnit = lsGet(LS_KEYS.manuUnit(jobNo, rowKey));
+        if (localUnit !== null) return localUnit;
+        const saved = com?.reconciliation?.manufacturingUnite;
+        return saved != null && saved !== "NULL" ? String(saved) : "";
+    }, []);
+
+    const getEffectiveRemarks = useCallback((jobNo, com, fallbackIndex) => {
+        const rowKey = getRowKey(com, fallbackIndex);
+        const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
+        if (localRemarks !== null) return localRemarks;
+        const saved = com?.reconciliation?.remarks;
+        return saved != null && saved !== "NULL" ? String(saved) : "";
+    }, []);
+
+    const getDateValueForFilter = useCallback((job) => {
+        const raw = getEffectiveDateRaw(job.jobNo, job);
+        const formatted = formatDateDisplay(raw);
+        return formatted === "-" ? "" : formatted;
+    }, [getEffectiveDateRaw]);
+
     const availableMonths = useMemo(() => {
         const set = new Set();
         reportData.forEach((job) => {
-            const key = monthKeyFromDate(getJobReconciliationDate(job));
+            const key = monthKeyFromDate(getEffectiveDateRaw(job.jobNo, job));
             if (key) set.add(key);
         });
         return Array.from(set).sort().reverse();
-    }, [reportData]);
+    }, [reportData, getEffectiveDateRaw]);
 
-    // ---------- CLIENT-SIDE FILTERING FALLBACK ----------
     const processedReportData = useMemo(() => {
         const filterKeys = Object.keys(activeFilters);
         const hasColumnFilters = filterKeys.length > 0;
@@ -199,11 +308,29 @@ const Reconciliation = () => {
 
         return reportData.reduce((acc, job) => {
             if (hasMonthFilter) {
-                const key = monthKeyFromDate(getJobReconciliationDate(job));
+                const key = monthKeyFromDate(getEffectiveDateRaw(job.jobNo, job));
                 if (key !== monthFilter) return acc;
             }
 
-            if (!hasColumnFilters) {
+            // Job-level filters
+            let jobLevelMatch = true;
+            for (const key of filterKeys) {
+                if (!JOB_LEVEL_FILTER_KEYS.has(key)) continue;
+                const values = activeFilters[key];
+                if (!values || values.length === 0) continue;
+
+                let rawVal = "";
+                if (key === "dateOfReconciliation") rawVal = getDateValueForFilter(job);
+
+                const normalizedVal = normalizeFilterVal(rawVal);
+                const hasMatch = values.some(v => normalizeFilterVal(v) === normalizedVal);
+                if (!hasMatch) { jobLevelMatch = false; break; }
+            }
+            if (!jobLevelMatch) return acc;
+
+            // Row-level filters
+            const rowLevelKeys = filterKeys.filter(k => !JOB_LEVEL_FILTER_KEYS.has(k));
+            if (rowLevelKeys.length === 0) {
                 acc.push(job);
                 return acc;
             }
@@ -217,7 +344,7 @@ const Reconciliation = () => {
             comps.forEach((com, idx) => {
                 let matchesAllFilters = true;
 
-                for (const key of filterKeys) {
+                for (const key of rowLevelKeys) {
                     const values = activeFilters[key];
                     if (!values || values.length === 0) continue;
 
@@ -225,7 +352,7 @@ const Reconciliation = () => {
                     if (key === "jobNo") val = String(job.jobNo ?? "");
                     else if (key === "color") val = String(com?.color ?? "");
                     else if (key === "composition") val = String(com?.composition ?? "");
-                    else if (key === "manufacturingUnite") val = String(com?.reconciliation?.manufacturingUnite ?? "");
+                    else if (key === "manufacturingUnite") val = getEffectiveManuUnit(job.jobNo, com, idx);
 
                     const normalizedVal = normalizeFilterVal(val);
                     const hasMatch = values.some(v => normalizeFilterVal(v) === normalizedVal);
@@ -249,7 +376,7 @@ const Reconciliation = () => {
             }
             return acc;
         }, []);
-    }, [reportData, activeFilters, monthFilter]);
+    }, [reportData, activeFilters, monthFilter, getEffectiveDateRaw, getEffectiveManuUnit, getDateValueForFilter]);
 
     const openFilterDropdown = async (colIndex) => {
         if (openFilterCol === colIndex) { setOpenFilterCol(null); return; }
@@ -257,6 +384,42 @@ const Reconciliation = () => {
         setSearchTerm("");
         const colKey = FILTERABLE_COLS[colIndex]?.key;
         if (!colKey) return;
+
+        if (colKey === "dateOfReconciliation") {
+            const set = new Set();
+            reportData.forEach(job => {
+                set.add(getDateValueForFilter(job));
+            });
+            const options = Array.from(set).sort((a, b) => {
+                if (a === "" && b !== "") return 1;
+                if (b === "" && a !== "") return -1;
+                return String(a).localeCompare(String(b));
+            });
+            setDropdownOptions(options);
+            const currentActive = activeFilters[colKey] || [];
+            setTempSelected(new Set(currentActive.length > 0 ? currentActive : options));
+            return;
+        }
+
+        if (colKey === "manufacturingUnite") {
+            const set = new Set();
+            reportData.forEach(job => {
+                const comps = job?.rows || [];
+                const subRowCount = getSubRowCount(job);
+                for (let i = 0; i < subRowCount; i++) {
+                    set.add(getEffectiveManuUnit(job.jobNo, comps[i], i));
+                }
+            });
+            const options = Array.from(set).sort((a, b) => {
+                if (a === "" && b !== "") return 1;
+                if (b === "" && a !== "") return -1;
+                return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
+            });
+            setDropdownOptions(options);
+            const currentActive = activeFilters[colKey] || [];
+            setTempSelected(new Set(currentActive.length > 0 ? currentActive : options));
+            return;
+        }
 
         try {
             const otherFilters = { ...activeFilters };
@@ -406,12 +569,20 @@ const Reconciliation = () => {
         });
     };
 
-    const handleInputChange = (jobNo, subRowIdx, fieldKey, value) => {
+    const handleInputChange = (jobNo, subRowIdx, fieldKey, value, rowKey) => {
         setEditValues(prev => ({ ...prev, [`${jobNo}-${subRowIdx}-${fieldKey}`]: value }));
+        if (fieldKey === "remarks") {
+            lsSet(LS_KEYS.remarks(jobNo, rowKey), value);
+        } else if (fieldKey === "manufacturingUnite") {
+            lsSet(LS_KEYS.manuUnit(jobNo, rowKey), value);
+        }
     };
 
     const handleJobFieldChange = (jobNo, fieldKey, value) => {
         setEditValues(prev => ({ ...prev, [`${jobNo}-${fieldKey}`]: value }));
+        if (fieldKey === "dateOfReconciliation") {
+            lsSet(LS_KEYS.date(jobNo), value);
+        }
     };
 
     const handleStartEdit = (jobNo, job) => {
@@ -420,26 +591,63 @@ const Reconciliation = () => {
         const subRowCount = getSubRowCount(job);
         const initialValues = {};
 
-        const existingDate = getJobReconciliationDate(job);
-        initialValues[`${jobNo}-dateOfReconciliation`] = existingDate ? String(existingDate).slice(0, 10) : "";
+        // Date of reconciliation: prefer localStorage (even empty), then server
+        const localDate = lsGet(LS_KEYS.date(jobNo));
+        const existingDate = (localDate !== null)
+            ? localDate
+            : getJobReconciliationDate(job);
+        initialValues[`${jobNo}-dateOfReconciliation`] = toDateInputValue(existingDate);
 
         for (let i = 0; i < subRowCount; i++) {
-            const reconciliation = comps[i]?.reconciliation || {};
+            const com = comps[i];
+            const reconciliation = com?.reconciliation || {};
+            const rowKey = getRowKey(com, i);
+
             TRAILING_FIELDS.forEach(field => {
                 if (field.type !== "FORMULA") {
-                    initialValues[`${jobNo}-${i}-${field.key}`] = reconciliation[field.key] != null ? String(reconciliation[field.key]) : "";
+                    if (field.key === "remarks") {
+                        const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
+                        const serverRemarks = reconciliation[field.key];
+                        if (localRemarks !== null) {
+                            initialValues[`${jobNo}-${i}-${field.key}`] = localRemarks;
+                        } else {
+                            initialValues[`${jobNo}-${i}-${field.key}`] =
+                                serverRemarks != null && serverRemarks !== "NULL" ? String(serverRemarks) : "";
+                        }
+                    } else {
+                        const savedVal = reconciliation[field.key];
+                        initialValues[`${jobNo}-${i}-${field.key}`] =
+                            savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
+                    }
                 }
             });
             STICKY_EDITABLE_FIELDS.forEach(field => {
+                const localUnit = lsGet(LS_KEYS.manuUnit(jobNo, rowKey));
                 const savedVal = reconciliation[field.key];
-                initialValues[`${jobNo}-${i}-${field.key}`] = savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
+                if (localUnit !== null) {
+                    initialValues[`${jobNo}-${i}-${field.key}`] = localUnit;
+                } else {
+                    initialValues[`${jobNo}-${i}-${field.key}`] =
+                        savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
+                }
             });
         }
         setEditValues(prev => ({ ...prev, ...initialValues }));
         setEditingJobNo(jobNo);
     };
 
-    const handleCancelEdit = (jobNo) => {
+    // On cancel, drop localStorage overlay for the job so the table reverts to server values.
+    const handleCancelEdit = (jobNo, job) => {
+        try {
+            lsSet(LS_KEYS.date(jobNo), null);
+            const comps = job?.rows || [];
+            const subRowCount = getSubRowCount(job);
+            for (let i = 0; i < subRowCount; i++) {
+                const rowKey = getRowKey(comps[i], i);
+                lsSet(LS_KEYS.remarks(jobNo, rowKey), null);
+                lsSet(LS_KEYS.manuUnit(jobNo, rowKey), null);
+            }
+        } catch { /* ignore */ }
         setEditValues(prev => {
             const next = { ...prev };
             Object.keys(next).forEach(k => { if (k.startsWith(`${jobNo}-`)) delete next[k]; });
@@ -505,41 +713,76 @@ const Reconciliation = () => {
             const com = comps[i];
             if (!com || !com.id) continue;
             const rowPayload = { styleRequirementRowId: com.id };
+            const rowKey = getRowKey(com, i);
 
             TRAILING_FIELDS.forEach(field => {
                 if (field.type !== "FORMULA") {
-                    const raw = editValues[`${jobNo}-${i}-${field.key}`];
-                    let num;
-                    if (raw === undefined) {
-                        const saved = com.reconciliation?.[field.key];
-                        num = saved != null ? Math.round(Number(saved)) : 0;
+                    if (field.key === "remarks") {
+                        const raw = editValues[`${jobNo}-${i}-${field.key}`];
+                        let finalValue = "";
+                        if (raw !== undefined && raw !== null) {
+                            finalValue = String(raw);
+                        } else {
+                            const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
+                            if (localRemarks !== null) {
+                                finalValue = localRemarks;
+                            } else {
+                                const existing = com.reconciliation?.[field.key];
+                                if (existing != null && existing !== "NULL") finalValue = String(existing);
+                            }
+                        }
+                        rowPayload[field.key] = finalValue;
                     } else {
-                        num = raw === "" ? 0 : Math.round(Number(raw));
+                        const raw = editValues[`${jobNo}-${i}-${field.key}`];
+                        let num;
+                        if (raw === undefined) {
+                            const saved = com.reconciliation?.[field.key];
+                            num = saved != null ? Math.round(Number(saved)) : 0;
+                        } else {
+                            num = raw === "" ? 0 : Math.round(Number(raw));
+                        }
+                        rowPayload[field.key] = isNaN(num) ? 0 : num;
                     }
-                    rowPayload[field.key] = isNaN(num) ? 0 : num;
                 } else if (FORMULA_KEYS_TO_PERSIST.includes(field.key)) {
                     const calculated = calculateFormula(jobNo, i, field.key, job);
                     rowPayload[field.key] = Number.isFinite(calculated) ? Math.round(calculated) : 0;
                 }
             });
 
+            // Manufacturing Unit
             STICKY_EDITABLE_FIELDS.forEach(field => {
                 const raw = editValues[`${jobNo}-${i}-${field.key}`];
-                if (raw !== undefined) {
-                    rowPayload[field.key] = raw !== "" ? String(raw) : "";
+                if (raw !== undefined && raw !== null) {
+                    rowPayload[field.key] = String(raw).trim() === "" ? "" : String(raw);
                 } else {
-                    const saved = com?.reconciliation?.[field.key];
-                    rowPayload[field.key] = saved != null && saved !== "NULL" ? String(saved) : "";
+                    const localUnit = lsGet(LS_KEYS.manuUnit(jobNo, rowKey));
+                    if (localUnit !== null) {
+                        rowPayload[field.key] = localUnit;
+                    } else {
+                        const saved = com?.reconciliation?.[field.key];
+                        rowPayload[field.key] = saved != null && saved !== "NULL" ? String(saved) : "";
+                    }
                 }
             });
 
             rows.push(rowPayload);
         }
 
+        // Date of reconciliation
         const rawDate = editValues[`${jobNo}-dateOfReconciliation`];
-        const dateOfReconciliation = rawDate !== undefined ? rawDate : (getJobReconciliationDate(job) || "");
+        let dateOfReconciliation;
+        if (rawDate !== undefined && rawDate !== null) {
+            dateOfReconciliation = rawDate;
+        } else {
+            const localDate = lsGet(LS_KEYS.date(jobNo));
+            if (localDate !== null) {
+                dateOfReconciliation = localDate;
+            } else {
+                dateOfReconciliation = getJobReconciliationDate(job) || "";
+            }
+        }
 
-        return { jobNo: job.jobNo, dateOfReconciliation, rows };
+        return { jobNo: job?.jobNo ?? jobNo, dateOfReconciliation, rows };
     };
 
     const toggleJobSelection = (jobNo) => {
@@ -581,6 +824,14 @@ const Reconciliation = () => {
             await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
 
             setEditingJobNo(null);
+            setEditValues(prev => {
+                const next = { ...prev };
+                Object.keys(next).forEach(k => { if (k.startsWith(`${jobNo}-`)) delete next[k]; });
+                return next;
+            });
+            // NOTE: Do NOT clear localStorage here — it acts as a display overlay
+            // so the saved value remains visible even if the refetch lags or
+            // doesn't return the field.
             await fetchFilteredData();
         } catch (err) {
             console.error("Failed to save job data:", err);
@@ -598,10 +849,12 @@ const Reconciliation = () => {
                 if (!payload || payload.rows.length === 0) continue;
                 payload.notes = notes;
                 await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
+                // Same note: keep localStorage overlay.
             }
 
             setSelectedJobs(new Set());
             setEditingJobNo(null);
+            setEditValues({});
             setShowNotesModal(false);
             setPendingSaveJobs([]);
             setNotes("");
@@ -686,6 +939,7 @@ const Reconciliation = () => {
                 totals.aopShortExcess += aopShortExcess;
 
                 TRAILING_FIELDS.forEach(field => {
+                    if (field.key === "remarks") return;
                     if (field.type === "FORMULA") {
                         totals[field.key] += calculateFormula(jobNo, i, field.key, job);
                     } else {
@@ -699,6 +953,310 @@ const Reconciliation = () => {
 
         return totals;
     }, [processedReportData, editValues, TRAILING_FIELDS, calculateFormula]);
+
+    const exportExcel = async () => {
+        if (isExporting) return;
+        if (processedReportData.length === 0) {
+            alert("No data to export.");
+            return;
+        }
+        setIsExporting(true);
+        try {
+            const ExcelJS = await loadExcelJS();
+
+            const wb = new ExcelJS.Workbook();
+            wb.creator = "Reconciliation Report";
+            wb.created = new Date();
+
+            const ws = wb.addWorksheet("Reconciliation", {
+                views: [{ state: "frozen", xSplit: 3, ySplit: 1, activeCell: "D2" }],
+                pageSetup: {
+                    orientation: "landscape",
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 0,
+                    paperSize: 9,
+                    margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+                }
+            });
+
+            const COL_WIDTHS = [5, 16, 18, 14, 20, 12, 16];
+            for (let i = 7; i < TOTAL_COLS; i++) COL_WIDTHS.push(13);
+            for (let i = 0; i < TOTAL_COLS; i++) {
+                ws.getColumn(i + 1).width = COL_WIDTHS[i];
+            }
+
+            const headerRow = ws.getRow(1);
+            headerRow.height = 48;
+            for (let c = 0; c < TOTAL_COLS; c++) {
+                const cell = headerRow.getCell(c + 1);
+                cell.value = c === 0 ? "SL" : (YARN_TABLE_HEADERS[c] ?? "");
+                cell.font = { bold: true, size: 9, color: { argb: "FF0F172A" } };
+                cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+                cell.border = XL_BORDER_HEADER;
+            }
+            headerRow.commit();
+
+            processedReportData.forEach((job) => {
+                const jobNo = job.jobNo;
+                const comps = job?.rows || [];
+                const compBreakDown = job.compBreakdown || [];
+                const subRowCount = getSubRowCount(job);
+                const isEditingThisJob = editingJobNo === jobNo;
+                const jobStartRow = ws.rowCount + 1;
+
+                for (let i = 0; i < subRowCount; i++) {
+                    const com = comps[i];
+                    const comp = compBreakDown[i];
+                    const isFirstRow = i === 0;
+
+                    const finishQty = Number(com?.finishRequiredQty) || 0;
+                    const processLoss = Number(job.processLoss) || 0;
+                    const yarnRequiredQty = finishQty * (1 + processLoss / 100);
+                    const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) || 0;
+                    const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
+                    const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return) || 0;
+                    const yarnShortExcessReq = knitYarnDelivery - yarnRequiredQty;
+                    const knitShortExcess = knitYarnReturn + knitGreyReceived - knitYarnDelivery;
+                    const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
+                    const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
+                    const dyeProcessLoss = dyeGreyReceived > 0 ? ((dyeGreyReceived - dyeFinishReceived) / dyeGreyReceived) * 100 : 0;
+                    const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
+                    const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
+                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
+                    const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop) || 0;
+                    const aopProcessLoss = aopGreyReceived > 0 ? ((aopGreyReceived - aopFinishReceived) / aopGreyReceived) * 100 : 0;
+                    const aopSent = Number(comp?.aopOrder_Sent_for_AOP) || 0;
+                    const aopReceived = Number(comp?.aopOrder_Return_From_Aop) || 0;
+                    const aopShortExcess = aopSent - aopReceived;
+
+                    const manuUnitDisplay = getEffectiveManuUnit(jobNo, com, i);
+
+                    const rowValues = new Array(TOTAL_COLS).fill("");
+
+                    rowValues[0] = "";
+                    rowValues[1] = isFirstRow ? formatDateDisplay(getEffectiveDateRaw(jobNo, job)) : "";
+                    rowValues[2] = isFirstRow ? (jobNo ?? "") : "";
+                    rowValues[3] = com?.color ?? "";
+                    rowValues[4] = com?.composition ?? "";
+                    rowValues[5] = com?.orderQty != null ? Number(com.orderQty) : "";
+                    rowValues[6] = manuUnitDisplay;
+                    rowValues[7] = com?.finishRequiredQty != null ? Number(com.finishRequiredQty) : "";
+                    rowValues[8] = com ? yarnRequiredQty : "";
+                    rowValues[9] = comp?.knittingOrder_Yarn_Delivery != null && !isNaN(Number(comp.knittingOrder_Yarn_Delivery)) ? Number(comp.knittingOrder_Yarn_Delivery) : "";
+                    rowValues[10] = comp ? yarnShortExcessReq : "";
+                    rowValues[11] = comp?.knittingOrder_Yarn_Return != null && !isNaN(Number(comp.knittingOrder_Yarn_Return)) ? Number(comp.knittingOrder_Yarn_Return) : "";
+                    rowValues[12] = comp?.knittingOrder_Grey_Fabric_Received != null && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received)) ? Number(comp.knittingOrder_Grey_Fabric_Received) : "";
+                    rowValues[13] = comp ? knitShortExcess : "";
+                    rowValues[14] = comp?.dyeingOrder_Grey_Delivery != null && !isNaN(Number(comp.dyeingOrder_Grey_Delivery)) ? Number(comp.dyeingOrder_Grey_Delivery) : "";
+                    rowValues[15] = comp?.dyeingOrder_Grey_Return != null && !isNaN(Number(comp.dyeingOrder_Grey_Return)) ? Number(comp.dyeingOrder_Grey_Return) : "";
+                    rowValues[16] = comp?.dyeingOrder_Grey_Received != null && !isNaN(Number(comp.dyeingOrder_Grey_Received)) ? Number(comp.dyeingOrder_Grey_Received) : "";
+                    rowValues[17] = comp?.dyeingOrder_Finish_Received != null && !isNaN(Number(comp.dyeingOrder_Finish_Received)) ? Number(comp.dyeingOrder_Finish_Received) : "";
+                    rowValues[18] = comp ? dyeProcessLoss : "";
+                    rowValues[19] = comp ? dyeShortExcess : "";
+                    rowValues[20] = comp?.aopOrder_Sent_for_AOP != null && !isNaN(Number(comp.aopOrder_Sent_for_AOP)) ? Number(comp.aopOrder_Sent_for_AOP) : "";
+                    rowValues[21] = comp?.aopOrder_Return_From_Aop != null && !isNaN(Number(comp.aopOrder_Return_From_Aop)) ? Number(comp.aopOrder_Return_From_Aop) : "";
+                    rowValues[22] = comp?.aopOrder_Received_From_Aop != null && !isNaN(Number(comp.aopOrder_Received_From_Aop)) ? Number(comp.aopOrder_Received_From_Aop) : "";
+                    rowValues[23] = comp?.aopOrder_AOP_Finish_Fabric_Rcvd != null && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd)) ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd) : "";
+                    rowValues[24] = comp ? aopProcessLoss : "";
+                    rowValues[25] = comp ? aopShortExcess : "";
+
+                    const rowKey = getRowKey(com, i);
+
+                    TRAILING_FIELDS.forEach((field, idx) => {
+                        const colIdx = FIXED_COLUMN_COUNT + idx;
+                        const isFormula = field.type === "FORMULA";
+
+                        if (field.key === "remarks") {
+                            let valStr = null;
+                            if (isEditingThisJob) {
+                                const ev = editValues[`${jobNo}-${i}-${field.key}`];
+                                if (ev !== undefined && ev !== null) valStr = ev;
+                            }
+                            if (valStr === null || valStr === undefined) {
+                                const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
+                                if (localRemarks !== null) {
+                                    valStr = localRemarks;
+                                } else {
+                                    const saved = com?.reconciliation?.[field.key];
+                                    if (saved != null && saved !== "NULL" && saved !== "") valStr = saved;
+                                }
+                            }
+                            rowValues[colIdx] = valStr || "";
+                        } else if (isFormula) {
+                            const val = calculateFormula(jobNo, i, field.key, job);
+                            rowValues[colIdx] = Number.isFinite(val) ? val : 0;
+                        } else {
+                            let valStr = null;
+                            if (isEditingThisJob) {
+                                const ev = editValues[`${jobNo}-${i}-${field.key}`];
+                                if (ev !== undefined && ev !== null) valStr = ev;
+                            }
+                            if (valStr === null || valStr === undefined) {
+                                const saved = com?.reconciliation?.[field.key];
+                                if (saved != null && saved !== "NULL" && saved !== "") valStr = saved;
+                            }
+                            if (valStr === null || valStr === undefined || valStr === "") {
+                                rowValues[colIdx] = "";
+                            } else {
+                                const n = Number(valStr);
+                                rowValues[colIdx] = isNaN(n) ? "" : n;
+                            }
+                        }
+                    });
+
+                    const row = ws.getRow(ws.rowCount + 1);
+                    row.height = 22;
+                    for (let c = 0; c < TOTAL_COLS; c++) {
+                        const cell = row.getCell(c + 1);
+                        cell.value = rowValues[c];
+                        cell.border = XL_BORDER;
+                        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: false };
+                        cell.font = { size: 10, color: { argb: "FF1E293B" } };
+
+                        if (isEditingThisJob) {
+                            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2FF" } };
+                        }
+
+                        if (PERCENT_FIXED_COLS_1DP.has(c)) {
+                            cell.numFmt = NUMFMT_PCT_1;
+                        } else if (SHORT_EXCESS_FIXED_COLS.has(c)) {
+                            cell.numFmt = NUMFMT_SHORT_EXCESS;
+                        } else if (typeof rowValues[c] === "number") {
+                            cell.numFmt = NUMFMT_NUMBER;
+                        }
+                    }
+
+                    TRAILING_FIELDS.forEach((field, idx) => {
+                        const colIdx = FIXED_COLUMN_COUNT + idx;
+                        if (field.key === "remarks") {
+                            const cell = row.getCell(colIdx + 1);
+                            cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+                            return;
+                        }
+                        const cell = row.getCell(colIdx + 1);
+                        const fk = field.key.toLowerCase();
+                        const isPercent = fk.includes("percent");
+                        const isShortExcess = fk.includes("short") || fk.includes("excess");
+
+                        if (isPercent) {
+                            cell.numFmt = NUMFMT_PCT_2;
+                        } else if (isShortExcess && field.type === "FORMULA") {
+                            cell.numFmt = NUMFMT_SHORT_EXCESS;
+                        } else if (typeof rowValues[colIdx] === "number") {
+                            cell.numFmt = NUMFMT_NUMBER;
+                        }
+                    });
+                    row.commit();
+                }
+
+                const jobEndRow = ws.rowCount;
+
+                if (jobEndRow > jobStartRow) {
+                    ws.mergeCells(jobStartRow, 2, jobEndRow, 2);
+                    ws.mergeCells(jobStartRow, 3, jobEndRow, 3);
+                }
+
+                const dateCell = ws.getCell(jobStartRow, 2);
+                dateCell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+                dateCell.font = { size: 10, color: { argb: "FF1E293B" } };
+
+                const jobCell = ws.getCell(jobStartRow, 3);
+                jobCell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+                jobCell.font = { bold: true, size: 11, color: { argb: "FF0F172A" } };
+            });
+
+            const subtotalValues = new Array(TOTAL_COLS).fill("");
+            subtotalValues[2] = "SUB-TOTAL";
+            subtotalValues[5] = footerTotals.orderQty;
+            subtotalValues[7] = footerTotals.finishRequiredQty;
+            subtotalValues[8] = footerTotals.yarnRequiredQty;
+            subtotalValues[9] = footerTotals.knitYarnDelivery;
+            subtotalValues[10] = footerTotals.yarnShortExcessReq;
+            subtotalValues[11] = footerTotals.knitYarnReturn;
+            subtotalValues[12] = footerTotals.knitGreyReceived;
+            subtotalValues[13] = footerTotals.knitShortExcess;
+            subtotalValues[14] = footerTotals.dyeGreyDelivery;
+            subtotalValues[15] = footerTotals.dyeGreyReturn;
+            subtotalValues[16] = footerTotals.dyeGreyReceived;
+            subtotalValues[17] = footerTotals.dyeFinishReceived;
+            subtotalValues[18] = "";
+            subtotalValues[19] = footerTotals.dyeShortExcess;
+            subtotalValues[20] = footerTotals.aopSent;
+            subtotalValues[21] = footerTotals.aopReceived;
+            subtotalValues[22] = footerTotals.aopGreyReceived;
+            subtotalValues[23] = footerTotals.aopFinishReceived;
+            subtotalValues[24] = "";
+            subtotalValues[25] = footerTotals.aopShortExcess;
+
+            TRAILING_FIELDS.forEach((field, idx) => {
+                const colIdx = FIXED_COLUMN_COUNT + idx;
+                if (field.key === "remarks") {
+                    subtotalValues[colIdx] = "";
+                } else {
+                    subtotalValues[colIdx] = footerTotals[field.key] ?? "";
+                }
+            });
+
+            const subtotalRow = ws.getRow(ws.rowCount + 1);
+            subtotalRow.height = 26;
+            for (let c = 0; c < TOTAL_COLS; c++) {
+                const cell = subtotalRow.getCell(c + 1);
+                cell.value = subtotalValues[c];
+                cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+                cell.border = XL_BORDER_SUBTOTAL;
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+
+                if (PERCENT_FIXED_COLS_1DP.has(c)) {
+                    cell.numFmt = NUMFMT_PCT_1;
+                } else if (SHORT_EXCESS_FIXED_COLS.has(c)) {
+                    cell.numFmt = NUMFMT_SHORT_EXCESS;
+                } else if (typeof subtotalValues[c] === "number") {
+                    cell.numFmt = NUMFMT_NUMBER;
+                }
+            }
+            TRAILING_FIELDS.forEach((field, idx) => {
+                const colIdx = FIXED_COLUMN_COUNT + idx;
+                if (field.key === "remarks") {
+                    const cell = subtotalRow.getCell(colIdx + 1);
+                    cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+                    return;
+                }
+                const cell = subtotalRow.getCell(colIdx + 1);
+                const fk = field.key.toLowerCase();
+                const isPercent = fk.includes("percent");
+                const isShortExcess = fk.includes("short") || fk.includes("excess");
+                if (isPercent) {
+                    cell.numFmt = NUMFMT_PCT_2;
+                } else if (isShortExcess && field.type === "FORMULA") {
+                    cell.numFmt = NUMFMT_SHORT_EXCESS;
+                } else if (typeof subtotalValues[colIdx] === "number") {
+                    cell.numFmt = NUMFMT_NUMBER;
+                }
+            });
+            subtotalRow.commit();
+
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `reconciliation-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Excel export failed:", err);
+            alert("Excel export failed. Please check your internet connection (ExcelJS loads from CDN on first export) and try again.");
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     return (
         <div className="min-h-screen w-full p-1 md:p-4 font-sans">
@@ -714,7 +1272,25 @@ const Reconciliation = () => {
                         </button>
                     </Link>
 
-                    {/* Month-wise filter (filters by Date Of Reconciliation) */}
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); exportExcel(); }}
+                        disabled={isExporting || processedReportData.length === 0}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-black rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isExporting ? (
+                            <>
+                                <RefreshCcw size={16} className="animate-spin" />
+                                Exporting...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={12} />
+                                Export Excel
+                            </>
+                        )}
+                    </button>
+
                     <div className="relative">
                         <button
                             type="button"
@@ -840,31 +1416,65 @@ const Reconciliation = () => {
                                                 )}
 
                                                 {openFilterCol === I && isFilterable && (
-                                                    <div className={`absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl ring-1 ring-black/20 z-50 overflow-hidden text-left normal-case font-normal ${I === 2 ? "left-0" : I >= YARN_TABLE_HEADERS.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2"}`} onClick={(e) => e.stopPropagation()}>
-                                                        <div className="p-3 border-b border-black">
-                                                            <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full text-sm border border-black rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                                                    <div
+                                                        className={`absolute top-full mt-1 w-64 bg-white rounded border border-gray-300 shadow-xl z-50 overflow-hidden text-left normal-case font-sans text-sm ${I === 1 || I === 2 ? "left-0" : I >= YARN_TABLE_HEADERS.length - 2 ? "right-0" : "left-1/2 -translate-x-1/2"}`}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <div className="p-2 border-b border-gray-200">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search"
+                                                                value={searchTerm}
+                                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                                                autoFocus
+                                                            />
                                                         </div>
-                                                        <div className="px-4 py-2 border-b border-black bg-slate-50">
-                                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                                <input type="checkbox" checked={allChecked} onChange={toggleAll} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                                                                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Select All</span>
+                                                        <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
+                                                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={allChecked}
+                                                                    onChange={toggleAll}
+                                                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                                <span className="text-sm text-gray-700 font-medium">(Select All)</span>
                                                             </label>
                                                         </div>
-                                                        <div className="max-h-52 overflow-y-auto py-1">
+                                                        <div className="max-h-64 overflow-y-auto py-1">
                                                             {visibleOptions.length === 0 ? (
-                                                                <div className="px-4 py-6 text-xs text-slate-400 text-center">No matches found</div>
+                                                                <div className="px-3 py-4 text-xs text-gray-500 text-center italic">No items match your search</div>
                                                             ) : (
-                                                                visibleOptions.map(val => (
-                                                                    <label key={val} className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-indigo-50 transition-colors">
-                                                                        <input type="checkbox" checked={tempSelected.has(val)} onChange={() => toggleValue(val)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                                                                        <span className="text-sm text-slate-700 truncate">{normalizeFilterVal(val) === "" ? "(Blank)" : val}</span>
+                                                                visibleOptions.map((val, idx) => (
+                                                                    <label key={`${val}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 select-none">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={tempSelected.has(val)}
+                                                                            onChange={() => toggleValue(val)}
+                                                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                        />
+                                                                        <span className="text-sm text-gray-800 truncate">
+                                                                            {normalizeFilterVal(val) === "" ? "(Blanks)" : val}
+                                                                        </span>
                                                                     </label>
                                                                 ))
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center justify-end gap-2 p-3 border-t border-black bg-slate-50">
-                                                            <button type="button" onClick={() => setOpenFilterCol(null)} className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900">Cancel</button>
-                                                            <button type="button" onClick={applyFilter} className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 shadow-sm">Apply</button>
+                                                        <div className="flex items-center justify-end gap-2 p-2 border-t border-gray-200 bg-gray-50">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setOpenFilterCol(null)}
+                                                                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={applyFilter}
+                                                                className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
+                                                            >
+                                                                OK
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 )}
@@ -901,6 +1511,7 @@ const Reconciliation = () => {
                                     const comp = compBreakDown[i];
                                     const isFirstRow = i === 0;
                                     const rowFlatIndex = rowIndexMap.get(`${jobNo}-${i}`);
+                                    const rowKey = getRowKey(com, i);
 
                                     const finishQty = Number(com?.finishRequiredQty).toFixed(2) || 0;
                                     const processLoss = Number(job.processLoss) || 0;
@@ -927,6 +1538,9 @@ const Reconciliation = () => {
                                         "sticky z-10 px-3 py-2.5 text-sm text-slate-800 border-b border-black text-center align-middle",
                                         colIdx === LAST_STICKY_INDEX ? "shadow-r-md" : "",
                                     ].join(" ");
+
+                                    const manuUnitDisplay = getEffectiveManuUnit(jobNo, com, i);
+                                    const remarksDisplay = getEffectiveRemarks(jobNo, com, i);
 
                                     return (
                                         <tr key={`${jobNo}-${i}`}>
@@ -964,7 +1578,7 @@ const Reconciliation = () => {
                                                             />
                                                         ) : (
                                                             <span className="text-sm font-medium text-slate-700">
-                                                                {formatDateDisplay(getJobReconciliationDate(job))}
+                                                                {formatDateDisplay(getEffectiveDateRaw(jobNo, job))}
                                                             </span>
                                                         )}
                                                     </div>
@@ -985,7 +1599,7 @@ const Reconciliation = () => {
                                                                 <button type="button" onClick={() => handleIndividualSave(jobNo, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 border border-black rounded-md hover:bg-indigo-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1">
                                                                     {savingJob ? <RefreshCcw size={12} className="animate-spin" /> : <><Save size={12} /> Save</>}
                                                                 </button>
-                                                                <button type="button" onClick={() => handleCancelEdit(jobNo)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-black rounded-md hover:bg-slate-100 disabled:opacity-50 flex items-center justify-center gap-1">
+                                                                <button type="button" onClick={() => handleCancelEdit(jobNo, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-black rounded-md hover:bg-slate-100 disabled:opacity-50 flex items-center justify-center gap-1">
                                                                     <XCircle size={12} /> Cancel
                                                                 </button>
                                                             </div>
@@ -1017,12 +1631,10 @@ const Reconciliation = () => {
                                                             placeholder="Unit"
                                                             disabled={savingJob}
                                                             value={editValues[`${jobNo}-${i}-manufacturingUnite`] ?? ""}
-                                                            onChange={(e) => handleInputChange(jobNo, i, "manufacturingUnite", e.target.value)}
+                                                            onChange={(e) => handleInputChange(jobNo, i, "manufacturingUnite", e.target.value, rowKey)}
                                                         />
                                                     ) : (
-                                                        com?.reconciliation?.manufacturingUnite && com.reconciliation.manufacturingUnite !== "NULL"
-                                                            ? com.reconciliation.manufacturingUnite
-                                                            : "-"
+                                                        manuUnitDisplay && manuUnitDisplay !== "" ? manuUnitDisplay : "-"
                                                     )}
                                                 </div>
                                             </td>
@@ -1115,6 +1727,20 @@ const Reconciliation = () => {
                                                 }
 
                                                 if (isEditingThisJob) {
+                                                    if (field.key === "remarks") {
+                                                        return (
+                                                            <td key={`trail-${idx}`} className={`${cellClass} ${selectedCellClass(rowFlatIndex, colIndex)}`} style={cellStyle} {...cellProps(rowFlatIndex, colIndex)}>
+                                                                <input
+                                                                    className="w-full px-2 py-1.5 text-sm text-slate-900 bg-amber-100 border-2 border-black rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-left"
+                                                                    type="text"
+                                                                    placeholder="Enter remarks"
+                                                                    disabled={savingJob}
+                                                                    value={editValues[`${jobNo}-${i}-${field.key}`] ?? ""}
+                                                                    onChange={(e) => handleInputChange(jobNo, i, field.key, e.target.value, rowKey)}
+                                                                />
+                                                            </td>
+                                                        );
+                                                    }
                                                     return (
                                                         <td key={`trail-${idx}`} className={`${cellClass} ${selectedCellClass(rowFlatIndex, colIndex)}`} style={cellStyle} {...cellProps(rowFlatIndex, colIndex)}>
                                                             <input
@@ -1124,15 +1750,18 @@ const Reconciliation = () => {
                                                                 placeholder="0"
                                                                 disabled={savingJob}
                                                                 value={editValues[`${jobNo}-${i}-${field.key}`] ?? ""}
-                                                                onChange={(e) => handleInputChange(jobNo, i, field.key, e.target.value)}
+                                                                onChange={(e) => handleInputChange(jobNo, i, field.key, e.target.value, rowKey)}
                                                             />
                                                         </td>
                                                     );
                                                 }
 
                                                 return (
-                                                    <td key={`trail-${idx}`} className={`${cellClass} font-mono text-slate-700 ${selectedCellClass(rowFlatIndex, colIndex)}`} style={cellStyle} {...cellProps(rowFlatIndex, colIndex)}>
-                                                        {savedValue != null && savedValue !== 0 ? savedValue : (savedValue === 0 ? "0" : "-")}
+                                                    <td key={`trail-${idx}`} className={`${cellClass} ${field.key === "remarks" ? "text-left pl-4" : "font-mono text-center"} text-slate-700 ${selectedCellClass(rowFlatIndex, colIndex)}`} style={cellStyle} {...cellProps(rowFlatIndex, colIndex)}>
+                                                        {field.key === "remarks"
+                                                            ? (remarksDisplay === "" ? "-" : remarksDisplay)
+                                                            : (savedValue != null && savedValue !== 0 ? savedValue : (savedValue === 0 ? "0" : "-"))
+                                                        }
                                                     </td>
                                                 );
                                             })}
@@ -1221,6 +1850,13 @@ const Reconciliation = () => {
                                     </td>
 
                                     {TRAILING_FIELDS.map((field) => {
+                                        if (field.key === "remarks") {
+                                            return (
+                                                <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-black text-left pl-4 align-middle font-medium text-slate-700" style={{ ...cellStyle, backgroundColor: "#f8fafc", borderTop: "2px solid #000000" }}>
+                                                    -
+                                                </td>
+                                            );
+                                        }
                                         const isPercent = field.key.toLowerCase().includes("percent");
                                         const isShortExcess = field.key.toLowerCase().includes("short") || field.key.toLowerCase().includes("excess");
                                         const val = footerTotals[field.key];

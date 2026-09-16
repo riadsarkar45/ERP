@@ -41,8 +41,8 @@ const KEY_TO_INDEX = Object.entries(FILTERABLE_COLS).reduce((acc, [idx, col]) =>
     return acc;
 }, {});
 
-// ── Frozen column widths ─────────────────────────────────────────────────────
-const FROZEN_WIDTHS = [150, 120, 180, 100, 120, 250, 280];
+// ── Frozen column widths (Updated to include FINISH DIA at index 7) ──────────
+const FROZEN_WIDTHS = [120, 120, 150, 110, 120, 250, 280, 120];
 const FROZEN_COUNT = FROZEN_WIDTHS.length;
 
 const FROZEN_LEFTS = FROZEN_WIDTHS.reduce((acc, width, idx) => {
@@ -67,6 +67,32 @@ const TOTALS_MAPPING = {
     35: "SentForReprocess",
     36: "ReturnFromAop",
     37: "ReceivedFromReprocess",
+};
+
+// ── Backend keys used by renderBreakdownCell / manual cells (for FOOTER TOTALS) ─
+// Maps column index → the exact backend key used to render the cell, so the
+// footer can sum the same values the body displays.
+const TOTALS_BACKEND_KEYS = {
+    8: "__ORDER_QTY__",       // sum of row.rows[].orderQty
+    12: "__ADDITIONAL__",     // sum of row.rows[].additional
+    14: "knittingOrder_workOrderQty",
+    16: "knittingOrder_Yarn_Delivery",
+    18: "yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye",
+    19: "yarnDyeingOrder_Yarn_Received_From_Yarn_Dye",
+    21: "knittingOrder_Grey_Fabric_Received",
+    22: "knittingOrder_Yarn_Return",
+    24: "dyeingOrder_Grey_Delivery",
+    25: "dyeingOrder_Grey_Return",
+    26: "dyeingOrder_Grey_Received",
+    27: "dyeingOrder_Finish_Received",
+    29: "aopOrder_Sent_For_Aop",
+    30: "aopOrder_Fabric_Return",
+    31: "aopOrder_After_Aop_Fabric_Rcvd",
+    32: "aopOrder_Received_From_Aop",
+    35: "reProcessOrder_Sent_for_Re_Process",
+    36: "reProcessOrder_Return_Received",
+    37: "reProcessOrder_Received_After_Re_Process_Grey",
+    38: "reProcessOrder_Received_After_Re_Process_Finish",
 };
 
 // ── Helper ───────────────────────────────────────────────────────────────────
@@ -299,6 +325,35 @@ export default function Summary() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length);
 
+    // ---------- FOOTER TOTALS (computed from full filtered dataset) ----------
+    const footerTotals = useMemo(() => {
+        const totals = {};
+        Object.values(TOTALS_BACKEND_KEYS).forEach(k => { totals[k] = 0; });
+        totals.__ORDER_QTY__ = 0;
+        totals.__ADDITIONAL__ = 0;
+
+        filteredData.forEach(row => {
+            const compBreakdown = row.compBreakdown || (row.rows || []).map(() => ({}));
+
+            // Row-level sums (orderQty, additional are per sub-row in row.rows[])
+            (row.rows || []).forEach(cell => {
+                totals.__ORDER_QTY__ += Number(cell?.orderQty) || 0;
+                totals.__ADDITIONAL__ += Number(cell?.additional) || 0;
+            });
+
+            // Breakdown-level sums
+            compBreakdown.forEach(cb => {
+                if (cb?.status) return;
+                Object.values(TOTALS_BACKEND_KEYS).forEach(k => {
+                    if (k === "__ORDER_QTY__" || k === "__ADDITIONAL__") return;
+                    totals[k] += Number(cb?.[k]) || 0;
+                });
+            });
+        });
+
+        return totals;
+    }, [filteredData]);
+
     const getPageNumbers = () => {
         const pages = [];
         const maxVisiblePages = 5;
@@ -404,7 +459,7 @@ export default function Summary() {
         minWidth: `${FROZEN_WIDTHS[index]}px`,
         maxWidth: `${FROZEN_WIDTHS[index]}px`,
         zIndex: 20,
-        backgroundColor: '#ffffff',
+        backgroundColor: index >= 6 ? '#fefeff' : '#ffffff',
         borderRight: '1px solid #000000',
         borderBottom: '1px solid #000000',
         boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : 'none',
@@ -444,6 +499,32 @@ export default function Summary() {
         borderBottom: '1px solid #000000',
         textAlign: 'center',
     });
+
+    // Sticky footer cell style helper
+    const getFooterCellStyle = (index) => {
+        const isFrozen = index < FROZEN_COUNT;
+        return {
+            position: 'sticky',
+            bottom: 0,
+            left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
+            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            zIndex: isFrozen ? 60 : 55,
+            backgroundColor: index === 0 ? '#1e3a8a' : (isFrozen ? '#c7d2fe' : '#e0e7ff'),
+            color: index === 0 ? '#ffffff' : '#0f172a',
+            borderRight: '1px solid #000000',
+            borderTop: '2px solid #000000',
+            borderBottom: '1px solid #000000',
+            boxShadow: isFrozen && index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.2)' : 'none',
+            overflow: isFrozen && index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
+            textAlign: 'center',
+            fontWeight: 700,
+            fontSize: '0.8rem',
+            whiteSpace: 'nowrap',
+            padding: '10px 8px',
+        };
+    };
 
     // --- Handlers for Multiple Inline Editing ---
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
@@ -578,7 +659,7 @@ export default function Summary() {
                     cb?.status ? "_" : shortExcess1,
                     cb?.status ? "_" : (Number(getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye')) || 0).toFixed(2),
                     cb?.status ? "_" : (Number(getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye')) || 0).toFixed(2),
-                    "party stock",
+                    "-",
                     cb?.status ? "_" : greyReceived.toFixed(2),
                     cb?.status ? "_" : yarnReturn.toFixed(2),
                     cb?.status ? "_" : balance.toFixed(2),
@@ -614,6 +695,17 @@ export default function Summary() {
             }
             currentRow += numSubRows;
         });
+
+        // ── Append footer total row ──
+        const totalRow = new Array(COLUMNS.length).fill("");
+        totalRow[0] = "TOTAL";
+        totalRow[8] = footerTotals.__ORDER_QTY__.toFixed(2);
+        totalRow[12] = footerTotals.__ADDITIONAL__.toFixed(2);
+        Object.entries(TOTALS_BACKEND_KEYS).forEach(([idx, key]) => {
+            if (key === "__ORDER_QTY__" || key === "__ADDITIONAL__") return;
+            totalRow[Number(idx)] = (footerTotals[key] || 0).toFixed(2);
+        });
+        wsData.push(totalRow);
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         ws['!cols'] = COLUMNS.map((_, i) => ({ wch: i < FROZEN_COUNT ? 20 : 18 }));
@@ -793,7 +885,7 @@ export default function Summary() {
                                     <th
                                         key={index}
                                         scope="col"
-                                        className="px-3 py-3 font-medium whitespace-nowrap"
+                                        className="px-3 py-3 font-medium whitespace-normal break-words"
                                         style={{
                                             backgroundColor: index >= 6 ? '#c7d2fe' : '#e5e7eb',
                                             position: 'sticky',
@@ -809,8 +901,8 @@ export default function Summary() {
                                             textAlign: 'center',
                                         }}
                                     >
-                                        <div className="flex items-center gap-1 justify-center">
-                                            <span className="flex-1 text-center">{col}</span>
+                                        <div className="flex items-center gap-1 justify-center flex-wrap">
+                                            <span className="flex-1 text-center break-words">{col}</span>
                                             {isFilterable && (
                                                 <button
                                                     ref={el => filterBtnRefs.current[index] = el}
@@ -962,8 +1054,8 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 8. FINISH DIA */}
-                                    <td className="p-0 align-top" style={getCellStyle(7)}>
+                                    {/* 8. FINISH DIA (Now Frozen) */}
+                                    <td className="p-0 align-top" style={getFrozenStyle(7)}>
                                         <div className="divide-y divide-black">
                                             {row.rows.map((cell, j) => (
                                                 <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
@@ -1137,7 +1229,7 @@ export default function Summary() {
                                     {/* 19. PARTY STOCK */}
                                     <td className="p-0 align-top" style={getCellStyle(18)}>
                                         <div className="divide-y divide-black">
-                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2`}>party stock</div>)}
+                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2`}>-</div>)}
                                         </div>
                                     </td>
 
@@ -1297,6 +1389,39 @@ export default function Summary() {
                             </tr>
                         )}
                     </tbody>
+
+                    {/* ── FOOTER TOTAL ROW ── */}
+                    {!isLoading.refreshLoading && filteredData.length > 0 && (
+                        <tfoot>
+                            <tr>
+                                {COLUMNS.map((_, index) => {
+                                    let displayValue = "";
+
+                                    if (index === 0) {
+                                        displayValue = "TOTAL";
+                                    } else if (index === 8) {
+                                        displayValue = formatNumber(footerTotals.__ORDER_QTY__);
+                                    } else if (index === 12) {
+                                        displayValue = formatNumber(footerTotals.__ADDITIONAL__);
+                                    } else if (TOTALS_BACKEND_KEYS[index]) {
+                                        const key = TOTALS_BACKEND_KEYS[index];
+                                        if (key !== "__ORDER_QTY__" && key !== "__ADDITIONAL__") {
+                                            displayValue = formatNumber(footerTotals[key]);
+                                        }
+                                    }
+
+                                    return (
+                                        <td
+                                            key={`footer-${index}`}
+                                            style={getFooterCellStyle(index)}
+                                        >
+                                            {displayValue}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
 
