@@ -92,7 +92,7 @@ const AllOrders = ({ orderType }) => {
         const cols = [];
         if (orderType === "knittingOrder") {
             cols.push(
-                { header: "MONTH", width: 110, inputName: "month" },
+                { header: "MONTH", width: 125, inputName: "month" },
                 { header: "FACTORY NAME", width: 180, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 120, inputName: "buyerName" },
@@ -102,7 +102,7 @@ const AllOrders = ({ orderType }) => {
                 { header: "COMPOSITION", width: 280, inputName: "composition" },
                 { header: "FINISH DIA", width: 120, inputName: "finishdia" },
                 { header: "YARN COUNT", width: 120, inputName: "yarnCount" },
-                { header: "YARN LOT", width: 200, inputName: "yarnLot" },
+                { header: "YARN LOT", width: 180, inputName: "yarnLot" },
                 { header: "STITCH LENGHT", width: 200, inputName: "stitchLength" },
                 { header: "M/C DIA", width: 200, inputName: "m/cDia" },
                 { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
@@ -118,7 +118,7 @@ const AllOrders = ({ orderType }) => {
             );
         } else if (orderType === "dyeingOrder") {
             cols.push(
-                { header: "MONTH", width: 110, inputName: "month" },
+                { header: "MONTH", width: 125, inputName: "month" },
                 { header: "FACTORY NAME", width: 160, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 160, inputName: "buyerName" },
@@ -148,7 +148,7 @@ const AllOrders = ({ orderType }) => {
             );
         } else if (orderType === "yarnDyeingOrder") {
             cols.push(
-                { header: "MONTH", width: 120, inputName: "month" },
+                { header: "MONTH", width: 125, inputName: "month" },
                 { header: "FACTORY NAME", width: 200, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 160, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 180, inputName: "buyerName" },
