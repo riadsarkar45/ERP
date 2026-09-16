@@ -82,20 +82,26 @@ const AllOrders = ({ orderType }) => {
     const [frozenWidths, setFrozenWidths] = useState([]);
     const [frozenLefts, setFrozenLefts] = useState([]);
 
+    const [openFilter, setOpenFilter] = useState(null);
+    const [filterSearch, setFilterSearch] = useState("");
+    const [filterTempSelected, setFilterTempSelected] = useState([]);
+    const filterDropdownRef = useRef(null);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+
     const COLUMNS = useMemo(() => {
         const cols = [];
         if (orderType === "knittingOrder") {
             cols.push(
-                { header: "MONTH", width: 135, inputName: "month" },
-                { header: "FACTORY NAME", width: 190, inputName: "factoryName" },
+                { header: "MONTH", width: 110, inputName: "month" },
+                { header: "FACTORY NAME", width: 180, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 120, inputName: "buyerName" },
-                { header: "JOB NO.", width: 175, inputName: "jobNo" },
+                { header: "JOB NO.", width: 155, inputName: "jobNo" },
                 { header: "STYLE", width: 130, inputName: "styleNo" },
                 { header: "COLOR", width: 180, inputName: "color" },
                 { header: "COMPOSITION", width: 280, inputName: "composition" },
                 { header: "FINISH DIA", width: 120, inputName: "finishdia" },
-                { header: "YARN COUNT", width: 160, inputName: "yarnCount" },
+                { header: "YARN COUNT", width: 120, inputName: "yarnCount" },
                 { header: "YARN LOT", width: 200, inputName: "yarnLot" },
                 { header: "STITCH LENGHT", width: 200, inputName: "stitchLength" },
                 { header: "M/C DIA", width: 200, inputName: "m/cDia" },
@@ -108,18 +114,18 @@ const AllOrders = ({ orderType }) => {
                 { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
                 { header: "PAYABLE AMOUNT", width: 140 },
                 { header: "PAID BILLING AMOUNT", width: 150 },
-                { header: "PENDING BILLING AMOUNT", width: 160 },
+                { header: "PENDING BILLING AMOUNT", width: 100 },
             );
         } else if (orderType === "dyeingOrder") {
             cols.push(
-                { header: "MONTH", width: 135, inputName: "month" },
-                { header: "FACTORY NAME", width: 190, inputName: "factoryName" },
+                { header: "MONTH", width: 110, inputName: "month" },
+                { header: "FACTORY NAME", width: 160, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 160, inputName: "buyerName" },
-                { header: "JOB NO.", width: 180, inputName: "jobNo" },
+                { header: "JOB NO.", width: 170, inputName: "jobNo" },
                 { header: "STYLE", width: 145, inputName: "styleNo" },
                 { header: "COLOR", width: 180, inputName: "bookingColor" },
-                { header: "COMPOSITION", width: 300, inputName: "composition" },
+                { header: "COMPOSITION", width: 280, inputName: "composition" },
                 { header: "FINISH DIA", width: 150, inputName: "finishdia" },
                 { header: "YARN COUNT", width: 200, inputName: "yarncount" },
                 { header: "YARN LOT", width: 200, inputName: "yarnlot" },
@@ -363,6 +369,72 @@ const AllOrders = ({ orderType }) => {
         });
     };
 
+    const openFilterDropdown = (columnName, btnElement) => {
+        if (!filterOptions[columnName]) {
+            loadFilterOptions(columnName);
+        }
+        const currentSelected = filters[columnName] || [];
+        const allOptions = filterOptions[columnName] || [];
+        const isAllSelected = currentSelected.length === allOptions.length || currentSelected.length === 0;
+        setFilterTempSelected(isAllSelected ? [...allOptions] : [...currentSelected]);
+        setFilterSearch("");
+        setOpenFilter(columnName);
+
+        if (btnElement) {
+            const rect = btnElement.getBoundingClientRect();
+            setDropdownPosition({
+                top: rect.bottom + 4,
+                left: rect.left
+            });
+        }
+    };
+
+    const closeFilterDropdown = () => {
+        setOpenFilter(null);
+        setFilterSearch("");
+        setFilterTempSelected([]);
+    };
+
+    const toggleFilterItem = (item) => {
+        setFilterTempSelected(prev => {
+            if (prev.includes(item)) {
+                return prev.filter(v => v !== item);
+            }
+            return [...prev, item];
+        });
+    };
+
+    const toggleSelectAll = () => {
+        const allOptions = filterOptions[openFilter] || [];
+        const allSelected = filterTempSelected.length === allOptions.length;
+        if (allSelected) {
+            setFilterTempSelected([]);
+        } else {
+            setFilterTempSelected([...allOptions]);
+        }
+    };
+
+    const applyFilter = () => {
+        if (openFilter) {
+            handleFilterApply(openFilter, filterTempSelected);
+        }
+        closeFilterDropdown();
+    };
+
+    const cancelFilter = () => {
+        closeFilterDropdown();
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) {
+                closeFilterDropdown();
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
     if (error) return <div className="p-4 bg-red-100 text-red-700 rounded">Something went wrong</div>;
 
     if (loading && !hasLoadedOnce) {
@@ -565,37 +637,6 @@ const AllOrders = ({ orderType }) => {
         setAppliedSearchTerm("");
     };
 
-    /* ============ EXCEL / MACRO-SHEET LOOK ============ */
-    const searchBarContainerStyle = {
-        display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px",
-        padding: "8px", backgroundColor: "#217346", borderRadius: "8px",
-        border: "1px solid #14532D", boxShadow: "2px 4px rgba(0,0,0,0.1)",
-    };
-    const fxBadgeStyle = {
-        background: "linear-gradient(180deg,#2E8B5F,#217346)",
-        color: "#ffffff", fontWeight: 700, fontSize: 13, fontStyle: "italic",
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        padding: "5px 10px", borderRadius: 6, border: "1px solid #1B5E3B",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,.25)", userSelect: "none",
-    };
-    const searchInputWrapperStyle = { position: "relative", flex: 1 };
-    const searchInputStyle = {
-        width: "100%", padding: "10px 40px 10px 40px", border: "1px solid #d1d5db",
-        borderRadius: "6px", fontSize: "14px", outline: "none", transition: "border-color 0.2s",
-        boxSizing: "border-box", backgroundColor: "#FBFCFD",
-    };
-    const searchIconStyle = {
-        position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
-        color: "#9ca3af", pointerEvents: "none",
-    };
-    const clearSearchButtonStyle = {
-        position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)",
-        background: "#f3f4f6", border: "none", borderRadius: "50%", cursor: "pointer",
-        color: "#6b7280", padding: "4px", display: "flex", alignItems: "center",
-        justifyContent: "center", width: "24px", height: "24px", transition: "background-color 0.2s",
-    };
-
-    // Filter header styles with VERY DARK, HIGH-CONTRAST colors
     const filterHeaderStyle = {
         display: "flex",
         flexWrap: "wrap",
@@ -651,22 +692,6 @@ const AllOrders = ({ orderType }) => {
         transition: "background 0.2s",
     };
 
-    const clearAllFiltersButtonStyle = {
-        padding: "8px 16px",
-        backgroundColor: "#DC2626",
-        color: "#FFFFFF",
-        border: "none",
-        borderRadius: "6px",
-        fontSize: "13px",
-        fontWeight: "700",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: "6px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-        transition: "background 0.2s",
-    };
-
     const filterIconStyle = {
         color: "#271294",
         marginRight: "4px",
@@ -680,32 +705,17 @@ const AllOrders = ({ orderType }) => {
         flexWrap: "wrap",
     };
 
+    const allFilterOptions = openFilter ? (filterOptions[openFilter] || []) : [];
+    const filteredOptions = allFilterOptions.filter(opt =>
+        String(opt).toLowerCase().includes(filterSearch.toLowerCase())
+    );
+    const isAllSelected = filterTempSelected.length === allFilterOptions.length && allFilterOptions.length > 0;
+
     return (
         <div>
             {showToast && (
                 <Toast message={toastMessage} type={toastType} onClose={() => setShowToast(false)} duration={3000} />
             )}
-
-            {/* Formula-bar style search
-            <div style={searchBarContainerStyle}>
-                <span style={fxBadgeStyle} title="Search (formula bar)">fx</span>
-                <div style={searchInputWrapperStyle}>
-                    <Search size={18} style={searchIconStyle} />
-                    <input
-                        type="text"
-                        placeholder="Search by job no, factory, buyer, style, color, composition..."
-                        value={searchTerm}
-                        onChange={handleSearchInputChange}
-                        onKeyDown={handleSearchKeyDown}
-                        style={searchInputStyle}
-                    />
-                    {(searchTerm || appliedSearchTerm) && (
-                        <button onClick={handleClearSearch} style={clearSearchButtonStyle} title="Clear search (Esc)">
-                            <X size={14} />
-                        </button>
-                    )}
-                </div>
-            </div> */}
 
             <div className="flex gap-2 mb-0.5">
                 {isEdit?.isEditing && (
@@ -739,7 +749,6 @@ const AllOrders = ({ orderType }) => {
                 )}
             </div>
 
-            {/* Active Filters Header */}
             {Object.keys(filters).length > 0 && (
                 <div style={filterHeaderStyle}>
                     <div style={activeFiltersContainerStyle}>
@@ -774,16 +783,6 @@ const AllOrders = ({ orderType }) => {
                             );
                         })}
                     </div>
-                    {/* <button
-                        onClick={handleClearFilters}
-                        style={clearAllFiltersButtonStyle}
-                        title="Clear all filters"
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#B91C1C"}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#DC2626"}
-                    >
-                        <X size={14} strokeWidth={3} />
-                        Clear All
-                    </button> */}
                 </div>
             )}
 
@@ -803,43 +802,151 @@ const AllOrders = ({ orderType }) => {
             >
                 <div className="order-table-wrapper" style={{ position: "relative", overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}>
                     <style>{`
-                        /* ========================================== */
-                        /* NUCLEAR CSS TO FORCE BLACK TEXT IN DROPDOWN*/
-                        /* ========================================== */
-                        .filter-dropdown-container * {
-                            color: #000000 !important;
-                            font-weight: 400 !important;
-                            font-size: 14px !important;
-                            text-shadow: none !important;
-                            -webkit-font-smoothing: antialiased;
+                        .filter-icon-btn {
+                            cursor: pointer;
+                            padding: 2px 4px;
+                            border-radius: 3px;
+                            transition: all 0.2s;
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            background: transparent;
+                            border: none;
+                            color: rgba(255, 255, 255, 0.8);
+                            margin-left: 4px;
+                            flex-shrink: 0;
                         }
                         
-                        .filter-dropdown-container input[type="text"],
-                        .filter-dropdown-container input[type="search"] {
-                            color: #000000 !important;
-                            background-color: #ffffff !important;
-                            -webkit-text-fill-color: #000000 !important;
-                            border: 1px solid #d1d5db !important;
+                        .filter-icon-btn:hover {
+                            background: rgba(255, 255, 255, 0.25);
+                            color: rgba(255, 255, 255, 1);
                         }
                         
-                        .filter-dropdown-container input::placeholder {
-                            color: #9ca3af !important;
-                            -webkit-text-fill-color: #9ca3af !important;
+                        .filter-icon-btn.active {
+                            color: rgba(255, 255, 255, 1);
+                            background: rgba(255, 255, 255, 0.3);
                         }
 
-                        .filter-dropdown-container button {
-                            color: #000000 !important;
+                        .filter-dropdown-excel {
+                            position: fixed;
+                            z-index: 100000;
+                            background: #ffffff;
+                            border: 1px solid #d1d5db;
+                            border-radius: 6px;
+                            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+                            min-width: 260px;
+                            max-width: 320px;
+                            padding: 8px;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                         }
 
-                        /* Keep OK button white text if it has a blue background */
-                        .filter-dropdown-container button[class*="ok"], 
-                        .filter-dropdown-container button[class*="Ok"],
-                        .filter-dropdown-container button[class*="OK"] {
-                            color: #ffffff !important;
+                        .filter-dropdown-excel .filter-search-input {
+                            width: 100%;
+                            padding: 8px 10px;
+                            border: 1px solid #d1d5db;
+                            border-radius: 4px;
+                            font-size: 13px;
+                            outline: none;
+                            box-sizing: border-box;
+                            margin-bottom: 6px;
+                            color: #1f2937;
                         }
-                    
 
-                        /* ================= EXCEL / MACRO SHEET GRID ================= */
+                        .filter-dropdown-excel .filter-search-input:focus {
+                            border-color: #3b82f6;
+                            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+                        }
+
+                        .filter-dropdown-excel .filter-search-input::placeholder {
+                            color: #9ca3af;
+                        }
+
+                        .filter-dropdown-excel .filter-list {
+                            max-height: 220px;
+                            overflow-y: auto;
+                            border: 1px solid #e5e7eb;
+                            border-radius: 4px;
+                            margin-bottom: 8px;
+                        }
+
+                        .filter-dropdown-excel .filter-item {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            padding: 6px 10px;
+                            cursor: pointer;
+                            font-size: 13px;
+                            color: #1f2937;
+                            border-bottom: 1px solid #f3f4f6;
+                            transition: background 0.15s;
+                        }
+
+                        .filter-dropdown-excel .filter-item:last-child {
+                            border-bottom: none;
+                        }
+
+                        .filter-dropdown-excel .filter-item:hover {
+                            background: #f0f9ff;
+                        }
+
+                        .filter-dropdown-excel .filter-item input[type="checkbox"] {
+                            width: 15px;
+                            height: 15px;
+                            accent-color: #2563eb;
+                            cursor: pointer;
+                            flex-shrink: 0;
+                        }
+
+                        .filter-dropdown-excel .filter-item label {
+                            cursor: pointer;
+                            flex: 1;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            white-space: nowrap;
+                            user-select: none;
+                        }
+
+                        .filter-dropdown-excel .filter-select-all {
+                            font-weight: 600;
+                            background: #f9fafb;
+                            border-bottom: 1px solid #e5e7eb;
+                        }
+
+                        .filter-dropdown-excel .filter-buttons {
+                            display: flex;
+                            justify-content: flex-end;
+                            gap: 8px;
+                        }
+
+                        .filter-dropdown-excel .filter-btn {
+                            padding: 6px 16px;
+                            border-radius: 4px;
+                            font-size: 13px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            border: 1px solid #d1d5db;
+                            transition: all 0.15s;
+                        }
+
+                        .filter-dropdown-excel .filter-btn-cancel {
+                            background: #ffffff;
+                            color: #374151;
+                        }
+
+                        .filter-dropdown-excel .filter-btn-cancel:hover {
+                            background: #f3f4f6;
+                        }
+
+                        .filter-dropdown-excel .filter-btn-apply {
+                            background: #2563eb;
+                            color: #ffffff;
+                            border-color: #2563eb;
+                        }
+
+                        .filter-dropdown-excel .filter-btn-apply:hover {
+                            background: #1d4ed8;
+                        }
+
                         .order-table-wrapper table {
                             width: 100% !important;
                             table-layout: auto !important;
@@ -859,7 +966,6 @@ const AllOrders = ({ orderType }) => {
                             font-variant-numeric: tabular-nums !important;
                         }
 
-                        /* ---- FROZEN COLUMNS (1-8): keep wrap text ---- */
                         .order-table-wrapper th:nth-child(-n+8),
                         .order-table-wrapper td:nth-child(-n+8) {
                             white-space: normal !important;
@@ -869,15 +975,22 @@ const AllOrders = ({ orderType }) => {
                             text-overflow: clip !important;
                         }
                         .order-table-wrapper th:nth-child(-n+8) {
-                            z-index: 20 !important;
+                            z-index: 25 !important;
                         }
                         .order-table-wrapper td:nth-child(-n+8) {
                             background-color: #ffffff !important;
-                            z-index: 10 !important;
+                            z-index: 5 !important;
                         }
 
-                        /* ---- UNFROZEN COLUMNS (9+): single line, no wrap ---- */
-                        .order-table-wrapper th:nth-child(n+9),
+                        /* Allow headers to wrap text for non-frozen columns */
+                        .order-table-wrapper th:nth-child(n+9) {
+                            white-space: normal !important;
+                            word-break: break-word !important;
+                            overflow: visible !important;
+                            text-overflow: clip !important;
+                        }
+
+                        /* Keep data cells truncated/nowrap for non-frozen columns */
                         .order-table-wrapper td:nth-child(n+9) {
                             white-space: nowrap !important;
                             overflow: hidden !important;
@@ -886,9 +999,8 @@ const AllOrders = ({ orderType }) => {
                             max-width: 260px !important;
                         }
 
-                        /* ---- EXCEL-STYLE HEADER BAND ---- */
                         .order-table-wrapper thead th {
-                            background: linear-gradient(#6b7280 10%) !important;
+                            background: #6b7280 !important;
                             color: #ffffff !important;
                             font-weight: 700 !important;
                             font-size: 12px !important;
@@ -898,21 +1010,39 @@ const AllOrders = ({ orderType }) => {
                             border-bottom: 2px solid #14532D !important;
                             padding: 9px 10px !important;
                             text-shadow: 0 1px 1px rgba(0,0,0,.25);
+                            white-space: normal !important;
+                            word-break: break-word !important;
+                            vertical-align: middle !important;
                         }
                         .order-table-wrapper thead th button,
                         .order-table-wrapper thead th svg {
                             color: #EAF6EE !important;
                         }
 
-                        /* ---- ZEBRA STRIPES (sheet rows) ---- */
+                        /* Sticky Footer Rules (if tfoot is used) */
+                        .order-table-wrapper tfoot th,
+                        .order-table-wrapper tfoot td {
+                            position: sticky !important;
+                            bottom: 0 !important;
+                            background: #ffffff !important;
+                            z-index: 15 !important;
+                            border-top: 2px solid #14532D !important;
+                            font-weight: 700 !important;
+                            box-shadow: 0 -3px 6px -1px rgba(0,0,0,0.16) !important;
+                        }
+                        .order-table-wrapper tfoot th:nth-child(-n+16),
+                        .order-table-wrapper tfoot td:nth-child(-n+16) {
+                            z-index: 25 !important;
+                            background-color: #d1dee3 !important;
+                        }
+
                         .order-table-wrapper tbody tr:nth-child(even) td {
                             background-color: #F2F7F4 !important;
                         }
-                        .order-table-wrapper tbody tr:nth-child(even) td:nth-child(-n+8) {
+                        .order-table-wrapper tbody tr:nth-child(even) td:nth-child(-n+16) {
                             background-color: #F2F7F4 !important;
                         }
 
-                        /* ---- EXCEL SELECTION HOVER ---- */
                         .order-table-wrapper tbody tr {
                             transition: background-color 0.12s ease;
                         }
@@ -920,7 +1050,6 @@ const AllOrders = ({ orderType }) => {
                             background-color: #DCEFD9 !important;
                         }
 
-                        /* ================= SHORT & EXCESS PILL ================= */
                         .se-badge {
                             display: inline-block;
                             min-width: 86px;
@@ -985,37 +1114,48 @@ const AllOrders = ({ orderType }) => {
                                                 position: "sticky",
                                                 top: 0,
                                                 left: isFrozen ? `${safeFrozenLefts[i]}px` : "auto",
-                                                zIndex: isFrozen ? 20 : 10,
+                                                zIndex: isFrozen ? 25 : 15,
                                                 borderRight: "1px solid #1B5E3B",
                                                 borderBottom: "2px solid #14532D",
                                                 boxShadow: i === FROZEN_COUNT - 1 ? "3px 0 6px -1px rgba(0,0,0,0.30)" : "none",
                                                 boxSizing: "border-box",
-                                                backgroundColor: hasActiveFilter ? "#166534" : undefined,
+                                                backgroundColor: hasActiveFilter ? "#166534" : "#6b7280",
+                                                whiteSpace: "normal",
+                                                wordBreak: "break-word",
+                                                verticalAlign: "middle"
                                             }}
                                         >
                                             <div style={{
-                                                display: "flex", justifyContent: "center", alignItems: "center",
-                                                width: "100%", gap: "4px"
+                                                display: "flex", 
+                                                justifyContent: "space-between", 
+                                                alignItems: "center",
+                                                width: "100%",
+                                                gap: "4px"
                                             }}>
                                                 <span style={{
-                                                    textAlign: "center", flex: 1, fontWeight: 700, fontSize: "11.5px",
-                                                    minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
-                                                    whiteSpace: "inherit", wordBreak: "inherit"
-                                                }}>{col.header}</span>
+                                                    textAlign: "center", 
+                                                    flex: 1, 
+                                                    fontWeight: 700, 
+                                                    fontSize: "11.5px",
+                                                    minWidth: 0, 
+                                                    whiteSpace: "normal",
+                                                    wordBreak: "break-word",
+                                                    lineHeight: "1.3",
+                                                    padding: "2px 0"
+                                                }}>
+                                                    {col.header}
+                                                </span>
                                                 {isFilterable && (
-                                                    /* WRAPPED IN CONTAINER TO FORCE BLACK TEXT */
-                                                    <div className="filter-dropdown-container">
-                                                        <FilterDropdown
-                                                            columnName={col.inputName}
-                                                            uniqueValues={filterOptions[col.inputName] || []}
-                                                            isLoading={!!filterOptionsLoading[col.inputName]}
-                                                            selectedValues={filters[col.inputName]}
-                                                            onOpen={() => {
-                                                                if (!filterOptions[col.inputName]) loadFilterOptions(col.inputName);
-                                                            }}
-                                                            onApply={handleFilterApply}
-                                                        />
-                                                    </div>
+                                                    <button
+                                                        className={`filter-icon-btn ${hasActiveFilter ? 'active' : ''}`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openFilterDropdown(col.inputName, e.currentTarget);
+                                                        }}
+                                                        title={`Filter by ${col.header}`}
+                                                    >
+                                                        <Filter size={14} strokeWidth={2} />
+                                                    </button>
                                                 )}
                                             </div>
                                         </th>
@@ -1085,6 +1225,69 @@ const AllOrders = ({ orderType }) => {
                     </table>
                 </div>
             </div>
+
+            {openFilter && (
+                <div
+                    ref={filterDropdownRef}
+                    className="filter-dropdown-excel"
+                    style={{
+                        position: "fixed",
+                        top: `${dropdownPosition.top}px`,
+                        left: `${dropdownPosition.left}px`,
+                        zIndex: 100000,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <input
+                        type="text"
+                        className="filter-search-input"
+                        placeholder="Search items..."
+                        value={filterSearch}
+                        onChange={(e) => setFilterSearch(e.target.value)}
+                    />
+
+                    <div className="filter-list">
+                        <div className="filter-item filter-select-all">
+                            <input
+                                type="checkbox"
+                                id="filter-select-all"
+                                checked={isAllSelected}
+                                onChange={toggleSelectAll}
+                            />
+                            <label htmlFor="filter-select-all">(Select All)</label>
+                        </div>
+                        {filteredOptions.map((opt, idx) => {
+                            const isChecked = filterTempSelected.includes(opt);
+                            const itemId = `filter-item-${openFilter}-${idx}`;
+                            return (
+                                <div key={idx} className="filter-item">
+                                    <input
+                                        type="checkbox"
+                                        id={itemId}
+                                        checked={isChecked}
+                                        onChange={() => toggleFilterItem(opt)}
+                                    />
+                                    <label htmlFor={itemId}>{String(opt)}</label>
+                                </div>
+                            );
+                        })}
+                        {filteredOptions.length === 0 && (
+                            <div style={{ padding: "10px", textAlign: "center", color: "#9ca3af", fontSize: "13px" }}>
+                                No items found
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="filter-buttons">
+                        <button className="filter-btn filter-btn-cancel" onClick={cancelFilter}>
+                            Cancel
+                        </button>
+                        <button className="filter-btn filter-btn-apply" onClick={applyFilter}>
+                            APPLY
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

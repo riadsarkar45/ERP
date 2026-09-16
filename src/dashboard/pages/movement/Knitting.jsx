@@ -37,8 +37,8 @@ const theme = {
 
 const cellStyle = {
     padding: "12px 16px",
-    borderBottom: `2px solid ${theme.colors.border}`,
-    borderRight: `2px solid ${theme.colors.border}`,
+    borderBottom: `1px solid ${theme.colors.border}`,
+    borderRight: `1px solid ${theme.colors.border}`,
     fontSize: "0.875rem",
     color: theme.colors.textMain,
     verticalAlign: "middle",

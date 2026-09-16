@@ -281,6 +281,11 @@ export default function Summary() {
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
+    // Any modal that should sit above the table gets checked here before the
+    // sticky footer (and its high z-index) is rendered, so it never shows
+    // on top of an open modal.
+    const isAnyModalOpen = showModal || glanceReport.showGlanceModal;
+
     const fetchFilteredData = useCallback(async () => {
         setIsLoading(prev => ({ ...prev, refreshLoading: true }));
         try {
@@ -1391,7 +1396,9 @@ export default function Summary() {
                     </tbody>
 
                     {/* ── FOOTER TOTAL ROW ── */}
-                    {!isLoading.refreshLoading && filteredData.length > 0 && (
+                    {/* Hidden while any modal (add-style modal or glance modal) is open,
+                        so the sticky footer never renders on top of the modal overlay. */}
+                    {!isLoading.refreshLoading && filteredData.length > 0 && !isAnyModalOpen && (
                         <tfoot>
                             <tr>
                                 {COLUMNS.map((_, index) => {
