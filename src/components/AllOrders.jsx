@@ -92,7 +92,7 @@ const AllOrders = ({ orderType }) => {
         const cols = [];
         if (orderType === "knittingOrder") {
             cols.push(
-                { header: "MONTH", width: 125, inputName: "month" },
+                { header: "MONTH", width: 130, inputName: "month" },
                 { header: "FACTORY NAME", width: 180, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 120, inputName: "buyerName" },
@@ -118,7 +118,7 @@ const AllOrders = ({ orderType }) => {
             );
         } else if (orderType === "dyeingOrder") {
             cols.push(
-                { header: "MONTH", width: 125, inputName: "month" },
+                { header: "MONTH", width: 130, inputName: "month" },
                 { header: "FACTORY NAME", width: 160, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 160, inputName: "buyerName" },
@@ -211,6 +211,7 @@ const AllOrders = ({ orderType }) => {
             const newLefts = [];
             let currentLeft = 0;
 
+    
             for (let i = 0; i < FROZEN_COUNT; i++) {
                 const width = thElements[i].getBoundingClientRect().width;
                 newWidths.push(width);
