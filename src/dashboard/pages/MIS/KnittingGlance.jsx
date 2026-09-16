@@ -387,7 +387,7 @@ const KnittingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("knittingYarnDelivery", r.jobNo)}
+                                onClick={() => safeMisDetail("Yarn Delivery", r.jobNo)}
                             >
                                 {fmt(r.yarnDelivery)}
                             </td>
@@ -423,7 +423,7 @@ const KnittingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("knittingGreyReceived", r.jobNo)}
+                                onClick={() => safeMisDetail("Grey Received", r.jobNo)}
                             >
                                 {fmt(r.greyReceived)}
                             </td>
@@ -435,7 +435,7 @@ const KnittingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("knittingYarnReturn", r.jobNo)}
+                                onClick={() => safeMisDetail("Yarn Return", r.jobNo)}
                             >
                                 {fmt(r.yarnReturn)}
                             </td>

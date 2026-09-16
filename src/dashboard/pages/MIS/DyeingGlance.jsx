@@ -390,7 +390,7 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("dyeingGreyDelivery", r.jobNo)}
+                                onClick={() => safeMisDetail("Grey Delivery", r.jobNo)}
                             >
                                 {fmt(r.greyDelivery)}
                             </td>
@@ -422,7 +422,7 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("dyeingGreyReturn", r.jobNo)}
+                                onClick={() => safeMisDetail("Grey Return", r.jobNo)}
                             >
                                 {fmt(r.greyReturn)}
                             </td>
@@ -434,13 +434,20 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("dyeingGreyReceived", r.jobNo)}
+                                onClick={() => safeMisDetail("Grey Received", r.jobNo)}
                             >
                                 {fmt(r.greyReceived)}
                             </td>
 
                             {/* 8 - Finish Received */}
-                            <td style={{ ...cellStyle, backgroundColor: rowBg }}>
+                            <td
+                                style={{
+                                    ...cellStyle,
+                                    backgroundColor: rowBg,
+                                    cursor: "pointer",
+                                }}
+                                onClick={() => safeMisDetail("Finish Received", r.jobNo)}
+                            >
                                 {fmt(r.finishReceived)}
                             </td>
 

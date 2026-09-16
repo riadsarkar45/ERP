@@ -385,7 +385,7 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("sentForAop", r.jobNo)}
+                                onClick={() => safeMisDetail("Sent For Aop", r.jobNo)}
                             >
                                 {fmt(r.sentForAop)}
                             </td>
@@ -417,7 +417,7 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("receivedFromAop", r.jobNo)}
+                                onClick={() => safeMisDetail("Received From Aop", r.jobNo)}
                             >
                                 {fmt(r.receivedFromAop)}
                             </td>
@@ -429,7 +429,7 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("aopFinishFabricRcvd", r.jobNo)}
+                                onClick={() => safeMisDetail("AOP Finish Fabric Rcvd", r.jobNo)}
                             >
                                 {fmt(r.aopFinishFabricRcvd)}
                             </td>
@@ -441,7 +441,7 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("returnFromAop", r.jobNo)}
+                                onClick={() => safeMisDetail("Return From Aop", r.jobNo)}
                             >
                                 {fmt(r.returnFromAop)}
                             </td>
