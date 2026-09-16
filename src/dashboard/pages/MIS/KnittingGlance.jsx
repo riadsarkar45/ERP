@@ -69,13 +69,13 @@ const KnittingGlance = ({ detailView, handleGetMisDetail }) => {
                     const recv = r.greyReceived + r.yarnReturn;
                     return (
                         <tr key={i}>
-                            <td style={cellStyle}>{r.jobNo}</td>
+                            <td onClick={() => handleGetMisDetail("jobNo", r.jobNo)} style={cellStyle}>{r.jobNo}</td>
                             <td onClick={() => handleGetMisDetail("knittingWorkOrder", r.jobNo)} style={cellStyle}>{fmt(r.wo)}</td>
-                            <td onClick={() => handleGetMisDetail("knittingYarnDelivery", r.jobNo)} style={cellStyle}>{fmt(r.yarnDelivery)}</td>
+                            <td onClick={() => handleGetMisDetail("Yarn Delivery", r.jobNo)} style={cellStyle}>{fmt(r.yarnDelivery)}</td>
                             <td onClick={() => handleGetMisDetail("yarnDeliveryShortExcess", r.jobNo)}  className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(r.yarnDelivery - r.wo)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.yarnDelivery, r.wo))}</td>
-                            <td onClick={() => handleGetMisDetail("knittingGreyReceived", r.jobNo)} style={cellStyle}>{fmt(r.greyReceived)}</td>
-                            <td onClick={() => handleGetMisDetail("knittingYarnReturn", r.jobNo)}  style={cellStyle}>{fmt(r.yarnReturn)}</td>
+                            <td onClick={() => handleGetMisDetail("Grey Fabric Received", r.jobNo)} style={cellStyle}>{fmt(r.greyReceived)}</td>
+                            <td onClick={() => handleGetMisDetail("Yarn Return", r.jobNo)}  style={cellStyle}>{fmt(r.yarnReturn)}</td>
                             <td onClick={() => handleGetMisDetail("knittingPartyStock", r.jobNo)}
                                 className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.yarnDelivery)}
                             </td>

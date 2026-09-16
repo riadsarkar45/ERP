@@ -4,7 +4,8 @@ import { useFetchData } from "../../../hooks/fetch";
 import AopGlance from "./AopGlance";
 import DyeingGlance from "./DyeingGlance";
 import KnittingGlance from "./KnittingGlance";
-import MISGlanceReport from "../../../components/MISGlanceReport";
+import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
+import JobModal from "./JobModal";
 
 const BORDER_COLOR = "#aeb7c2";
 const PAGE_SIZE = 30;
@@ -149,7 +150,12 @@ const GlanceReport = () => {
 
     const [allJobNumbers, setAllJobNumbers] = useState([]);
     const [selectedJobNos, setSelectedJobNos] = useState([]);
-    const [isLoading, setIsLoading] = useState({ isLoading: false, isShowGlanceModal: false })
+
+    // isShowGlanceModal -> controls JobModal's `isOpen`
+    // isLoading         -> controls JobModal's `loading`
+    const [modalState, setModalState] = useState({ isLoading: false, isShowGlanceModal: false });
+    const axiosPrivate = useAxiosPrivate();
+    const [jobDetails, setJobDetails] = useState([]);
 
     const partyViews = ["knittingOrder", "dyeingOrder", "aopOrder"];
 
@@ -238,12 +244,33 @@ const GlanceReport = () => {
         setPage(1);
     };
 
-    const handleGetMisDetail = (detailColumn, jobNo) => {
-        console.log(detailColumn, jobNo);
-    }
+    const handleGetMisDetail = async (detailColumn, jobNo) => {
+        setModalState({ isLoading: true, isShowGlanceModal: true });
+        try {
+            const res = await axiosPrivate.get(`/api/job-wise-mis-view/${jobNo}/${detailColumn}/${selectOrderType}`);
+            setJobDetails(res?.data?.data);
+            console.log(res.data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setModalState((prev) => ({ ...prev, isLoading: false }));
+        }
+    };
+
+    const handleCloseModal = () => {
+        setModalState({ isLoading: false, isShowGlanceModal: false });
+    };
 
     return (
         <div>
+            {/* Job detail modal */}
+            <JobModal
+                isOpen={modalState.isShowGlanceModal}
+                loading={modalState.isLoading}
+                jobDetails={jobDetails}
+                onClose={handleCloseModal}
+            />
+
             {/* Tabs */}
             <div className="flex gap-2 border-b border-gray-300 pb-2 mb-4">
                 {partyViews.map((v, i) => (

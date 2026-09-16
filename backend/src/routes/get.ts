@@ -14,7 +14,7 @@ import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 import { challanMovement } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
-import { misDetailView } from "../controllers/mis/misDetail";
+import { misDetailView, misDetailViewByJobNo } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 import { searchChallans } from "../controllers/movements/searchChallan";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
@@ -115,5 +115,7 @@ getRouters.get("/prepare-to-download/:userId", responseTimeMonitor, authenticate
 getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, downloadChallan);
 
 getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
+
+getRouters.get('/job-wise-mis-view/:jobNo/:deliveryType/:orderType', misDetailViewByJobNo);
 
 export default getRouters;

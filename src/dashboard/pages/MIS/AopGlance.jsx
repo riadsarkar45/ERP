@@ -73,12 +73,12 @@ const AopGlance = ({ detailView, handleGetMisDetail }) => {
                         <tr key={i}>
                             <td style={cellStyle}>{r.jobNo}</td>
                             <td onClick={() => handleGetMisDetail("aopWorkOrder", r.jobNo)} style={cellStyle}>{fmt(r.wo)}</td>
-                            <td onClick={() => handleGetMisDetail("sentForAop", r.jobNo)}  style={cellStyle}>{fmt(r.sentForAop)}</td>
+                            <td onClick={() => handleGetMisDetail("Sent For Aop", r.jobNo)}  style={cellStyle}>{fmt(r.sentForAop)}</td>
                             <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(r.sentForAop - r.wo)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.sentForAop, r.wo))}</td>
-                            <td onClick={() => handleGetMisDetail("receivedFromAop", r.jobNo)}  style={cellStyle}>{fmt(r.receivedFromAop)}</td>
-                            <td onClick={() => handleGetMisDetail("aopFinishFabricRcvd", r.jobNo)}  style={cellStyle}>{fmt(r.aopFinishFabricRcvd)}</td>
-                            <td onClick={() => handleGetMisDetail("returnFromAop", r.jobNo)}  style={cellStyle}>{fmt(r.returnFromAop)}</td>
+                            <td onClick={() => handleGetMisDetail("Received From Aop", r.jobNo)}  style={cellStyle}>{fmt(r.receivedFromAop)}</td>
+                            <td onClick={() => handleGetMisDetail("Aop Finish Fabric Rcvd", r.jobNo)}  style={cellStyle}>{fmt(r.aopFinishFabricRcvd)}</td>
+                            <td onClick={() => handleGetMisDetail("Return From Aop", r.jobNo)}  style={cellStyle}>{fmt(r.returnFromAop)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(r.receivedFromAop - r.aopFinishFabricRcvd, r.receivedFromAop))}</td>
                             <td className="bg-yellow-500 bg-opacity-20" style={cellStyle}>{shortExcess(recv - r.sentForAop)}</td>
                             <td className="bg-[#0af07d] bg-opacity-20" style={cellStyle}>{pctCell(pct(recv, r.sentForAop))}</td>
