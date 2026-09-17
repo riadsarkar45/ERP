@@ -4,39 +4,42 @@ import type { Request, Response } from "express";
 
 export const generateBill = async (req: Request, res: Response) => {
     const { challanIds } = req.body as { challanIds: number[] };
-
+    console.log(challanIds, "1");
     if (!challanIds || challanIds.length === 0) {
         return res.status(400).send({ msg: "No challan IDs provided", type: "error" });
     }
+    console.log(challanIds, "server challan received");
 
-    const getChallans = await prisma.challan.findMany({
-        where: { id: { in: challanIds } },
-        select: {
-            id: true,
-            challanNo: true,
-            challanDate: true,
-            fromFactory: true,
-            toFactory: true,
-            deliveries: { select: { id: true, deliveryQty: true } },
-            composition: {
-                select: {
-                    unitePrice: true,
-                    workOrder: {
-                        select: {
-                            jobNo: true,
+    const getChallans = await prisma.deliveries.findMany(
+        {
+            where: { id: { in: challanIds } },
+            select: {
+                id: true,
+                challanNo: true,
+                createdAt: true,
+                fromFactory: true,
+                toFactory: true,
+                deliveryQty: true,
+                composition: {
+                    select: {
+                        unitePrice: true,
+                        workOrder: {
+                            select: {
+                                jobNo: true,
+                            }
                         }
                     }
                 }
-            },
+            }
         }
-    });
+    )
 
     if (getChallans.length === 0) {
         return res.status(404).send({ msg: "No matching challans found", type: "error" });
     }
 
     const rows = getChallans.map((c) => {
-        const totalQty = c.deliveries.reduce((sum, d) => sum + d.deliveryQty, 0);
+        const totalQty = c.deliveryQty;
         const composition = Array.isArray(c.composition) ? c.composition[0] : c.composition;
         const unitPrice = composition?.unitePrice ?? 0;
         const jobNo = composition?.workOrder?.jobNo ?? "-";
@@ -44,7 +47,7 @@ export const generateBill = async (req: Request, res: Response) => {
         return {
             challanNo: c.challanNo,
             jobNo,
-            date: c.challanDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+            date: new Date(c.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
             from: c.fromFactory,
             to: c.toFactory,
             qty: totalQty,

@@ -61,6 +61,7 @@ export const challanMovement = async (req: Request, res: Response) => {
             },
             deliveries: {
                 where: { deliveryType: { in: deliveryTypes } },
+                orderBy: {createdAt: "desc"},
                 select: {
                     deliveryQty: true,
                     deliveryDate: true,

@@ -204,6 +204,8 @@ const Aop = () => {
 
     const [hoveredRow, setHoveredRow] = useState(null);
 
+    const [isBillGenerating, setIsBillGenerating] = useState(false);
+
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
     const axiosSecure = useAxiosPrivate();
@@ -524,13 +526,16 @@ const Aop = () => {
     // ==============================================
 
     const handleBillPreparation = (challanId) => {
+        console.log(challanId);
         if (challanIds.includes(challanId)) setChallanIds((prev) => prev.filter(id => id !== challanId));
         else setChallanIds((prev) => [...prev, challanId]);
     };
 
     const handleGenerateBill = async () => {
         if (challanIds.length === 0) { alert("Please select at least one challan to generate the bill."); return; }
+        setIsBillGenerating(true);
         try {
+            console.log(challanIds, "challan ids");
             const response = await axiosPublic.post("/api/generate-bill", { challanIds }, { responseType: "blob" });
             const blob = new Blob([response.data], { type: "application/pdf" });
             const url = window.URL.createObjectURL(blob);
@@ -544,6 +549,7 @@ const Aop = () => {
         } catch (error) {
             console.error("Bill generation failed:", error);
             alert("Failed to generate bill. Please try again.");
+            console.log(error, "error");
         }
     };
 
