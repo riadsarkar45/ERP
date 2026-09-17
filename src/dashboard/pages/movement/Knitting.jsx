@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
 import useAxiosPublic from '../../../hooks/Axios';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
@@ -8,32 +9,24 @@ import { useTableFilters } from './UseFilter';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 import { Loader, Search, Download, Save, Filter, X, Calendar, ChevronDown, Check } from 'lucide-react';
 
-// --- Modern Design System & Styles (same as Aop/Dyeing) ---
+// --- Modern Design System & Styles ---
 const theme = {
     colors: {
-        primary: '#3b82f6',
-        primaryHover: '#2563eb',
-        success: '#10b981',
-        successHover: '#059669',
-        danger: '#ef4444',
-        warning: '#fef08a',
-        bgPage: '#ffffff',
-        bgHeader: '#f5d8c9',
-        bgFooter: '#f5d8c9',
-        bgHover: '#f1f5f9',
-        border: '#10b981',
-        borderDark: '#cbd5e1',
-        textMain: '#0f172a',
-        textMuted: '#0f172a',
-        white: '#ffffff',
+        primary: '#3b82f6', primaryHover: '#2563eb', success: '#10b981', successHover: '#059669',
+        danger: '#ef4444', warning: '#fef08a', bgPage: '#ffffff', bgHeader: '#f5d8c9',
+        bgFooter: '#f5d8c9', bgHover: '#f1f5f9', border: '#10b981', borderDark: '#cbd5e1',
+        textMain: '#0f172a', textMuted: '#0f172a', white: '#ffffff',
     },
     shadows: {
         sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
         md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
         lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        xl: '0 20px 25px -5px rgb(0 0 0 / 0.18), 0 8px 10px -6px rgb(0 0 0 / 0.12)',
     },
     radius: '8px',
 };
+
+const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 const cellStyle = {
     padding: "12px 16px",
@@ -53,59 +46,37 @@ const cellStyle = {
 
 const thStickyStyle = {
     ...cellStyle,
-    position: "sticky",
-    top: 0,
-    zIndex: 30,
+    position: "sticky", top: 0, zIndex: 30,
     background: theme.colors.bgHeader,
-    fontWeight: 600,
-    fontSize: "0.80rem",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    fontWeight: 600, fontSize: "0.80rem",
+    textTransform: "uppercase", letterSpacing: "0.05em",
     color: theme.colors.textMuted,
     borderBottom: `3px solid ${theme.colors.borderDark}`,
     boxShadow: theme.shadows.sm,
-    whiteSpace: "normal",
-    wordWrap: "break-word",
-    wordBreak: "break-word",
-    verticalAlign: "middle",
-    textAlign: "center",
+    whiteSpace: "normal", wordWrap: "break-word", wordBreak: "break-word",
+    verticalAlign: "middle", textAlign: "center",
     backgroundClip: "padding-box",
 };
 
 const tfootCellStyle = {
     ...cellStyle,
-    position: "sticky",
-    bottom: 0,
-    zIndex: 30,
-    background: theme.colors.bgFooter,
-    fontWeight: 700,
-    borderTop: `2px solid ${theme.colors.borderDark}`,
-    borderBottom: "none",
-    color: theme.colors.textMain,
-    textAlign: "center",
+    position: "sticky", bottom: 0, zIndex: 30,
+    background: theme.colors.bgFooter, fontWeight: 700,
+    borderTop: `2px solid ${theme.colors.borderDark}`, borderBottom: "none",
+    color: theme.colors.textMain, textAlign: "center",
     backgroundClip: "padding-box",
 };
 
 const pageButtonStyle = (active) => ({
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: "36px",
-    height: "36px",
-    padding: "0 12px",
-    margin: "0 2px",
-    borderRadius: "6px",
-    border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    minWidth: "36px", height: "36px", padding: "0 12px", margin: "0 2px",
+    borderRadius: "6px", border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`,
     background: active ? theme.colors.primary : theme.colors.white,
     color: active ? theme.colors.white : theme.colors.textMain,
-    cursor: "pointer",
-    fontSize: "0.875rem",
-    fontWeight: active ? 600 : 400,
-    transition: "all 0.2s ease",
-    boxShadow: active ? theme.shadows.sm : "none",
+    cursor: "pointer", fontSize: "0.875rem", fontWeight: active ? 600 : 400,
+    transition: "all 0.2s ease", boxShadow: active ? theme.shadows.sm : "none",
 });
 
-// Column definitions (px widths to match Aop/Dyeing)
 const tableHeader = [
     { header: "", width: "50px", key: "select", noFilter: true },
     { header: "Date", width: "110px", key: "challanDate" },
@@ -157,7 +128,6 @@ const getFrozenStyle = (key, area = 'body') => {
 };
 // ===== END FROZEN COLUMNS =====
 
-// Helper: extract YYYY-MM from any date value
 const getMonthKey = (dateVal) => {
     if (!dateVal) return "";
     try {
@@ -169,15 +139,22 @@ const getMonthKey = (dateVal) => {
     }
 };
 
-// Helper: format YYYY-MM -> "Jan 2025"
 const formatMonthLabel = (key) => {
     if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
     const [y, m] = key.split('-');
     return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
 };
 
+const formatMonthLong = (key) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
+    const [y, m] = key.split('-');
+    return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+};
+
+const FILTER_DROPDOWN_WIDTH = 270;
+
 const Knitting = () => {
-    // --- ALL STATE AT TOP LEVEL (Rules of Hooks) ---
+    // --- ALL STATE AT TOP LEVEL ---
     const [movements, setMovements] = useState([]);
     const [fetchError, setFetchError] = useState(null);
     const [selectedRows, setSelectedRows] = useState(new Set());
@@ -191,36 +168,37 @@ const Knitting = () => {
     const [isFetchingAll, setIsFetchingAll] = useState(false);
     const [pendingFilterKey, setPendingFilterKey] = useState(null);
 
-    // Editing states
     const [isLoading, setIsLoading] = useState(false);
     const [editingCell, setEditingCell] = useState(null);
     const [editedData, setEditedData] = useState({});
+    const [localOverrides, setLocalOverrides] = useState({});
 
-    // Excel-like Month Filter States
     const [selectedMonths, setSelectedMonths] = useState(new Set());
     const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
     const [monthDraftSelected, setMonthDraftSelected] = useState(new Set());
     const [monthSearch, setMonthSearch] = useState("");
     const monthDropdownRef = useRef(null);
 
-    // Hover state
     const [hoveredRow, setHoveredRow] = useState(null);
+
+    // Portal refs & state for the column filter dropdown
+    const filterButtonRefs = useRef({});
+    const [dropdownPos, setDropdownPos] = useState(null);
 
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
     const axiosSecure = useAxiosPrivate();
 
-    // ── Build rows ──
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
         const rows = [];
-        let rowCounter = 0;
         const extractJobNo = (item) => item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
 
         const makeRow = (challanNo, jobNo, comp, color, source, mvId, deliveryId) => {
-            rowCounter += 1;
+            const stableId = deliveryId ?? mvId ?? source?.id ?? null;
+            const rowKey = `${challanNo}|${jobNo}|${comp}|${color}|${stableId ?? ''}`;
             return {
-                rowKey: `${challanNo}|${jobNo}|${comp}|${color}|${rowCounter}`,
+                rowKey,
                 mvId: mvId ?? challanNo,
                 deliveryId: deliveryId ?? source?.id ?? null,
                 chId: source?.id || challanNo,
@@ -284,7 +262,6 @@ const Knitting = () => {
                 item.deliveries.forEach((dv) => {
                     const challanNo = dv?.challanNo;
                     if (challanNo === undefined || challanNo === null) return;
-
                     const comp = dv?.composition || item?.composition || "-";
                     const color = dv?.color || item?.color || "-";
                     const row = makeRow(challanNo, jobNo, comp, color, dv, item.id, dv.id);
@@ -314,17 +291,15 @@ const Knitting = () => {
         }));
     }, [movements]);
 
-    // Merge base rows with any unsaved edits and recalculate derived fields
     const processedRows = useMemo(() => {
         return allRows.map(row => {
-            const edits = editedData[row.rowKey] || {};
+            const edits = { ...(localOverrides[row.rowKey] || {}), ...(editedData[row.rowKey] || {}) };
             const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
 
             const yarnDelivery = Number(getVal('yarnDelivery')) || 0;
             const yarnReturn = Number(getVal('yarnReturn')) || 0;
             const greyFabricReceived = Number(getVal('greyFabricReceived')) || 0;
             const unitePrice = Number(getVal('unitePrice')) || 0;
-
             const billingAmount = greyFabricReceived * unitePrice;
 
             return {
@@ -340,7 +315,7 @@ const Knitting = () => {
                 billingAmount
             };
         });
-    }, [allRows, editedData]);
+    }, [allRows, editedData, localOverrides]);
 
     const {
         filters, openFilterKey, draftSelected, filterSearch, dropdownRef,
@@ -348,17 +323,49 @@ const Knitting = () => {
         toggleDraftValue, toggleSelectAllDraft, applyFilter, clearFilter,
     } = useTableFilters(processedRows, tableHeader);
 
-    // ── Month options derived from processedRows ──
+    // ===== Column filter dropdown portal positioning =====
+    const updateDropdownPosition = useCallback(() => {
+        if (!openFilterKey) return;
+        const btn = filterButtonRefs.current[openFilterKey];
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const width = FILTER_DROPDOWN_WIDTH;
+
+        let left = rect.right - width;
+        left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+
+        const estimatedHeight = 360;
+        let top = rect.bottom + 8;
+        if (top + estimatedHeight > window.innerHeight - 8) {
+            const aboveTop = rect.top - estimatedHeight - 8;
+            top = aboveTop > 8 ? aboveTop : Math.max(8, window.innerHeight - estimatedHeight - 8);
+        }
+        setDropdownPos({ top, left, width });
+    }, [openFilterKey]);
+
+    useLayoutEffect(() => {
+        if (!openFilterKey) { setDropdownPos(null); return; }
+        updateDropdownPosition();
+        const handler = () => updateDropdownPosition();
+        window.addEventListener('scroll', handler, true);
+        window.addEventListener('resize', handler);
+        return () => {
+            window.removeEventListener('scroll', handler, true);
+            window.removeEventListener('resize', handler);
+        };
+    }, [openFilterKey, updateDropdownPosition]);
+    // ===== END portal positioning =====
+
+    // ── Month options ──
     const monthOptions = useMemo(() => {
         const set = new Set();
         processedRows.forEach((row) => {
             const key = getMonthKey(row.challanDate);
             if (key) set.add(key);
         });
-        return Array.from(set).sort((a, b) => b.localeCompare(a)); // newest first
+        return Array.from(set).sort((a, b) => b.localeCompare(a));
     }, [processedRows]);
 
-    // Clean up selected months if they no longer exist in data
     useEffect(() => {
         if (selectedMonths.size > 0) {
             const validMonths = new Set(monthOptions);
@@ -369,7 +376,6 @@ const Knitting = () => {
         }
     }, [monthOptions, selectedMonths]);
 
-    // Filtered month options (searchable)
     const filteredMonthOptions = useMemo(() => {
         if (!monthSearch.trim()) return monthOptions;
         const q = monthSearch.toLowerCase();
@@ -379,18 +385,15 @@ const Knitting = () => {
         });
     }, [monthOptions, monthSearch]);
 
-    // Apply month filter on top of the hook's filtered rows
     const filteredRows = useMemo(() => {
         let rows = hookFilteredRows;
-        
-        // Excel-like Month Filter Logic
+
         if (selectedMonths.size > 0) {
             rows = rows.filter((row) => {
                 const rowMonth = getMonthKey(row.challanDate);
                 return rowMonth && selectedMonths.has(rowMonth);
             });
         }
-        
         return rows;
     }, [hookFilteredRows, selectedMonths]);
 
@@ -455,6 +458,10 @@ const Knitting = () => {
     }, [fetchData, filtersString, fetchAll, refreshKey, search]);
 
     useEffect(() => {
+        setLocalOverrides({});
+    }, [movements]);
+
+    useEffect(() => {
         if (fetchError && pendingFilterKey) { setPendingFilterKey(null); return; }
         if (pendingFilterKey && fetchAll && !isFetchingAll && !fetchError) { openFilter(pendingFilterKey); setPendingFilterKey(null); }
     }, [pendingFilterKey, fetchAll, isFetchingAll, fetchError, openFilter]);
@@ -477,7 +484,7 @@ const Knitting = () => {
         openFilter(key);
     };
 
-    // ===== MONTH FILTER EXCEL-LIKE BEHAVIOR =====
+    // ===== MONTH FILTER =====
     const openMonthFilter = () => {
         if (monthDropdownOpen) {
             setMonthDropdownOpen(false);
@@ -534,7 +541,7 @@ const Knitting = () => {
         finally { setSearchLoading(false); }
     };
 
-    // ── Editing Helpers ──
+    // ── Editing helpers ──
     const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'yarnDelivery', 'yarnReturn', 'greyFabricReceived', 'unitePrice'];
     const numericFields = ['yarnDelivery', 'yarnReturn', 'greyFabricReceived', 'unitePrice'];
     const hasUnsavedChanges = Object.keys(editedData).length > 0;
@@ -546,18 +553,15 @@ const Knitting = () => {
         !!search;
 
     const handleClearAllFilters = () => {
-        // Clear column filters (hook owns them — clear each key)
         Object.keys(filters || {}).forEach((key) => clearFilter(key));
         setFilterSearch("");
-        setDraftSelected && setDraftSelected(new Set()); // only if hook exposes it; otherwise safe no-op guard
+        if (typeof setDraftSelected === 'function') setDraftSelected(new Set());
 
-        // Clear month filter
         setSelectedMonths(new Set());
         setMonthDraftSelected(new Set());
         setMonthDropdownOpen(false);
         setMonthSearch("");
 
-        // Clear search
         if (search) {
             setSearch("");
             setSearchError(null);
@@ -585,26 +589,44 @@ const Knitting = () => {
     };
 
     const handleSaveChanges = async () => {
+        const entries = Object.entries(editedData).filter(([, edits]) => edits && Object.keys(edits).length > 0);
+        if (entries.length === 0) { setIsLoading(false); return; }
         setIsLoading(true);
         try {
-            const payload = Object.entries(editedData).map(([rowKey, edits]) => {
+            const payload = entries.map(([rowKey, edits]) => {
                 const originalRow = allRows.find(r => r.rowKey === rowKey);
-                return {
-                    deliveryId: originalRow?.deliveryId || originalRow?.mvId || rowKey,
-                    rowKey,
-                    ...edits
-                };
-            });
-            console.log("Saving edited Knitting data:", payload);
+                const deliveryId = originalRow?.deliveryId ?? originalRow?.mvId ?? null;
+                const changed = {};
+                Object.entries(edits).forEach(([k, v]) => {
+                    if (originalRow?.[k] !== v) changed[k] = v;
+                });
+                return { deliveryId, _rowKey: rowKey, ...changed };
+            }).filter(p => p.deliveryId != null && Object.keys(p).length > 2);
+
+            if (payload.length === 0) {
+                alert("Nothing to save (no valid deliveryId or no changed values).");
+                setIsLoading(false);
+                return;
+            }
+
+            console.log("PATCH /api/edit-challan payload:", payload);
             const update = await axiosSecure.patch("/api/edit-challan", payload);
-            if (update.status === 200) {
-                alert("Changes saved successfully!");
+
+            if (update.status === 200 || update.status === 201 || update.status === 204) {
+                setLocalOverrides(prev => {
+                    const next = { ...prev };
+                    Object.entries(editedData).forEach(([rk, vals]) => {
+                        next[rk] = { ...(next[rk] || {}), ...vals };
+                    });
+                    return next;
+                });
                 setEditedData({});
                 setRefreshKey(prev => prev + 1);
+                alert("Changes saved successfully!");
             }
         } catch (error) {
             console.error("Failed to save changes:", error);
-            alert("Failed to save changes.");
+            alert(error?.response?.data?.message || "Failed to save changes.");
         } finally {
             setIsLoading(false);
         }
@@ -684,9 +706,181 @@ const Knitting = () => {
         );
     };
 
+    // ===== PORTALED COLUMN FILTER DROPDOWN =====
+    const renderColumnFilterDropdown = () => {
+        if (!openFilterKey || !dropdownPos) return null;
+        const th = tableHeader.find(h => h.key === openFilterKey);
+        if (!th) return null;
+
+        const options = filterOptions[openFilterKey] || [];
+        const visibleOptions = options.filter((val) => {
+            let displayVal = val;
+            if (openFilterKey === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                displayVal = formatMonthLong(val);
+            }
+            return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
+        });
+
+        const allSelected = draftSelected.size === options.length && options.length > 0;
+        const availableHeight = Math.max(220, Math.min(380, window.innerHeight - dropdownPos.top - 16));
+
+        return createPortal(
+            <div
+                ref={dropdownRef}
+                style={{
+                    position: 'fixed',
+                    top: dropdownPos.top,
+                    left: dropdownPos.left,
+                    width: dropdownPos.width,
+                    zIndex: 99999,
+                    background: theme.colors.white,
+                    border: `1px solid ${theme.colors.borderDark}`,
+                    borderRadius: theme.radius,
+                    boxShadow: theme.shadows.xl,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    maxHeight: availableHeight,
+                    overflow: 'hidden',
+                    fontFamily: FONT_STACK,
+                    textAlign: 'left',
+                    textTransform: 'none',
+                    letterSpacing: 'normal',
+                    fontWeight: 400,
+                    fontSize: '0.875rem',
+                    color: theme.colors.textMain,
+                }}
+            >
+                <div style={{
+                    padding: '10px 12px',
+                    borderBottom: `1px solid #e2e8f0`,
+                    background: theme.colors.bgHeader,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                }}>
+                    <span style={{
+                        fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: '0.05em', color: theme.colors.textMain,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        Filter: {th.header}
+                    </span>
+                    <button
+                        onClick={() => openFilter(openFilterKey)}
+                        title="Close"
+                        style={{
+                            border: 'none', background: 'transparent', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: 2, borderRadius: '50%', color: theme.colors.textMain, flexShrink: 0,
+                        }}
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+
+                <div style={{ padding: "10px 12px", borderBottom: `1px solid #e2e8f0` }}>
+                    <input
+                        type="text"
+                        value={filterSearch}
+                        onChange={(e) => setFilterSearch(e.target.value)}
+                        placeholder="Filter values..."
+                        autoFocus
+                        style={{
+                            width: "100%", padding: "8px 10px",
+                            border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px',
+                            fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box',
+                            fontFamily: FONT_STACK, color: theme.colors.textMain,
+                        }}
+                    />
+                </div>
+
+                <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 0 }}>
+                    <label style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
+                        color: theme.colors.textMain, cursor: 'pointer'
+                    }}>
+                        <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={() => toggleSelectAllDraft(options)}
+                            style={{ accentColor: theme.colors.primary, width: 15, height: 15 }}
+                        />
+                        Select All ({options.length})
+                    </label>
+                    <div style={{ borderTop: `1px solid #e2e8f0`, paddingTop: 6 }}>
+                        {visibleOptions.length === 0 && (
+                            <div style={{ padding: '12px 0', fontSize: '0.8rem', color: theme.colors.textMain, textAlign: 'center', opacity: 0.6 }}>
+                                No values found
+                            </div>
+                        )}
+                        {visibleOptions.map((val) => {
+                            let displayVal = val;
+                            if (openFilterKey === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                                displayVal = formatMonthLong(val);
+                            }
+                            const isChecked = draftSelected.has(val);
+                            return (
+                                <label key={val} style={{
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    fontSize: "0.8rem", padding: "5px 0", cursor: 'pointer',
+                                    borderRadius: '4px'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => toggleDraftValue(val)}
+                                        style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }}
+                                    />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {displayVal === "" ? "(blank)" : displayVal}
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div style={{
+                    display: "flex", justifyContent: "space-between", gap: 8,
+                    padding: "10px 12px", borderTop: `1px solid #e2e8f0`,
+                    background: theme.colors.bgHeader,
+                }}>
+                    <button
+                        onClick={() => clearFilter(openFilterKey)}
+                        style={{
+                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            background: theme.colors.white, color: theme.colors.textMain,
+                            border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px',
+                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500,
+                            padding: '7px 0', fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Clear
+                    </button>
+                    <button
+                        onClick={() => applyFilter(openFilterKey, options)}
+                        style={{
+                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            background: theme.colors.primary, color: theme.colors.white,
+                            border: 'none', borderRadius: '6px',
+                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                            padding: '7px 0', fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Apply
+                    </button>
+                </div>
+            </div>,
+            document.body
+        );
+    };
+    // ===== END PORTALED FILTER DROPDOWN =====
+
     if (loading && movements.length === 0 && !searchLoading) {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.colors.textMuted, fontFamily: 'inherit' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.colors.textMuted, fontFamily: FONT_STACK }}>
                 <Loader size={24} className="animate-spin" style={{ marginRight: 10 }} /> Loading data...
             </div>
         );
@@ -694,7 +888,7 @@ const Knitting = () => {
 
     if (fetchError && !search) {
         return (
-            <div style={{ padding: "12px 16px", color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: theme.radius, margin: 20, fontFamily: 'inherit' }}>
+            <div style={{ padding: "12px 16px", color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: theme.radius, margin: 20, fontFamily: FONT_STACK }}>
                 {fetchError}
             </div>
         );
@@ -703,7 +897,7 @@ const Knitting = () => {
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
     return (
-        <div style={{ width: "100%", padding: "24px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: theme.colors.textMain }}>
+        <div style={{ width: "100%", padding: "24px", fontFamily: FONT_STACK, color: theme.colors.textMain }}>
 
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
@@ -752,7 +946,6 @@ const Knitting = () => {
                     </button>
                 )}
 
-                {/* ===== EXCEL-LIKE MONTH FILTER TAB ===== */}
                 {monthOptions.length > 0 && (
                     <div ref={monthDropdownRef} style={{ position: 'relative' }}>
                         <button
@@ -776,27 +969,19 @@ const Knitting = () => {
                         >
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 <Calendar size={16} />
-                                {selectedMonths.size === 0 ? "All Months" : 
-                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) : 
+                                {selectedMonths.size === 0 ? "All Months" :
+                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
                                  `${selectedMonths.size} Months Selected`}
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {selectedMonths.size > 0 && (
                                     <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            clearMonthFilter();
-                                        }}
+                                        onClick={(e) => { e.stopPropagation(); clearMonthFilter(); }}
                                         style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: theme.colors.primary,
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            padding: 2,
-                                            borderRadius: '50%',
-                                            transition: 'background 0.15s'
+                                            background: 'transparent', border: 'none',
+                                            color: theme.colors.primary, cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', padding: 2,
+                                            borderRadius: '50%', transition: 'background 0.15s'
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.background = '#eff6ff'}
                                         onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -818,20 +1003,12 @@ const Knitting = () => {
                         {monthDropdownOpen && (
                             <div
                                 style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + 6px)',
-                                    left: 0,
-                                    zIndex: 60,
-                                    background: theme.colors.white,
+                                    position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+                                    zIndex: 60, background: theme.colors.white,
                                     border: `1px solid ${theme.colors.border}`,
-                                    borderRadius: theme.radius,
-                                    width: 260,
-                                    maxHeight: 360,
-                                    boxShadow: theme.shadows.lg,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    fontFamily: 'inherit',
-                                    overflow: 'hidden'
+                                    borderRadius: theme.radius, width: 260, maxHeight: 360,
+                                    boxShadow: theme.shadows.lg, display: 'flex',
+                                    flexDirection: 'column', fontFamily: 'inherit', overflow: 'hidden'
                                 }}
                             >
                                 <div style={{ padding: "10px 12px", borderBottom: `1px solid ${theme.colors.border}` }}>
@@ -842,14 +1019,10 @@ const Knitting = () => {
                                         placeholder="Search months..."
                                         autoFocus
                                         style={{
-                                            width: "100%",
-                                            padding: "8px 10px",
-                                            border: `1px solid ${theme.colors.border}`,
-                                            borderRadius: '6px',
-                                            fontSize: '0.8rem',
-                                            outline: 'none',
-                                            boxSizing: 'border-box',
-                                            fontFamily: 'inherit'
+                                            width: "100%", padding: "8px 10px",
+                                            border: `1px solid ${theme.colors.border}`, borderRadius: '6px',
+                                            fontSize: '0.8rem', outline: 'none',
+                                            boxSizing: 'border-box', fontFamily: 'inherit'
                                         }}
                                     />
                                 </div>
@@ -882,7 +1055,7 @@ const Knitting = () => {
                                                     borderRadius: '4px'
                                                 }}>
                                                     <input
-                                                        type="checkbox" 
+                                                        type="checkbox"
                                                         checked={isChecked}
                                                         onChange={() => toggleMonthDraftValue(m)}
                                                         style={{ accentColor: theme.colors.primary, width: 16, height: 16 }}
@@ -900,8 +1073,8 @@ const Knitting = () => {
                                     padding: "10px 12px", borderTop: `1px solid ${theme.colors.border}`,
                                     background: theme.colors.bgHeader
                                 }}>
-                                    <button 
-                                        onClick={clearMonthFilter} 
+                                    <button
+                                        onClick={clearMonthFilter}
                                         style={{
                                             flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                             background: theme.colors.white, color: theme.colors.textMain,
@@ -911,8 +1084,8 @@ const Knitting = () => {
                                     >
                                         Clear
                                     </button>
-                                    <button 
-                                        onClick={applyMonthFilter} 
+                                    <button
+                                        onClick={applyMonthFilter}
                                         style={{
                                             flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                             background: theme.colors.primary, color: theme.colors.white,
@@ -927,27 +1100,17 @@ const Knitting = () => {
                         )}
                     </div>
                 )}
-                {/* ===== END MONTH FILTER TAB ===== */}
 
-                {/* ===== CLEAR ALL FILTERS BUTTON ===== */}
                 {hasActiveFilters && (
                     <button
                         onClick={handleClearAllFilters}
                         style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            background: '#fef2f2',
-                            color: '#b91c1c',
-                            padding: "10px 16px",
-                            borderRadius: theme.radius,
-                            border: '1px solid #fecaca',
-                            cursor: "pointer",
-                            fontSize: '0.875rem',
-                            fontWeight: 600,
-                            fontFamily: 'inherit',
-                            transition: 'all 0.15s ease',
-                            boxShadow: theme.shadows.sm
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: '#fef2f2', color: '#b91c1c',
+                            padding: "10px 16px", borderRadius: theme.radius,
+                            border: '1px solid #fecaca', cursor: "pointer",
+                            fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit',
+                            transition: 'all 0.15s ease', boxShadow: theme.shadows.sm
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; }}
@@ -956,7 +1119,6 @@ const Knitting = () => {
                         <X size={16} /> Clear All Filters
                     </button>
                 )}
-                {/* ===== END CLEAR ALL FILTERS BUTTON ===== */}
 
                 <div style={{ flex: 1 }} />
 
@@ -1049,21 +1211,23 @@ const Knitting = () => {
                                         </th>
                                     );
                                 }
-                                const options = filterOptions[th.key] || [];
                                 const isActive = !!filters[th.key];
                                 const isOpen = openFilterKey === th.key;
                                 return (
-                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, overflow: "visible", ...frozen }}>
+                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, ...frozen }}>
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                                             <span style={{
-                                                overflow: "visible", whiteSpace: "normal", wordBreak: "break-word",
+                                                whiteSpace: "normal", wordBreak: "break-word",
                                                 textAlign: "center", flex: 1
                                             }}>{th.header}</span>
                                             <button
+                                                ref={(el) => { filterButtonRefs.current[th.key] = el; }}
+                                                onMouseDown={(e) => e.stopPropagation()}
                                                 onClick={() => handleOpenFilter(th.key)}
                                                 style={{
-                                                    border: "none", background: isActive ? theme.colors.primary : "transparent",
-                                                    color: isActive ? theme.colors.white : theme.colors.textMuted,
+                                                    border: "none",
+                                                    background: (isActive || isOpen) ? theme.colors.primary : "transparent",
+                                                    color: (isActive || isOpen) ? theme.colors.white : theme.colors.textMuted,
                                                     cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
                                                     display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
                                                 }}
@@ -1071,88 +1235,7 @@ const Knitting = () => {
                                                 <Filter size={12} />
                                             </button>
                                         </div>
-
-                                        {isOpen && (
-                                            <div ref={dropdownRef} style={{
-                                                position: "absolute", top: "100%", left: 0, zIndex: 100,
-                                                background: theme.colors.white, border: `1px solid ${theme.colors.border}`,
-                                                borderRadius: theme.radius, width: 240, maxHeight: 320,
-                                                boxShadow: theme.shadows.lg, display: "flex", flexDirection: "column",
-                                                textAlign: "left", marginTop: 4, fontFamily: 'inherit'
-                                            }}>
-                                                <div style={{ padding: "10px 12px", borderBottom: `1px solid ${theme.colors.border}` }}>
-                                                    <input
-                                                        type="text" value={filterSearch}
-                                                        onChange={(e) => setFilterSearch(e.target.value)}
-                                                        placeholder="Filter values..." autoFocus
-                                                        style={{
-                                                            width: "100%", padding: "8px 10px",
-                                                            border: `1px solid ${theme.colors.border}`, borderRadius: '6px',
-                                                            fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit'
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
-                                                    <label style={{
-                                                        display: "flex", alignItems: "center", gap: 8,
-                                                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
-                                                        color: theme.colors.textMuted, cursor: 'pointer'
-                                                    }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={draftSelected.size === options.length && options.length > 0}
-                                                            onChange={() => toggleSelectAllDraft(options)}
-                                                            style={{ accentColor: theme.colors.primary }}
-                                                        />
-                                                        Select All ({options.length})
-                                                    </label>
-                                                    <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: 6 }}>
-                                                        {options.filter((val) => {
-                                                            let displayVal = val;
-                                                            if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                                                const [y, m] = val.split('-');
-                                                                displayVal = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-                                                            }
-                                                            return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
-                                                        }).map((val) => {
-                                                            let displayVal = val;
-                                                            if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                                                const [y, m] = val.split('-');
-                                                                displayVal = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-                                                            }
-                                                            return (
-                                                                <label key={val} style={{
-                                                                    display: "flex", alignItems: "center", gap: 8,
-                                                                    fontSize: "0.8rem", padding: "4px 0", cursor: 'pointer',
-                                                                    borderRadius: '4px'
-                                                                }}>
-                                                                    <input
-                                                                        type="checkbox" checked={draftSelected.has(val)}
-                                                                        onChange={() => toggleDraftValue(val)}
-                                                                        style={{ accentColor: theme.colors.primary }}
-                                                                    />
-                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                        {displayVal === "" ? "(blank)" : displayVal}
-                                                                    </span>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                                <div style={{
-                                                    display: "flex", justifyContent: "space-between", gap: 8,
-                                                    padding: "10px 12px", borderTop: `1px solid ${theme.colors.border}`,
-                                                    background: theme.colors.bgHeader, borderRadius: `0 0 ${theme.radius} ${theme.radius}`
-                                                }}>
-                                                    <button onClick={() => clearFilter(th.key)} style={{
-                                                        ...pageButtonStyle(false), fontSize: "0.75rem", padding: '6px 14px', height: 'auto', fontFamily: 'inherit'
-                                                    }}>Clear</button>
-                                                    <button onClick={() => applyFilter(th.key, options)} style={{
-                                                        ...pageButtonStyle(true), fontSize: "0.75rem", padding: '6px 14px', height: 'auto', fontFamily: 'inherit'
-                                                    }}>Apply</button>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* Dropdown is portaled to document.body below */}
                                     </th>
                                 );
                             })}
@@ -1262,6 +1345,9 @@ const Knitting = () => {
                     )}
                 </table>
             </div>
+
+            {/* PORTALED COLUMN FILTER DROPDOWN */}
+            {renderColumnFilterDropdown()}
         </div>
     );
 };

@@ -1,17 +1,17 @@
 import { useState, useMemo } from "react";
 
-const DyeingOrder = ({ 
-    orders, 
-    handleInlineEdit, 
-    handleRedirect, 
-    updatedFields, 
-    handleOnChange, 
-    isEdit, 
-    handleEditRowData, 
-    FROZEN_COUNT, 
-    currentFrozenWidths, 
+const DyeingOrder = ({
+    orders,
+    handleInlineEdit,
+    handleRedirect,
+    updatedFields,
+    handleOnChange,
+    isEdit,
+    handleEditRowData,
+    FROZEN_COUNT,
+    currentFrozenWidths,
     currentFrozenLefts,
-    searchTerm = "" 
+    searchTerm = ""
 }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
@@ -23,6 +23,7 @@ const DyeingOrder = ({
         padding: 0,
         textAlign: "center",
         verticalAlign: "top",
+        boxSizing: "border-box",
     };
 
     const dataTd = { ...baseTd };
@@ -44,12 +45,12 @@ const DyeingOrder = ({
     // Helper function to get finish dia from styleRequirement
     const getFinishDia = (wo, comp) => {
         if (!wo?.styleRequirement?.rows || !comp) return "-";
-        
-        const matchingRow = wo.styleRequirement.rows.find(row => 
-            row.composition === comp.composition && 
+
+        const matchingRow = wo.styleRequirement.rows.find(row =>
+            row.composition === comp.composition &&
             row.color === comp.color
         );
-        
+
         return matchingRow?.finishDia || "-";
     };
 
@@ -99,37 +100,12 @@ const DyeingOrder = ({
         return acc;
     }, [orders]);
 
-    const totalFrozenWidth = currentFrozenWidths.reduce((sum, w) => sum + w, 0);
-
-    const footerStickyLabelTd = {
-        ...baseTd,
-        position: "sticky",
-        left: 0,
-        zIndex: 4,
-        backgroundColor: "#f3f4f6",
-        width: `${totalFrozenWidth}px`,
-        minWidth: `${totalFrozenWidth}px`,
-        fontWeight: 700,
-        boxShadow: "2px 0 5px -1px rgba(0,0,0,0.18)",
-        padding: "8px 12px",
-        textAlign: "center",
-    };
-
-    const footerTd = {
-        border: "1px solid #000000",
-        padding: "8px 12px",
-        textAlign: "center",
-        verticalAlign: "middle",
-        fontWeight: 700,
-        backgroundColor: "#f3f4f6",
-    };
-
     // Filter orders based on search term
     const filteredOrders = useMemo(() => {
         if (!searchTerm?.trim()) return orders || [];
-        
+
         const lowerSearch = searchTerm.toLowerCase();
-        
+
         return (orders || []).map(job => {
             const filteredWorkOrders = (job.workOrders || []).map(wo => {
                 const filteredComps = (wo.compositions || []).filter(comp => {
@@ -146,13 +122,13 @@ const DyeingOrder = ({
                         wo?.lotNo,
                         comp?.workOrderQty,
                     ].map(val => String(val || "").toLowerCase());
-                    
+
                     return searchableValues.some(val => val.includes(lowerSearch));
                 });
-                
+
                 return { ...wo, compositions: filteredComps };
             }).filter(wo => wo.compositions.length > 0);
-            
+
             return { ...job, workOrders: filteredWorkOrders };
         }).filter(job => job.workOrders.length > 0);
     }, [orders, searchTerm]);
@@ -194,6 +170,55 @@ const DyeingOrder = ({
         return out;
     }, [filteredOrders]);
 
+    /* ============================================================
+       FOOTER STYLES
+       ============================================================ */
+
+    // Base style for every footer cell (sticks to the bottom of the scroll area)
+    const footerBaseStyle = {
+        ...baseTd,
+        position: "sticky",
+        bottom: 0,
+        zIndex: 12,
+        backgroundColor: "#f3f4f6",
+        fontWeight: 700,
+        padding: "8px 12px",
+        textAlign: "center",
+        verticalAlign: "middle",
+        borderTop: "2px solid #000000",
+        boxShadow: "0 -2px 5px -1px rgba(0,0,0,0.1)",
+        boxSizing: "border-box",
+        whiteSpace: "nowrap",
+    };
+
+    // Footer cell style.
+    // index < FROZEN_COUNT  -> sticky BOTTOM + sticky LEFT (frozen column)
+    // index >= FROZEN_COUNT -> sticky BOTTOM only
+    const getFooterCellStyle = (index) => {
+        if (index < FROZEN_COUNT) {
+            return {
+                ...footerBaseStyle,
+                left: `${currentFrozenLefts[index]}px`,
+                // must sit ABOVE the non-frozen footer cells (12)
+                zIndex: 20,
+                backgroundColor: "#e5e7eb",
+                width: `${currentFrozenWidths[index]}px`,
+                minWidth: `${currentFrozenWidths[index]}px`,
+                maxWidth: `${currentFrozenWidths[index]}px`,
+                // right shadow only on the last frozen column
+                boxShadow: index === FROZEN_COUNT - 1
+                    ? "2px -2px 5px -1px rgba(0,0,0,0.18)"
+                    : "0 -2px 5px -1px rgba(0,0,0,0.1)",
+            };
+        }
+
+        return footerBaseStyle;
+    };
+
+    // Count non-frozen footer cells that come after the frozen block
+    // (see tfoot markup below for the order of these cells)
+    const NON_FROZEN_FOOTER_COUNT = 18;
+
     return (
         <>
             <tbody>
@@ -217,8 +242,8 @@ const DyeingOrder = ({
                     const currentFinishDia = getFinishDia(wo, comp);
 
                     return (
-                        <tr 
-                            key={rowIndex} 
+                        <tr
+                            key={rowIndex}
                             onMouseEnter={() => setHoveredIndex(jobIndex)}
                             onMouseLeave={() => setHoveredIndex(null)}
                         >
@@ -447,33 +472,120 @@ const DyeingOrder = ({
 
             <tfoot>
                 <tr>
-                    <td colSpan={FROZEN_COUNT} style={footerStickyLabelTd}>
-                        TOTAL
+                    {/* ===== FROZEN FOOTER CELLS =====
+                        Rendered as INDIVIDUAL cells (no colSpan).
+                        colSpan + position:sticky is broken in Chromium,
+                        which is why the frozen side of the footer was not sticking. */}
+                    {Array.from({ length: FROZEN_COUNT }).map((_, i) => (
+                        <td key={`footer-frozen-${i}`} style={getFooterCellStyle(i)}>
+                            {i === 0 ? (
+                                <div style={{ textAlign: "left", paddingLeft: "4px" }}>TOTAL</div>
+                            ) : null}
+                        </td>
+                    ))}
+
+                    {/* FINISH DIA Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT)}>
+                        <div className={cellPad}>-</div>
                     </td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>{totals?.workOrderQty?.toFixed(2)}</td>
-                    <td style={footerTd}>{totals?.totalGreyDelivery?.toFixed(2)}</td>
-                    <td style={{ ...footerTd, color: totals?.shortExcess > 0 ? "red" : "green" }}>
-                        {totals?.shortExcess > 0 ? totals?.shortExcess?.toFixed(2) : `(${Math.abs(totals?.shortExcess?.toFixed(2))})`}
+
+                    {/* YARN COUNT Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 1)}>
+                        <div className={cellPad}>-</div>
                     </td>
-                    <td style={footerTd}>{totals?.greyReturn?.toFixed(2)}</td>
-                    <td style={footerTd}>{totals?.greyReceived?.toFixed(2)}</td>
-                    <td style={footerTd}>{totals?.finishReceived?.toFixed(2)}</td>
-                    <td style={{ ...footerTd, color: totals?.finishVsGreyDiff < 0 ? "red" : "green" }}>
-                        {totals.finishVsGreyDiff < 0 ? Math.abs(totals.finishVsGreyDiff?.toFixed(2)) : `(${Math.abs(totals.finishVsGreyDiff.toFixed(2))})`}
+
+                    {/* YARN LOT Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 2)}>
+                        <div className={cellPad}>-</div>
                     </td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>{totals?.sentForCompacting?.toFixed(2)}</td>
-                    <td style={footerTd}>{totals?.receivedFromCompacting?.toFixed(2)}</td>
-                    <td style={footerTd}>{totals?.greyReceivedValue?.toFixed(2)}</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
+
+                    {/* STICH LENGTH Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 3)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* MACHINE DIA Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 4)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* SHADE % Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 5)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* WORK ORDER QTY Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 6)}>
+                        <div className={cellPad}>{totals?.workOrderQty?.toFixed(2)}</div>
+                    </td>
+
+                    {/* GREY DELIVERY Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
+                        <div className={cellPad}>{totals?.totalGreyDelivery?.toFixed(2)}</div>
+                    </td>
+
+                    {/* DEL SHORT & EXCESS Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 8)}>
+                        <div className={cellPad} style={{ color: totals?.shortExcess > 0 ? "red" : "green" }}>
+                            {totals?.shortExcess > 0
+                                ? totals?.shortExcess?.toFixed(2)
+                                : `(${Math.abs(totals?.shortExcess?.toFixed(2))})`}
+                        </div>
+                    </td>
+
+                    {/* GREY RETURN Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 9)}>
+                        <div className={cellPad}>{totals?.greyReturn?.toFixed(2)}</div>
+                    </td>
+
+                    {/* GREY RECEIVED Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 10)}>
+                        <div className={cellPad}>{totals?.greyReceived?.toFixed(2)}</div>
+                    </td>
+
+                    {/* FINISH RECEIVED Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 11)}>
+                        <div className={cellPad}>{totals?.finishReceived?.toFixed(2)}</div>
+                    </td>
+
+                    {/* RCVD SHORT & EXCESS Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 12)}>
+                        <div className={cellPad} style={{ color: totals?.finishVsGreyDiff < 0 ? "red" : "green" }}>
+                            {totals.finishVsGreyDiff < 0
+                                ? Math.abs(totals.finishVsGreyDiff?.toFixed(2))
+                                : `(${Math.abs(totals.finishVsGreyDiff.toFixed(2))})`}
+                        </div>
+                    </td>
+
+                    {/* UNIT PRICE Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 13)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* TOTAL SENT FOR COMPACTING Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 14)}>
+                        <div className={cellPad}>{totals?.sentForCompacting?.toFixed(2)}</div>
+                    </td>
+
+                    {/* TOTAL RECEIVED FROM COMPACTING Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 15)}>
+                        <div className={cellPad}>{totals?.receivedFromCompacting?.toFixed(2)}</div>
+                    </td>
+
+                    {/* TOTAL BILLING / PAYABLE AMOUNT Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 16)}>
+                        <div className={cellPad}>{totals?.greyReceivedValue?.toFixed(2)}</div>
+                    </td>
+
+                    {/* PAYABLE AMOUNT placeholder Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 17)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* PENDING BILLING AMOUNT placeholder Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 18)}>
+                        <div className={cellPad}>-</div>
+                    </td>
                 </tr>
             </tfoot>
         </>

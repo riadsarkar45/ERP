@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
@@ -28,9 +29,12 @@ const theme = {
         sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
         md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
         lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        xl: '0 20px 25px -5px rgb(0 0 0 / 0.18), 0 8px 10px -6px rgb(0 0 0 / 0.12)',
     },
     radius: '8px',
 };
+
+const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 const cellStyle = {
     padding: "12px 16px",
@@ -174,6 +178,15 @@ const formatMonthLabel = (key) => {
     return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
 };
 
+const formatMonthLong = (key) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
+    const [y, m] = key.split('-');
+    return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+};
+
+// Dropdown width used for portal positioning
+const FILTER_DROPDOWN_WIDTH = 270;
+
 const Aop = () => {
     const [movements, setMovements] = useState([]);
     const [page, setPage] = useState(1);
@@ -183,6 +196,8 @@ const Aop = () => {
     const [filterSearch, setFilterSearch] = useState("");
     const [selectedRows, setSelectedRows] = useState(new Set());
     const dropdownRef = useRef(null);
+    const filterButtonRefs = useRef({});          // 🔧 refs to each header filter button
+    const [dropdownPos, setDropdownPos] = useState(null); // 🔧 portal position
     const monthDropdownRef = useRef(null);
     const [totalPages, setTotalPages] = useState(1);
     const [challanIds, setChallanIds] = useState([]);
@@ -195,6 +210,8 @@ const Aop = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [editingCell, setEditingCell] = useState(null);
     const [editedData, setEditedData] = useState({});
+    // 🔧 FIX: keep server-confirmed edits visible until refetch returns
+    const [localOverrides, setLocalOverrides] = useState({});
 
     // Excel-like Month Filter States
     const [selectedMonths, setSelectedMonths] = useState(new Set());
@@ -220,13 +237,74 @@ const Aop = () => {
             });
     }, [fetchData, page, refreshKey, search]);
 
+    // 🔧 FIX: whenever fresh server data arrives, drop local overrides
+    useEffect(() => {
+        setLocalOverrides({});
+    }, [movements]);
+
+    // ===== COLUMN FILTER DROPDOWN: position helper (portal) =====
+    const updateDropdownPosition = useCallback(() => {
+        if (!openFilterKey) return;
+        const btn = filterButtonRefs.current[openFilterKey];
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const width = FILTER_DROPDOWN_WIDTH;
+
+        // Align dropdown right edge to the button right edge, then clamp to viewport
+        let left = rect.right - width;
+        left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+
+        const estimatedHeight = 360;
+        let top = rect.bottom + 8;
+
+        // If it doesn't fit below, flip it above the button
+        if (top + estimatedHeight > window.innerHeight - 8) {
+            const aboveTop = rect.top - estimatedHeight - 8;
+            top = aboveTop > 8
+                ? aboveTop
+                : Math.max(8, window.innerHeight - estimatedHeight - 8);
+        }
+
+        setDropdownPos({ top, left, width });
+    }, [openFilterKey]);
+
+    // Reposition (or keep in sync) on scroll / resize while open
+    useLayoutEffect(() => {
+        if (!openFilterKey) { setDropdownPos(null); return; }
+        updateDropdownPosition();
+        const handler = () => updateDropdownPosition();
+        window.addEventListener('scroll', handler, true);
+        window.addEventListener('resize', handler);
+        return () => {
+            window.removeEventListener('scroll', handler, true);
+            window.removeEventListener('resize', handler);
+        };
+    }, [openFilterKey, updateDropdownPosition]);
+
+    // Outside click + Escape for the column filter dropdown (portal aware)
     useEffect(() => {
         if (!openFilterKey) return;
         const handleClick = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpenFilterKey(null);
+            // click inside the dropdown panel -> ignore
+            if (dropdownRef.current && dropdownRef.current.contains(e.target)) return;
+            // click on the button that opened it -> ignore (let onClick toggle it)
+            const btn = filterButtonRefs.current[openFilterKey];
+            if (btn && btn.contains(e.target)) return;
+            setOpenFilterKey(null);
+            setDropdownPos(null);
+        };
+        const handleKey = (e) => {
+            if (e.key === 'Escape') {
+                setOpenFilterKey(null);
+                setDropdownPos(null);
+            }
         };
         document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
+        document.addEventListener("keydown", handleKey);
+        return () => {
+            document.removeEventListener("mousedown", handleClick);
+            document.removeEventListener("keydown", handleKey);
+        };
     }, [openFilterKey]);
 
     useEffect(() => {
@@ -344,23 +422,26 @@ const Aop = () => {
         });
     }, [movements]);
 
+    // 🔧 FIX: merge localOverrides + editedData on top of base rows
     const processedRows = useMemo(() => {
         return allRows.map(row => {
-            const edits = editedData[row.rowKey] || {};
+            const edits = { ...(localOverrides[row.rowKey] || {}), ...(editedData[row.rowKey] || {}) };
             const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
             const sentForAop = Number(getVal('sentForAop')) || 0;
             const returnFromAop = Number(getVal('returnFromAop')) || 0;
             const receiveFromAop = Number(getVal('receiveFromAop')) || 0;
             const finishReceiveFromAop = Number(getVal('finishReceiveFromAop')) || 0;
+            const unitePrice = Number(getVal('unitePrice')) || 0;
             const processLoss = receiveFromAop > 0 ? ((receiveFromAop - finishReceiveFromAop) / receiveFromAop) * 100 : 0;
-            const billingAmount = receiveFromAop * row.unitePrice;
+            const billingAmount = receiveFromAop * unitePrice;
             return {
                 ...row, deliveryId: row.deliveryId, challanNo: getVal('challanNo'),
                 fromFactory: getVal('fromFactory'), toFactory: getVal('toFactory'),
-                sentForAop, returnFromAop, receiveFromAop, finishReceiveFromAop, processLoss, billingAmount
+                sentForAop, returnFromAop, receiveFromAop, finishReceiveFromAop,
+                unitePrice, processLoss, billingAmount
             };
         });
-    }, [allRows, editedData]);
+    }, [allRows, editedData, localOverrides]);
 
     const monthOptions = useMemo(() => {
         const set = new Set();
@@ -418,7 +499,7 @@ const Aop = () => {
             const rowMonth = getMonthKey(row.challanDate);
             if (!rowMonth || !selectedMonths.has(rowMonth)) return false;
         }
-        
+
         return tableHeader.every((col) => {
             if (col.noFilter) return true;
             const selected = filters[col.key];
@@ -459,16 +540,25 @@ const Aop = () => {
         return nums;
     }, [totalPages, page]);
 
+    const closeFilterDropdown = () => {
+        setOpenFilterKey(null);
+        setDropdownPos(null);
+        setFilterSearch("");
+    };
+
     const openFilter = (key) => {
-        if (openFilterKey === key) { setOpenFilterKey(null); return; }
+        if (openFilterKey === key) { closeFilterDropdown(); return; }
         const options = filterOptions[key] || [];
         const current = filters[key];
         setDraftSelected(current ? new Set(current) : new Set(options));
         setFilterSearch("");
+        setDropdownPos(null); // will be computed in useLayoutEffect
         setOpenFilterKey(key);
     };
+
     const toggleDraftValue = (val) => setDraftSelected((prev) => { const next = new Set(prev); if (next.has(val)) next.delete(val); else next.add(val); return next; });
     const toggleSelectAllDraft = (options) => setDraftSelected((prev) => (prev.size === options.length ? new Set() : new Set(options)));
+
     const applyFilter = (key, options) => {
         setFilters((prev) => {
             const next = { ...prev };
@@ -476,9 +566,13 @@ const Aop = () => {
             else next[key] = new Set(draftSelected);
             return next;
         });
-        setOpenFilterKey(null);
+        closeFilterDropdown();
     };
-    const clearFilter = (key) => { setFilters((prev) => { const next = { ...prev }; delete next[key]; return next; }); setOpenFilterKey(null); };
+
+    const clearFilter = (key) => {
+        setFilters((prev) => { const next = { ...prev }; delete next[key]; return next; });
+        closeFilterDropdown();
+    };
 
     // ===== MONTH FILTER EXCEL-LIKE BEHAVIOR =====
     const openMonthFilter = () => {
@@ -487,7 +581,6 @@ const Aop = () => {
             setMonthSearch("");
             return;
         }
-        // Initialize draft with current selection, or all options if none selected
         if (selectedMonths.size > 0) {
             setMonthDraftSelected(new Set(selectedMonths));
         } else {
@@ -565,23 +658,50 @@ const Aop = () => {
         setEditedData(prev => ({ ...prev, [rowKey]: { ...(prev[rowKey] || {}), [colKey]: value } }));
     };
 
+    // 🔧 FIX: clean save payload + optimistic local merge + proper refetch
     const handleSaveChanges = async () => {
+        const entries = Object.entries(editedData).filter(([, edits]) => edits && Object.keys(edits).length > 0);
+        if (entries.length === 0) { setIsLoading(false); return; }
         setIsLoading(true);
         try {
-            const payload = Object.entries(editedData).map(([rowKey, edits]) => {
+            const payload = entries.map(([rowKey, edits]) => {
                 const originalRow = allRows.find(r => r.rowKey === rowKey);
-                return { deliveryId: originalRow?.deliveryId || originalRow?.chId || rowKey, rowKey, ...edits };
-            });
-            console.log("Saving edited AOP data:", payload);
+                const deliveryId = originalRow?.deliveryId ?? originalRow?.chId ?? null;
+
+                // only send fields that actually changed
+                const changed = {};
+                Object.entries(edits).forEach(([k, v]) => {
+                    if (originalRow?.[k] !== v) changed[k] = v;
+                });
+
+                return { deliveryId, _rowKey: rowKey, ...changed };
+            }).filter(p => p.deliveryId != null && Object.keys(p).length > 2);
+
+            if (payload.length === 0) {
+                alert("Nothing to save (no valid deliveryId or no changed values).");
+                setIsLoading(false);
+                return;
+            }
+
+            console.log("PATCH /api/edit-challan payload:", payload);
             const update = await axiosSecure.patch("/api/edit-challan", payload);
-            if (update.status === 200) {
-                alert("Changes saved successfully!");
+
+            if (update.status === 200 || update.status === 201 || update.status === 204) {
+                // 🔧 FIX: keep saved values visible until refetch replaces them
+                setLocalOverrides(prev => {
+                    const next = { ...prev };
+                    Object.entries(editedData).forEach(([rk, vals]) => {
+                        next[rk] = { ...(next[rk] || {}), ...vals };
+                    });
+                    return next;
+                });
                 setEditedData({});
                 setRefreshKey(prev => prev + 1);
+                alert("Changes saved successfully!");
             }
         } catch (error) {
             console.error("Failed to save changes:", error);
-            alert("Failed to save changes.");
+            alert(error?.response?.data?.message || "Failed to save changes.");
         } finally { setIsLoading(false); }
     };
 
@@ -624,19 +744,15 @@ const Aop = () => {
         !!search;
 
     const handleClearAllFilters = () => {
-        // Clear column filters
         setFilters({});
-        setOpenFilterKey(null);
-        setFilterSearch("");
+        closeFilterDropdown();
         setDraftSelected(new Set());
 
-        // Clear month filter
         setSelectedMonths(new Set());
         setMonthDraftSelected(new Set());
         setMonthDropdownOpen(false);
         setMonthSearch("");
 
-        // Clear search
         if (search) {
             setSearch("");
             setSearchError(null);
@@ -706,9 +822,190 @@ const Aop = () => {
         );
     };
 
+    // ===== PORTALED COLUMN FILTER DROPDOWN RENDERER =====
+    const renderColumnFilterDropdown = () => {
+        if (!openFilterKey || !dropdownPos) return null;
+        const th = tableHeader.find(h => h.key === openFilterKey);
+        if (!th) return null;
+
+        const options = filterOptions[openFilterKey] || [];
+        const visibleOptions = options.filter((val) => {
+            let displayVal = val;
+            if (openFilterKey === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                displayVal = formatMonthLong(val);
+            }
+            return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
+        });
+
+        const allSelected = draftSelected.size === options.length && options.length > 0;
+        const availableHeight = Math.max(220, Math.min(380, window.innerHeight - dropdownPos.top - 16));
+
+        return createPortal(
+            <div
+                ref={dropdownRef}
+                style={{
+                    position: 'fixed',
+                    top: dropdownPos.top,
+                    left: dropdownPos.left,
+                    width: dropdownPos.width,
+                    zIndex: 99999,                     // 🔧 always on top of the table
+                    background: theme.colors.white,
+                    border: `1px solid ${theme.colors.borderDark}`,
+                    borderRadius: theme.radius,
+                    boxShadow: theme.shadows.xl,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    maxHeight: availableHeight,
+                    overflow: 'hidden',
+                    fontFamily: FONT_STACK,
+                    textAlign: 'left',
+                    textTransform: 'none',
+                    letterSpacing: 'normal',
+                    fontWeight: 400,
+                    fontSize: '0.875rem',
+                    color: theme.colors.textMain,
+                }}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '10px 12px',
+                    borderBottom: `1px solid #e2e8f0`,
+                    background: theme.colors.bgHeader,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                }}>
+                    <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: theme.colors.textMain,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}>
+                        Filter: {th.header}
+                    </span>
+                    <button
+                        onClick={closeFilterDropdown}
+                        title="Close"
+                        style={{
+                            border: 'none', background: 'transparent', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: 2, borderRadius: '50%', color: theme.colors.textMain, flexShrink: 0,
+                        }}
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+
+                {/* Search */}
+                <div style={{ padding: "10px 12px", borderBottom: `1px solid #e2e8f0` }}>
+                    <input
+                        type="text"
+                        value={filterSearch}
+                        onChange={(e) => setFilterSearch(e.target.value)}
+                        placeholder="Filter values..."
+                        autoFocus
+                        style={{
+                            width: "100%", padding: "8px 10px",
+                            border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px',
+                            fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box',
+                            fontFamily: FONT_STACK, color: theme.colors.textMain,
+                        }}
+                    />
+                </div>
+
+                {/* Options */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 0 }}>
+                    <label style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
+                        color: theme.colors.textMain, cursor: 'pointer'
+                    }}>
+                        <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={() => toggleSelectAllDraft(options)}
+                            style={{ accentColor: theme.colors.primary, width: 15, height: 15 }}
+                        />
+                        Select All ({options.length})
+                    </label>
+                    <div style={{ borderTop: `1px solid #e2e8f0`, paddingTop: 6 }}>
+                        {visibleOptions.length === 0 && (
+                            <div style={{ padding: '12px 0', fontSize: '0.8rem', color: theme.colors.textMain, textAlign: 'center', opacity: 0.6 }}>
+                                No values found
+                            </div>
+                        )}
+                        {visibleOptions.map((val) => {
+                            let displayVal = val;
+                            if (openFilterKey === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
+                                displayVal = formatMonthLong(val);
+                            }
+                            const isChecked = draftSelected.has(val);
+                            return (
+                                <label key={val} style={{
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    fontSize: "0.8rem", padding: "5px 0", cursor: 'pointer',
+                                    borderRadius: '4px'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => toggleDraftValue(val)}
+                                        style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }}
+                                    />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {displayVal === "" ? "(blank)" : displayVal}
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                    display: "flex", justifyContent: "space-between", gap: 8,
+                    padding: "10px 12px", borderTop: `1px solid #e2e8f0`,
+                    background: theme.colors.bgHeader,
+                }}>
+                    <button
+                        onClick={() => clearFilter(openFilterKey)}
+                        style={{
+                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            background: theme.colors.white, color: theme.colors.textMain,
+                            border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px',
+                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500,
+                            padding: '7px 0', fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Clear
+                    </button>
+                    <button
+                        onClick={() => applyFilter(openFilterKey, options)}
+                        style={{
+                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            background: theme.colors.primary, color: theme.colors.white,
+                            border: 'none', borderRadius: '6px',
+                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                            padding: '7px 0', fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Apply
+                    </button>
+                </div>
+            </div>,
+            document.body
+        );
+    };
+    // ===== END PORTALED FILTER DROPDOWN =====
+
     if (loading && movements.length === 0 && !searchLoading) {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.colors.textMuted, fontFamily: 'inherit' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.colors.textMuted, fontFamily: FONT_STACK }}>
                 <Loader size={24} className="animate-spin" style={{ marginRight: 10 }} /> Loading data...
             </div>
         );
@@ -717,7 +1014,7 @@ const Aop = () => {
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
     return (
-        <div style={{ width: "100%", padding: "24px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: theme.colors.textMain }}>
+        <div style={{ width: "100%", padding: "24px", fontFamily: FONT_STACK, color: theme.colors.textMain }}>
 
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
@@ -790,12 +1087,11 @@ const Aop = () => {
                         >
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 <Calendar size={16} />
-                                {selectedMonths.size === 0 ? "All Months" : 
-                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) : 
+                                {selectedMonths.size === 0 ? "All Months" :
+                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
                                  `${selectedMonths.size} Months Selected`}
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                {/* Filter Clear Tab appears when month filter is active */}
                                 {selectedMonths.size > 0 && (
                                     <button
                                         onClick={(e) => {
@@ -897,7 +1193,7 @@ const Aop = () => {
                                                     borderRadius: '4px'
                                                 }}>
                                                     <input
-                                                        type="checkbox" 
+                                                        type="checkbox"
                                                         checked={isChecked}
                                                         onChange={() => toggleMonthDraftValue(m)}
                                                         style={{ accentColor: theme.colors.primary, width: 16, height: 16 }}
@@ -915,8 +1211,8 @@ const Aop = () => {
                                     padding: "10px 12px", borderTop: `1px solid ${theme.colors.border}`,
                                     background: theme.colors.bgHeader
                                 }}>
-                                    <button 
-                                        onClick={clearMonthFilter} 
+                                    <button
+                                        onClick={clearMonthFilter}
                                         style={{
                                             flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                             background: theme.colors.white, color: theme.colors.textMain,
@@ -926,8 +1222,8 @@ const Aop = () => {
                                     >
                                         Clear
                                     </button>
-                                    <button 
-                                        onClick={applyMonthFilter} 
+                                    <button
+                                        onClick={applyMonthFilter}
                                         style={{
                                             flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                             background: theme.colors.primary, color: theme.colors.white,
@@ -1067,24 +1363,24 @@ const Aop = () => {
                                         </th>
                                     );
                                 }
-                                const options = filterOptions[th.key] || [];
                                 const isActive = !!filters[th.key];
                                 const isOpen = openFilterKey === th.key;
                                 return (
-                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, overflow: "visible", ...frozen }}>
+                                    <th key={th.key} style={{ ...thStickyStyle, width: th.width, ...frozen }}>
                                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                                             <span style={{
-                                                overflow: "visible",
                                                 whiteSpace: "normal",
                                                 wordBreak: "break-word",
                                                 textAlign: "center",
                                                 flex: 1
                                             }}>{th.header}</span>
                                             <button
+                                                ref={(el) => { filterButtonRefs.current[th.key] = el; }}   // 🔧 ref for portal positioning
                                                 onClick={() => openFilter(th.key)}
                                                 style={{
-                                                    border: "none", background: isActive ? theme.colors.primary : "transparent",
-                                                    color: isActive ? theme.colors.white : theme.colors.textMuted,
+                                                    border: "none",
+                                                    background: (isActive || isOpen) ? theme.colors.primary : "transparent",
+                                                    color: (isActive || isOpen) ? theme.colors.white : theme.colors.textMuted,
                                                     cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
                                                     display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
                                                 }}
@@ -1092,88 +1388,7 @@ const Aop = () => {
                                                 <Filter size={12} />
                                             </button>
                                         </div>
-
-                                        {isOpen && (
-                                            <div ref={dropdownRef} style={{
-                                                position: "absolute", top: "100%", left: 0, zIndex: 100,
-                                                background: theme.colors.white, border: `1px solid ${theme.colors.border}`,
-                                                borderRadius: theme.radius, width: 240, maxHeight: 320,
-                                                boxShadow: theme.shadows.lg, display: "flex", flexDirection: "column",
-                                                textAlign: "left", marginTop: 4, fontFamily: 'inherit'
-                                            }}>
-                                                <div style={{ padding: "10px 12px", borderBottom: `1px solid ${theme.colors.border}` }}>
-                                                    <input
-                                                        type="text" value={filterSearch}
-                                                        onChange={(e) => setFilterSearch(e.target.value)}
-                                                        placeholder="Filter values..." autoFocus
-                                                        style={{
-                                                            width: "100%", padding: "8px 10px",
-                                                            border: `1px solid ${theme.colors.border}`, borderRadius: '6px',
-                                                            fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit'
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
-                                                    <label style={{
-                                                        display: "flex", alignItems: "center", gap: 8,
-                                                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
-                                                        color: theme.colors.textMuted, cursor: 'pointer'
-                                                    }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={draftSelected.size === options.length && options.length > 0}
-                                                            onChange={() => toggleSelectAllDraft(options)}
-                                                            style={{ accentColor: theme.colors.primary }}
-                                                        />
-                                                        Select All ({options.length})
-                                                    </label>
-                                                    <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: 6 }}>
-                                                        {options.filter((val) => {
-                                                            let displayVal = val;
-                                                            if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                                                const [y, m] = val.split('-');
-                                                                displayVal = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-                                                            }
-                                                            return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
-                                                        }).map((val) => {
-                                                            let displayVal = val;
-                                                            if (th.key === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                                                const [y, m] = val.split('-');
-                                                                displayVal = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-                                                            }
-                                                            return (
-                                                                <label key={val} style={{
-                                                                    display: "flex", alignItems: "center", gap: 8,
-                                                                    fontSize: "0.8rem", padding: "4px 0", cursor: 'pointer',
-                                                                    borderRadius: '4px'
-                                                                }}>
-                                                                    <input
-                                                                        type="checkbox" checked={draftSelected.has(val)}
-                                                                        onChange={() => toggleDraftValue(val)}
-                                                                        style={{ accentColor: theme.colors.primary }}
-                                                                    />
-                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                        {displayVal === "" ? "(blank)" : displayVal}
-                                                                    </span>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                                <div style={{
-                                                    display: "flex", justifyContent: "space-between", gap: 8,
-                                                    padding: "10px 12px", borderTop: `1px solid ${theme.colors.border}`,
-                                                    background: theme.colors.bgHeader, borderRadius: `0 0 ${theme.radius} ${theme.radius}`
-                                                }}>
-                                                    <button onClick={() => clearFilter(th.key)} style={{
-                                                        ...pageButtonStyle(false), fontSize: "0.75rem", padding: '6px 14px', height: 'auto', fontFamily: 'inherit'
-                                                    }}>Clear</button>
-                                                    <button onClick={() => applyFilter(th.key, options)} style={{
-                                                        ...pageButtonStyle(true), fontSize: "0.75rem", padding: '6px 14px', height: 'auto', fontFamily: 'inherit'
-                                                    }}>Apply</button>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* 🔧 Dropdown is NOT rendered here anymore — it is portaled to body so it always appears on top of the table */}
                                     </th>
                                 );
                             })}
@@ -1332,6 +1547,9 @@ const Aop = () => {
                     </button>
                 </div>
             )}
+
+            {/* 🔧 PORTALED COLUMN FILTER DROPDOWN — rendered on top of everything */}
+            {renderColumnFilterDropdown()}
         </div>
     );
 };

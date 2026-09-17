@@ -1,16 +1,16 @@
 import { useState, useMemo } from "react";
 
-const KnittingOrder = ({ 
-    orders, 
-    handleEditRowData, 
-    handleRedirect, 
-    handleInlineEdit, 
-    updatedFields, 
-    handleOnChange, 
-    isEdit, 
-    FROZEN_COUNT, 
-    currentFrozenWidths, 
-    currentFrozenLefts 
+const KnittingOrder = ({
+    orders,
+    handleEditRowData,
+    handleRedirect,
+    handleInlineEdit,
+    updatedFields,
+    handleOnChange,
+    isEdit,
+    FROZEN_COUNT,
+    currentFrozenWidths,
+    currentFrozenLefts
 }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
@@ -52,34 +52,51 @@ const KnittingOrder = ({
         minWidth: "100px",
     });
 
-    // FIXED: Footer merged sticky cell - spans all frozen columns
-    const footerMergedStickyTd = (totalWidth) => ({
+    /* ============================================================
+       FOOTER STYLES (same pattern as DyeingOrder / AopOrder)
+       ============================================================ */
+
+    // Base style for every footer cell (sticks to bottom of scroll area)
+    const footerBaseStyle = {
         ...baseTd,
         position: "sticky",
-        left: 0,
         bottom: 0,
-        zIndex: 40,
+        zIndex: 12,
         backgroundColor: "#e5e7eb",
-        width: `${totalWidth}px`,
-        minWidth: `${totalWidth}px`,
-        maxWidth: `${totalWidth}px`,
-        overflow: "visible",
-        textOverflow: "clip",
+        fontWeight: 700,
+        padding: "8px 12px",
+        textAlign: "center",
+        verticalAlign: "middle",
+        borderTop: "2px solid #6b7280",
+        boxShadow: "0 -2px 5px -1px rgba(0,0,0,0.1)",
+        boxSizing: "border-box",
         whiteSpace: "nowrap",
-        boxShadow: "2px 0 5px -1px rgba(0,0,0,0.18)",
-        fontWeight: 700,
         color: "#1f2937",
-        borderTop: "2px solid #6b7280",
-    });
+    };
 
-    // Footer plain cells - NOT sticky, just grey
-    const footerPlainTd = {
-        ...baseTd,
-        backgroundColor: "#e5e7eb",
-        fontWeight: 700,
-        minWidth: "100px",
-        color: "#1f2937",
-        borderTop: "2px solid #6b7280",
+    // index <  FROZEN_COUNT -> sticky BOTTOM + sticky LEFT (frozen column)
+    // index >= FROZEN_COUNT -> sticky BOTTOM only
+    const getFooterCellStyle = (index) => {
+        if (index < FROZEN_COUNT) {
+            return {
+                ...footerBaseStyle,
+                left: `${currentFrozenLefts[index]}px`,
+                // must sit above the non-frozen footer cells (12)
+                zIndex: 20,
+                backgroundColor: "#e5e7eb",
+                width: `${currentFrozenWidths[index]}px`,
+                minWidth: `${currentFrozenWidths[index]}px`,
+                maxWidth: `${currentFrozenWidths[index]}px`,
+                overflow: "visible",
+                textOverflow: "clip",
+                // right shadow only on the last frozen column
+                boxShadow: index === FROZEN_COUNT - 1
+                    ? "2px -2px 5px -1px rgba(0,0,0,0.18)"
+                    : "0 -2px 5px -1px rgba(0,0,0,0.1)",
+            };
+        }
+
+        return footerBaseStyle;
     };
 
     const totals = useMemo(() => {
@@ -130,25 +147,24 @@ const KnittingOrder = ({
 
     const getFinishDia = (wo, comp) => {
         if (!wo?.styleRequirement?.rows || !comp) return "-";
-        
-        const matchingRow = wo.styleRequirement.rows.find(row => 
-            row.composition === comp.composition && 
+
+        const matchingRow = wo.styleRequirement.rows.find(row =>
+            row.composition === comp.composition &&
             row.color === comp.color
         );
-        
+
         return matchingRow?.finishDia || "-";
     };
 
-    // FIXED: Filter orders based on search term
+    // Filter orders based on search term
     const filteredOrders = useMemo(() => {
         if (!searchTerm.trim()) return orders || [];
-        
+
         const lowerSearch = searchTerm.toLowerCase();
-        
+
         return (orders || []).map(job => {
             const filteredWorkOrders = (job.workOrders || []).map(wo => {
                 const filteredComps = (wo.compositions || []).filter(comp => {
-                    // Search in multiple fields
                     const searchableValues = [
                         job?.jobNo,
                         wo?.factoryName,
@@ -164,13 +180,13 @@ const KnittingOrder = ({
                         wo?.machineDia,
                         comp?.workOrderQty,
                     ].map(val => String(val || "").toLowerCase());
-                    
+
                     return searchableValues.some(val => val.includes(lowerSearch));
                 });
-                
+
                 return { ...wo, compositions: filteredComps };
             }).filter(wo => wo.compositions.length > 0);
-            
+
             return { ...job, workOrders: filteredWorkOrders };
         }).filter(job => job.workOrders.length > 0);
     }, [orders, searchTerm]);
@@ -210,9 +226,6 @@ const KnittingOrder = ({
         });
         return out;
     }, [filteredOrders]);
-
-    // Calculate total width of frozen columns for merged cell
-    const totalFrozenWidth = currentFrozenWidths.reduce((sum, width) => sum + width, 0);
 
     // Search input style
     const searchInputStyle = {
@@ -274,7 +287,7 @@ const KnittingOrder = ({
                                     </div>
                                 </td>
                             )}
-                            
+
                             {/* COL 1 — FACTORY NAME */}
                             {isFirstOfWo && (
                                 <td style={stickyTd(1, isHovered)} rowSpan={woRowSpan}>
@@ -517,47 +530,92 @@ const KnittingOrder = ({
 
             <tfoot>
                 <tr>
-                    {/* MERGED FROZEN COLUMN - TOTAL spans across all frozen columns */}
-                    <td 
-                        colSpan={FROZEN_COUNT} 
-                        style={footerMergedStickyTd(totalFrozenWidth)}
-                    >
-                        <div className={cellPad} style={{ fontWeight: 700, fontSize: "14px", textAlign: "center" }}>
-                            TOTAL
-                        </div>
-                    </td>
+                    {/* ===== FROZEN FOOTER CELLS =====
+                        Rendered as INDIVIDUAL cells (no colSpan).
+                        colSpan + position:sticky is broken in Chromium,
+                        which is why the frozen side of the footer wasn't sticking. */}
+                    {Array.from({ length: FROZEN_COUNT }).map((_, i) => (
+                        <td key={`footer-frozen-${i}`} style={getFooterCellStyle(i)}>
+                            {i === 0 ? (
+                                <div style={{ textAlign: "center", fontSize: "14px", fontWeight: 700 }}>TOTAL</div>
+                            ) : null}
+                        </td>
+                    ))}
 
                     {/* COL 8 — FINISH DIA (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
                     {/* COL 9 — YARN COUNT (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 1)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
                     {/* COL 10 — YARN LOT (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 2)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
                     {/* COL 11 — STITCH LENGTH (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 3)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
                     {/* COL 12 — MACHINE DIA (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 4)}>
+                        <div className={cellPad}>-</div>
+                    </td>
 
                     {/* COL 13 — WORK ORDER QTY total */}
-                    <td style={footerPlainTd}><div className={cellPad}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 5)}>
+                        <div className={cellPad}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 14 — TOTAL YARN DELIVERY total */}
-                    <td style={footerPlainTd}><div className={cellPad}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 6)}>
+                        <div className={cellPad}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 15 — DEL SHORT & EXCESS total */}
-                    <td style={footerPlainTd}><div className={cellPad}>{renderSigned(totals.delShortExcess?.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
+                        <div className={cellPad}>{renderSigned(totals.delShortExcess?.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 16 — YARN RETURN total */}
-                    <td style={footerPlainTd}><div className={`${cellPad} text-red-600`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 8)}>
+                        <div className={`${cellPad} text-red-600`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 17 — GREY RECEIVED total */}
-                    <td style={footerPlainTd}><div className={cellPad}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 9)}>
+                        <div className={cellPad}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 18 — RCVD SHORT & EXCESS total */}
-                    <td style={footerPlainTd}><div className={cellPad}>{renderSigned(-totals.rcvdShortExcess?.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 10)}>
+                        <div className={cellPad}>{renderSigned(-totals.rcvdShortExcess?.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 19 — UNIT PRICE (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}></div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 11)}>
+                        <div className={cellPad}></div>
+                    </td>
+
                     {/* COL 20 — PAYABLE AMOUNT total */}
-                    <td style={footerPlainTd}><div className={`${cellPad} text-red-600`}>{formatNumber(totals.payableAmount.toFixed(2))}</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 12)}>
+                        <div className={`${cellPad} text-red-600`}>{formatNumber(totals.payableAmount.toFixed(2))}</div>
+                    </td>
+
                     {/* COL 21 — PAID BILLING AMOUNT (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 13)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
                     {/* COL 22 — PENDING BILLING AMOUNT (blank) */}
-                    <td style={footerPlainTd}><div className={cellPad}>-</div></td>
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 14)}>
+                        <div className={cellPad}>-</div>
+                    </td>
                 </tr>
             </tfoot>
         </>

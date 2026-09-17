@@ -14,7 +14,6 @@ import Toast from "./Toast";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../dashboard/auth/AuthContext";
 
-
 export const FROZEN_COUNT = 8;
 
 const FILTERABLE_COLUMNS = new Set([
@@ -92,59 +91,59 @@ const AllOrders = ({ orderType }) => {
         const cols = [];
         if (orderType === "knittingOrder") {
             cols.push(
-                { header: "MONTH", width: 130, inputName: "month" },
+                { header: "MONTH", width: 120, inputName: "month" },
                 { header: "FACTORY NAME", width: 180, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
                 { header: "BUYER NAME", width: 120, inputName: "buyerName" },
-                { header: "JOB NO.", width: 155, inputName: "jobNo" },
+                { header: "JOB NO.", width: 150, inputName: "jobNo" },
                 { header: "STYLE", width: 130, inputName: "styleNo" },
-                { header: "COLOR", width: 180, inputName: "color" },
+                { header: "COLOR", width: 200, inputName: "color" },
                 { header: "COMPOSITION", width: 280, inputName: "composition" },
                 { header: "FINISH DIA", width: 120, inputName: "finishdia" },
-                { header: "YARN COUNT", width: 120, inputName: "yarnCount" },
-                { header: "YARN LOT", width: 180, inputName: "yarnLot" },
-                { header: "STITCH LENGHT", width: 200, inputName: "stitchLength" },
-                { header: "M/C DIA", width: 200, inputName: "m/cDia" },
-                { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
-                { header: "YARN DELIVERY", width: 140, inputName: "totalYarnDelivery" },
-                { header: "DEL. SHORT & EXCESS", width: 150 },
-                { header: "YARN RETURN RECEIVED", width: 160 },
-                { header: "GREY RECEIVED", width: 140 },
-                { header: "RCVD SHORT & EXCESS", width: 150 },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "PAYABLE AMOUNT", width: 140 },
-                { header: "PAID BILLING AMOUNT", width: 150 },
-                { header: "PENDING BILLING AMOUNT", width: 100 },
+                { header: "YARN COUNT", width: 160, inputName: "yarnCount" },
+                { header: "YARN LOT", width: 160, inputName: "yarnLot" },
+                { header: "STITCH LENGHT", width: 160, inputName: "stitchLength" },
+                { header: "M/C DIA", width: 160, inputName: "m/cDia" },
+                { header: "WORK ORDER QTY", width: 160, inputName: "workOrderQty", isNumeric: true },
+                { header: "YARN DELIVERY", width: 160, inputName: "totalYarnDelivery", isNumeric: true },
+                { header: "DEL. SHORT & EXCESS", width: 160, inputName: "delShortExcess", isNumeric: true },
+                { header: "YARN RETURN RECEIVED", width: 160, inputName: "yarnReturnReceived", isNumeric: true },
+                { header: "GREY RECEIVED", width: 160, inputName: "greyReceived", isNumeric: true },
+                { header: "RCVD SHORT & EXCESS", width: 160, inputName: "rcvdShortExcess", isNumeric: true },
+                { header: "PRICE PER KG", width: 160, inputName: "unitePrice", isNumeric: true },
+                { header: "PAYABLE AMOUNT", width: 160, inputName: "payableAmount", isNumeric: true },
+                { header: "PAID BILLING AMOUNT", width: 160, inputName: "paidBillingAmount", isNumeric: true },
+                { header: "PENDING BILLING AMOUNT", width: 160, inputName: "pendingBillingAmount", isNumeric: true },
             );
         } else if (orderType === "dyeingOrder") {
             cols.push(
                 { header: "MONTH", width: 130, inputName: "month" },
-                { header: "FACTORY NAME", width: 160, inputName: "factoryName" },
+                { header: "FACTORY NAME", width: 180, inputName: "factoryName" },
                 { header: "WORK ORDER NO", width: 100, inputName: "workOrderNo" },
-                { header: "BUYER NAME", width: 160, inputName: "buyerName" },
-                { header: "JOB NO.", width: 170, inputName: "jobNo" },
+                { header: "BUYER NAME", width: 120, inputName: "buyerName" },
+                { header: "JOB NO.", width: 150, inputName: "jobNo" },
                 { header: "STYLE", width: 145, inputName: "styleNo" },
                 { header: "COLOR", width: 180, inputName: "bookingColor" },
                 { header: "COMPOSITION", width: 280, inputName: "composition" },
-                { header: "FINISH DIA", width: 150, inputName: "finishdia" },
-                { header: "YARN COUNT", width: 200, inputName: "yarncount" },
-                { header: "YARN LOT", width: 200, inputName: "yarnlot" },
-                { header: "STICH LENGHT", width: 200, inputName: "stichLenght" },
-                { header: "MACHINE DIA", width: 200, inputName: "machineDia" },
-                { header: "SHADE %", width: 200, inputName: "shade%" },
-                { header: "DYEING WORK ORDER QTY", width: 160, inputName: "workOrderQty" },
-                { header: "GREY DELIVERY", width: 140, inputName: "greyReceived" },
-                { header: "DELIVERY SHORT & EXCESS", width: 180, inputName: "greyReceived" },
-                { header: "GREY RETURN RECEIVE", width: 160, inputName: "greyReturn" },
-                { header: "GREY RECEIVED FROM DYEING", width: 190, inputName: "greyReturn" },
-                { header: "FINISH FABRIC RECEIVED", width: 170, inputName: "greyReturn" },
-                { header: "BALANCE", width: 110, inputName: "greyReturn" },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "TOTAL SENT FOR COMPACTING", width: 190, inputName: "sentForCompacting" },
-                { header: "TOTAL RECEIVED FROM COMPACTING", width: 210, inputName: "receivedFromCompacting" },
-                { header: "TOTAL BILLING AMOUNT", width: 170, inputName: "unitePrice" },
-                { header: "PAYABLE AMOUNT", width: 140, inputName: "unitePrice" },
-                { header: "PENDING BILLING AMOUNT", width: 170, inputName: "unitePrice" },
+                { header: "FINISH DIA", width: 120, inputName: "finishdia" },
+                { header: "YARN COUNT", width: 160, inputName: "yarncount" },
+                { header: "YARN LOT", width: 160, inputName: "yarnlot" },
+                { header: "STICH LENGHT", width: 160, inputName: "stichLenght" },
+                { header: "MACHINE DIA", width: 160, inputName: "machineDia" },
+                { header: "SHADE %", width: 160, inputName: "shade%" },
+                { header: "DYEING WORK ORDER QTY", width: 160, inputName: "workOrderQty", isNumeric: true },
+                { header: "GREY DELIVERY", width: 160, inputName: "greyReceived", isNumeric: true },
+                { header: "DELIVERY SHORT & EXCESS", width: 160, inputName: "greyReceived", isNumeric: true },
+                { header: "GREY RETURN RECEIVE", width: 160, inputName: "greyReturn", isNumeric: true },
+                { header: "GREY RECEIVED FROM DYEING", width: 160, inputName: "greyReturn", isNumeric: true },
+                { header: "FINISH FABRIC RECEIVED", width: 160, inputName: "greyReturn", isNumeric: true },
+                { header: "BALANCE", width: 160, inputName: "greyReturn", isNumeric: true },
+                { header: "PRICE PER KG", width: 160, inputName: "unitePrice", isNumeric: true },
+                { header: "TOTAL SENT FOR COMPACTING", width: 160, inputName: "sentForCompacting", isNumeric: true },
+                { header: "TOTAL RECEIVED FROM COMPACTING", width: 160, inputName: "receivedFromCompacting", isNumeric: true },
+                { header: "TOTAL BILLING AMOUNT", width: 160, inputName: "unitePrice", isNumeric: true },
+                { header: "PAYABLE AMOUNT", width: 160, inputName: "unitePrice", isNumeric: true },
+                { header: "PENDING BILLING AMOUNT", width: 160, inputName: "unitePrice", isNumeric: true },
             );
         } else if (orderType === "yarnDyeingOrder") {
             cols.push(
@@ -156,17 +155,17 @@ const AllOrders = ({ orderType }) => {
                 { header: "STYLE", width: 150, inputName: "styleNo" },
                 { header: "BOOKING COLOR", width: 200, inputName: "bookingColor" },
                 { header: "COMPOSITION", width: 200, inputName: "composition" },
-                { header: "FINISH DIA", width: 150, inputName: "finishDia" },
-                { header: "SHADE (%)", width: 200, inputName: "shade(%)" },
-                { header: "COLOR WISE ORDER QTY", width: 180, inputName: "orderColor" },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "YARN DELIVERY FOR Y/D", width: 170, inputName: "yarnDeliveryForYd" },
-                { header: "DEL.SHORT & EXCESS", width: 160 },
-                { header: "YARN RETURN RECEIVED", width: 170, inputName: "yarnReturnReceived" },
-                { header: "YARN RECEIVED FROM Y/D", width: 180, inputName: "greyReceivedFromYd" },
-                { header: "FINISH YARN RECEIVED", width: 170, inputName: "finishReceived" },
-                { header: "FINISH RETURN", width: 140, inputName: "finishReturn" },
-                { header: "YARN STOCK", width: 130 },
+                { header: "FINISH DIA", width: 160, inputName: "finishDia" },
+                { header: "SHADE (%)", width: 160, inputName: "shade(%)" },
+                { header: "COLOR WISE ORDER QTY", width: 160, inputName: "orderColor", isNumeric: true },
+                { header: "PRICE PER KG", width: 160, inputName: "unitePrice", isNumeric: true },
+                { header: "YARN DELIVERY FOR Y/D", width: 160, inputName: "yarnDeliveryForYd", isNumeric: true },
+                { header: "DEL.SHORT & EXCESS", width: 160, inputName: "delShortExcess", isNumeric: true },
+                { header: "YARN RETURN RECEIVED", width: 160, inputName: "yarnReturnReceived", isNumeric: true },
+                { header: "YARN RECEIVED FROM Y/D", width: 160, inputName: "greyReceivedFromYd", isNumeric: true },
+                { header: "FINISH YARN RECEIVED", width: 160, inputName: "finishReceived", isNumeric: true },
+                { header: "FINISH RETURN", width: 160, inputName: "finishReturn", isNumeric: true },
+                { header: "YARN STOCK", width: 160, inputName: "yarnStock", isNumeric: true },
             );
         } else if (orderType === "aopOrder") {
             cols.push(
@@ -178,27 +177,27 @@ const AllOrders = ({ orderType }) => {
                 { header: "STYLE", width: 120, inputName: "styleNo" },
                 { header: "COLOR", width: 180, inputName: "color" },
                 { header: "COMPOSITION", width: 280, inputName: "composition" },
-                { header: "FINISH DIA", width: 200, inputName: "finishDia" },
-                { header: "WORK ORDER QTY", width: 140, inputName: "workOrderQty" },
-                { header: "SENT FOR AOP", width: 140, inputName: "totalYarnDelivery" },
-                { header: "DEL. SHORT & EXCESS", width: 150 },
-                { header: "RETURN FROM AOP", width: 150 },
-                { header: "RECEIVED FROM AOP", width: 150 },
-                { header: "FINISH AFTER AOP", width: 150 },
-                { header: "PARTY BALANCE", width: 170 },
-                { header: "PRICE PER KG", width: 120, inputName: "unitePrice" },
-                { header: "PAYABLE AMOUNT", width: 140 },
-                { header: "PAID BILLING AMOUNT", width: 150 },
-                { header: "PENDING BILLING AMOUNT", width: 160 },
+                { header: "FINISH DIA", width: 160, inputName: "finishDia" },
+                { header: "WORK ORDER QTY", width: 160, inputName: "workOrderQty", isNumeric: true },
+                { header: "SENT FOR AOP", width: 160, inputName: "totalYarnDelivery", isNumeric: true },
+                { header: "DEL. SHORT & EXCESS", width: 160, inputName: "delShortExcess", isNumeric: true },
+                { header: "RETURN FROM AOP", width: 160, inputName: "returnFromAop", isNumeric: true },
+                { header: "RECEIVED FROM AOP", width: 160, inputName: "receivedFromAop", isNumeric: true },
+                { header: "FINISH AFTER AOP", width: 160, inputName: "finishAfterAop", isNumeric: true },
+                { header: "PARTY BALANCE", width: 160, inputName: "partyBalance", isNumeric: true },
+                { header: "PRICE PER KG", width: 160, inputName: "unitePrice", isNumeric: true },
+                { header: "PAYABLE AMOUNT", width: 160, inputName: "payableAmount", isNumeric: true },
+                { header: "PAID BILLING AMOUNT", width: 160, inputName: "paidBillingAmount", isNumeric: true },
+                { header: "PENDING BILLING AMOUNT", width: 160, inputName: "pendingBillingAmount", isNumeric: true },
             );
         }
         return cols;
     }, [orderType]);
 
-    const [columnWidths, setColumnWidths] = useState(() => COLUMNS.map(c => c.width || 120));
+    const [columnWidths, setColumnWidths] = useState(() => COLUMNS.map(c => c.width || 150));
 
     useEffect(() => {
-        setColumnWidths(COLUMNS.map(c => c.width || 120));
+        setColumnWidths(COLUMNS.map(c => c.width || 150));
     }, [COLUMNS]);
 
     useEffect(() => {
@@ -211,7 +210,6 @@ const AllOrders = ({ orderType }) => {
             const newLefts = [];
             let currentLeft = 0;
 
-    
             for (let i = 0; i < FROZEN_COUNT; i++) {
                 const width = thElements[i].getBoundingClientRect().width;
                 newWidths.push(width);
@@ -241,7 +239,6 @@ const AllOrders = ({ orderType }) => {
         };
 
         const timer = setTimeout(updateFrozenDimensions, 150);
-
         const resizeObserver = new ResizeObserver(() => {
             requestAnimationFrame(updateFrozenDimensions);
         });
@@ -254,7 +251,7 @@ const AllOrders = ({ orderType }) => {
             clearTimeout(timer);
             resizeObserver.disconnect();
         };
-    }, [orders, isEdit, orderType]);
+    }, [orders, updatedFields, isEditing, orderType]);
 
     const safeFrozenWidths = frozenWidths.length === FROZEN_COUNT ? frozenWidths : columnWidths.slice(0, FROZEN_COUNT);
     const safeFrozenLefts = frozenLefts.length === FROZEN_COUNT ? frozenLefts : safeFrozenWidths.reduce((acc, w, i) => {
@@ -797,10 +794,7 @@ const AllOrders = ({ orderType }) => {
                 )}
             </div>
 
-            <div
-                className="bg-white rounded-lg border border-gray-200"
-                style={{ borderTop: "3px solid #217346", overflow: "hidden" }}
-            >
+            <div className="bg-white rounded-lg border border-gray-200" style={{ borderTop: "3px solid #217346", overflow: "hidden" }}>
                 <div className="order-table-wrapper" style={{ position: "relative", overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}>
                     <style>{`
                         .filter-icon-btn {
@@ -817,17 +811,14 @@ const AllOrders = ({ orderType }) => {
                             margin-left: 4px;
                             flex-shrink: 0;
                         }
-                        
                         .filter-icon-btn:hover {
                             background: rgba(255, 255, 255, 0.25);
                             color: rgba(255, 255, 255, 1);
                         }
-                        
                         .filter-icon-btn.active {
                             color: rgba(255, 255, 255, 1);
                             background: rgba(255, 255, 255, 0.3);
                         }
-
                         .filter-dropdown-excel {
                             position: fixed;
                             z-index: 100000;
@@ -840,7 +831,6 @@ const AllOrders = ({ orderType }) => {
                             padding: 8px;
                             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                         }
-
                         .filter-dropdown-excel .filter-search-input {
                             width: 100%;
                             padding: 8px 10px;
@@ -852,16 +842,13 @@ const AllOrders = ({ orderType }) => {
                             margin-bottom: 6px;
                             color: #1f2937;
                         }
-
                         .filter-dropdown-excel .filter-search-input:focus {
                             border-color: #3b82f6;
                             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
                         }
-
                         .filter-dropdown-excel .filter-search-input::placeholder {
                             color: #9ca3af;
                         }
-
                         .filter-dropdown-excel .filter-list {
                             max-height: 220px;
                             overflow-y: auto;
@@ -869,7 +856,6 @@ const AllOrders = ({ orderType }) => {
                             border-radius: 4px;
                             margin-bottom: 8px;
                         }
-
                         .filter-dropdown-excel .filter-item {
                             display: flex;
                             align-items: center;
@@ -881,15 +867,12 @@ const AllOrders = ({ orderType }) => {
                             border-bottom: 1px solid #f3f4f6;
                             transition: background 0.15s;
                         }
-
                         .filter-dropdown-excel .filter-item:last-child {
                             border-bottom: none;
                         }
-
                         .filter-dropdown-excel .filter-item:hover {
                             background: #f0f9ff;
                         }
-
                         .filter-dropdown-excel .filter-item input[type="checkbox"] {
                             width: 15px;
                             height: 15px;
@@ -897,7 +880,6 @@ const AllOrders = ({ orderType }) => {
                             cursor: pointer;
                             flex-shrink: 0;
                         }
-
                         .filter-dropdown-excel .filter-item label {
                             cursor: pointer;
                             flex: 1;
@@ -906,19 +888,16 @@ const AllOrders = ({ orderType }) => {
                             white-space: nowrap;
                             user-select: none;
                         }
-
                         .filter-dropdown-excel .filter-select-all {
                             font-weight: 600;
                             background: #f9fafb;
                             border-bottom: 1px solid #e5e7eb;
                         }
-
                         .filter-dropdown-excel .filter-buttons {
                             display: flex;
                             justify-content: flex-end;
                             gap: 8px;
                         }
-
                         .filter-dropdown-excel .filter-btn {
                             padding: 6px 16px;
                             border-radius: 4px;
@@ -928,26 +907,21 @@ const AllOrders = ({ orderType }) => {
                             border: 1px solid #d1d5db;
                             transition: all 0.15s;
                         }
-
                         .filter-dropdown-excel .filter-btn-cancel {
                             background: #ffffff;
                             color: #374151;
                         }
-
                         .filter-dropdown-excel .filter-btn-cancel:hover {
                             background: #f3f4f6;
                         }
-
                         .filter-dropdown-excel .filter-btn-apply {
                             background: #2563eb;
                             color: #ffffff;
                             border-color: #2563eb;
                         }
-
                         .filter-dropdown-excel .filter-btn-apply:hover {
                             background: #1d4ed8;
                         }
-
                         .order-table-wrapper table {
                             width: 100% !important;
                             table-layout: auto !important;
@@ -966,7 +940,6 @@ const AllOrders = ({ orderType }) => {
                             color: #1F2937 !important;
                             font-variant-numeric: tabular-nums !important;
                         }
-
                         .order-table-wrapper th:nth-child(-n+8),
                         .order-table-wrapper td:nth-child(-n+8) {
                             white-space: normal !important;
@@ -975,31 +948,8 @@ const AllOrders = ({ orderType }) => {
                             overflow: visible !important;
                             text-overflow: clip !important;
                         }
-                        .order-table-wrapper th:nth-child(-n+8) {
-                            z-index: 25 !important;
-                        }
-                        .order-table-wrapper td:nth-child(-n+8) {
-                            background-color: #ffffff !important;
-                            z-index: 5 !important;
-                        }
-
-                        /* Allow headers to wrap text for non-frozen columns */
-                        .order-table-wrapper th:nth-child(n+9) {
-                            white-space: normal !important;
-                            word-break: break-word !important;
-                            overflow: visible !important;
-                            text-overflow: clip !important;
-                        }
-
-                        /* Keep data cells truncated/nowrap for non-frozen columns */
-                        .order-table-wrapper td:nth-child(n+9) {
-                            white-space: nowrap !important;
-                            overflow: hidden !important;
-                            text-overflow: ellipsis !important;
-                            min-width: 100px !important;
-                            max-width: 260px !important;
-                        }
-
+                        
+                        /* Z-Index Stacking Context */
                         .order-table-wrapper thead th {
                             background: #6b7280 !important;
                             color: #ffffff !important;
@@ -1014,33 +964,26 @@ const AllOrders = ({ orderType }) => {
                             white-space: normal !important;
                             word-break: break-word !important;
                             vertical-align: middle !important;
+                            position: sticky !important;
+                            top: 0 !important;
+                            z-index: 25 !important;
+                        }
+                        .order-table-wrapper thead th:nth-child(-n+8) {
+                            z-index: 35 !important;
+                        }
+                        .order-table-wrapper tbody td:nth-child(-n+8) {
+                            background-color: #ffffff !important;
+                            z-index: 15 !important;
                         }
                         .order-table-wrapper thead th button,
                         .order-table-wrapper thead th svg {
                             color: #EAF6EE !important;
                         }
 
-                        /* Sticky Footer Rules (if tfoot is used) */
-                        .order-table-wrapper tfoot th,
-                        .order-table-wrapper tfoot td {
-                            position: sticky !important;
-                            bottom: 0 !important;
-                            background: #ffffff !important;
-                            z-index: 15 !important;
-                            border-top: 2px solid #14532D !important;
-                            font-weight: 700 !important;
-                            box-shadow: 0 -3px 6px -1px rgba(0,0,0,0.16) !important;
-                        }
-                        .order-table-wrapper tfoot th:nth-child(-n+16),
-                        .order-table-wrapper tfoot td:nth-child(-n+16) {
-                            z-index: 25 !important;
-                            background-color: #d1dee3 !important;
-                        }
-
                         .order-table-wrapper tbody tr:nth-child(even) td {
                             background-color: #F2F7F4 !important;
                         }
-                        .order-table-wrapper tbody tr:nth-child(even) td:nth-child(-n+16) {
+                        .order-table-wrapper tbody tr:nth-child(even) td:nth-child(-n+8) {
                             background-color: #F2F7F4 !important;
                         }
 
@@ -1096,7 +1039,7 @@ const AllOrders = ({ orderType }) => {
                             {COLUMNS.map((col, i) => (
                                 <col key={i} style={{
                                     width: `${columnWidths[i]}px`,
-                                    minWidth: i < FROZEN_COUNT ? `${columnWidths[i]}px` : "100px",
+                                    minWidth: i < FROZEN_COUNT ? `${columnWidths[i]}px` : "170px",
                                 }} />
                             ))}
                         </colgroup>
@@ -1115,15 +1058,8 @@ const AllOrders = ({ orderType }) => {
                                                 position: "sticky",
                                                 top: 0,
                                                 left: isFrozen ? `${safeFrozenLefts[i]}px` : "auto",
-                                                zIndex: isFrozen ? 25 : 15,
-                                                borderRight: "1px solid #1B5E3B",
-                                                borderBottom: "2px solid #14532D",
                                                 boxShadow: i === FROZEN_COUNT - 1 ? "3px 0 6px -1px rgba(0,0,0,0.30)" : "none",
-                                                boxSizing: "border-box",
                                                 backgroundColor: hasActiveFilter ? "#166534" : "#6b7280",
-                                                whiteSpace: "normal",
-                                                wordBreak: "break-word",
-                                                verticalAlign: "middle"
                                             }}
                                         >
                                             <div style={{
