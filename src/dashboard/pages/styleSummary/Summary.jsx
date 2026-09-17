@@ -1,5 +1,8 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Filter, X, Search, ChevronDown as DropIcon, Save, Loader, Download, View, ViewIcon, Pen, PencilOff } from "lucide-react";
+import {
+    PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, Filter, X, Search,
+    Save, Loader, Download, Pen, PencilOff, FileText
+} from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
 import { Link, useNavigate } from "react-router-dom";
@@ -25,7 +28,7 @@ const COLUMNS = [
     "RE-PROCESS FAB. BALANCE (+/-)", "RE-PROCESS PROCESS LOSS (%)",
 ];
 
-// ── Filterable columns config (colIndex -> { key, type }) ────────────────────
+// ── Filterable columns config ─────────────────────────────────────────────────
 const FILTERABLE_COLS = {
     0: { key: "salesContact", type: "row" },
     1: { key: "buyerName", type: "row" },
@@ -41,76 +44,35 @@ const KEY_TO_INDEX = Object.entries(FILTERABLE_COLS).reduce((acc, [idx, col]) =>
     return acc;
 }, {});
 
-// ── Frozen column widths (Updated to include FINISH DIA at index 7) ──────────
-const FROZEN_WIDTHS = [120, 120, 150, 110, 120, 250, 280, 120];
+// ─ Frozen column widths ─────────────────────────────────────────────────────
+const CHECKBOX_WIDTH = 50;
+const FROZEN_WIDTHS = [120, 120, 180, 110, 120, 230, 290, 100];
 const FROZEN_COUNT = FROZEN_WIDTHS.length;
+const UNFROZEN_WIDTH = 110;
 
+// Calculate frozen left positions WITH checkbox offset
 const FROZEN_LEFTS = FROZEN_WIDTHS.reduce((acc, width, idx) => {
-    acc.push(idx === 0 ? 0 : acc[idx - 1] + FROZEN_WIDTHS[idx - 1]);
+    acc.push(idx === 0 ? CHECKBOX_WIDTH : acc[idx - 1] + FROZEN_WIDTHS[idx - 1]);
     return acc;
 }, []);
 
-// ── Totals Mapping (Column Index -> Backend Key) ─────────────────────────────
-const TOTALS_MAPPING = {
-    16: "YarnDelivery",
-    18: "YarnDeliveryForYarnDye",
-    21: "GreyFabricReceived",
-    22: "YarnReturn",
-    24: "GreyDelivery",
-    25: "GreyReturn",
-    26: "GreyReceived",
-    27: "FinishReceived",
-    29: "SentForAop",
-    30: "FabricReturnFromAop",
-    31: "AfterAopFabricRcvd",
-    32: "ReceivedFromAop",
-    35: "SentForReprocess",
-    36: "ReturnFromAop",
-    37: "ReceivedFromReprocess",
-};
+const PERCENT_COLUMN_INDEXES = new Set([10, 34, 40]);
+const NO_TOTAL_COLUMN_INDEXES = new Set([20]);
 
-// ── Backend keys used by renderBreakdownCell / manual cells (for FOOTER TOTALS) ─
-// Maps column index → the exact backend key used to render the cell, so the
-// footer can sum the same values the body displays.
-const TOTALS_BACKEND_KEYS = {
-    8: "__ORDER_QTY__",       // sum of row.rows[].orderQty
-    12: "__ADDITIONAL__",     // sum of row.rows[].additional
-    14: "knittingOrder_workOrderQty",
-    16: "knittingOrder_Yarn_Delivery",
-    18: "yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye",
-    19: "yarnDyeingOrder_Yarn_Received_From_Yarn_Dye",
-    21: "knittingOrder_Grey_Fabric_Received",
-    22: "knittingOrder_Yarn_Return",
-    24: "dyeingOrder_Grey_Delivery",
-    25: "dyeingOrder_Grey_Return",
-    26: "dyeingOrder_Grey_Received",
-    27: "dyeingOrder_Finish_Received",
-    29: "aopOrder_Sent_For_Aop",
-    30: "aopOrder_Fabric_Return",
-    31: "aopOrder_After_Aop_Fabric_Rcvd",
-    32: "aopOrder_Received_From_Aop",
-    35: "reProcessOrder_Sent_for_Re_Process",
-    36: "reProcessOrder_Return_Received",
-    37: "reProcessOrder_Received_After_Re_Process_Grey",
-    38: "reProcessOrder_Received_After_Re_Process_Finish",
-};
-
-// ── Helper ───────────────────────────────────────────────────────────────────
+// ── Helper functions ─────────────────────────────────────────────────────────
 const getBreakdownValue = (item, key) => {
     if (!item) return 0;
     if (item.status) return 0;
     return Number(item[key]) || 0;
 };
 
-// Formats a numeric value to 2 decimal places; falls back to "_" when the
-// value isn't a usable number, or returns the raw value as-is when requested.
 const formatNumber = (val, fallback = "_") => {
     if (val === undefined || val === null || val === "") return fallback;
     const num = Number(val);
     return Number.isFinite(num) ? num.toFixed(2) : val;
 };
 
-// ── Filter Dropdown Component ─────────────────────────────────────────────────
+// ─ Filter Dropdown Component ────────────────────────────────────────────────
 function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading, onApply, onClear, onClose, anchorRef }) {
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState(
@@ -159,7 +121,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 position: "fixed",
                 zIndex: 9999,
                 background: "#fff",
-                border: "1px solid #000000",
+                border: "1px solid #0d9488",
                 borderRadius: 6,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
                 minWidth: 220,
@@ -167,7 +129,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
             }}
             className="filter-dropdown"
         >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-black bg-gray-50">
+            <div className="flex items-center justify-between px-3 py-2 subrow-cell border-b border-[#0d9488] bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide truncate">{colLabel}</span>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0">
                     <X size={13} />
@@ -199,7 +161,7 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                         checked={allChecked}
                         onChange={toggleAll}
                         disabled={isLoading}
-                        className="rounded text-blue-500"
+                        className="rounded text-teal-600"
                     />
                     <span className="text-xs font-medium text-gray-600">Select All</span>
                     <span className="ml-auto text-xs text-gray-400">{selected.size}/{allValues.length}</span>
@@ -215,12 +177,12 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                     <div className="px-3 py-4 text-xs text-gray-400 text-center">No matches</div>
                 ) : (
                     filtered.map(val => (
-                        <label key={val} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-blue-50 select-none">
+                        <label key={val} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-teal-50 select-none">
                             <input
                                 type="checkbox"
                                 checked={selected.has(val)}
                                 onChange={() => toggle(val)}
-                                className="rounded text-blue-500"
+                                className="rounded text-teal-600"
                             />
                             <span className="text-xs text-gray-700 truncate" title={val}>{val || "(Blank)"}</span>
                         </label>
@@ -228,11 +190,11 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
                 )}
             </div>
 
-            <div className="flex gap-2 px-3 py-2 border-t border-gray-100 bg-gray-50">
+            <div className="flex gap-2 px-3 py-2 subrow-cell border-t border-gray-100 bg-gray-50">
                 <button
                     onClick={() => { onApply(selected); onClose(); }}
                     disabled={isLoading}
-                    className="flex-1 text-xs bg-blue-500 text-white rounded px-3 py-1.5 font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+                    className="flex-1 text-xs bg-teal-600 text-white rounded px-3 py-1.5 font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
                 >
                     Apply
                 </button>
@@ -247,12 +209,16 @@ function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading
     );
 }
 
-// ── Summary Page ─────────────────────────────────────────────────────────────
+// ─ Summary Page ────────────────────────────────────────────────────────────
 export default function Summary() {
     const [rawData, setRawData] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
     const scrollContainerRef = useRef(null);
+
+    const [editingJobData, setEditingJobData] = useState(null);
+    const [editLoading, setEditLoading] = useState(false);
+    const [selectedRows, setSelectedRows] = useState(new Set());
 
     const FILTER_STORAGE_KEY = "summary_active_filters";
 
@@ -268,7 +234,6 @@ export default function Summary() {
     const [filterOptions, setFilterOptions] = useState([]);
     const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
 
-    // --- Multi-Cell Editing State ---
     const [editingCells, setEditingCells] = useState({});
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
@@ -281,9 +246,6 @@ export default function Summary() {
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
     const filterBtnRefs = useRef({});
 
-    // Any modal that should sit above the table gets checked here before the
-    // sticky footer (and its high z-index) is rendered, so it never shows
-    // on top of an open modal.
     const isAnyModalOpen = showModal || glanceReport.showGlanceModal;
 
     const fetchFilteredData = useCallback(async () => {
@@ -293,7 +255,6 @@ export default function Summary() {
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setRawData(res.data.data);
-            console.log(res.data.data)
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
@@ -330,30 +291,98 @@ export default function Summary() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length);
 
-    // ---------- FOOTER TOTALS (computed from full filtered dataset) ----------
     const footerTotals = useMemo(() => {
         const totals = {};
-        Object.values(TOTALS_BACKEND_KEYS).forEach(k => { totals[k] = 0; });
-        totals.__ORDER_QTY__ = 0;
-        totals.__ADDITIONAL__ = 0;
+        for (let idx = FROZEN_COUNT; idx < COLUMNS.length; idx++) {
+            totals[idx] = 0;
+        }
 
         filteredData.forEach(row => {
             const compBreakdown = row.compBreakdown || (row.rows || []).map(() => ({}));
+            const numSubRows = (row.rows || []).length;
 
-            // Row-level sums (orderQty, additional are per sub-row in row.rows[])
-            (row.rows || []).forEach(cell => {
-                totals.__ORDER_QTY__ += Number(cell?.orderQty) || 0;
-                totals.__ADDITIONAL__ += Number(cell?.additional) || 0;
-            });
+            for (let j = 0; j < numSubRows; j++) {
+                const cell = row.rows[j] || {};
+                const cb = compBreakdown[j] || {};
 
-            // Breakdown-level sums
-            compBreakdown.forEach(cb => {
-                if (cb?.status) return;
-                Object.values(TOTALS_BACKEND_KEYS).forEach(k => {
-                    if (k === "__ORDER_QTY__" || k === "__ADDITIONAL__") return;
-                    totals[k] += Number(cb?.[k]) || 0;
-                });
-            });
+                totals[8] += Number(cell.orderQty) || 0;
+
+                const firstBooking = (Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)) || 0;
+                totals[9] += firstBooking;
+                totals[13] += firstBooking;
+
+                totals[10] += Number(row.processLoss) || 0;
+
+                const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
+                const netAdditional = Number(cell.additional) - lossQty;
+                const finishReqAdj = Number(cell.finishRequiredQty) + netAdditional;
+                totals[11] += Number.isFinite(finishReqAdj) ? finishReqAdj : 0;
+
+                totals[12] += Number(cell.additional) || 0;
+
+                if (cb?.status) continue;
+
+                const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
+                totals[14] += workOrderQty;
+                totals[15] += firstBooking - workOrderQty;
+
+                const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
+                totals[16] += yarnDelivery;
+                totals[17] += workOrderQty - yarnDelivery;
+
+                totals[18] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye');
+                totals[19] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye');
+
+                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
+                totals[21] += greyReceived;
+
+                const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
+                totals[22] += yarnReturn;
+                totals[23] += (greyReceived + yarnReturn) - yarnDelivery;
+
+                const greyDelivery = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
+                totals[24] += greyDelivery;
+                totals[25] += getBreakdownValue(cb, 'dyeingOrder_Grey_Return');
+
+                const greyReceivedDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received');
+                totals[26] += greyReceivedDyeing;
+                totals[27] += getBreakdownValue(cb, 'dyeingOrder_Finish_Received');
+
+                const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
+                const greyReceivedFromDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing');
+                const hasGreyData = greyReturnRcvd || greyReceivedFromDyeing || greyDelivery;
+                if (hasGreyData) {
+                    totals[28] += greyDelivery - greyReceivedDyeing - greyReturnRcvd;
+                }
+
+                const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
+                totals[29] += aopSent;
+                totals[30] += getBreakdownValue(cb, 'aopOrder_Fabric_Return');
+                totals[31] += getBreakdownValue(cb, 'aopOrder_After_Aop_Fabric_Rcvd');
+
+                const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
+                totals[32] += aopReceived;
+                totals[33] += aopReceived - aopSent;
+
+                if (aopSent > 0) {
+                    totals[34] += ((aopSent - aopReceived) / aopSent) * 100;
+                }
+
+                const rpSent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
+                totals[35] += rpSent;
+                totals[36] += getBreakdownValue(cb, 'reProcessOrder_Return_Received');
+
+                const rpGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
+                totals[37] += rpGrey;
+
+                const rpFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
+                totals[38] += rpFinish;
+                totals[39] += (rpGrey + rpFinish) - rpSent;
+
+                if (rpSent > 0) {
+                    totals[40] += ((rpSent - (rpGrey + rpFinish)) / rpSent) * 100;
+                }
+            }
         });
 
         return totals;
@@ -435,27 +464,34 @@ export default function Summary() {
     const clearAllFilters = () => setActiveFilters({});
     const hasActiveFilters = Object.keys(activeFilters).length > 0;
 
+    const HEADER_BG = "#f3ddc7";
+    const BORDER_COLOR = "#14b8a6";
+    const CELL_BG = "#ffffff";
+
     const renderBreakdownCell = (compBreakdown, key, colIndex) => (
         <td
             className="p-0 align-top"
             style={{
-                backgroundColor: colIndex >= 6 ? '#fbf8f8' : '#f9f3f3',
-                borderRight: '1px solid #000000',
-                borderBottom: '1px solid #000000',
+                backgroundColor: CELL_BG,
+                borderRight: `1px solid ${BORDER_COLOR}`,
+                borderBottom: `1px solid ${BORDER_COLOR}`,
                 textAlign: 'center',
+                width: `${UNFROZEN_WIDTH}px`,
+                minWidth: `${UNFROZEN_WIDTH}px`,
+                maxWidth: `${UNFROZEN_WIDTH}px`,
             }}
         >
-            <div className="divide-y divide-black">
+            <div className="divide-y divide-[#14b8a6]">
                 {compBreakdown.map((cb, j) => {
-                    if (cb?.status) return <div key={j} className={`px-3 py-2 text-black italic`}>_</div>;
+                    if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-black italic`}>_</div>;
                     const value = cb?.[key];
-                    return <div key={j} className={`px-3 py-2`}>{formatNumber(value)}</div>;
+                    return <div key={j} className={`px-3 py-2 subrow-cell`}>{formatNumber(value)}</div>;
                 })}
             </div>
         </td>
     );
 
-    const getColBg = (index) => index >= 6 ? '#fefeff' : '#ffffff';
+    const getColBg = (index) => CELL_BG;
 
     const getFrozenStyle = (index) => ({
         position: 'sticky',
@@ -464,63 +500,51 @@ export default function Summary() {
         minWidth: `${FROZEN_WIDTHS[index]}px`,
         maxWidth: `${FROZEN_WIDTHS[index]}px`,
         zIndex: 20,
-        backgroundColor: index >= 6 ? '#fefeff' : '#ffffff',
-        borderRight: '1px solid #000000',
-        borderBottom: '1px solid #000000',
+        backgroundColor: CELL_BG,
+        borderRight: `1px solid ${BORDER_COLOR}`,
+        borderBottom: `1px solid ${BORDER_COLOR}`,
         boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.1)' : 'none',
         overflow: index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
         textAlign: 'center',
     });
 
-    const getTotalStyle = (index) => {
-        const isFrozen = index < FROZEN_COUNT;
-        return {
-            position: 'sticky',
-            top: 0,
-            left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
-            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-            zIndex: isFrozen ? 50 : 40,
-            backgroundColor: isFrozen ? '#dbeafe' : '#eff6ff',
-            borderRight: '1px solid #000000',
-            borderBottom: '1px solid #000000',
-            boxShadow: isFrozen && index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.15)' : 'none',
-            overflow: isFrozen && index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
-            textAlign: 'center',
-        };
-    };
-
     const getCellStyle = (index) => ({
         backgroundColor: getColBg(index),
-        borderRight: '1px solid #000000',
-        borderBottom: '1px solid #000000',
+        borderRight: `1px solid ${BORDER_COLOR}`,
+        borderBottom: `1px solid ${BORDER_COLOR}`,
         textAlign: 'center',
+        width: `${UNFROZEN_WIDTH}px`,
+        minWidth: `${UNFROZEN_WIDTH}px`,
+        maxWidth: `${UNFROZEN_WIDTH}px`,
     });
 
     const getFormulaCellStyle = () => ({
-        backgroundColor: '#e0e7ff',
-        borderRight: '1px solid #000000',
-        borderBottom: '1px solid #000000',
+        backgroundColor: CELL_BG,
+        borderRight: `1px solid ${BORDER_COLOR}`,
+        borderBottom: `1px solid ${BORDER_COLOR}`,
         textAlign: 'center',
+        width: `${UNFROZEN_WIDTH}px`,
+        minWidth: `${UNFROZEN_WIDTH}px`,
+        maxWidth: `${UNFROZEN_WIDTH}px`,
     });
 
-    // Sticky footer cell style helper
     const getFooterCellStyle = (index) => {
         const isFrozen = index < FROZEN_COUNT;
         return {
             position: 'sticky',
             bottom: 0,
             left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
-            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
+            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
+            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
             zIndex: isFrozen ? 60 : 55,
-            backgroundColor: index === 0 ? '#1e3a8a' : (isFrozen ? '#c7d2fe' : '#e0e7ff'),
-            color: index === 0 ? '#ffffff' : '#0f172a',
-            borderRight: '1px solid #000000',
-            borderTop: '2px solid #000000',
-            borderBottom: '1px solid #000000',
+            backgroundColor: HEADER_BG,
+            color: '#1f2937',
+            borderRight: `1px solid ${BORDER_COLOR}`,
+            borderTop: `2px solid ${BORDER_COLOR}`,
+            borderBottom: `1px solid ${BORDER_COLOR}`,
+            borderBottomLeftRadius: index === 0 ? '14px' : 0,
+            borderBottomRightRadius: index === COLUMNS.length - 1 ? '14px' : 0,
             boxShadow: isFrozen && index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.2)' : 'none',
             overflow: isFrozen && index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
             textAlign: 'center',
@@ -531,7 +555,6 @@ export default function Summary() {
         };
     };
 
-    // --- Handlers for Multiple Inline Editing ---
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
         const cellKey = `${rowId}-${editingField}`;
         setEditingCells(prev => {
@@ -600,12 +623,48 @@ export default function Summary() {
         fetchFilteredData();
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  OPEN EDIT MODAL — fetches the FULL previous data (colors, compositions,
+    //  additional bookings, breakdown) so the modal is pre-filled with what was
+    //  saved earlier. Falls back to the summary row if the fetch fails.
+    // ══════════════════════════════════════════════════════════════════════════
+    const openEditJobModal = async (row) => {
+        setEditLoading(true);
+        try {
+            // Deep clone the summary row as a safety net
+            let full = null;
+            try {
+                const res = await axiosPrivate.get(`/api/styles/${row.id}`);
+                full = res.data?.data || res.data;
+            } catch (e) {
+                try {
+                    const res = await axiosPrivate.get(`/api/styles/job/${row.jobNo}`);
+                    full = res.data?.data || res.data;
+                } catch (e2) {
+                    console.warn("Full job fetch failed, using summary row:", e2);
+                }
+            }
+
+            const merged = {
+                ...JSON.parse(JSON.stringify(row)),
+                ...(full || {}),
+                rows: full?.rows?.length ? full.rows : (row.rows || []),
+                compBreakdown: full?.compBreakdown?.length ? full.compBreakdown : (row.compBreakdown || []),
+            };
+
+            setEditingJobData(merged);
+            setShowModal(true);
+        } finally {
+            setEditLoading(false);
+        }
+    };
+
     const handleExportExcel = () => {
         const wsData = [];
         wsData.push(COLUMNS);
 
         const merges = [];
-        let currentRow = 1; // 0 is header
+        let currentRow = 1;
 
         filteredData.forEach(row => {
             const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
@@ -689,7 +748,6 @@ export default function Summary() {
                 ]);
             }
 
-            // Add merges for the first 5 columns if there are multiple sub-rows
             if (numSubRows > 1) {
                 for (let col = 0; col < 5; col++) {
                     merges.push({
@@ -701,22 +759,19 @@ export default function Summary() {
             currentRow += numSubRows;
         });
 
-        // ── Append footer total row ──
         const totalRow = new Array(COLUMNS.length).fill("");
         totalRow[0] = "TOTAL";
-        totalRow[8] = footerTotals.__ORDER_QTY__.toFixed(2);
-        totalRow[12] = footerTotals.__ADDITIONAL__.toFixed(2);
-        Object.entries(TOTALS_BACKEND_KEYS).forEach(([idx, key]) => {
-            if (key === "__ORDER_QTY__" || key === "__ADDITIONAL__") return;
-            totalRow[Number(idx)] = (footerTotals[key] || 0).toFixed(2);
-        });
+        for (let idx = FROZEN_COUNT; idx < COLUMNS.length; idx++) {
+            if (NO_TOTAL_COLUMN_INDEXES.has(idx)) continue;
+            const val = (footerTotals[idx] || 0).toFixed(2);
+            totalRow[idx] = PERCENT_COLUMN_INDEXES.has(idx) ? `${val}%` : val;
+        }
         wsData.push(totalRow);
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         ws['!cols'] = COLUMNS.map((_, i) => ({ wch: i < FROZEN_COUNT ? 20 : 18 }));
         ws['!merges'] = merges;
 
-        // Apply center alignment to all cells
         const range = XLSX.utils.decode_range(ws['!ref']);
         for (let R = range.s.r; R <= range.e.r; ++R) {
             for (let C = range.s.c; C <= range.e.c; ++C) {
@@ -732,6 +787,207 @@ export default function Summary() {
         XLSX.writeFile(wb, `Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  PDF — now includes an "Additional Booking" column (highlighted) so any
+    //  additional qty added through the modal appears on the booking sheet.
+    // ══════════════════════════════════════════════════════════════════════════
+    const generatePDFBooking = (rowData) => {
+        const printWindow = window.open('', '_blank');
+
+        const processLoss = Number(rowData.processLoss) || 0;
+        const rows = rowData.rows || [];
+
+        let rowsHtml = '';
+        let grandOrder = 0;
+        let grandAdditional = 0;
+        let grandTotal = 0;
+
+        rows.forEach((row) => {
+            const finishQty = Number(row.finishRequiredQty) || 0;
+            const additional = Number(row.additional) || 0;
+            const totalRequired = finishQty * (1 + processLoss / 100) + additional;
+
+            grandOrder += finishQty;
+            grandAdditional += additional;
+            grandTotal += totalRequired;
+
+            rowsHtml += `
+                <tr>
+                    <td>${rowData.styleNo || ''}</td>
+                    <td>${rowData.poNo || ''}</td>
+                    <td>${row.color || ''}</td>
+                    <td>${row.composition || ''}</td>
+                    <td>${rowData.hod || ''}</td>
+                    <td>${finishQty.toFixed(2)}</td>
+                    <td class="${additional > 0 ? 'add-cell' : ''}">${additional > 0 ? additional.toFixed(2) : '-'}</td>
+                    <td>${totalRequired.toFixed(2)}</td>
+                    <td>${row.finishDia || ''}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>${totalRequired.toFixed(2)}</td>
+                    <td>${totalRequired.toFixed(2)}</td>
+                    <td>BODY-Solid</td>
+                </tr>
+            `;
+        });
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Fabric Booking Sheet - ${rowData.jobNo}</title>
+                <style>
+                    @media print {
+                        @page { margin: 0.5in; }
+                        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    }
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 20px;
+                        font-size: 12px;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 20px;
+                    }
+                    .header h1 { margin: 5px 0; font-size: 18px; }
+                    .header h2 { margin: 5px 0; font-size: 16px; }
+                    .info-row {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 10px;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 15px;
+                    }
+                    th, td {
+                        border: 1px solid #000;
+                        padding: 6px;
+                        text-align: center;
+                        font-size: 10px;
+                    }
+                    th { background-color: #f3ddc7; font-weight: bold; }
+                    th.add-head { background-color: #fde68a; }
+                    td.add-cell { background-color: #fef3c7; font-weight: bold; color: #92400e; }
+                    tfoot td { background-color: #f3ddc7; font-weight: bold; }
+                    .footer {
+                        margin-top: 30px;
+                        display: flex;
+                        justify-content: space-between;
+                    }
+                    .signature {
+                        text-align: center;
+                        margin-top: 40px;
+                    }
+                    button { margin: 10px 5px; padding: 8px 16px; cursor: pointer; }
+                </style>
+            </head>
+            <body>
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <button onclick="window.print()">🖨️ Print / Save as PDF</button>
+                    <button onclick="window.close()">Close</button>
+                </div>
+
+                <div class="header">
+                    <h1>SM SOURCING</h1>
+                    <h2>Fabric Booking Sheet</h2>
+                </div>
+
+                <div class="info-row">
+                    <div>
+                        <strong>Buyer:</strong> ${rowData.buyerName || ''}<br/>
+                        <strong>Process loss below 8%.</strong>
+                    </div>
+                    <div style="text-align: center;">
+                        <strong>HOD:</strong> ${rowData.hod || 'N/A'}
+                    </div>
+                    <div style="text-align: right;">
+                        <strong>JOB NO:</strong> ${rowData.jobNo}<br/>
+                        <strong>Date:</strong> ${new Date().toLocaleDateString()}
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Style No</th>
+                            <th>PO No</th>
+                            <th>Color</th>
+                            <th>Fabrication</th>
+                            <th>HOD</th>
+                            <th>Order Qty</th>
+                            <th class="add-head">Additional Booking</th>
+                            <th>Total Booking</th>
+                            <th>Finished fab. Width</th>
+                            <th>Consumption PCS</th>
+                            <th>F. Fab</th>
+                            <th>2x1 rib lycra</th>
+                            <th>Total fabric</th>
+                            <th>Yarn req.</th>
+                            <th>Type Of work order</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="5">TOTAL</td>
+                            <td>${grandOrder.toFixed(2)}</td>
+                            <td class="add-cell">${grandAdditional.toFixed(2)}</td>
+                            <td>${grandTotal.toFixed(2)}</td>
+                            <td colspan="7"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div class="footer">
+                    <div>
+                        <p>Thanks &amp; Best regards</p>
+                    </div>
+                    <div>
+                        <p>CC To:</p>
+                    </div>
+                    <div class="signature">
+                        <p>Approved by:</p>
+                        <p style="margin-top: 40px;">_________________</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+    };
+
+    const handleToggleRow = (rowId) => {
+        const newSelected = new Set(selectedRows);
+        if (newSelected.has(rowId)) {
+            newSelected.delete(rowId);
+        } else {
+            newSelected.add(rowId);
+        }
+        setSelectedRows(newSelected);
+    };
+
+    const handleGenerateSelectedPDFs = () => {
+        if (selectedRows.size === 0) {
+            alert("Please select at least one row to generate PDF");
+            return;
+        }
+
+        selectedRows.forEach(rowId => {
+            const rowData = filteredData.find(r => r.id === rowId);
+            if (rowData) {
+                generatePDFBooking(rowData);
+            }
+        });
+    };
+
     const handleGlanceReport = () => {
         setGlanceReport({ isGlanceLoading: true });
         fetchData(`/api/styles`).then(data => {
@@ -743,10 +999,13 @@ export default function Summary() {
         <DashboardLayout>
             <div className="flex gap-2 mb-4 items-center flex-wrap">
                 <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => {
+                        setEditingJobData(null);
+                        setShowModal(true);
+                    }}
                     className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600"
                 >
-                    <PlusCircle size={18} />
+                    <PlusCircle size={18} /> Add Job
                 </button>
                 {
                     isLoading.refreshLoading ?
@@ -777,6 +1036,15 @@ export default function Summary() {
                         </button>
                     )
                 }
+
+                {selectedRows.size > 0 && (
+                    <button
+                        onClick={handleGenerateSelectedPDFs}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 transition-colors border border-blue-600"
+                    >
+                        <FileText size={18} /> Generate PDF ({selectedRows.size})
+                    </button>
+                )}
 
                 {
                     glanceReport.showGlanceModal && (
@@ -813,17 +1081,17 @@ export default function Summary() {
                     <>
                         <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                            <Filter size={14} className="text-blue-500" />
+                            <Filter size={14} className="text-teal-600" />
                             {Object.entries(activeFilters).map(([colKey, values]) => {
                                 const colIndex = KEY_TO_INDEX[colKey];
                                 return (
                                     <span
                                         key={colKey}
-                                        className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-black text-blue-700 text-xs rounded-full font-medium"
+                                        className="flex items-center gap-1 px-2 py-1 bg-teal-50 border border-[#14b8a6] text-teal-700 text-xs rounded-full font-medium"
                                     >
                                         {colIndex !== undefined ? COLUMNS[colIndex] : colKey}
-                                        <span className="bg-blue-200 text-blue-800 rounded-full px-1 text-xs">{values.length}</span>
-                                        <button onClick={() => colIndex !== undefined && clearFilter(colIndex)} className="ml-0.5 text-blue-400 hover:text-blue-700">
+                                        <span className="bg-teal-200 text-teal-800 rounded-full px-1 text-xs">{values.length}</span>
+                                        <button onClick={() => colIndex !== undefined && clearFilter(colIndex)} className="ml-0.5 text-teal-400 hover:text-teal-700">
                                             <X size={11} />
                                         </button>
                                     </span>
@@ -844,7 +1112,18 @@ export default function Summary() {
                 </span>
             </div>
 
-            {showModal && <StyleReqModal setRawData={setRawData} setShowModal={setShowModal} />}
+            {showModal && (
+                <StyleReqModal
+                    setRawData={setRawData}
+                    setShowModal={setShowModal}
+                    editData={editingJobData}
+                    onSaved={() => {
+                        fetchFilteredData();
+                        setShowModal(false);
+                        setEditingJobData(null);
+                    }}
+                />
+            )}
 
             {openFilter !== null && (
                 <FilterDropdown
@@ -866,21 +1145,59 @@ export default function Summary() {
                     top: ${dropdownPos.top}px !important;
                     left: ${dropdownPos.left}px !important;
                 }
+                .subrow-cell {
+                    min-height: 42px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-sizing: border-box;
+                }
             `}</style>
 
 
             <div
                 ref={scrollContainerRef}
-                className="relative overflow-auto shadow-xs rounded-t-base border border-default"
-                style={{ maxHeight: 'calc(100vh - 250px)' }}
+                className="relative overflow-auto shadow-xs"
+                style={{ maxHeight: 'calc(100vh - 250px)', border: `1px solid ${BORDER_COLOR}`, borderRadius: '14px' }}
             >
                 <table
                     className="w-full text-sm text-left rtl:text-right text-body"
                     style={{ borderCollapse: 'separate', borderSpacing: 0 }}
                 >
                     <thead className="sticky top-0 z-30 text-sm text-body">
-                        {/* ── Main Header Row ── */}
                         <tr>
+                            {/* Checkbox Column Header */}
+                            <th
+                                scope="col"
+                                className="px-3 py-3 font-medium"
+                                style={{
+                                    backgroundColor: HEADER_BG,
+                                    position: 'sticky',
+                                    left: '0px',
+                                    width: `${CHECKBOX_WIDTH}px`,
+                                    minWidth: `${CHECKBOX_WIDTH}px`,
+                                    maxWidth: `${CHECKBOX_WIDTH}px`,
+                                    zIndex: 50,
+                                    borderRight: `1px solid ${BORDER_COLOR}`,
+                                    borderBottom: `2px solid ${BORDER_COLOR}`,
+                                    borderTopLeftRadius: '14px',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            const allIds = new Set(paginatedData.map(r => r.id));
+                                            setSelectedRows(allIds);
+                                        } else {
+                                            setSelectedRows(new Set());
+                                        }
+                                    }}
+                                    checked={paginatedData.length > 0 && paginatedData.every(r => selectedRows.has(r.id))}
+                                    className="rounded text-teal-600"
+                                />
+                            </th>
                             {COLUMNS.map((col, index) => {
                                 const isFilterable = index in FILTERABLE_COLS;
                                 const hasFilter = isFilterable && !!activeFilters[FILTERABLE_COLS[index].key];
@@ -892,15 +1209,16 @@ export default function Summary() {
                                         scope="col"
                                         className="px-3 py-3 font-medium whitespace-normal break-words"
                                         style={{
-                                            backgroundColor: index >= 6 ? '#c7d2fe' : '#e5e7eb',
+                                            backgroundColor: HEADER_BG,
                                             position: 'sticky',
                                             left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
-                                            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-                                            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
-                                            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : 'auto',
+                                            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
+                                            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
+                                            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
                                             zIndex: isFrozen ? 45 : 35,
-                                            borderRight: '1px solid #000000',
-                                            borderBottom: '2px solid #000000',
+                                            borderRight: `1px solid ${BORDER_COLOR}`,
+                                            borderBottom: `2px solid ${BORDER_COLOR}`,
+                                            borderTopRightRadius: index === COLUMNS.length - 1 ? '14px' : 0,
                                             boxShadow: index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.15)' : 'none',
                                             overflow: index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
                                             textAlign: 'center',
@@ -914,8 +1232,8 @@ export default function Summary() {
                                                     onClick={(e) => openFilterDropdown(index, e)}
                                                     title={hasFilter ? "Filter active" : "Filter"}
                                                     className={`flex-shrink-0 flex items-center justify-center w-5 h-5 rounded transition-colors ${hasFilter
-                                                        ? 'bg-blue-500 text-white'
-                                                        : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200'
+                                                        ? 'bg-teal-600 text-white'
+                                                        : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                                                         }`}
                                                 >
                                                     <Filter size={11} />
@@ -931,9 +1249,9 @@ export default function Summary() {
                     <tbody>
                         {isLoading.refreshLoading && paginatedData.length === 0 && (
                             <tr>
-                                <td colSpan={COLUMNS.length} className="px-4 py-20 text-center align-middle">
+                                <td colSpan={COLUMNS.length + 1} className="px-4 py-20 text-center align-middle">
                                     <div className="flex flex-col items-center justify-center gap-3">
-                                        <RefreshCcw size={24} className="animate-spin text-blue-500" />
+                                        <RefreshCcw size={24} className="animate-spin text-teal-600" />
                                         <span className="text-sm font-medium text-gray-500">Loading summary data...</span>
                                     </div>
                                 </td>
@@ -942,12 +1260,36 @@ export default function Summary() {
 
                         {!isLoading.refreshLoading && paginatedData.map((row, i) => {
                             const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
+                            const isSelected = selectedRows.has(row.id);
 
                             return (
-                                <tr key={row.id || i} className="group">
+                                <tr key={row.id || i} className={`group ${isSelected ? 'bg-blue-50' : ''}`}>
+                                    {/* Checkbox Column */}
+                                    <td
+                                        className="px-3 py-2 align-middle"
+                                        style={{
+                                            position: 'sticky',
+                                            left: '0px',
+                                            width: `${CHECKBOX_WIDTH}px`,
+                                            minWidth: `${CHECKBOX_WIDTH}px`,
+                                            maxWidth: `${CHECKBOX_WIDTH}px`,
+                                            zIndex: 25,
+                                            backgroundColor: isSelected ? '#eff6ff' : CELL_BG,
+                                            borderRight: `1px solid ${BORDER_COLOR}`,
+                                            borderBottom: `1px solid ${BORDER_COLOR}`,
+                                            textAlign: 'center',
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => handleToggleRow(row.id)}
+                                            className="rounded text-teal-600"
+                                        />
+                                    </td>
 
                                     {/* 1. SALES CONTACT */}
-                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(0)}>
+                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(0)}>
                                         {editingCells[`${row.id}-salesContact`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-salesContact`].value}
@@ -960,7 +1302,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 2. BUYER */}
-                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(1)}>
+                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(1)}>
                                         {editingCells[`${row.id}-buyerName`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-buyerName`].value}
@@ -972,23 +1314,40 @@ export default function Summary() {
                                         ) : row.buyerName}
                                     </td>
 
-                                    {/* 3. JOB NO */}
-                                    <td onDoubleClick={() => handleRedirect(row.jobNo)} className={`px-3 py-2 align-middle cursor-pointer hover:text-blue-600 group-hover:bg-gray-50`} style={getFrozenStyle(2)}>
-                                        <span onClick={() => handleEdit(row.id, "jobNo", row.jobNo)}>
-                                            {editingCells[`${row.id}-jobNo`] ? (
-                                                <input
-                                                    value={editingCells[`${row.id}-jobNo`].value}
-                                                    onChange={(e) => handleOnChange(e, `${row.id}-jobNo`)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                    type="text"
-                                                />
-                                            ) : row.jobNo}
-                                        </span>
+                                    {/* 3. JOB NO (With Edit Button) */}
+                                    <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(2)}>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span
+                                                onDoubleClick={() => handleRedirect(row.jobNo)}
+                                                onClick={() => handleEdit(row.id, "jobNo", row.jobNo)}
+                                                className="cursor-pointer hover:text-teal-700 flex-1 text-center break-words"
+                                            >
+                                                {editingCells[`${row.id}-jobNo`] ? (
+                                                    <input
+                                                        value={editingCells[`${row.id}-jobNo`].value}
+                                                        onChange={(e) => handleOnChange(e, `${row.id}-jobNo`)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
+                                                        type="text"
+                                                    />
+                                                ) : row.jobNo}
+                                            </span>
+                                            <button
+                                                disabled={editLoading}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openEditJobModal(row);
+                                                }}
+                                                className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
+                                                title="Edit Job Details (Colors, Compositions, Additional Booking, etc.)"
+                                            >
+                                                {editLoading ? <Loader size={16} className="animate-spin" /> : <Pen size={16} />}
+                                            </button>
+                                        </div>
                                     </td>
 
                                     {/* 4. STYLE */}
-                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(3)}>
+                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(3)}>
                                         {editingCells[`${row.id}-styleNo`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-styleNo`].value}
@@ -1005,7 +1364,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 5. PO NO */}
-                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-gray-50`} style={getFrozenStyle(4)}>
+                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(4)}>
                                         {editingCells[`${row.id}-poNo`] ? (
                                             <input
                                                 value={editingCells[`${row.id}-poNo`].value}
@@ -1022,10 +1381,10 @@ export default function Summary() {
                                     </td>
 
                                     {/* 6. COLOR */}
-                                    <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(5)}>
-                                        <div className="divide-y divide-black">
+                                    <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(5)}>
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
+                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`}>
                                                     {editingCells[`${cell.id}-color`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-color`].value}
@@ -1034,17 +1393,21 @@ export default function Summary() {
                                                             className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
                                                             type="text"
                                                         />
-                                                    ) : cell.color}
+                                                    ) : (
+                                                        <span className="inline-block px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-xs font-medium border border-teal-200">
+                                                            {cell.color}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
                                     </td>
 
                                     {/* 7. COMPOSITION */}
-                                    <td className="p-0 align-top group-hover:bg-gray-50" style={getFrozenStyle(6)}>
-                                        <div className="divide-y divide-black">
+                                    <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(6)}>
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className={`px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis'`} title={cell.composition}>
+                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`} title={cell.composition}>
                                                     {editingCells[`${cell.id}-composition`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-composition`].value}
@@ -1053,17 +1416,21 @@ export default function Summary() {
                                                             className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
                                                             type="text"
                                                         />
-                                                    ) : cell.composition}
+                                                    ) : (
+                                                        <span className="block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                                                            {cell.composition}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
                                     </td>
 
-                                    {/* 8. FINISH DIA (Now Frozen) */}
+                                    {/* 8. FINISH DIA */}
                                     <td className="p-0 align-top" style={getFrozenStyle(7)}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
+                                                <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`}>
                                                     {editingCells[`${cell.id}-finishDia`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-finishDia`].value}
@@ -1078,11 +1445,11 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 9. ORDER QTY */}
+                                    {/* 9. ORDER QTY - NO TOFIXED */}
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className={`px-3 py-2`}>
+                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`}>
                                                     {editingCells[`${cell.id}-orderQty`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-orderQty`].value}
@@ -1091,7 +1458,7 @@ export default function Summary() {
                                                             className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
                                                             type="text"
                                                         />
-                                                    ) : formatNumber(cell.orderQty, cell.orderQty)}
+                                                    ) : (cell.orderQty !== undefined && cell.orderQty !== null && cell.orderQty !== "" ? cell.orderQty : "_")}
                                                 </div>
                                             ))}
                                         </div>
@@ -1099,25 +1466,25 @@ export default function Summary() {
 
                                     {/* 10. 1st BOOKING (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div key={j} className={`px-3 py-2`}>
+                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
                                                     {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
                                                 </div>
                                             ))}
                                         </div>
                                     </td>
 
-                                    {/* 28. PROCESS LOSS % */}
-                                    <td className="p-0 align-top" style={getCellStyle(27)}>
-                                        <div className="divide-y divide-black">
-                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2`}>{Number(row.processLoss || 0).toFixed(2)}%</div>)}
+                                    {/* PROCESS LOSS % */}
+                                    <td className="p-0 align-top" style={getCellStyle(10)}>
+                                        <div className="divide-y divide-[#14b8a6]">
+                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2 subrow-cell`}>{Number(row.processLoss || 0).toFixed(2)}%</div>)}
                                         </div>
                                     </td>
 
-                                    {/* 11. FINISH REQUIRED QTY (formula) */}
+                                    {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
                                                 const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
                                                 const netAdditional = Number(cell.additional) - lossQty;
@@ -1126,7 +1493,7 @@ export default function Summary() {
                                                     <div
                                                         key={j}
                                                         onClick={() => handleEdit(cell.id, "finishRequiredQty", cell.finishRequiredQty, "styleRequirementRows")}
-                                                        className={`px-3 py-2`}
+                                                        className={`px-3 py-2 subrow-cell`}
                                                     >
                                                         {editingCells[`${cell.id}-finishRequiredQty`] ? (
                                                             <input
@@ -1145,11 +1512,11 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 11. ADDITIONAL BOOKING */}
-                                    <td className="p-0 align-top" style={getCellStyle(10)}>
-                                        <div className="divide-y divide-black">
+                                    {/* ADDITIONAL BOOKING */}
+                                    <td className="p-0 align-top" style={getCellStyle(12)}>
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className={`px-3 py-2`}>
+                                                <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className={`px-3 py-2 subrow-cell`}>
                                                     {editingCells[`${cell.id}-additional`] ? (
                                                         <input
                                                             value={editingCells[`${cell.id}-additional`].value}
@@ -1168,9 +1535,9 @@ export default function Summary() {
 
                                     {/* 12. REQUIRED YARN QTY (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div key={j} className={`px-3 py-2`}>
+                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
                                                     {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
                                                 </div>
                                             ))}
@@ -1178,20 +1545,21 @@ export default function Summary() {
                                     </td>
 
                                     {/* 13. KNITTING WORK ORDER QTY */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_workOrderQty', 12)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_workOrderQty', 14)}
 
                                     {/* 14. SHORT & EXCESS (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
                                                 const cb = compBreakdown[j] || {};
-                                                if (cb.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const finishRequiredQty = cell.finishRequiredQty || 0;
                                                 const processLoss = row.processLoss || 0;
                                                 const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                                                const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty); const isExceeded0 = diff0 > 0;
+                                                const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty);
+                                                const isExceeded0 = diff0 > 0;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${isExceeded0 ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
+                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
                                                         {isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2)}
                                                     </div>
                                                 );
@@ -1200,24 +1568,23 @@ export default function Summary() {
                                     </td>
 
                                     {/* 15. YARN DELIVERY */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Delivery', 14)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Delivery', 16)}
 
                                     {/* 16. SHORT & EXCESS (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
                                                 const cb = compBreakdown[j] || {};
-                                                if (cb.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
 
                                                 const delivered = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
 
-                                                // Balance calculation: Yarn Delivery - Work Order Qty
                                                 const diff1 = workOrderQty - delivered;
-                                                const isExcess = diff1 > 0; // Positive means excess (green), negative means short (red)
+                                                const isExcess = diff1 > 0;
 
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${isExcess ? "text-green-500 font-bold" : "text-red-500 font-bold"}`}>
+                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExcess ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
                                                         {delivered === 0 && workOrderQty === 0 ? "_" : isExcess ? `(${diff1.toFixed(2)})` : Math.abs(diff1).toFixed(2)}
                                                     </div>
                                                 );
@@ -1226,35 +1593,35 @@ export default function Summary() {
                                     </td>
 
                                     {/* 17. RAW YARN DELIVERY FOR DYED */}
-                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', 16)}
+                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', 18)}
 
                                     {/* 18. YARN RECEIVED AFTER DYED */}
-                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', 17)}
+                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', 19)}
 
                                     {/* 19. PARTY STOCK */}
-                                    <td className="p-0 align-top" style={getCellStyle(18)}>
-                                        <div className="divide-y divide-black">
-                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2`}>-</div>)}
+                                    <td className="p-0 align-top" style={getCellStyle(20)}>
+                                        <div className="divide-y divide-[#14b8a6]">
+                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2 subrow-cell`}>-</div>)}
                                         </div>
                                     </td>
 
                                     {/* 20. TOTAL KNITTING (GREY) */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Grey_Fabric_Received', 19)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Grey_Fabric_Received', 21)}
 
                                     {/* 21. RETURN YARN RECEIVED */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Return', 20)}
+                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Return', 22)}
 
                                     {/* 22. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
                                                 const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
                                                 const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
                                                 const balance = (greyReceived + yarnReturn) - yarnDelivery;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 font-bold ${balance >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 subrow-cell font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
                                                         {balance === 0 ? "_" : balance.toFixed(2)}
                                                     </div>
                                                 );
@@ -1263,22 +1630,22 @@ export default function Summary() {
                                     </td>
 
                                     {/* 23. GREY DELIVERY FOR DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Delivery', 22)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Delivery', 24)}
 
                                     {/* 24. GREY RETURN FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return', 23)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return', 25)}
 
                                     {/* 25. GREY RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 24)}
+                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 26)}
 
                                     {/* 26. FINISH RECEIVED FROM DYEING */}
                                     {renderBreakdownCell(compBreakdown, 'dyeingOrder_Finish_Received', 27)}
 
                                     {/* 27. GREY BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const diff = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery') - getBreakdownValue(cb, 'dyeingOrder_Grey_Received') -
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
                                                 const isExceeded = diff > 0;
@@ -1286,7 +1653,7 @@ export default function Summary() {
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing') ||
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
                                                         {!hasAnyData ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
@@ -1308,15 +1675,15 @@ export default function Summary() {
 
                                     {/* 33. AOP FAB. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                                                 const diff = received - sent;
                                                 const isExceeded = diff > 0;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
                                                         {sent === 0 && received === 0 ? "_" : (isExceeded ? `(${Math.abs(diff).toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
@@ -1326,13 +1693,13 @@ export default function Summary() {
 
                                     {/* 34. AOP PROCESS LOSS (%) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
                                                 const loss = sent > 0 ? (((sent - received) / sent) * 100).toFixed(2) : "_";
-                                                return <div key={j} className={`px-3 py-2`}>{loss === "_" ? "_" : `${loss}%`}</div>;
+                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{loss === "_" ? "_" : `${loss}%`}</div>;
                                             })}
                                         </div>
                                     </td>
@@ -1351,16 +1718,16 @@ export default function Summary() {
 
                                     {/* 39. RE-PROCESS FAB. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
                                                 const diff = (receivedGrey + receivedFinish) - sent;
                                                 const isExceeded = diff > 0;
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 ${isExceeded ? "text-green-500 font-bold" : "font-bold text-red-500"}`}>
+                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
                                                         {sent === 0 && receivedGrey === 0 && receivedFinish === 0 ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
@@ -1370,14 +1737,14 @@ export default function Summary() {
 
                                     {/* 40. RE-PROCESS PROCESS LOSS (%) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-black">
+                                        <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 text-gray-400`}>_</div>;
+                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
                                                 const loss = sent > 0 ? (((sent - (receivedGrey + receivedFinish)) / sent) * 100).toFixed(2) : "_";
-                                                return <div key={j} className={`px-3 py-2`}>{loss === "_" ? "_" : `${loss}%`}</div>;
+                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{loss === "_" ? "_" : `${loss}%`}</div>;
                                             })}
                                         </div>
                                     </td>
@@ -1388,39 +1755,72 @@ export default function Summary() {
 
                         {!isLoading.refreshLoading && paginatedData.length === 0 && (
                             <tr>
-                                <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-400 text-sm">
+                                <td colSpan={COLUMNS.length + 1} className="px-6 py-12 text-center text-gray-400 text-sm">
                                     No rows match the active filters.
                                 </td>
                             </tr>
                         )}
                     </tbody>
 
-                    {/* ── FOOTER TOTAL ROW ── */}
-                    {/* Hidden while any modal (add-style modal or glance modal) is open,
-                        so the sticky footer never renders on top of the modal overlay. */}
+                    {/* FOOTER TOTAL ROW */}
                     {!isLoading.refreshLoading && filteredData.length > 0 && !isAnyModalOpen && (
                         <tfoot>
                             <tr>
-                                {COLUMNS.map((_, index) => {
+                                {/* Merged TOTAL cell spanning checkbox + all frozen columns (9 columns total) */}
+                                <td
+                                    colSpan={FROZEN_COUNT + 1}
+                                    style={{
+                                        position: 'sticky',
+                                        bottom: 0,
+                                        left: '0px',
+                                        backgroundColor: HEADER_BG,
+                                        color: '#1f2937',
+                                        borderRight: `1px solid ${BORDER_COLOR}`,
+                                        borderTop: `2px solid ${BORDER_COLOR}`,
+                                        borderBottom: `1px solid ${BORDER_COLOR}`,
+                                        borderBottomLeftRadius: '14px',
+                                        zIndex: 65,
+                                        textAlign: 'center',
+                                        fontWeight: 700,
+                                        fontSize: '0.8rem',
+                                        whiteSpace: 'nowrap',
+                                        padding: '10px 8px',
+                                    }}
+                                >
+                                    TOTAL
+                                </td>
+                                {/* Only render cells for non-frozen columns (index 8 onwards) */}
+                                {COLUMNS.slice(FROZEN_COUNT).map((_, idx) => {
+                                    const colIndex = idx + FROZEN_COUNT;
                                     let displayValue = "";
 
-                                    if (index === 0) {
-                                        displayValue = "TOTAL";
-                                    } else if (index === 8) {
-                                        displayValue = formatNumber(footerTotals.__ORDER_QTY__);
-                                    } else if (index === 12) {
-                                        displayValue = formatNumber(footerTotals.__ADDITIONAL__);
-                                    } else if (TOTALS_BACKEND_KEYS[index]) {
-                                        const key = TOTALS_BACKEND_KEYS[index];
-                                        if (key !== "__ORDER_QTY__" && key !== "__ADDITIONAL__") {
-                                            displayValue = formatNumber(footerTotals[key]);
-                                        }
+                                    if (!NO_TOTAL_COLUMN_INDEXES.has(colIndex)) {
+                                        const sum = formatNumber(footerTotals[colIndex]);
+                                        displayValue = (sum !== "_" && PERCENT_COLUMN_INDEXES.has(colIndex)) ? `${sum}%` : sum;
                                     }
 
                                     return (
                                         <td
-                                            key={`footer-${index}`}
-                                            style={getFooterCellStyle(index)}
+                                            key={`footer-${colIndex}`}
+                                            style={{
+                                                position: 'sticky',
+                                                bottom: 0,
+                                                backgroundColor: HEADER_BG,
+                                                color: '#1f2937',
+                                                borderRight: `1px solid ${BORDER_COLOR}`,
+                                                borderTop: `2px solid ${BORDER_COLOR}`,
+                                                borderBottom: `1px solid ${BORDER_COLOR}`,
+                                                borderBottomRightRadius: colIndex === COLUMNS.length - 1 ? '14px' : 0,
+                                                zIndex: 55,
+                                                textAlign: 'center',
+                                                fontWeight: 700,
+                                                fontSize: '0.8rem',
+                                                whiteSpace: 'nowrap',
+                                                padding: '10px 8px',
+                                                width: `${UNFROZEN_WIDTH}px`,
+                                                minWidth: `${UNFROZEN_WIDTH}px`,
+                                                maxWidth: `${UNFROZEN_WIDTH}px`,
+                                            }}
                                         >
                                             {displayValue}
                                         </td>
@@ -1433,7 +1833,7 @@ export default function Summary() {
             </div>
 
             {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 border-black rounded-b-base shadow-xs">
+                <div className="flex items-center justify-between px-4 py-3 bg-white border border-t-0 shadow-xs" style={{ borderColor: BORDER_COLOR, borderRadius: '0 0 14px 14px' }}>
                     <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                         <div>
                             <p className="text-sm text-gray-700">
@@ -1455,7 +1855,7 @@ export default function Summary() {
                                         key={page}
                                         onClick={() => setCurrentPage(page)}
                                         className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium ${currentPage === page
-                                            ? 'bg-blue-600 text-white z-10'
+                                            ? 'bg-teal-600 text-white z-10'
                                             : 'bg-white text-gray-700 hover:bg-gray-50'
                                             }`}
                                     >

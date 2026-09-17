@@ -1,32 +1,36 @@
 import { useState, useMemo } from "react";
 
-const AopOrder = ({ 
-    orders, 
-    handleInlineEdit, 
-    handleRedirect, 
-    updatedFields, 
-    handleOnChange, 
-    isEdit, 
-    handleEditRowData, 
-    FROZEN_COUNT, 
-    currentFrozenWidths, 
+const AopOrder = ({
+    orders,
+    handleInlineEdit,
+    handleRedirect,
+    updatedFields,
+    handleOnChange,
+    isEdit,
+    handleEditRowData,
+    FROZEN_COUNT,
+    currentFrozenWidths,
     currentFrozenLefts,
-    searchTerm = "" 
+    searchTerm = ""
 }) => {
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
     const cellPad = "py-2 px-3";
 
+    // Base styles for all TDs
     const baseTd = {
         borderRight: "1px solid #000000",
         borderBottom: "1px solid #000000",
         padding: 0,
         textAlign: "center",
         verticalAlign: "top",
+        boxSizing: "border-box"
     };
 
+    // Data cell style
     const dataTd = { ...baseTd };
 
+    // Sticky frozen column style for body rows
     const stickyTd = (colIndex, isHovered) => ({
         ...baseTd,
         position: "sticky",
@@ -44,15 +48,16 @@ const AopOrder = ({
     // Helper function to get finish dia from styleRequirement
     const getFinishDia = (wo, comp) => {
         if (!wo?.styleRequirement?.rows || !comp) return "-";
-        
-        const matchingRow = wo.styleRequirement.rows.find(row => 
-            row.composition === comp.composition && 
+
+        const matchingRow = wo.styleRequirement.rows.find(row =>
+            row.composition === comp.composition &&
             row.color === comp.color
         );
-        
+
         return matchingRow?.finishDia || "-";
     };
 
+    // Calculate totals based on filtered orders
     const totals = useMemo(() => {
         const acc = {
             workOrderQty: 0,
@@ -90,37 +95,12 @@ const AopOrder = ({
         return acc;
     }, [orders]);
 
-    const totalFrozenWidth = currentFrozenWidths.reduce((sum, w) => sum + w, 0);
-
-    const footerStickyLabelTd = {
-        ...baseTd,
-        position: "sticky",
-        left: 0,
-        zIndex: 4,
-        backgroundColor: "#f3f4f6",
-        width: `${totalFrozenWidth}px`,
-        minWidth: `${totalFrozenWidth}px`,
-        fontWeight: 700,
-        boxShadow: "2px 0 5px -1px rgba(0,0,0,0.18)",
-        padding: "8px 12px",
-        textAlign: "left",
-    };
-
-    const footerTd = {
-        border: "1px solid #000000",
-        padding: "8px 12px",
-        textAlign: "center",
-        verticalAlign: "middle",
-        fontWeight: 700,
-        backgroundColor: "#f3f4f6",
-    };
-
     // Filter orders based on search term
     const filteredOrders = useMemo(() => {
         if (!searchTerm?.trim()) return orders || [];
-        
+
         const lowerSearch = searchTerm.toLowerCase();
-        
+
         return (orders || []).map(job => {
             const filteredWorkOrders = (job.workOrders || []).map(wo => {
                 const filteredComps = (wo.compositions || []).filter(comp => {
@@ -135,17 +115,18 @@ const AopOrder = ({
                         comp?.color,
                         comp?.workOrderQty,
                     ].map(val => String(val || "").toLowerCase());
-                    
+
                     return searchableValues.some(val => val.includes(lowerSearch));
                 });
-                
+
                 return { ...wo, compositions: filteredComps };
             }).filter(wo => wo.compositions.length > 0);
-            
+
             return { ...job, workOrders: filteredWorkOrders };
         }).filter(job => job.workOrders.length > 0);
     }, [orders, searchTerm]);
 
+    // Flatten rows for rendering
     const flatRows = useMemo(() => {
         const out = [];
         (filteredOrders || []).forEach((job, jobIndex) => {
@@ -181,6 +162,52 @@ const AopOrder = ({
         });
         return out;
     }, [filteredOrders]);
+
+    /* ============================================================
+       FOOTER STYLES
+       ============================================================ */
+
+    // Base style for every footer cell (sticks to the bottom of the scroll area)
+    const footerBaseStyle = {
+        ...baseTd,
+        position: "sticky",
+        bottom: 0,
+        zIndex: 12,
+        backgroundColor: "#f3f4f6",
+        fontWeight: 700,
+        padding: "8px 12px",
+        textAlign: "center",
+        verticalAlign: "middle",
+        borderTop: "2px solid #000000",
+        boxShadow: "0 -2px 5px -1px rgba(0,0,0,0.1)",
+        boxSizing: "border-box",
+        whiteSpace: "nowrap",
+    };
+
+    // Footer cell style.
+    // index < FROZEN_COUNT  -> sticky BOTTOM + sticky LEFT (frozen column)
+    // index >= FROZEN_COUNT -> sticky BOTTOM only
+    const getFooterCellStyle = (index) => {
+        if (index < FROZEN_COUNT) {
+            return {
+                ...footerBaseStyle,
+                // keep both axis sticky
+                left: `${currentFrozenLefts[index]}px`,
+                // must sit ABOVE the non-frozen footer cells (12)
+                zIndex: 16,
+                backgroundColor: "#e5e7eb",
+                width: `${currentFrozenWidths[index]}px`,
+                minWidth: `${currentFrozenWidths[index]}px`,
+                maxWidth: `${currentFrozenWidths[index]}px`,
+                // right shadow only on the last frozen column
+                boxShadow: index === FROZEN_COUNT - 1
+                    ? "2px -2px 5px -1px rgba(0,0,0,0.18)"
+                    : "0 -2px 5px -1px rgba(0,0,0,0.1)",
+            };
+        }
+
+        return footerBaseStyle;
+    };
 
     return (
         <>
@@ -251,7 +278,6 @@ const AopOrder = ({
                                     <div onDoubleClick={() => handleRedirect(job.jobNo)} className={cellPad}>{job.jobNo || "NO JOB FOUND"}</div>
                                 </td>
                             )}
-                        
 
                             {/* STYLE NO (per work order) */}
                             {isFirstOfWo && (
@@ -263,22 +289,20 @@ const AopOrder = ({
                             {/* COLOR (per composition) */}
                             {isFirstOfWo && (
                                 <td style={stickyTd(6, isHovered)} rowSpan={woRowSpan}>
-                                <div onClick={() => handleEditRowData(comp?.id)} className={cellPad} style={{ cursor: "pointer" }}>
-                                    {comp?.color || "-"}
-                                </div>
-                            </td>
+                                    <div onClick={() => handleEditRowData(comp?.id)} className={cellPad} style={{ cursor: "pointer" }}>
+                                        {comp?.color || "-"}
+                                    </div>
+                                </td>
                             )}
-                            
 
                             {/* COMPOSITION (per composition) */}
                             {isFirstOfWo && (
                                 <td style={stickyTd(7, isHovered)} rowSpan={woRowSpan}>
-                                <div className={cellPad}>{comp?.composition || "-"}</div>
-                            </td>
+                                    <div className={cellPad}>{comp?.composition || "-"}</div>
+                                </td>
                             )}
-                            
 
-                            {/* FINISH DIA (per composition) - FIXED: uses getFinishDia */}
+                            {/* FINISH DIA (per composition) */}
                             <td style={dataTd}>
                                 <div className={cellPad}>{currentFinishDia}</div>
                             </td>
@@ -356,26 +380,81 @@ const AopOrder = ({
 
             <tfoot>
                 <tr>
-                    <td colSpan={FROZEN_COUNT} style={footerStickyLabelTd}>
-                        TOTAL
+                    {/* ===== FROZEN FOOTER CELLS =====
+                        Rendered as INDIVIDUAL cells (no colSpan).
+                        colSpan + position:sticky is broken in Chromium,
+                        which is why the frozen side of the footer was not sticking. */}
+                    {Array.from({ length: FROZEN_COUNT }).map((_, i) => (
+                        <td key={`footer-frozen-${i}`} style={getFooterCellStyle(i)}>
+                            {i === 0 ? (
+                                <div style={{ textAlign: "left", paddingLeft: "4px" }}>TOTAL</div>
+                            ) : null}
+                        </td>
+                    ))}
+
+                    {/* FINISH DIA Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT)}>
+                        <div className={cellPad}>-</div>
                     </td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>{totals.workOrderQty.toFixed(2)}</td>
-                    <td style={footerTd}>{totals.sentForAop.toFixed(2)}</td>
-                    <td style={{ ...footerTd, color: totals.shortExcess > 0 ? "red" : "green" }}>
-                        {totals.shortExcess > 0 ? totals.shortExcess : `(${Math.abs(totals.shortExcess.toFixed(2))})`}
+
+                    {/* WORK ORDER QTY Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 1)}>
+                        <div className={cellPad}>{totals.workOrderQty.toFixed(2)}</div>
                     </td>
-                    <td style={footerTd}>{totals.ReturnFromAop.toFixed(2)}</td>
-                    <td style={footerTd}>{totals.receivedFromAop.toFixed(2)}</td>
-                    <td style={footerTd}>{totals.FinishFromAop.toFixed(2)}</td>
-                    <td style={{ ...footerTd, color: totals.rcvdShortExcess > 0 ? "red" : "green" }}>
-                        {totals.rcvdShortExcess > 0 ? totals.rcvdShortExcess : `(${Math.abs(totals.rcvdShortExcess.toFixed(3))})`}
+
+                    {/* SENT FOR AOP Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 2)}>
+                        <div className={cellPad}>{totals.sentForAop.toFixed(2)}</div>
                     </td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>{totals.payableAmount.toFixed(2)}</td>
-                    <td style={footerTd}>-</td>
-                    <td style={footerTd}>-</td>
+
+                    {/* DEL. SHORT & EXCESS Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 3)}>
+                        <div className={cellPad} style={{ color: totals.shortExcess > 0 ? "red" : "green" }}>
+                            {totals.shortExcess > 0 ? totals.shortExcess.toFixed(2) : `(${Math.abs(totals.shortExcess.toFixed(2))})`}
+                        </div>
+                    </td>
+
+                    {/* RETURN FROM AOP Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 4)}>
+                        <div className={cellPad}>{totals.ReturnFromAop.toFixed(2)}</div>
+                    </td>
+
+                    {/* RECEIVED FROM AOP Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 5)}>
+                        <div className={cellPad}>{totals.receivedFromAop.toFixed(2)}</div>
+                    </td>
+
+                    {/* FINISH FROM AOP Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 6)}>
+                        <div className={cellPad}>{totals.FinishFromAop.toFixed(2)}</div>
+                    </td>
+
+                    {/* RCVD SHORT & EXCESS Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
+                        <div className={cellPad} style={{ color: totals.rcvdShortExcess > 0 ? "red" : "green" }}>
+                            {totals.rcvdShortExcess > 0 ? totals.rcvdShortExcess.toFixed(2) : `(${Math.abs(totals.rcvdShortExcess.toFixed(2))})`}
+                        </div>
+                    </td>
+
+                    {/* UNIT PRICE Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 8)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* PAYABLE AMOUNT Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 9)}>
+                        <div className={cellPad}>{totals.payableAmount.toFixed(2)}</div>
+                    </td>
+
+                    {/* PAID BILLING AMOUNT Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 10)}>
+                        <div className={cellPad}>-</div>
+                    </td>
+
+                    {/* PENDING BILLING AMOUNT Total */}
+                    <td style={getFooterCellStyle(FROZEN_COUNT + 11)}>
+                        <div className={cellPad}>-</div>
+                    </td>
                 </tr>
             </tfoot>
         </>
