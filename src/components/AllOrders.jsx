@@ -727,7 +727,7 @@ const AllOrders = ({ orderType }) => {
                     </button>
                 )}
                 {Object.keys(filters).length > 0 && (
-                    <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-pink-600 text-white rounded-md p-2 text-lg flex items-center gap-2">
+                    <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-red-600 text-white rounded-md p-2 text-lg flex items-center gap-2">
                         <FunnelX /> Clear Filters
                     </button>
                 )}

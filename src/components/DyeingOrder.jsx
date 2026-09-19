@@ -180,7 +180,7 @@ const DyeingOrder = ({
         position: "sticky",
         bottom: 0,
         zIndex: 12,
-        backgroundColor: "#f3f4f6",
+        backgroundColor: "#657582",
         fontWeight: 700,
         padding: "8px 12px",
         textAlign: "center",
@@ -201,7 +201,7 @@ const DyeingOrder = ({
                 left: `${currentFrozenLefts[index]}px`,
                 // must sit ABOVE the non-frozen footer cells (12)
                 zIndex: 20,
-                backgroundColor: "#e5e7eb",
+                backgroundColor: "#657582",
                 width: `${currentFrozenWidths[index]}px`,
                 minWidth: `${currentFrozenWidths[index]}px`,
                 maxWidth: `${currentFrozenWidths[index]}px`,
@@ -479,112 +479,111 @@ const DyeingOrder = ({
                     {Array.from({ length: FROZEN_COUNT }).map((_, i) => (
                         <td key={`footer-frozen-${i}`} style={getFooterCellStyle(i)}>
                             {i === 0 ? (
-                                <div style={{ textAlign: "left", paddingLeft: "4px" }}>TOTAL</div>
+                                <div className={`${cellPad} text-white`} style={{ textAlign: "left", paddingLeft: "4px" }}>TOTAL</div>
                             ) : null}
                         </td>
                     ))}
 
                     {/* FINISH DIA Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* YARN COUNT Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 1)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* YARN LOT Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 2)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* STICH LENGTH Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 3)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* MACHINE DIA Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 4)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* SHADE % Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 5)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* WORK ORDER QTY Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 6)}>
-                        <div className={cellPad}>{totals?.workOrderQty?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.workOrderQty?.toFixed(2)}</div>
                     </td>
 
                     {/* GREY DELIVERY Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
-                        <div className={cellPad}>{totals?.totalGreyDelivery?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.totalGreyDelivery?.toFixed(2)}</div>
                     </td>
 
                     {/* DEL SHORT & EXCESS Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 8)}>
-                        <div className={cellPad} style={{ color: totals?.shortExcess > 0 ? "red" : "green" }}>
-                            {totals?.shortExcess > 0
-                                ? totals?.shortExcess?.toFixed(2)
-                                : `(${Math.abs(totals?.shortExcess?.toFixed(2))})`}
+                        <div className={` text-white`}> 
+                                {totals?.shortExcess?.toFixed(2)}
+                                
                         </div>
                     </td>
 
                     {/* GREY RETURN Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 9)}>
-                        <div className={cellPad}>{totals?.greyReturn?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.greyReturn?.toFixed(2)}</div>
                     </td>
 
                     {/* GREY RECEIVED Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 10)}>
-                        <div className={cellPad}>{totals?.greyReceived?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.greyReceived?.toFixed(2)}</div>
                     </td>
 
                     {/* FINISH RECEIVED Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 11)}>
-                        <div className={cellPad}>{totals?.finishReceived?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.finishReceived?.toFixed(2)}</div>
                     </td>
 
                     {/* RCVD SHORT & EXCESS Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 12)}>
-                        <div className={cellPad} style={{ color: totals?.finishVsGreyDiff < 0 ? "red" : "green" }}>
-                            {totals.finishVsGreyDiff < 0
-                                ? Math.abs(totals.finishVsGreyDiff?.toFixed(2))
-                                : `(${Math.abs(totals.finishVsGreyDiff.toFixed(2))})`}
+                        <div className={` text-white`}>
+                           
+                                {Math.abs(totals.finishVsGreyDiff?.toFixed(2))}
+                                
                         </div>
                     </td>
 
                     {/* UNIT PRICE Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 13)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* TOTAL SENT FOR COMPACTING Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 14)}>
-                        <div className={cellPad}>{totals?.sentForCompacting?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.sentForCompacting?.toFixed(2)}</div>
                     </td>
 
                     {/* TOTAL RECEIVED FROM COMPACTING Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 15)}>
-                        <div className={cellPad}>{totals?.receivedFromCompacting?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.receivedFromCompacting?.toFixed(2)}</div>
                     </td>
 
                     {/* TOTAL BILLING / PAYABLE AMOUNT Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 16)}>
-                        <div className={cellPad}>{totals?.greyReceivedValue?.toFixed(2)}</div>
+                        <div className={`${cellPad} text-white`}>{totals?.greyReceivedValue?.toFixed(2)}</div>
                     </td>
 
                     {/* PAYABLE AMOUNT placeholder Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 17)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* PENDING BILLING AMOUNT placeholder Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 18)}>
-                        <div className={cellPad}>-</div>
+                        <div className={`${cellPad} text-white`}>-</div>
                     </td>
                 </tr>
             </tfoot>
