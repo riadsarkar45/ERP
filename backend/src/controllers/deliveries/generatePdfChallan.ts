@@ -37,8 +37,7 @@ const purgeExpired = () => {
     const cutoff = Date.now() - QUEUE_TTL_MS;
     for (let i = yarnAndUserIds.length - 1; i >= 0; i--) {
         const entry = yarnAndUserIds[i];
-        if (!entry) continue;
-        if (entry.queuedAt < cutoff) yarnAndUserIds.splice(i, 1);
+        if (entry && entry.queuedAt < cutoff) yarnAndUserIds.splice(i, 1);
     }
 };
 
@@ -67,27 +66,30 @@ export const generatePdfChallan = (
     return yarnAndUserIds.filter((c) => c.userId === userId);
 };
 
-export const prepareToGenerate = (req: Request, res: Response) => {
+export const prepareToGenerate = (req: Request, res: Response): void => {
     const userId = Number(req.params.userId);
 
     if (!userId) {
-        return res.status(404).send({ message: "Something went wrong", type: "err" });
+        res.status(404).send({ message: "Something went wrong", type: "err" });
+        return;
     }
 
     // A user may only see their own queue
     const authUserId = Number(req.user?.userId);
     if (authUserId && authUserId !== userId) {
-        return res.status(403).send({ message: "Access Denied", type: "err" });
+        res.status(403).send({ message: "Access Denied", type: "err" });
+        return;
     }
 
     purgeExpired();
     const challansToSend = yarnAndUserIds.filter((challan) => challan.userId === userId);
 
     if (challansToSend.length === 0) {
-        return res.status(404).send({ message: "No user id found to send", type: "message" });
+        res.status(404).send({ message: "No user id found to send", type: "message" });
+        return;
     }
 
-    return res.status(200).send(challansToSend);
+    res.status(200).send(challansToSend);
 };
 
 /* -------------------------------------------------------------------------- */
@@ -97,11 +99,11 @@ export const prepareToGenerate = (req: Request, res: Response) => {
 // Treat empty / "0" placeholder values as "not set" so they don't print as "0" or "Lot 0"
 const clean = (v: unknown): string => {
     const s = String(v ?? "").trim();
-    return s && s !== "0" ? s : "";
+    return s && s !== "0" && s.toUpperCase() !== "NULL" ? s : "";
 };
 
 // Always format in Bangladesh time (Render runs in UTC)
-const fmtDate = (d: any) => {
+const fmtDate = (d: Date | string | number | null | undefined) => {
     if (!d) return "   /   /";
     return new Intl.DateTimeFormat("en-GB", {
         timeZone: TZ,
@@ -113,7 +115,7 @@ const fmtDate = (d: any) => {
         .replace(/\//g, " / ");
 };
 
-const fmtTime = (d: any) => {
+const fmtTime = (d: Date | string | number | null | undefined) => {
     if (!d) return "";
     return new Intl.DateTimeFormat("en-US", {
         timeZone: TZ,
@@ -125,8 +127,50 @@ const fmtTime = (d: any) => {
 // avoid floating point noise like 1112.0000000001
 const fmtQty = (n: number) => String(Number(n.toFixed(2)));
 
-const fetchCompositions = (compositionWhere: any, deliveryWhere: any) =>
-    prisma.composition.findMany({
+interface DeliveryRow {
+    id: number;
+    challanNo: number;
+    fromFactory: string;
+    toFactory: string;
+    deliveryDate: Date;
+    createdAt: Date;
+    deliveryQty: number;
+}
+
+interface StyleInfo {
+    jobNo: string;
+    buyerName: string;
+    styleNo: string;
+}
+
+interface CompositionRow {
+    id: number;
+    composition: string;
+    color: string;
+    deliveries: DeliveryRow[];
+    workOrder: {
+        lotNo: string;
+        machineDia: string;
+        yarnCount: string;
+        jobNo: string;
+        styleNo: string;
+        styleRequirement: StyleInfo | null;
+    };
+    styleRequirementRow: { styleRequirement: StyleInfo } | null;
+}
+
+interface Line {
+    comp: CompositionRow;
+    dl: DeliveryRow;
+}
+
+// The result is cast to our own row types so the file never depends on Prisma's
+// generated payload types (adjust the interfaces above if your schema differs).
+const fetchCompositions = async (
+    compositionWhere: Record<string, unknown>,
+    deliveryWhere: Record<string, unknown>
+): Promise<CompositionRow[]> => {
+    const rows = await prisma.composition.findMany({
         where: compositionWhere,
         select: {
             id: true,
@@ -141,6 +185,7 @@ const fetchCompositions = (compositionWhere: any, deliveryWhere: any) =>
                     fromFactory: true,
                     toFactory: true,
                     deliveryDate: true,
+                    createdAt: true,
                     deliveryQty: true,
                 },
             },
@@ -149,6 +194,11 @@ const fetchCompositions = (compositionWhere: any, deliveryWhere: any) =>
                     lotNo: true,
                     machineDia: true,
                     yarnCount: true,
+                    jobNo: true,
+                    styleNo: true,
+                    styleRequirement: {
+                        select: { jobNo: true, buyerName: true, styleNo: true },
+                    },
                 },
             },
             styleRequirementRow: {
@@ -159,7 +209,9 @@ const fetchCompositions = (compositionWhere: any, deliveryWhere: any) =>
                 },
             },
         },
-    });
+    } as any);
+    return rows as unknown as CompositionRow[];
+};
 
 /* -------------------------------------------------------------------------- */
 /*  Download                                                                  */
@@ -167,10 +219,13 @@ const fetchCompositions = (compositionWhere: any, deliveryWhere: any) =>
 /*   1) GET /download?deliveryIds=1,2,3   -> stateless (recommended)          */
 /*   2) GET /download                     -> uses this user's queued entries  */
 /* -------------------------------------------------------------------------- */
-export const downloadChallan = async (req: Request, res: Response) => {
+export const downloadChallan = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = Number(req.user?.userId);
-        if (!userId) return res.status(401).json({ message: "Access Denied" });
+        if (!userId) {
+            res.status(401).json({ message: "Access Denied" });
+            return;
+        }
 
         const deliveryIds = String(req.query.deliveryIds ?? "")
             .split(",")
@@ -183,9 +238,8 @@ export const downloadChallan = async (req: Request, res: Response) => {
         const queued = useQueue ? yarnAndUserIds.filter((c) => c.userId === userId) : [];
 
         if (useQueue && queued.length === 0) {
-            return res
-                .status(404)
-                .json({ message: "No challans queued for download. Please generate the challan again." });
+            res.status(404).json({ message: "No challans queued for download. Please generate the challan again." });
+            return;
         }
 
         /* ---------- DATA FETCH (only this user's data) ---------- */
@@ -208,13 +262,6 @@ export const downloadChallan = async (req: Request, res: Response) => {
                   ),
               ];
 
-        type Composition = (typeof results)[number][number];
-        type Delivery = Composition["deliveries"][number];
-        interface Line {
-            comp: Composition;
-            dl: Delivery;
-        }
-
         /* ---------- ONE LINE PER DELIVERY (dedupe, drop empty compositions) ---------- */
         const seen = new Set<number>();
         const lines: Line[] = [];
@@ -234,10 +281,50 @@ export const downloadChallan = async (req: Request, res: Response) => {
                 }) || a.dl.id - b.dl.id
         );
 
+        /* ---------- JOB / BUYER / STYLE (with fallbacks) ----------
+           1) composition -> styleRequirementRow -> styleRequirement   (new data)
+           2) composition -> workOrder -> styleRequirement             (legacy data)
+           3) StyleRequirement looked up by workOrder.jobNo            (jobNo is unique)
+           4) workOrder.jobNo / workOrder.styleNo strings              (buyer stays empty) */
+        const jobNosToLookup = Array.from(
+            new Set(
+                lines
+                    .filter(
+                        (l) =>
+                            !l.comp.styleRequirementRow?.styleRequirement &&
+                            !l.comp.workOrder?.styleRequirement
+                    )
+                    .map((l) => l.comp.workOrder?.jobNo)
+                    .filter((j): j is string => Boolean(j && clean(j)))
+            )
+        );
+
+        const styleByJobNo = new Map<string, StyleInfo>();
+        if (jobNosToLookup.length > 0) {
+            const found = await prisma.styleRequirement.findMany({
+                where: { jobNo: { in: jobNosToLookup } },
+                select: { jobNo: true, buyerName: true, styleNo: true },
+            });
+            found.forEach((sr: StyleInfo) => styleByJobNo.set(sr.jobNo, sr));
+        }
+
+        const resolveStyle = ({ comp }: Line) => {
+            const wo = comp.workOrder;
+            const sr =
+                comp.styleRequirementRow?.styleRequirement ??
+                wo?.styleRequirement ??
+                (wo?.jobNo ? styleByJobNo.get(wo.jobNo) : undefined);
+            return {
+                jobNo: clean(sr?.jobNo) || clean(wo?.jobNo),
+                buyerName: clean(sr?.buyerName),
+                styleNo: clean(sr?.styleNo) || clean(wo?.styleNo),
+            };
+        };
+
         /* ---------- GROUP BY (challanNo + from + to + jobNo) ---------- */
         const groupMap = new Map<string, Line[]>();
         for (const line of lines) {
-            const jobNo = line.comp.styleRequirementRow?.styleRequirement?.jobNo ?? "NA";
+            const jobNo = resolveStyle(line).jobNo || "NA";
             const key = [line.dl.challanNo, line.dl.fromFactory, line.dl.toFactory, jobNo].join("__");
             const bucket = groupMap.get(key);
             if (bucket) bucket.push(line);
@@ -247,7 +334,8 @@ export const downloadChallan = async (req: Request, res: Response) => {
 
         // nothing to print -> never send a blank PDF
         if (groups.length === 0) {
-            return res.status(404).json({ message: "No deliveries found to generate challan." });
+            res.status(404).json({ message: "No deliveries found to generate challan." });
+            return;
         }
 
         /* ---------- BUILD TABLE ROWS PER GROUP ---------- */
@@ -295,6 +383,7 @@ export const downloadChallan = async (req: Request, res: Response) => {
         const W = R - L;
 
         const COL_W: number[] = [45, 265, 70, 85, 50];
+        const colWidth = (i: number): number => COL_W[i] ?? 0;
         const TABLE_TOP = 195;
         const HEAD_H = 22;
         const ROW_H = 20;
@@ -313,22 +402,15 @@ export const downloadChallan = async (req: Request, res: Response) => {
             doc.fillColor("#000").text(value || "", x + lw + 6, y, { width: w - lw - 8 });
         };
 
-        // Gate-out time = moment of printing (deliveryDate is date-only, so it always showed 12:00 AM).
-        // If your Delivery model has a createdAt column, select it above and use it here instead.
-        const printedAt = new Date();
-
         let pageCount = 0;
 
         /* ---------- ONE PAGE PER GROUP ---------- */
         groups.forEach((group) => {
-            if (!group || group.length === 0) return;
-
             const allRows = buildRows(group);
             const first = group[0];
             if (!first) return;
-
             const dl0 = first.dl;
-            const style = first.comp.styleRequirementRow?.styleRequirement;
+            const style = resolveStyle(first);
 
             // Split rows into pages if a group has more rows than fit
             const chunks: (typeof allRows)[] = [];
@@ -370,14 +452,14 @@ export const downloadChallan = async (req: Request, res: Response) => {
                 field("Sl. No.", String(dl0.challanNo ?? "-"), leftX, fy, colW);
                 field("Gate Pass No:", String(dl0.challanNo ?? "-"), rightX, fy, colW);
                 fy += 16;
-                field("Name", dl0.toFactory ?? "-", leftX, fy, colW);
+                field("Name", String(dl0.toFactory ?? "-"), leftX, fy, colW);
                 field("Date :", fmtDate(dl0.deliveryDate), rightX, fy, colW);
                 fy += 16;
-                field("Address", dl0.fromFactory ?? "", leftX, fy, colW);
-                field("Order No", style?.jobNo ?? "-", rightX, fy, colW);
+                field("Address", String(dl0.fromFactory ?? ""), leftX, fy, colW);
+                field("Order No", style.jobNo || "-", rightX, fy, colW);
                 fy += 16;
-                field("Buyer", style?.buyerName ?? "-", leftX, fy, colW);
-                field("Style No", style?.styleNo ?? "-", rightX, fy, colW);
+                field("Buyer", style.buyerName || "-", leftX, fy, colW);
+                field("Style No", style.styleNo || "-", rightX, fy, colW);
 
                 /* ---------- TABLE GRID ---------- */
                 doc.strokeColor("#000").lineWidth(0.7);
@@ -398,9 +480,8 @@ export const downloadChallan = async (req: Request, res: Response) => {
                 doc.font("Helvetica-Bold").fontSize(9).fillColor("#000");
                 let hx = L;
                 ["Sl. No.", "Description of Goods", "Unit", "Quantity", "Remarks"].forEach((h, i) => {
-                    const colWidth = COL_W[i] ?? 0;
-                    doc.text(h, hx + 3, TABLE_TOP + 7, { width: colWidth - 6, align: "center" });
-                    hx += colWidth;
+                    doc.text(h, hx + 3, TABLE_TOP + 7, { width: colWidth(i) - 6, align: "center" });
+                    hx += colWidth(i);
                 });
 
                 // Table rows
@@ -410,23 +491,18 @@ export const downloadChallan = async (req: Request, res: Response) => {
                     const ry = TABLE_TOP + HEAD_H + i * ROW_H;
                     let cx = L;
                     [String(slOffset + i + 1), row.desc, row.unit, `${fmtQty(row.qty)} lb`, ""].forEach((txt, ci) => {
-                        const cellW = COL_W[ci] ?? 0;
                         // fixed height + ellipsis so long descriptions never overlap the next row
-                        doc.text(txt, cx + 4, ry + 5, { width: cellW - 8, height: ROW_H - 6, ellipsis: true });
-                        cx += cellW;
+                        doc.text(txt, cx + 4, ry + 5, { width: colWidth(ci) - 8, height: ROW_H - 6, ellipsis: true });
+                        cx += colWidth(ci);
                     });
                 });
 
                 // Totals under bottom border (grand total of the whole challan)
-                const col0 = COL_W[0] ?? 0;
-                const col1 = COL_W[1] ?? 0;
-                const col2 = COL_W[2] ?? 0;
-                const col3 = COL_W[3] ?? 0;
-                const unitX = L + col0 + col1;
-                const qtyX = unitX + col2;
+                const unitX = L + colWidth(0) + colWidth(1);
+                const qtyX = unitX + colWidth(2);
                 doc.font("Helvetica-Bold").fontSize(9.5);
-                doc.text(`${allRows.length} CHT`, unitX + 4, TABLE_BOT + 4, { width: col2 - 8 });
-                doc.text(`${fmtQty(totalQty)} lb`, qtyX + 4, TABLE_BOT + 4, { width: col3 - 8 });
+                doc.text(`${allRows.length} CHT`, unitX + 4, TABLE_BOT + 4, { width: colWidth(2) - 8 });
+                doc.text(`${fmtQty(totalQty)} lb`, qtyX + 4, TABLE_BOT + 4, { width: colWidth(3) - 8 });
 
                 /* ---------- GATE OUT STAMP ---------- */
                 const sx = L + 55, sy = TABLE_BOT - 165, sw = 150, sh = 78;
@@ -436,7 +512,7 @@ export const downloadChallan = async (req: Request, res: Response) => {
                 doc.fontSize(6.5).text("SM SOURCING (YARN STORE)", sx, sy + 20, { width: sw, align: "center" });
                 doc.font("Helvetica").fontSize(8.5);
                 doc.text(`Date: ${fmtDate(dl0.deliveryDate)}`, sx + 12, sy + 32);
-                doc.text(`Time: ${fmtTime(printedAt)}`, sx + 12, sy + 45);
+                doc.text(`Time: ${fmtTime(dl0.createdAt)}`, sx + 12, sy + 45);
 
                 /* ---------- FOOTER + SIGNATURES ---------- */
                 doc.fillColor("#000").font("Helvetica").fontSize(8.5)
