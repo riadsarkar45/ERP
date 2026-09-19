@@ -62,7 +62,7 @@ const KnittingOrder = ({
         position: "sticky",
         bottom: 0,
         zIndex: 12,
-        backgroundColor: "#e5e7eb",
+        backgroundColor: "#657582",
         fontWeight: 700,
         padding: "8px 12px",
         textAlign: "center",
@@ -83,7 +83,7 @@ const KnittingOrder = ({
                 left: `${currentFrozenLefts[index]}px`,
                 // must sit above the non-frozen footer cells (12)
                 zIndex: 20,
-                backgroundColor: "#e5e7eb",
+                backgroundColor: "#657582",
                 width: `${currentFrozenWidths[index]}px`,
                 minWidth: `${currentFrozenWidths[index]}px`,
                 maxWidth: `${currentFrozenWidths[index]}px`,
@@ -537,84 +537,84 @@ const KnittingOrder = ({
                     {Array.from({ length: FROZEN_COUNT }).map((_, i) => (
                         <td key={`footer-frozen-${i}`} style={getFooterCellStyle(i)}>
                             {i === 0 ? (
-                                <div style={{ textAlign: "center", fontSize: "14px", fontWeight: 700 }}>TOTAL</div>
+                                <div className= {`${cellPad} text-white`} style={{ textAlign: "center", fontSize: "14px", fontWeight: 700 }}>TOTAL</div>
                             ) : null}
                         </td>
                     ))}
 
                     {/* COL 8 — FINISH DIA (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* COL 9 — YARN COUNT (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 1)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* COL 10 — YARN LOT (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 2)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* COL 11 — STITCH LENGTH (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 3)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* COL 12 — MACHINE DIA (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 4)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* COL 13 — WORK ORDER QTY total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 5)}>
-                        <div className={cellPad}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div>
+                        <div className= {`${cellPad} text-white`}>{formatNumber(totals.workOrderQty?.toFixed(2))}</div>
                     </td>
 
                     {/* COL 14 — TOTAL YARN DELIVERY total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 6)}>
-                        <div className={cellPad}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div>
+                        <div className= {`${cellPad} text-white`}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div>
                     </td>
 
                     {/* COL 15 — DEL SHORT & EXCESS total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
-                        <div className={cellPad}>{renderSigned(totals.delShortExcess?.toFixed(2))}</div>
+                        <div className= {`${cellPad} text-white`}>{(totals.delShortExcess?.toFixed(2))}</div>
                     </td>
 
                     {/* COL 16 — YARN RETURN total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 8)}>
-                        <div className={`${cellPad} text-red-600`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div>
+                        <div className={`${cellPad} text-white`}>{formatNumber(totals.yarnReturn?.toFixed(2))}</div>
                     </td>
 
                     {/* COL 17 — GREY RECEIVED total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 9)}>
-                        <div className={cellPad}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div>
+                        <div className= {`${cellPad} text-white`}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div>
                     </td>
 
                     {/* COL 18 — RCVD SHORT & EXCESS total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 10)}>
-                        <div className={cellPad}>{renderSigned(-totals.rcvdShortExcess?.toFixed(2))}</div>
+                        <div className= {`${cellPad} text-white`}>{(-totals.rcvdShortExcess?.toFixed(2))}</div>
                     </td>
 
                     {/* COL 19 — UNIT PRICE (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 11)}>
-                        <div className={cellPad}></div>
+                        <div className= {`${cellPad} text-white`}></div>
                     </td>
 
                     {/* COL 20 — PAYABLE AMOUNT total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 12)}>
-                        <div className={`${cellPad} text-red-600`}>{formatNumber(totals.payableAmount.toFixed(2))}</div>
+                        <div className={`${cellPad} text-white`}>{formatNumber(totals.payableAmount.toFixed(2))}</div>
                     </td>
 
                     {/* COL 21 — PAID BILLING AMOUNT (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 13)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
 
                     {/* COL 22 — PENDING BILLING AMOUNT (blank) */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 14)}>
-                        <div className={cellPad}>-</div>
+                        <div className= {`${cellPad} text-white`}>-</div>
                     </td>
                 </tr>
             </tfoot>

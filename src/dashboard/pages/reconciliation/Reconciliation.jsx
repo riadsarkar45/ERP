@@ -138,7 +138,7 @@ const SHORT_EXCESS_FIXED_COLS = new Set([11, 14, 20, 26]);
 const PERCENT_FIXED_COLS_1DP = new Set([19, 25]);
 
 // Filter dropdown width (original was w-72 = 18rem = 288px)
-const FILTER_DROPDOWN_WIDTH = 288;
+const FILTER_DROPDOWN_WIDTH = 220;
 
 const Reconciliation = () => {
     const axiosPrivate = useAxiosPrivate();
@@ -176,10 +176,10 @@ const Reconciliation = () => {
 
     const WRAPPED_COL_WIDTH = 120;
     const wrapClass = "whitespace-normal break-words";
-    const cellClass = `px-3 py-2.5 text-sm text-slate-800 border-b border-[#f7d494] text-center align-middle ${wrapClass}`;
+    const cellClass = `px-3 py-2.5 text-sm text-slate-800 border-b border-[#47637a] text-center align-middle ${wrapClass}`;
 
     const cellStyle = {
-        borderRight: "1px solid #f7d494",
+        borderRight: "1px solid #47637a",
         width: WRAPPED_COL_WIDTH,
         maxWidth: WRAPPED_COL_WIDTH,
         wordBreak: "break-word",
@@ -191,7 +191,7 @@ const Reconciliation = () => {
         minWidth: STICKY_COL_WIDTHS[colIdx],
         maxWidth: STICKY_COL_WIDTHS[colIdx],
         backgroundColor: bg,
-        borderRight: hasRightBorder ? "2px solid #f7d494" : "1px solid #f7d494",
+        borderRight: hasRightBorder ? "2px solid #47637a" : "1px solid #47637a",
         zIndex: 30,
     });
 
@@ -567,7 +567,7 @@ const Reconciliation = () => {
     };
 
     const selectedCellClass = (rowIndex, colIndex) =>
-        isCellSelected(rowIndex, colIndex) ? "outline outline-2 outline-offset-[-2px] outline-[#f7d494]" : "";
+        isCellSelected(rowIndex, colIndex) ? "outline outline-2 outline-offset-[-2px] outline-[#47637a]" : "";
 
     const handleCellClick = (e, rowIndex, colIndex) => {
         setSelectedCell({ rowIndex, colIndex });
@@ -1310,7 +1310,7 @@ const Reconciliation = () => {
         return createPortal(
             <div
                 ref={filterDropdownRef}
-                className="bg-white rounded-md border-2 border-[#f7d494] shadow-2xl overflow-hidden text-left normal-case font-sans text-sm flex flex-col"
+                className="bg-white rounded-md border-2 border-[#47637a] shadow-2xl overflow-hidden text-left normal-case font-sans text-sm flex flex-col"
                 style={{
                     position: 'fixed',
                     top: dropdownPos.top,
@@ -1320,7 +1320,7 @@ const Reconciliation = () => {
                     maxHeight: availableHeight,
                 }}
             >
-                <div className="p-2 border-b border-[#f7d494]">
+                <div className="p-2 border-b border-[#47637a]">
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
                         <input
@@ -1328,18 +1328,18 @@ const Reconciliation = () => {
                             placeholder="Search"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full text-sm border border-[#f7d494] rounded pl-8 pr-3 py-1.5 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200"
+                            className="w-full text-sm border border-[#47637a] rounded pl-8 pr-3 py-1.5 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200"
                             autoFocus
                         />
                     </div>
                 </div>
-                <div className="px-3 py-2 border-b border-[#f7d494] bg-gray-50">
+                <div className="px-3 py-2 border-b border-[#47637a] bg-gray-50">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
                             type="checkbox"
                             checked={allChecked}
                             onChange={toggleAll}
-                            className="h-4 w-4 rounded border-[#f7d494] text-blue-600 focus:ring-blue-600 cursor-pointer"
+                            className="h-4 w-4 rounded border-[#47637a] text-blue-600 focus:ring-blue-600 cursor-pointer"
                         />
                         <span className="text-sm text-gray-700 font-medium">(Select All)</span>
                     </label>
@@ -1354,7 +1354,7 @@ const Reconciliation = () => {
                                     type="checkbox"
                                     checked={tempSelected.has(val)}
                                     onChange={() => toggleValue(val)}
-                                    className="h-4 w-4 rounded border-[#f7d494] text-blue-600 focus:ring-blue-600 cursor-pointer"
+                                    className="h-4 w-4 rounded border-[#47637a] text-blue-600 focus:ring-blue-600 cursor-pointer"
                                 />
                                 <span className="text-sm text-gray-800 truncate">
                                     {normalizeFilterVal(val) === "" ? "(Blanks)" : val}
@@ -1363,18 +1363,18 @@ const Reconciliation = () => {
                         ))
                     )}
                 </div>
-                <div className="flex items-center justify-end gap-2 p-2 border-t border-[#f7d494] bg-gray-50">
+                <div className="flex items-center justify-end gap-2 p-2 border-t border-[#47637a] bg-gray-50">
                     <button
                         type="button"
                         onClick={() => setOpenFilterCol(null)}
-                        className="px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-[#f7d494] rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-1 transition-colors"
+                        className="px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-[#47637a] rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-1 transition-colors"
                     >
                        Clear
                     </button>
                     <button
                         type="button"
                         onClick={applyFilter}
-                        className="px-4 py-1.5 text-sm font-bold text-white bg-blue-700 border border-[#f7d494] rounded hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-1 transition-colors"
+                        className="px-4 py-1.5 text-sm font-bold text-white bg-blue-700 border border-[#47637a] rounded hover:bg-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-1 transition-colors"
                     >
                         Apply
                     </button>
@@ -1389,12 +1389,12 @@ const Reconciliation = () => {
         <div className="min-h-screen w-full p-1 md:p-4 font-sans bg-stone-50">
             <div className="mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-3 flex-wrap">
-                    <button onClick={fetchFilteredData} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 text-white border border-[#f7d494] rounded-lg shadow-sm text-sm font-medium hover:bg-blue-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button onClick={fetchFilteredData} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 bg-[#47637a] text-white border border-[#47637a] rounded-lg shadow-sm text-sm font-medium hover:bg-blue-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <RefreshCcw size={16} className={isLoading ? "animate-spin" : ""} />
                         Refresh Data
                     </button>
                     <Link to={"/dashboard/balance-sheet"}>
-                        <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-900 text-white border border-[#f7d494] rounded-lg shadow-sm text-sm font-medium hover:bg-blue-950 transition-colors disabled:opacity-50">
+                        <button className="inline-flex items-center gap-2 px-4 py-2 bg-[#47637a] text-white border border-[#47637a] rounded-lg shadow-sm text-sm font-medium hover:bg-blue-950 transition-colors disabled:opacity-50">
                             Balance Sheet
                         </button>
                     </Link>
@@ -1403,7 +1403,7 @@ const Reconciliation = () => {
                         type="button"
                         onClick={(e) => { e.stopPropagation(); exportExcel(); }}
                         disabled={isExporting || processedReportData.length === 0}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-[#f7d494] rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#47637a] text-white border border-[#47637a] rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExporting ? (
                             <>
@@ -1422,7 +1422,7 @@ const Reconciliation = () => {
                         <button
                             type="button"
                             onClick={() => setMonthFilterOpen(o => !o)}
-                            className={`inline-flex items-center gap-2 px-4 py-2 border border-[#f7d494] rounded-lg shadow-sm text-sm font-medium transition-colors ${monthFilter !== "ALL" ? "bg-blue-50 text-blue-900" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                            className={`inline-flex items-center gap-2 px-4 py-2 border border-[#47637a] rounded-lg shadow-sm text-sm font-medium transition-colors ${monthFilter !== "ALL" ? "bg-blue-50 text-blue-900" : "bg-white text-slate-700 hover:bg-slate-50"}`}
                         >
                             <ListFilter size={16} />
                             {monthFilter === "ALL" ? "All Months" : formatMonthLabel(monthFilter)}
@@ -1456,7 +1456,7 @@ const Reconciliation = () => {
                     </div>
 
                     {selectedJobs.size > 0 && (
-                        <button onClick={handleGlobalSubmit} disabled={savingJob} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-[#f7d494] rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={handleGlobalSubmit} disabled={savingJob} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white border border-[#47637a] rounded-lg shadow-sm text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <CloudCog size={16} />
                             Submit Reconciliation ({selectedJobs.size})
                         </button>
@@ -1468,7 +1468,7 @@ const Reconciliation = () => {
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider mr-2">Active Filters:</span>
                     {monthFilter !== "ALL" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-900 rounded-full text-xs font-medium border border-[#f7d494]">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-900 rounded-full text-xs font-medium border border-[#47637a]">
                             MONTH: <span className="font-bold">{formatMonthLabel(monthFilter)}</span>
                             <button onClick={() => setMonthFilter("ALL")} className="ml-1 hover:text-blue-950 transition-colors">
                                 <X size={14} />
@@ -1478,7 +1478,7 @@ const Reconciliation = () => {
                     {activeFilterEntries.map(([key, values]) => {
                         const colDef = Object.values(FILTERABLE_COLS).find(c => c.key === key);
                         return (
-                            <span key={key} className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-900 rounded-full text-xs font-medium border border-[#f7d494]">
+                            <span key={key} className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-900 rounded-full text-xs font-medium border border-[#47637a]">
                                 {colDef?.label}: <span className="font-bold">{values.length}</span>
                                 <button onClick={() => setActiveFilters(prev => { const next = { ...prev }; delete next[key]; return next; })} className="ml-1 hover:text-blue-950 transition-colors">
                                     <X size={14} />
@@ -1492,7 +1492,7 @@ const Reconciliation = () => {
                 </div>
             )}
 
-            <div className="w-full bg-white rounded-xl border-2 border-[#f7d494] shadow-sm overflow-hidden">
+            <div className="w-full bg-white rounded-xl border-2 border-[#47637a] shadow-sm overflow-hidden">
                 <div
                     className="w-full overflow-auto max-h-[calc(100vh-190px)] focus:outline-none"
                     ref={wrapperRef}
@@ -1515,11 +1515,11 @@ const Reconciliation = () => {
                                         <th
                                             key={I}
                                             className={[
-                                                "px-3 py-3 text-center align-middle text-xs font-bold uppercase tracking-wider text-slate-800 border-b-2 border-[#f7d494] bg-[#f5df98]",
+                                                "px-3 py-3 text-center align-middle text-xs font-bold uppercase tracking-wider text-white border-b-2 border-[#d6d5d3] bg-[#6b7280]",
                                                 isSticky ? "sticky z-30 whitespace-normal" : wrapClass,
                                                 isLastSticky ? "shadow-sm" : "",
                                             ].join(" ")}
-                                            style={isSticky ? stickyCellStyle(I, "#f5df98", hasRightBorder) : { ...cellStyle, backgroundColor: "#f5df98" }}
+                                            style={isSticky ? stickyCellStyle(I, "#6b7280", hasRightBorder) : { ...cellStyle, backgroundColor: "#6b7280" }}
                                         >
                                             <div className="relative flex items-center justify-center gap-1">
                                                 {I === 0 ? (
@@ -1527,7 +1527,7 @@ const Reconciliation = () => {
                                                         type="checkbox"
                                                         checked={allSelected}
                                                         onChange={toggleAllSelection}
-                                                        className="h-4 w-4 rounded border-[#f7d494] text-blue-900 focus:ring-blue-600"
+                                                        className="h-4 w-4 rounded border-[#47637a] text-blue-900 focus:ring-blue-600"
                                                     />
                                                 ) : (
                                                     <span>{header}</span>
@@ -1539,7 +1539,7 @@ const Reconciliation = () => {
                                                         type="button"
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                         onClick={() => openFilterDropdown(I)}
-                                                        className={`p-1 rounded transition-colors hover:bg-blue-200/50 ${openFilterCol === I ? "text-blue-950" : hasActiveFilter ? "text-blue-950" : "text-blue-900"}`}
+                                                        className={`p-1 rounded transition-colors hover:bg-blue-200/50 ${openFilterCol === I ? "text-blue-950" : hasActiveFilter ? "text-blue-950" : "text-white"}`}
                                                     >
                                                         <Filter size={14} strokeWidth={2.5} />
                                                     </button>
@@ -1556,7 +1556,7 @@ const Reconciliation = () => {
                         </thead>
                         <tbody>
                             {isLoading && (
-                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle border-b border-[#f7d494]">
+                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle border-b border-[#47637a]">
                                     <div className="flex flex-col items-center justify-center gap-3">
                                         <RefreshCcw size={24} className="animate-spin text-blue-600" />
                                         <span className="text-sm font-medium text-slate-500">Loading reconciliation data...</span>
@@ -1565,7 +1565,7 @@ const Reconciliation = () => {
                             )}
 
                             {!isLoading && processedReportData.length === 0 && (
-                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle text-sm text-slate-500 border-b border-[#f7d494]">No records match your current filters.</td></tr>
+                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle text-sm text-slate-500 border-b border-[#47637a]">No records match your current filters.</td></tr>
                             )}
 
                             {!isLoading && processedReportData.map((job) => {
@@ -1605,7 +1605,7 @@ const Reconciliation = () => {
                                     const aopShortExcess = aopSent - aopReceived;
 
                                     const stickyBodyClass = (colIdx) => [
-                                        "sticky z-10 px-3 py-2.5 text-sm text-slate-800 border-b border-[#f7d494] text-center align-middle",
+                                        "sticky z-10 px-3 py-2.5 text-sm text-slate-800 border-b border-[#47637a] text-center align-middle",
                                         colIdx === LAST_STICKY_INDEX ? "shadow-r-md" : "",
                                     ].join(" ");
 
@@ -1617,7 +1617,7 @@ const Reconciliation = () => {
                                             {isFirstRow && (
                                                 <td
                                                     rowSpan={subRowCount}
-                                                    className={`sticky left-0 z-10 px-3 py-3 border-b border-[#f7d494] text-center align-middle ${selectedCellClass(rowFlatIndex, 0)}`}
+                                                    className={`sticky left-0 z-10 px-3 py-3 border-b border-[#47637a] text-center align-middle ${selectedCellClass(rowFlatIndex, 0)}`}
                                                     style={stickyCellStyle(0, stickyBg, false)}
                                                     {...cellProps(rowFlatIndex, 0)}
                                                 >
@@ -1625,7 +1625,7 @@ const Reconciliation = () => {
                                                         type="checkbox"
                                                         checked={selectedJobs.has(jobNo)}
                                                         onChange={() => toggleJobSelection(jobNo)}
-                                                        className="h-4 w-4 rounded border-[#f7d494] text-blue-600 focus:ring-blue-600 cursor-pointer"
+                                                        className="h-4 w-4 rounded border-[#47637a] text-blue-600 focus:ring-blue-600 cursor-pointer"
                                                     />
                                                 </td>
                                             )}
@@ -1633,7 +1633,7 @@ const Reconciliation = () => {
                                             {isFirstRow && (
                                                 <td
                                                     rowSpan={subRowCount}
-                                                    className={`sticky z-10 px-3 py-3 border-b border-[#f7d494] text-center align-middle ${selectedCellClass(rowFlatIndex, 1)}`}
+                                                    className={`sticky z-10 px-3 py-3 border-b border-[#47637a] text-center align-middle ${selectedCellClass(rowFlatIndex, 1)}`}
                                                     style={stickyCellStyle(1, stickyBg, false)}
                                                     {...cellProps(rowFlatIndex, 1)}
                                                 >
@@ -1641,7 +1641,7 @@ const Reconciliation = () => {
                                                         {isEditingThisJob ? (
                                                             <input
                                                                 type="date"
-                                                                className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-[#f7d494] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                                                className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                                                 disabled={savingJob}
                                                                 value={editValues[`${jobNo}-dateOfReconciliation`] ?? ""}
                                                                 onChange={(e) => handleJobFieldChange(jobNo, "dateOfReconciliation", e.target.value)}
@@ -1658,7 +1658,7 @@ const Reconciliation = () => {
                                             {isFirstRow && (
                                                 <td
                                                     rowSpan={subRowCount}
-                                                    className={`sticky z-10 px-3 py-3 border-b border-[#f7d494] text-center align-middle ${selectedCellClass(rowFlatIndex, 2)}`}
+                                                    className={`sticky z-10 px-3 py-3 border-b border-[#47637a] text-center align-middle ${selectedCellClass(rowFlatIndex, 2)}`}
                                                     style={stickyCellStyle(2, stickyBg, false)}
                                                     {...cellProps(rowFlatIndex, 2)}
                                                 >
@@ -1673,7 +1673,7 @@ const Reconciliation = () => {
                                             {isFirstRow && (
                                                 <td
                                                     rowSpan={subRowCount}
-                                                    className={`sticky z-10 px-3 py-3 border-b border-[#f7d494] text-center align-middle ${isEditingThisJob ? "border-l-4 border-l-blue-900" : ""} ${selectedCellClass(rowFlatIndex, 3)}`}
+                                                    className={`sticky z-10 px-3 py-3 border-b border-[#47637a] text-center align-middle ${isEditingThisJob ? "border-l-4 border-l-blue-900" : ""} ${selectedCellClass(rowFlatIndex, 3)}`}
                                                     style={stickyCellStyle(3, stickyBg, true)}
                                                     {...cellProps(rowFlatIndex, 3)}
                                                 >
@@ -1681,15 +1681,15 @@ const Reconciliation = () => {
                                                         <span className="text-sm font-bold text-slate-900">{jobNo || "-"}</span>
                                                         {isEditingThisJob ? (
                                                             <div className="flex flex-col gap-2 w-full">
-                                                                <button type="button" onClick={() => handleIndividualSave(jobNo, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 border border-[#f7d494] rounded-md hover:bg-blue-950 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1">
+                                                                <button type="button" onClick={() => handleIndividualSave(jobNo, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-semibold text-white bg-blue-900 border border-[#47637a] rounded-md hover:bg-blue-950 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1">
                                                                     {savingJob ? <RefreshCcw size={12} className="animate-spin" /> : <><Save size={12} /> Save</>}
                                                                 </button>
-                                                                <button type="button" onClick={() => handleCancelEdit(jobNo, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-[#f7d494] rounded-md hover:bg-slate-100 disabled:opacity-50 flex items-center justify-center gap-1">
+                                                                <button type="button" onClick={() => handleCancelEdit(jobNo, job)} disabled={savingJob} className="w-full px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-[#47637a] rounded-md hover:bg-slate-100 disabled:opacity-50 flex items-center justify-center gap-1">
                                                                     <XCircle size={12} /> Cancel
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            <button type="button" onClick={() => handleStartEdit(jobNo, job)} disabled={editingJobNo !== null} className="px-3 py-1.5 text-xs font-medium text-blue-900 bg-blue-50 border border-[#f7d494] rounded-md hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1">
+                                                            <button type="button" onClick={() => handleStartEdit(jobNo, job)} disabled={editingJobNo !== null} className="px-3 py-1.5 text-xs font-medium text-blue-900 bg-blue-50 border border-[#47637a] rounded-md hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1">
                                                                 <Edit3 size={12} /> Edit
                                                             </button>
                                                         )}
@@ -1715,7 +1715,7 @@ const Reconciliation = () => {
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
                                                         <input
-                                                            className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-[#f7d494] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                                            className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                                             type="text"
                                                             placeholder="Unit"
                                                             disabled={savingJob}
@@ -1820,7 +1820,7 @@ const Reconciliation = () => {
                                                         return (
                                                             <td key={`trail-${idx}`} className={`${cellClass} ${selectedCellClass(rowFlatIndex, colIndex)}`} style={cellStyle} {...cellProps(rowFlatIndex, colIndex)}>
                                                                 <input
-                                                                    className="w-full px-2 py-1.5 text-sm text-slate-900 bg-amber-100 border-2 border-[#f7d494] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-left"
+                                                                    className="w-full px-2 py-1.5 text-sm text-slate-900 bg-amber-100 border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed text-left"
                                                                     type="text"
                                                                     placeholder="Enter remarks"
                                                                     disabled={savingJob}
@@ -1833,7 +1833,7 @@ const Reconciliation = () => {
                                                     return (
                                                         <td key={`trail-${idx}`} className={`${cellClass} ${selectedCellClass(rowFlatIndex, colIndex)}`} style={cellStyle} {...cellProps(rowFlatIndex, colIndex)}>
                                                             <input
-                                                                className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-[#f7d494] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                className="w-full px-2 py-1.5 text-sm text-center font-semibold text-slate-900 bg-amber-100 border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 type="number"
                                                                 step="1"
                                                                 placeholder="0"
@@ -1862,88 +1862,88 @@ const Reconciliation = () => {
 
                         {!isLoading && processedReportData.length > 0 && (
                             /* FIX: tfoot z-index raised from z-20 to z-50 for the same reason as thead */
-                            <tfoot className="sticky bottom-0 z-50 bg-[#f5df98]">
+                            <tfoot className="sticky bottom-0 z-50 bg-[#6b7280]">
                                 <tr>
-                                    <td className="sticky bottom-0 left-0 z-30 px-3 py-3 border-t-2 border-[#f7d494] text-center align-middle" style={stickyCellStyle(0, "#f5df98", false)} />
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494] text-center align-middle" style={stickyCellStyle(1, "#f5df98", false)} />
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494] text-center align-middle" style={stickyCellStyle(2, "#f5df98", false)} />
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494] text-center align-middle text-xs font-extrabold uppercase tracking-wider text-slate-800" style={stickyCellStyle(3, "#f5df98", true)}>
+                                    <td className="sticky bottom-0 left-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle" style={stickyCellStyle(0, "#6b7280", false)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle" style={stickyCellStyle(1, "#6b7280", false)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle" style={stickyCellStyle(2, "#6b7280", false)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle text-xs font-extrabold uppercase tracking-wider text-white" style={stickyCellStyle(3, "#6b7280", true)}>
                                         Total
                                     </td>
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494]" style={stickyCellStyle(4, "#f5df98")} />
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494]" style={stickyCellStyle(5, "#f5df98")} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(4, "#6b7280")} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(5, "#6b7280")} />
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...stickyCellStyle(6, "#f5df98", false), borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(6, "#6b7280", false), borderTop: "2px solid #47637a" }}>
                                         {footerTotals.orderQty.toFixed(2)}
                                     </td>
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#f7d494]" style={stickyCellStyle(7, "#f5df98", true)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(7, "#6b7280", true)} />
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.finishRequiredQty.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.yarnRequiredQty.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.knitYarnDelivery.toFixed(2)}
                                     </td>
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.yarnShortExcessReq} /></div>
                                     </td>
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.knitYarnReturn.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.knitGreyReceived.toFixed(2)}
                                     </td>
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.knitShortExcess} /></div>
                                     </td>
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.dyeGreyDelivery.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.dyeGreyReturn.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.dyeGreyReceived.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.dyeFinishReceived.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }} />
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }} />
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.dyeShortExcess} /></div>
                                     </td>
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.aopSent.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.aopReceived.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.aopGreyReceived.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.aopFinishReceived.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }} />
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }} />
 
-                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                    <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         <div className="flex items-center justify-center h-full"><ShortExcess value={footerTotals.aopShortExcess} /></div>
                                     </td>
 
                                     {TRAILING_FIELDS.map((field) => {
                                         if (field.key === "remarks") {
                                             return (
-                                                <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-left pl-4 align-middle font-medium text-slate-700" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                                <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-left pl-4 align-middle font-medium text-slate-700" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                                     -
                                                 </td>
                                             );
@@ -1954,13 +1954,13 @@ const Reconciliation = () => {
 
                                         if (isShortExcess) {
                                             return (
-                                                <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                                <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                                     <div className="flex items-center justify-center h-full"><ShortExcess value={val} /></div>
                                                 </td>
                                             );
                                         }
                                         return (
-                                            <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#f7d494] text-center align-middle font-mono font-bold text-slate-900" style={{ ...cellStyle, backgroundColor: "#f5df98", borderTop: "2px solid #f7d494" }}>
+                                            <td key={`foot-${field.key}`} className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                                 {isPercent ? `${val.toFixed(1)}%` : val.toFixed(2)}
                                             </td>
                                         );
@@ -1977,8 +1977,8 @@ const Reconciliation = () => {
 
             {showNotesModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="w-full max-w-lg bg-white rounded-xl border-2 border-[#f7d494] shadow-2xl overflow-hidden">
-                        <div className="flex items-center justify-between px-5 py-3 border-b-2 border-[#f7d494] bg-[#f5df98]">
+                    <div className="w-full max-w-lg bg-white rounded-xl border-2 border-[#47637a] shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-5 py-3 border-b-2 border-[#47637a] bg-[#6b7280]">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
                                 Reconciliation Notes — <span className="text-blue-950">{pendingSaveJobs.length} Job(s)</span>
                             </h3>
@@ -1996,7 +1996,7 @@ const Reconciliation = () => {
                                 Add notes for this reconciliation (optional)
                             </label>
                             <textarea
-                                className="w-full h-40 px-3 py-2.5 text-sm text-slate-900 bg-white border-2 border-[#f7d494] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none disabled:bg-slate-100 disabled:text-slate-400"
+                                className="w-full h-40 px-3 py-2.5 text-sm text-slate-900 bg-white border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none disabled:bg-slate-100 disabled:text-slate-400"
                                 placeholder="e.g. Adjustments made due to..., Reconciled with supervisor..."
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
@@ -2007,12 +2007,12 @@ const Reconciliation = () => {
                                 {notes.length} characters
                             </p>
                         </div>
-                        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t-2 border-[#f7d494] bg-[#f5df98]">
+                        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t-2 border-[#47637a] bg-[#6b7280]">
                             <button
                                 type="button"
                                 onClick={cancelNotesModal}
                                 disabled={savingJob}
-                                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border-2 border-[#f7d494] rounded-md hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border-2 border-[#47637a] rounded-md hover:bg-slate-100 disabled:opacity-50 transition-colors"
                             >
                                 Cancel
                             </button>
@@ -2020,7 +2020,7 @@ const Reconciliation = () => {
                                 type="button"
                                 onClick={confirmSaveWithNotes}
                                 disabled={savingJob}
-                                className="px-5 py-2 text-sm font-semibold text-white bg-blue-900 border-2 border-[#f7d494] rounded-md hover:bg-blue-950 shadow-sm disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+                                className="px-5 py-2 text-sm font-semibold text-white bg-blue-900 border-2 border-[#47637a] rounded-md hover:bg-blue-950 shadow-sm disabled:opacity-50 transition-colors inline-flex items-center gap-2"
                             >
                                 {savingJob ? (
                                     <><RefreshCcw size={14} className="animate-spin" /> Saving...</>
