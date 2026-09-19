@@ -6,8 +6,8 @@ import { formatToErpDate } from '../../../helpers/date/formateDate';
 import { fmtNumber } from './FormatNumber';
 import { tableScrollWrapStyle } from './TableStyle';
 import { useTableFilters } from './UseFilter';
-import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
-import { Loader, Search, Download, Save, Filter, X, Calendar, ChevronDown, Check } from 'lucide-react';
+import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
+import ChallanEditModal from './challanEditModal/ChallanEdit';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -47,10 +47,10 @@ const cellStyle = {
 const thStickyStyle = {
     ...cellStyle,
     position: "sticky", top: 0, zIndex: 30,
-    background: theme.colors.bgHeader,
+    background: "#657582",
     fontWeight: 600, fontSize: "0.80rem",
     textTransform: "uppercase", letterSpacing: "0.05em",
-    color: theme.colors.textMuted,
+    color: "white",
     borderBottom: `3px solid ${theme.colors.borderDark}`,
     boxShadow: theme.shadows.sm,
     whiteSpace: "normal", wordWrap: "break-word", wordBreak: "break-word",
@@ -61,21 +61,12 @@ const thStickyStyle = {
 const tfootCellStyle = {
     ...cellStyle,
     position: "sticky", bottom: 0, zIndex: 30,
-    background: theme.colors.bgFooter, fontWeight: 700,
+    background: "#657582", fontWeight: 700,
     borderTop: `2px solid ${theme.colors.borderDark}`, borderBottom: "none",
-    color: theme.colors.textMain, textAlign: "center",
+    color: "white", textAlign: "center",
     backgroundClip: "padding-box",
 };
 
-const pageButtonStyle = (active) => ({
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    minWidth: "36px", height: "36px", padding: "0 12px", margin: "0 2px",
-    borderRadius: "6px", border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`,
-    background: active ? theme.colors.primary : theme.colors.white,
-    color: active ? theme.colors.white : theme.colors.textMain,
-    cursor: "pointer", fontSize: "0.875rem", fontWeight: active ? 600 : 400,
-    transition: "all 0.2s ease", boxShadow: active ? theme.shadows.sm : "none",
-});
 
 const tableHeader = [
     { header: "", width: "50px", key: "select", noFilter: true },
@@ -168,11 +159,6 @@ const Knitting = () => {
     const [isFetchingAll, setIsFetchingAll] = useState(false);
     const [pendingFilterKey, setPendingFilterKey] = useState(null);
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [editingCell, setEditingCell] = useState(null);
-    const [editedData, setEditedData] = useState({});
-    const [localOverrides, setLocalOverrides] = useState({});
-
     const [selectedMonths, setSelectedMonths] = useState(new Set());
     const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
     const [monthDraftSelected, setMonthDraftSelected] = useState(new Set());
@@ -183,11 +169,16 @@ const Knitting = () => {
 
     // Portal refs & state for the column filter dropdown
     const filterButtonRefs = useRef({});
-    const [dropdownPos, setDropdownPos] = useState(null);
+    const [dropdownPos, setDropdownPos] = useState(null); 
+
+    const [isBillGenerating, setIsBillGenerating] = useState(false);
+    const [isChallanEditing, setIsChallanEditing] = useState(false);
+    const [challanToEditData, setChallanToEditData] = useState({});
+    const [isChallanDataLoading, setIsChallanDataLoading] = useState(null)
+
 
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
-    const axiosSecure = useAxiosPrivate();
 
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
@@ -291,37 +282,11 @@ const Knitting = () => {
         }));
     }, [movements]);
 
-    const processedRows = useMemo(() => {
-        return allRows.map(row => {
-            const edits = { ...(localOverrides[row.rowKey] || {}), ...(editedData[row.rowKey] || {}) };
-            const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
-
-            const yarnDelivery = Number(getVal('yarnDelivery')) || 0;
-            const yarnReturn = Number(getVal('yarnReturn')) || 0;
-            const greyFabricReceived = Number(getVal('greyFabricReceived')) || 0;
-            const unitePrice = Number(getVal('unitePrice')) || 0;
-            const billingAmount = greyFabricReceived * unitePrice;
-
-            return {
-                ...row,
-                deliveryId: row.deliveryId,
-                challanNo: getVal('challanNo'),
-                fromFactory: getVal('fromFactory'),
-                toFactory: getVal('toFactory'),
-                yarnDelivery,
-                yarnReturn,
-                greyFabricReceived,
-                unitePrice,
-                billingAmount
-            };
-        });
-    }, [allRows, editedData, localOverrides]);
-
     const {
         filters, openFilterKey, draftSelected, filterSearch, dropdownRef,
         filterOptions, filteredRows: hookFilteredRows, setFilterSearch, openFilter,
         toggleDraftValue, toggleSelectAllDraft, applyFilter, clearFilter,
-    } = useTableFilters(processedRows, tableHeader);
+    } = useTableFilters(allRows, tableHeader);
 
     // ===== Column filter dropdown portal positioning =====
     const updateDropdownPosition = useCallback(() => {
@@ -359,12 +324,12 @@ const Knitting = () => {
     // ── Month options ──
     const monthOptions = useMemo(() => {
         const set = new Set();
-        processedRows.forEach((row) => {
+        allRows.forEach((row) => {
             const key = getMonthKey(row.challanDate);
             if (key) set.add(key);
         });
         return Array.from(set).sort((a, b) => b.localeCompare(a));
-    }, [processedRows]);
+    }, [allRows]);
 
     useEffect(() => {
         if (selectedMonths.size > 0) {
@@ -458,10 +423,6 @@ const Knitting = () => {
     }, [fetchData, filtersString, fetchAll, refreshKey, search]);
 
     useEffect(() => {
-        setLocalOverrides({});
-    }, [movements]);
-
-    useEffect(() => {
         if (fetchError && pendingFilterKey) { setPendingFilterKey(null); return; }
         if (pendingFilterKey && fetchAll && !isFetchingAll && !fetchError) { openFilter(pendingFilterKey); setPendingFilterKey(null); }
     }, [pendingFilterKey, fetchAll, isFetchingAll, fetchError, openFilter]);
@@ -541,11 +502,6 @@ const Knitting = () => {
         finally { setSearchLoading(false); }
     };
 
-    // ── Editing helpers ──
-    const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'yarnDelivery', 'yarnReturn', 'greyFabricReceived', 'unitePrice'];
-    const numericFields = ['yarnDelivery', 'yarnReturn', 'greyFabricReceived', 'unitePrice'];
-    const hasUnsavedChanges = Object.keys(editedData).length > 0;
-
     // ===== CLEAR-ALL FILTERS =====
     const hasActiveFilters =
         Object.keys(filters || {}).length > 0 ||
@@ -576,62 +532,6 @@ const Knitting = () => {
         return { ...cellStyle, backgroundColor: bg };
     };
 
-    const getEditedCellStyle = (row, colKey) => {
-        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
-        return isEdited ? { backgroundColor: theme.colors.warning } : {};
-    };
-
-    const handleCellEdit = (rowKey, colKey, value) => {
-        setEditedData(prev => ({
-            ...prev,
-            [rowKey]: { ...(prev[rowKey] || {}), [colKey]: value }
-        }));
-    };
-
-    const handleSaveChanges = async () => {
-        const entries = Object.entries(editedData).filter(([, edits]) => edits && Object.keys(edits).length > 0);
-        if (entries.length === 0) { setIsLoading(false); return; }
-        setIsLoading(true);
-        try {
-            const payload = entries.map(([rowKey, edits]) => {
-                const originalRow = allRows.find(r => r.rowKey === rowKey);
-                const deliveryId = originalRow?.deliveryId ?? originalRow?.mvId ?? null;
-                const changed = {};
-                Object.entries(edits).forEach(([k, v]) => {
-                    if (originalRow?.[k] !== v) changed[k] = v;
-                });
-                return { deliveryId, _rowKey: rowKey, ...changed };
-            }).filter(p => p.deliveryId != null && Object.keys(p).length > 2);
-
-            if (payload.length === 0) {
-                alert("Nothing to save (no valid deliveryId or no changed values).");
-                setIsLoading(false);
-                return;
-            }
-
-            console.log("PATCH /api/edit-challan payload:", payload);
-            const update = await axiosSecure.patch("/api/edit-challan", payload);
-
-            if (update.status === 200 || update.status === 201 || update.status === 204) {
-                setLocalOverrides(prev => {
-                    const next = { ...prev };
-                    Object.entries(editedData).forEach(([rk, vals]) => {
-                        next[rk] = { ...(next[rk] || {}), ...vals };
-                    });
-                    return next;
-                });
-                setEditedData({});
-                setRefreshKey(prev => prev + 1);
-                alert("Changes saved successfully!");
-            }
-        } catch (error) {
-            console.error("Failed to save changes:", error);
-            alert(error?.response?.data?.message || "Failed to save changes.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleExport = () => {
         if (filteredRows.length === 0) { alert("No data to export."); return; }
         const headers = tableHeader.filter(h => h.key !== 'select').map(h => h.header);
@@ -658,52 +558,6 @@ const Knitting = () => {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-    };
-
-    const renderCell = (row, colKey) => {
-        const isEditing = editingCell?.rowKey === row.rowKey && editingCell?.colKey === colKey;
-        const currentValue = editedData[row.rowKey]?.[colKey] !== undefined ? editedData[row.rowKey][colKey] : row[colKey];
-        const isNumber = numericFields.includes(colKey);
-
-        if (isEditing) {
-            return (
-                <input
-                    type={isNumber ? "number" : "text"}
-                    step={isNumber ? "0.01" : undefined}
-                    value={currentValue || ""}
-                    onChange={(e) => handleCellEdit(row.rowKey, colKey, isNumber ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
-                    onBlur={() => setEditingCell(null)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
-                    autoFocus
-                    style={{
-                        width: '100%', height: '100%', border: `2px solid ${theme.colors.primary}`,
-                        borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem',
-                        textAlign: 'center', boxSizing: 'border-box',
-                        outline: 'none', backgroundColor: theme.colors.white, margin: '-4px -8px',
-                        fontFamily: 'inherit', whiteSpace: 'normal', wordBreak: 'break-word'
-                    }}
-                />
-            );
-        }
-
-        return (
-            <div
-                onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
-                style={{
-                    minHeight: '20px', textAlign: 'center',
-                    fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal',
-                    opacity: currentValue ? 1 : 0.5,
-                    whiteSpace: 'normal',
-                    wordBreak: 'break-word',
-                }}
-                title={editableFields.includes(colKey) ? "Click to edit" : ""}
-            >
-                {isNumber
-                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
-                    : (currentValue || "-")
-                }
-            </div>
-        );
     };
 
     // ===== PORTALED COLUMN FILTER DROPDOWN =====
@@ -896,9 +750,35 @@ const Knitting = () => {
 
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
+
+
+    const handlePrepareChallanEdit = async (challanNo) => {
+        if (!challanNo) return;
+        console.log(challanNo, "challan no from diff edit");
+        setIsChallanDataLoading(true)
+        setIsChallanEditing(true);
+        try {
+            const res = await axiosPublic.get(`/api/detail-challan-view/knittingOrder/${challanNo}`)
+            console.log(res.data, "challan data");
+            setChallanToEditData(res.data);
+            setIsChallanDataLoading(false)
+        } catch (error) {
+            console.error("Error preparing challan edit:", error);
+        }
+    }
+
+
     return (
         <div style={{ width: "100%", padding: "24px", fontFamily: FONT_STACK, color: theme.colors.textMain }}>
-
+            {
+                isChallanEditing && (
+                    <ChallanEditModal
+                        setIsChallanEditing={setIsChallanEditing}
+                        challanToEditData={challanToEditData}
+                        isChallanDataLoading={isChallanDataLoading}
+                    />
+                )
+            }
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ position: 'relative', flex: '0 1 320px' }}>
@@ -970,8 +850,8 @@ const Knitting = () => {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 <Calendar size={16} />
                                 {selectedMonths.size === 0 ? "All Months" :
-                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
-                                 `${selectedMonths.size} Months Selected`}
+                                    selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
+                                        `${selectedMonths.size} Months Selected`}
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {selectedMonths.size > 0 && (
@@ -1133,23 +1013,6 @@ const Knitting = () => {
                 >
                     <Download size={16} /> Export CSV
                 </button>
-
-                {hasUnsavedChanges && (
-                    <button
-                        onClick={handleSaveChanges}
-                        disabled={isLoading}
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            background: isLoading ? theme.colors.textMuted : theme.colors.success,
-                            color: theme.colors.white, padding: "10px 24px", borderRadius: theme.radius,
-                            border: "none", cursor: isLoading ? "not-allowed" : "pointer",
-                            fontSize: '0.875rem', fontWeight: 600, boxShadow: theme.shadows.sm, fontFamily: 'inherit'
-                        }}
-                    >
-                        {isLoading ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
-                        {isLoading ? "Saving..." : "Save Changes"}
-                    </button>
-                )}
             </div>
 
             {/* Error Banner */}
@@ -1227,7 +1090,7 @@ const Knitting = () => {
                                                 style={{
                                                     border: "none",
                                                     background: (isActive || isOpen) ? theme.colors.primary : "transparent",
-                                                    color: (isActive || isOpen) ? theme.colors.white : theme.colors.textMuted,
+                                                    color: theme.colors.white,
                                                     cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
                                                     display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
                                                 }}
@@ -1250,7 +1113,7 @@ const Knitting = () => {
                             >
                                 {tableHeader.map((th) => {
                                     const frozen = getFrozenStyle(th.key, 'body');
-                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...getEditedCellStyle(row, th.key), ...frozen };
+                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...frozen };
 
                                     if (th.key === 'select') {
                                         return (
@@ -1305,9 +1168,25 @@ const Knitting = () => {
                                         );
                                     }
 
+                                    const isNumber = ['yarnDelivery', 'yarnReturn', 'greyFabricReceived'].includes(th.key);
+                                    const currentValue = row[th.key];
+
                                     return (
-                                        <td key={th.key} style={baseStyle}>
-                                            {renderCell(row, th.key)}
+                                        <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
+                                            <div
+                                                onClick={th.key === 'challanNo' ? () => handlePrepareChallanEdit(row.challanNo) : undefined} style={{
+                                                    minHeight: '20px', textAlign: 'center',
+                                                    opacity: currentValue ? 1 : 0.5,
+                                                    whiteSpace: 'normal',
+                                                    wordBreak: 'break-word',
+                                                }}>
+                                                {isNumber
+                                                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
+                                                    : (currentValue || "-")
+                                                }
+
+
+                                            </div>
                                         </td>
                                     );
                                 })}

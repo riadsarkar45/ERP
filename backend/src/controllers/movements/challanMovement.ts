@@ -46,10 +46,6 @@ export const challanMovement = async (req: Request, res: Response) => {
         take: 30,
         select: {
             composition: true,
-            // Only fetched for normal order-type movements — Others
-            // (compacting/reprocess/heat-set/trumble) have no associated
-            // price, so it's omitted from the query rather than always
-            // coming back null.
             ...(!isOthersType && { unitePrice: true }),
             id: true,
             workOrderQty: true,
@@ -61,7 +57,7 @@ export const challanMovement = async (req: Request, res: Response) => {
             },
             deliveries: {
                 where: { deliveryType: { in: deliveryTypes } },
-                orderBy: {createdAt: "desc"},
+                orderBy: { createdAt: "desc" },
                 select: {
                     deliveryQty: true,
                     deliveryDate: true,
@@ -78,3 +74,52 @@ export const challanMovement = async (req: Request, res: Response) => {
 
     return res.status(200).send({ msg: "Deliveries found", type: "success", data: deliveries });
 };
+
+export const challanMovementByChallanNo = async (req: Request, res: Response) => {
+    const { challanNo, deliveryType, orderType } = req.params as { challanNo: string, deliveryType: string, orderType: string };
+
+    if (!challanNo || !orderType) {
+        return res.status(400).send({ msg: "Missing required parameters", type: "error" });
+    }
+
+    console.log("challanNo ->", challanNo, "deliveryType ->", deliveryType, "orderType->", orderType);
+    try {
+
+        const findComps = await prisma.composition.findMany(
+            {
+                where: { orderType: orderType, },
+                select: {
+                    composition: true,
+                    deliveries: {
+                        where: { challanNo: Number(challanNo) },
+                        select: {
+                            id: true,
+                            deliveryQty: true,
+                            deliveryType: true,
+                            challanNo: true,
+                            createdAt: true,
+                            toFactory: true,
+                            fromFactory: true,
+                        }
+                    }
+                }
+            }
+        )
+
+        if (!findComps || findComps.length === 0) {
+            return res.status(404).send({ msg: "No deliveries found for the given challan number", type: "error" });
+        }
+
+        const filteredComps = findComps.filter((comp) => comp.deliveries.length > 0);
+
+        if (filteredComps.length === 0) {
+            return res.status(404).send({ msg: "No deliveries found for the given challan number", type: "error" });
+        }
+
+        return res.status(200).send({ data: filteredComps });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send({ msg: "Internal server error", type: "error" });
+    }
+
+}

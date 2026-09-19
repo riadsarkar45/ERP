@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
-import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
-import { Loader, Search, Download, Save, Filter, X, Calendar, ChevronDown, Check } from 'lucide-react';
+import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
+import ChallanEditModal from './challanEditModal/ChallanEdit';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -16,8 +16,8 @@ const theme = {
         danger: '#ef4444',
         warning: '#fef08a',
         bgPage: '#ffffff',
-        bgHeader: '#f5d8c9',
-        bgFooter: '#f5d8c9',
+        bgHeader: '#657582',
+        bgFooter: '#657582',
         bgHover: '#f1f5f9',
         border: '#10b981',
         borderDark: '#cbd5e1',
@@ -62,7 +62,7 @@ const thStickyStyle = {
     fontSize: "0.80rem",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: theme.colors.textMuted,
+    color: "white",
     borderBottom: `3px solid ${theme.colors.borderDark}`,
     boxShadow: theme.shadows.sm,
     whiteSpace: "normal",
@@ -82,7 +82,7 @@ const tfootCellStyle = {
     fontWeight: 700,
     borderTop: `2px solid ${theme.colors.borderDark}`,
     borderBottom: "none",
-    color: theme.colors.textMain,
+    color: "white",
     textAlign: "center",
     backgroundClip: "padding-box",
 };
@@ -98,7 +98,7 @@ const pageButtonStyle = (active) => ({
     borderRadius: "6px",
     border: `1px solid ${active ? theme.colors.primary : theme.colors.border}`,
     background: active ? theme.colors.primary : theme.colors.white,
-    color: active ? theme.colors.white : theme.colors.textMain,
+    color: "active ? theme.colors.white : theme.colors.textMain",
     cursor: "pointer",
     fontSize: "0.875rem",
     fontWeight: active ? 600 : 400,
@@ -196,8 +196,8 @@ const Aop = () => {
     const [filterSearch, setFilterSearch] = useState("");
     const [selectedRows, setSelectedRows] = useState(new Set());
     const dropdownRef = useRef(null);
-    const filterButtonRefs = useRef({});          // 🔧 refs to each header filter button
-    const [dropdownPos, setDropdownPos] = useState(null); // 🔧 portal position
+    const filterButtonRefs = useRef({});
+    const [dropdownPos, setDropdownPos] = useState(null);
     const monthDropdownRef = useRef(null);
     const [totalPages, setTotalPages] = useState(1);
     const [challanIds, setChallanIds] = useState([]);
@@ -207,12 +207,6 @@ const Aop = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [editingCell, setEditingCell] = useState(null);
-    const [editedData, setEditedData] = useState({});
-    // 🔧 FIX: keep server-confirmed edits visible until refetch returns
-    const [localOverrides, setLocalOverrides] = useState({});
-
     // Excel-like Month Filter States
     const [selectedMonths, setSelectedMonths] = useState(new Set());
     const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
@@ -220,12 +214,12 @@ const Aop = () => {
     const [monthSearch, setMonthSearch] = useState("");
 
     const [hoveredRow, setHoveredRow] = useState(null);
-
     const [isBillGenerating, setIsBillGenerating] = useState(false);
-
+    const [isChallanEditing, setIsChallanEditing] = useState(false);
+    const [challanToEditData, setChallanToEditData] = useState({});
+    const [isChallanDataLoading, setIsChallanDataLoading] = useState(null)
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
-    const axiosSecure = useAxiosPrivate();
 
     useEffect(() => {
         if (search) return;
@@ -239,11 +233,6 @@ const Aop = () => {
             });
     }, [fetchData, page, refreshKey, search]);
 
-    // 🔧 FIX: whenever fresh server data arrives, drop local overrides
-    useEffect(() => {
-        setLocalOverrides({});
-    }, [movements]);
-
     // ===== COLUMN FILTER DROPDOWN: position helper (portal) =====
     const updateDropdownPosition = useCallback(() => {
         if (!openFilterKey) return;
@@ -252,14 +241,12 @@ const Aop = () => {
         const rect = btn.getBoundingClientRect();
         const width = FILTER_DROPDOWN_WIDTH;
 
-        // Align dropdown right edge to the button right edge, then clamp to viewport
         let left = rect.right - width;
         left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
 
         const estimatedHeight = 360;
         let top = rect.bottom + 8;
 
-        // If it doesn't fit below, flip it above the button
         if (top + estimatedHeight > window.innerHeight - 8) {
             const aboveTop = rect.top - estimatedHeight - 8;
             top = aboveTop > 8
@@ -270,7 +257,6 @@ const Aop = () => {
         setDropdownPos({ top, left, width });
     }, [openFilterKey]);
 
-    // Reposition (or keep in sync) on scroll / resize while open
     useLayoutEffect(() => {
         if (!openFilterKey) { setDropdownPos(null); return; }
         updateDropdownPosition();
@@ -283,13 +269,10 @@ const Aop = () => {
         };
     }, [openFilterKey, updateDropdownPosition]);
 
-    // Outside click + Escape for the column filter dropdown (portal aware)
     useEffect(() => {
         if (!openFilterKey) return;
         const handleClick = (e) => {
-            // click inside the dropdown panel -> ignore
             if (dropdownRef.current && dropdownRef.current.contains(e.target)) return;
-            // click on the button that opened it -> ignore (let onClick toggle it)
             const btn = filterButtonRefs.current[openFilterKey];
             if (btn && btn.contains(e.target)) return;
             setOpenFilterKey(null);
@@ -424,37 +407,15 @@ const Aop = () => {
         });
     }, [movements]);
 
-    // 🔧 FIX: merge localOverrides + editedData on top of base rows
-    const processedRows = useMemo(() => {
-        return allRows.map(row => {
-            const edits = { ...(localOverrides[row.rowKey] || {}), ...(editedData[row.rowKey] || {}) };
-            const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
-            const sentForAop = Number(getVal('sentForAop')) || 0;
-            const returnFromAop = Number(getVal('returnFromAop')) || 0;
-            const receiveFromAop = Number(getVal('receiveFromAop')) || 0;
-            const finishReceiveFromAop = Number(getVal('finishReceiveFromAop')) || 0;
-            const unitePrice = Number(getVal('unitePrice')) || 0;
-            const processLoss = receiveFromAop > 0 ? ((receiveFromAop - finishReceiveFromAop) / receiveFromAop) * 100 : 0;
-            const billingAmount = receiveFromAop * unitePrice;
-            return {
-                ...row, deliveryId: row.deliveryId, challanNo: getVal('challanNo'),
-                fromFactory: getVal('fromFactory'), toFactory: getVal('toFactory'),
-                sentForAop, returnFromAop, receiveFromAop, finishReceiveFromAop,
-                unitePrice, processLoss, billingAmount
-            };
-        });
-    }, [allRows, editedData, localOverrides]);
-
     const monthOptions = useMemo(() => {
         const set = new Set();
-        processedRows.forEach((row) => {
+        allRows.forEach((row) => {
             const key = getMonthKey(row.challanDate);
             if (key) set.add(key);
         });
         return Array.from(set).sort((a, b) => b.localeCompare(a));
-    }, [processedRows]);
+    }, [allRows]);
 
-    // Clean up selected months if they no longer exist in data
     useEffect(() => {
         if (selectedMonths.size > 0) {
             const validMonths = new Set(monthOptions);
@@ -479,7 +440,7 @@ const Aop = () => {
         tableHeader.forEach((col) => {
             if (col.noFilter) return;
             const set = new Set();
-            processedRows.forEach((row) => {
+            allRows.forEach((row) => {
                 if (col.key === 'challanDate') {
                     try {
                         const d = new Date(row.challanDate);
@@ -493,10 +454,9 @@ const Aop = () => {
                 : Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
         });
         return opts;
-    }, [processedRows]);
+    }, [allRows]);
 
-    const filteredRows = useMemo(() => processedRows.filter((row) => {
-        // Excel-like Month Filter Logic
+    const filteredRows = useMemo(() => allRows.filter((row) => {
         if (selectedMonths.size > 0) {
             const rowMonth = getMonthKey(row.challanDate);
             if (!rowMonth || !selectedMonths.has(rowMonth)) return false;
@@ -517,7 +477,7 @@ const Aop = () => {
             }
             return selected.has(String(row[col.key] ?? ""));
         });
-    }), [processedRows, filters, selectedMonths]);
+    }), [allRows, filters, selectedMonths]);
 
     const totals = useMemo(() => {
         const t = { sentForAop: 0, returnFromAop: 0, receiveFromAop: 0, finishReceiveFromAop: 0, billingAmount: 0 };
@@ -554,7 +514,7 @@ const Aop = () => {
         const current = filters[key];
         setDraftSelected(current ? new Set(current) : new Set(options));
         setFilterSearch("");
-        setDropdownPos(null); // will be computed in useLayoutEffect
+        setDropdownPos(null);
         setOpenFilterKey(key);
     };
 
@@ -619,7 +579,6 @@ const Aop = () => {
     // ==============================================
 
     const handleBillPreparation = (challanId) => {
-        console.log(challanId);
         if (challanIds.includes(challanId)) setChallanIds((prev) => prev.filter(id => id !== challanId));
         else setChallanIds((prev) => [...prev, challanId]);
     };
@@ -628,7 +587,6 @@ const Aop = () => {
         if (challanIds.length === 0) { alert("Please select at least one challan to generate the bill."); return; }
         setIsBillGenerating(true);
         try {
-            console.log(challanIds, "challan ids");
             const response = await axiosPublic.post("/api/generate-bill", { challanIds }, { responseType: "blob" });
             const blob = new Blob([response.data], { type: "application/pdf" });
             const url = window.URL.createObjectURL(blob);
@@ -642,7 +600,8 @@ const Aop = () => {
         } catch (error) {
             console.error("Bill generation failed:", error);
             alert("Failed to generate bill. Please try again.");
-            console.log(error, "error");
+        } finally {
+            setIsBillGenerating(false);
         }
     };
 
@@ -658,57 +617,6 @@ const Aop = () => {
             setMovements(searchData); setTotalPages(1);
         } catch (err) { setSearchError("Failed to search."); setMovements([]); }
         finally { setSearchLoading(false); }
-    };
-
-    const handleCellEdit = (rowKey, colKey, value) => {
-        setEditedData(prev => ({ ...prev, [rowKey]: { ...(prev[rowKey] || {}), [colKey]: value } }));
-    };
-
-    // 🔧 FIX: clean save payload + optimistic local merge + proper refetch
-    const handleSaveChanges = async () => {
-        const entries = Object.entries(editedData).filter(([, edits]) => edits && Object.keys(edits).length > 0);
-        if (entries.length === 0) { setIsLoading(false); return; }
-        setIsLoading(true);
-        try {
-            const payload = entries.map(([rowKey, edits]) => {
-                const originalRow = allRows.find(r => r.rowKey === rowKey);
-                const deliveryId = originalRow?.deliveryId ?? originalRow?.chId ?? null;
-
-                // only send fields that actually changed
-                const changed = {};
-                Object.entries(edits).forEach(([k, v]) => {
-                    if (originalRow?.[k] !== v) changed[k] = v;
-                });
-
-                return { deliveryId, _rowKey: rowKey, ...changed };
-            }).filter(p => p.deliveryId != null && Object.keys(p).length > 2);
-
-            if (payload.length === 0) {
-                alert("Nothing to save (no valid deliveryId or no changed values).");
-                setIsLoading(false);
-                return;
-            }
-
-            console.log("PATCH /api/edit-challan payload:", payload);
-            const update = await axiosSecure.patch("/api/edit-challan", payload);
-
-            if (update.status === 200 || update.status === 201 || update.status === 204) {
-                // 🔧 FIX: keep saved values visible until refetch replaces them
-                setLocalOverrides(prev => {
-                    const next = { ...prev };
-                    Object.entries(editedData).forEach(([rk, vals]) => {
-                        next[rk] = { ...(next[rk] || {}), ...vals };
-                    });
-                    return next;
-                });
-                setEditedData({});
-                setRefreshKey(prev => prev + 1);
-                alert("Changes saved successfully!");
-            }
-        } catch (error) {
-            console.error("Failed to save changes:", error);
-            alert(error?.response?.data?.message || "Failed to save changes.");
-        } finally { setIsLoading(false); }
     };
 
     const handleExport = () => {
@@ -738,10 +646,6 @@ const Aop = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     };
-
-    const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
-    const numericFields = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'];
-    const hasUnsavedChanges = Object.keys(editedData).length > 0;
 
     // ===== CLEAR-ALL FILTERS =====
     const hasActiveFilters =
@@ -777,57 +681,6 @@ const Aop = () => {
         };
     };
 
-    const getEditedCellStyle = (row, colKey) => {
-        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
-        return isEdited ? { backgroundColor: theme.colors.warning } : {};
-    };
-
-    const renderCell = (row, colKey) => {
-        const isEditing = editingCell?.rowKey === row.rowKey && editingCell?.colKey === colKey;
-        const currentValue = editedData[row.rowKey]?.[colKey] !== undefined ? editedData[row.rowKey][colKey] : row[colKey];
-        const isNumber = numericFields.includes(colKey);
-
-        if (isEditing) {
-            return (
-                <input
-                    type={isNumber ? "number" : "text"}
-                    step={isNumber ? "0.01" : undefined}
-                    value={currentValue || ""}
-                    onChange={(e) => handleCellEdit(row.rowKey, colKey, isNumber ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
-                    onBlur={() => setEditingCell(null)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
-                    autoFocus
-                    style={{
-                        width: '100%', height: '100%', border: `2px solid ${theme.colors.primary}`,
-                        borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem',
-                        textAlign: 'center', boxSizing: 'border-box',
-                        outline: 'none', backgroundColor: theme.colors.white, margin: '-4px -8px',
-                        fontFamily: 'inherit', whiteSpace: 'normal', wordBreak: 'break-word'
-                    }}
-                />
-            );
-        }
-
-        return (
-            <div
-                onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
-                style={{
-                    minHeight: '20px', textAlign: 'center',
-                    fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal',
-                    opacity: currentValue ? 1 : 0.5,
-                    whiteSpace: 'normal',
-                    wordBreak: 'break-word',
-                }}
-                title={editableFields.includes(colKey) ? "Click to edit" : ""}
-            >
-                {isNumber
-                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
-                    : (currentValue || "-")
-                }
-            </div>
-        );
-    };
-
     // ===== PORTALED COLUMN FILTER DROPDOWN RENDERER =====
     const renderColumnFilterDropdown = () => {
         if (!openFilterKey || !dropdownPos) return null;
@@ -854,7 +707,7 @@ const Aop = () => {
                     top: dropdownPos.top,
                     left: dropdownPos.left,
                     width: dropdownPos.width,
-                    zIndex: 99999,                     // 🔧 always on top of the table
+                    zIndex: 99999,
                     background: theme.colors.white,
                     border: `1px solid ${theme.colors.borderDark}`,
                     borderRadius: theme.radius,
@@ -872,7 +725,6 @@ const Aop = () => {
                     color: theme.colors.textMain,
                 }}
             >
-                {/* Header */}
                 <div style={{
                     padding: '10px 12px',
                     borderBottom: `1px solid #e2e8f0`,
@@ -907,7 +759,6 @@ const Aop = () => {
                     </button>
                 </div>
 
-                {/* Search */}
                 <div style={{ padding: "10px 12px", borderBottom: `1px solid #e2e8f0` }}>
                     <input
                         type="text"
@@ -924,7 +775,6 @@ const Aop = () => {
                     />
                 </div>
 
-                {/* Options */}
                 <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 0 }}>
                     <label style={{
                         display: "flex", alignItems: "center", gap: 8,
@@ -972,7 +822,6 @@ const Aop = () => {
                     </div>
                 </div>
 
-                {/* Footer */}
                 <div style={{
                     display: "flex", justifyContent: "space-between", gap: 8,
                     padding: "10px 12px", borderTop: `1px solid #e2e8f0`,
@@ -1019,13 +868,36 @@ const Aop = () => {
 
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
+    const handlePrepareChallanEdit = async(challanNo) => {
+        if (!challanNo) return;
+        console.log(challanNo, "challan no from diff edit");
+        setIsChallanDataLoading(true)
+        setIsChallanEditing(true);
+        try {
+            const res = await axiosPublic.get(`/api/detail-challan-view/aopOrder/${challanNo}`)
+            console.log(res.data, "challan data");
+            setChallanToEditData(res.data);
+            setIsChallanDataLoading(false)
+        }catch (error) {
+            console.error("Error preparing challan edit:", error);
+        }
+    }
+
     return (
         <div style={{ width: "100%", padding: "24px", fontFamily: FONT_STACK, color: theme.colors.textMain }}>
-
+            {
+                isChallanEditing && (
+                    <ChallanEditModal
+                        setIsChallanEditing={setIsChallanEditing}
+                        challanToEditData={challanToEditData}
+                        isChallanDataLoading={isChallanDataLoading}
+                    />
+                )
+            }
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ position: 'relative', flex: '0 1 320px' }}>
-                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.colors.textMuted }} />
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.colors.white }} />
                     <input
                         style={{
                             width: '100%', border: `1px solid ${theme.colors.border}`, padding: "10px 12px 10px 36px",
@@ -1094,8 +966,8 @@ const Aop = () => {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 <Calendar size={16} />
                                 {selectedMonths.size === 0 ? "All Months" :
-                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
-                                 `${selectedMonths.size} Months Selected`}
+                                    selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
+                                        `${selectedMonths.size} Months Selected`}
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {selectedMonths.size > 0 && (
@@ -1288,23 +1160,6 @@ const Aop = () => {
                 >
                     <Download size={16} /> Export CSV
                 </button>
-
-                {hasUnsavedChanges && (
-                    <button
-                        onClick={handleSaveChanges}
-                        disabled={isLoading}
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            background: isLoading ? theme.colors.textMuted : theme.colors.success,
-                            color: theme.colors.white, padding: "10px 24px", borderRadius: theme.radius,
-                            border: "none", cursor: isLoading ? "not-allowed" : "pointer",
-                            fontSize: '0.875rem', fontWeight: 600, boxShadow: theme.shadows.sm, fontFamily: 'inherit'
-                        }}
-                    >
-                        {isLoading ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
-                        {isLoading ? "Saving..." : "Save Changes"}
-                    </button>
-                )}
             </div>
 
             {searchError && (
@@ -1381,12 +1236,12 @@ const Aop = () => {
                                                 flex: 1
                                             }}>{th.header}</span>
                                             <button
-                                                ref={(el) => { filterButtonRefs.current[th.key] = el; }}   // 🔧 ref for portal positioning
+                                                ref={(el) => { filterButtonRefs.current[th.key] = el; }}
                                                 onClick={() => openFilter(th.key)}
                                                 style={{
                                                     border: "none",
                                                     background: (isActive || isOpen) ? theme.colors.primary : "transparent",
-                                                    color: (isActive || isOpen) ? theme.colors.white : theme.colors.textMuted,
+                                                    color: theme.colors.white,
                                                     cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
                                                     display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
                                                 }}
@@ -1394,7 +1249,6 @@ const Aop = () => {
                                                 <Filter size={12} />
                                             </button>
                                         </div>
-                                        {/* 🔧 Dropdown is NOT rendered here anymore — it is portaled to body so it always appears on top of the table */}
                                     </th>
                                 );
                             })}
@@ -1409,7 +1263,7 @@ const Aop = () => {
                             >
                                 {tableHeader.map((th) => {
                                     const frozen = getFrozenStyle(th.key, 'body');
-                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...getEditedCellStyle(row, th.key), ...frozen };
+                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...frozen };
 
                                     if (th.key === 'select') {
                                         return (
@@ -1484,9 +1338,25 @@ const Aop = () => {
                                         );
                                     }
 
+                                    const isNumber = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop'].includes(th.key);
+                                    const currentValue = row[th.key];
+
                                     return (
-                                        <td key={th.key} style={baseStyle}>
-                                            {renderCell(row, th.key)}
+                                        <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
+                                            <div
+                                                onClick={th.key === 'challanNo' ? () => handlePrepareChallanEdit(row.challanNo) : undefined} style={{
+                                                    minHeight: '20px', textAlign: 'center',
+                                                    opacity: currentValue ? 1 : 0.5,
+                                                    whiteSpace: 'normal',
+                                                    wordBreak: 'break-word',
+                                                }}>
+                                                {isNumber
+                                                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
+                                                    : (currentValue || "-")
+                                                }
+
+
+                                            </div>
                                         </td>
                                     );
                                 })}

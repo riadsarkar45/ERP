@@ -12,7 +12,7 @@ import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDeliv
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
-import { challanMovement } from "../controllers/movements/challanMovement";
+import { challanMovement, challanMovementByChallanNo } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 import { misDetailView, misDetailViewByJobNo } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
@@ -117,5 +117,7 @@ getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, d
 getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
 
 getRouters.get('/job-wise-mis-view/:jobNo/:deliveryType/:orderType', misDetailViewByJobNo);
+
+getRouters.get('/detail-challan-view/:orderType/:challanNo', challanMovementByChallanNo);
 
 export default getRouters;

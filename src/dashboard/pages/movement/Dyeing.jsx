@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
 import useAxiosPublic from '../../../hooks/Axios';
-import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
-import { Loader, Search, Download, Save, Filter, X, Calendar, ChevronDown, Check } from 'lucide-react';
+import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
+import ChallanEditModal from './challanEditModal/ChallanEdit';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -28,7 +28,7 @@ const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 const cellStyle = {
     padding: "12px 16px", borderBottom: `1px solid ${theme.colors.border}`,
     borderRight: `1px solid ${theme.colors.border}`, fontSize: "0.875rem",
-    color: theme.colors.textMain, verticalAlign: "middle", textAlign: "center",
+    color: "theme.colors.textMain", verticalAlign: "middle", textAlign: "center",
     transition: "background-color 0.15s ease", whiteSpace: "normal",
     wordWrap: "break-word", wordBreak: "break-word", lineHeight: "1.2",
     backgroundClip: "padding-box",
@@ -36,8 +36,8 @@ const cellStyle = {
 
 const thStickyStyle = {
     ...cellStyle, position: "sticky", top: 0, zIndex: 30,
-    background: theme.colors.bgHeader, fontWeight: 600, fontSize: "0.80rem",
-    textTransform: "uppercase", letterSpacing: "0.05em", color: theme.colors.textMuted,
+    background: "#657582", fontWeight: 600, fontSize: "0.80rem",
+    textTransform: "uppercase", letterSpacing: "0.05em", color: "white",
     borderBottom: `3px solid ${theme.colors.borderDark}`, boxShadow: theme.shadows.sm,
     whiteSpace: "normal", wordWrap: "break-word", wordBreak: "break-word",
     verticalAlign: "middle", textAlign: "center", backgroundClip: "padding-box",
@@ -45,9 +45,10 @@ const thStickyStyle = {
 
 const tfootCellStyle = {
     ...cellStyle, position: "sticky", bottom: 0, zIndex: 30,
-    background: theme.colors.bgFooter, fontWeight: 700,
+    background: "#657582",
+    fontWeight: 700,
     borderTop: `2px solid ${theme.colors.borderDark}`, borderBottom: "none",
-    color: theme.colors.textMain, textAlign: "center", backgroundClip: "padding-box",
+    color: "white", textAlign: "center", backgroundClip: "padding-box",
 };
 
 const pageButtonStyle = (active) => ({
@@ -159,11 +160,6 @@ const Dyeing = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [editingCell, setEditingCell] = useState(null);
-    const [editedData, setEditedData] = useState({});
-    const [localOverrides, setLocalOverrides] = useState({});
-
     const [selectedMonths, setSelectedMonths] = useState(new Set());
     const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
     const [monthDraftSelected, setMonthDraftSelected] = useState(new Set());
@@ -171,9 +167,14 @@ const Dyeing = () => {
 
     const [hoveredRow, setHoveredRow] = useState(null);
 
+    const [isBillGenerating, setIsBillGenerating] = useState(false);
+    const [isChallanEditing, setIsChallanEditing] = useState(false);
+    const [challanToEditData, setChallanToEditData] = useState({});
+    const [isChallanDataLoading, setIsChallanDataLoading] = useState(null)
+
+
     const { fetchData, loading } = useFetchData();
     const axiosPublic = useAxiosPublic();
-    const axiosSecure = useAxiosPrivate();
 
     useEffect(() => {
         if (search) return;
@@ -186,10 +187,6 @@ const Dyeing = () => {
                 }
             });
     }, [fetchData, page, refreshKey, search]);
-
-    useEffect(() => {
-        setLocalOverrides({});
-    }, [movements]);
 
     // ===== Column filter dropdown: position helper (portal) =====
     const updateDropdownPosition = useCallback(() => {
@@ -365,34 +362,14 @@ const Dyeing = () => {
         });
     }, [movements]);
 
-    const processedRows = useMemo(() => {
-        return allRows.map(row => {
-            const edits = { ...(localOverrides[row.rowKey] || {}), ...(editedData[row.rowKey] || {}) };
-            const getVal = (key) => edits[key] !== undefined ? edits[key] : row[key];
-            const greyDelivery = Number(getVal('greyDelivery')) || 0;
-            const greyReturn = Number(getVal('greyReturn')) || 0;
-            const greyReceive = Number(getVal('greyReceive')) || 0;
-            const finishReceive = Number(getVal('finishReceive')) || 0;
-            const unitePrice = Number(getVal('unitePrice')) || 0;
-            const processLoss = greyReceive > 0 ? ((greyReceive - finishReceive) / greyReceive) * 100 : 0;
-            const billingAmount = greyReceive * unitePrice;
-            return {
-                ...row, deliveryId: row.deliveryId, challanNo: getVal('challanNo'),
-                fromFactory: getVal('fromFactory'), toFactory: getVal('toFactory'),
-                greyDelivery, greyReturn, greyReceive, finishReceive,
-                unitePrice, processLoss, billingAmount
-            };
-        });
-    }, [allRows, editedData, localOverrides]);
-
     const monthOptions = useMemo(() => {
         const set = new Set();
-        processedRows.forEach((row) => {
+        allRows.forEach((row) => {
             const key = getMonthKey(row.challanDate);
             if (key) set.add(key);
         });
         return Array.from(set).sort((a, b) => b.localeCompare(a));
-    }, [processedRows]);
+    }, [allRows]);
 
     useEffect(() => {
         if (selectedMonths.size > 0) {
@@ -418,7 +395,7 @@ const Dyeing = () => {
         tableHeader.forEach((col) => {
             if (col.noFilter) return;
             const set = new Set();
-            processedRows.forEach((row) => {
+            allRows.forEach((row) => {
                 if (col.key === 'challanDate') {
                     try {
                         const d = new Date(row.challanDate);
@@ -432,9 +409,9 @@ const Dyeing = () => {
                 : Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
         });
         return opts;
-    }, [processedRows]);
+    }, [allRows]);
 
-    const filteredRows = useMemo(() => processedRows.filter((row) => {
+    const filteredRows = useMemo(() => allRows.filter((row) => {
         if (selectedMonths.size > 0) {
             const rowMonth = getMonthKey(row.challanDate);
             if (!rowMonth || !selectedMonths.has(rowMonth)) return false;
@@ -455,7 +432,7 @@ const Dyeing = () => {
             }
             return selected.has(String(row[col.key] ?? ""));
         });
-    }), [processedRows, filters, selectedMonths]);
+    }), [allRows, filters, selectedMonths]);
 
     const totals = useMemo(() => {
         const t = { greyDelivery: 0, greyReturn: 0, greyReceive: 0, finishReceive: 0, billingAmount: 0 };
@@ -593,52 +570,6 @@ const Dyeing = () => {
         finally { setSearchLoading(false); }
     };
 
-    const handleCellEdit = (rowKey, colKey, value) => {
-        setEditedData(prev => ({ ...prev, [rowKey]: { ...(prev[rowKey] || {}), [colKey]: value } }));
-    };
-
-    const handleSaveChanges = async () => {
-        const entries = Object.entries(editedData).filter(([, edits]) => edits && Object.keys(edits).length > 0);
-        if (entries.length === 0) { setIsLoading(false); return; }
-        setIsLoading(true);
-        try {
-            const payload = entries.map(([rowKey, edits]) => {
-                const originalRow = allRows.find(r => r.rowKey === rowKey);
-                const deliveryId = originalRow?.deliveryId ?? originalRow?.chId ?? null;
-                const changed = {};
-                Object.entries(edits).forEach(([k, v]) => {
-                    if (originalRow?.[k] !== v) changed[k] = v;
-                });
-                return { deliveryId, _rowKey: rowKey, ...changed };
-            }).filter(p => p.deliveryId != null && Object.keys(p).length > 2);
-
-            if (payload.length === 0) {
-                alert("Nothing to save (no valid deliveryId or no changed values).");
-                setIsLoading(false);
-                return;
-            }
-
-            console.log("PATCH /api/edit-challan payload:", payload);
-            const update = await axiosSecure.patch("/api/edit-challan", payload);
-
-            if (update.status === 200 || update.status === 201 || update.status === 204) {
-                setLocalOverrides(prev => {
-                    const next = { ...prev };
-                    Object.entries(editedData).forEach(([rk, vals]) => {
-                        next[rk] = { ...(next[rk] || {}), ...vals };
-                    });
-                    return next;
-                });
-                setEditedData({});
-                setRefreshKey(prev => prev + 1);
-                alert("Changes saved successfully!");
-            }
-        } catch (error) {
-            console.error("Failed to save changes:", error);
-            alert(error?.response?.data?.message || "Failed to save changes.");
-        } finally { setIsLoading(false); }
-    };
-
     const handleExport = () => {
         if (filteredRows.length === 0) { alert("No data to export."); return; }
         const headers = tableHeader.filter(h => h.key !== 'select').map(h => h.header);
@@ -667,10 +598,6 @@ const Dyeing = () => {
         URL.revokeObjectURL(url);
     };
 
-    const editableFields = ['challanNo', 'fromFactory', 'toFactory', 'greyDelivery', 'greyReturn', 'greyReceive', 'finishReceive'];
-    const numericFields = ['greyDelivery', 'greyReturn', 'greyReceive', 'finishReceive'];
-    const hasUnsavedChanges = Object.keys(editedData).length > 0;
-
     const hasActiveFilters =
         Object.keys(filters || {}).length > 0 ||
         (selectedMonths && selectedMonths.size > 0) ||
@@ -698,57 +625,6 @@ const Dyeing = () => {
         const isHovered = hoveredRow === row.rowKey;
         let bg = isHovered ? theme.colors.bgHover : (idx % 2 === 0 ? theme.colors.white : '#fafbfc');
         return { ...cellStyle, backgroundColor: bg };
-    };
-
-    const getEditedCellStyle = (row, colKey) => {
-        const isEdited = editedData[row.rowKey]?.[colKey] !== undefined;
-        return isEdited ? { backgroundColor: theme.colors.warning } : {};
-    };
-
-    const renderCell = (row, colKey) => {
-        const isEditing = editingCell?.rowKey === row.rowKey && editingCell?.colKey === colKey;
-        const currentValue = editedData[row.rowKey]?.[colKey] !== undefined ? editedData[row.rowKey][colKey] : row[colKey];
-        const isNumber = numericFields.includes(colKey);
-
-        if (isEditing) {
-            return (
-                <input
-                    type={isNumber ? "number" : "text"}
-                    step={isNumber ? "0.01" : undefined}
-                    value={currentValue || ""}
-                    onChange={(e) => handleCellEdit(row.rowKey, colKey, isNumber ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
-                    onBlur={() => setEditingCell(null)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setEditingCell(null); }}
-                    autoFocus
-                    style={{
-                        width: '100%', height: '100%', border: `2px solid ${theme.colors.primary}`,
-                        borderRadius: '4px', padding: '4px 8px', fontSize: '0.75rem',
-                        textAlign: 'center', boxSizing: 'border-box',
-                        outline: 'none', backgroundColor: theme.colors.white, margin: '-4px -8px',
-                        fontFamily: 'inherit', whiteSpace: 'normal', wordBreak: 'break-word'
-                    }}
-                />
-            );
-        }
-
-        return (
-            <div
-                onClick={() => editableFields.includes(colKey) && setEditingCell({ rowKey: row.rowKey, colKey })}
-                style={{
-                    minHeight: '20px', textAlign: 'center',
-                    fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal',
-                    opacity: currentValue ? 1 : 0.5,
-                    whiteSpace: 'normal',
-                    wordBreak: 'break-word',
-                }}
-                title={editableFields.includes(colKey) ? "Click to edit" : ""}
-            >
-                {isNumber
-                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
-                    : (currentValue || "-")
-                }
-            </div>
-        );
     };
 
     // ===== PORTALED COLUMN FILTER DROPDOWN =====
@@ -929,13 +805,37 @@ const Dyeing = () => {
 
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
+    const handlePrepareChallanEdit = async (challanNo) => {
+        if (!challanNo) return;
+        console.log(challanNo, "challan no from diff edit");
+        setIsChallanDataLoading(true)
+        setIsChallanEditing(true);
+        try {
+            const res = await axiosPublic.get(`/api/detail-challan-view/dyeingOrder/${challanNo}`)
+            console.log(res.data, "challan data");
+            setChallanToEditData(res.data);
+            setIsChallanDataLoading(false)
+        } catch (error) {
+            console.error("Error preparing challan edit:", error);
+        }
+    }
+
     return (
         <div style={{ width: "100%", padding: "24px", fontFamily: FONT_STACK, color: theme.colors.textMain }}>
 
+            {
+                isChallanEditing && (
+                    <ChallanEditModal
+                        setIsChallanEditing={setIsChallanEditing}
+                        challanToEditData={challanToEditData}
+                        isChallanDataLoading={isChallanDataLoading}
+                    />
+                )
+            }
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ position: 'relative', flex: '0 1 320px' }}>
-                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.colors.textMuted }} />
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.colors.white }} />
                     <input
                         style={{
                             width: '100%', border: `1px solid ${theme.colors.border}`, padding: "10px 12px 10px 36px",
@@ -1003,8 +903,8 @@ const Dyeing = () => {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 <Calendar size={16} />
                                 {selectedMonths.size === 0 ? "All Months" :
-                                 selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
-                                 `${selectedMonths.size} Months Selected`}
+                                    selectedMonths.size === 1 ? formatMonthLabel([...selectedMonths][0]) :
+                                        `${selectedMonths.size} Months Selected`}
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {selectedMonths.size > 0 && (
@@ -1166,23 +1066,6 @@ const Dyeing = () => {
                 >
                     <Download size={16} /> Export CSV
                 </button>
-
-                {hasUnsavedChanges && (
-                    <button
-                        onClick={handleSaveChanges}
-                        disabled={isLoading}
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            background: isLoading ? theme.colors.textMuted : theme.colors.success,
-                            color: theme.colors.white, padding: "10px 24px", borderRadius: theme.radius,
-                            border: "none", cursor: isLoading ? "not-allowed" : "pointer",
-                            fontSize: '0.875rem', fontWeight: 600, boxShadow: theme.shadows.sm, fontFamily: 'inherit'
-                        }}
-                    >
-                        {isLoading ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
-                        {isLoading ? "Saving..." : "Save Changes"}
-                    </button>
-                )}
             </div>
 
             {searchError && (
@@ -1259,7 +1142,7 @@ const Dyeing = () => {
                                                 style={{
                                                     border: "none",
                                                     background: (isActive || isOpen) ? theme.colors.primary : "transparent",
-                                                    color: (isActive || isOpen) ? theme.colors.white : theme.colors.textMuted,
+                                                    color: theme.colors.white,
                                                     cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
                                                     display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
                                                 }}
@@ -1281,7 +1164,7 @@ const Dyeing = () => {
                             >
                                 {tableHeader.map((th) => {
                                     const frozen = getFrozenStyle(th.key, 'body');
-                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...getEditedCellStyle(row, th.key), ...frozen };
+                                    const baseStyle = { ...getCellBaseStyle(row, idx), ...frozen };
 
                                     if (th.key === 'select') {
                                         return (
@@ -1356,9 +1239,25 @@ const Dyeing = () => {
                                         );
                                     }
 
+                                    const isNumber = ['greyDelivery', 'greyReturn', 'greyReceive', 'finishReceive'].includes(th.key);
+                                    const currentValue = row[th.key];
+
                                     return (
-                                        <td key={th.key} style={baseStyle}>
-                                            {renderCell(row, th.key)}
+                                        <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
+                                            <div
+                                                onClick={th.key === 'challanNo' ? () => handlePrepareChallanEdit(row.challanNo) : undefined} style={{
+                                                    minHeight: '20px', textAlign: 'center',
+                                                    opacity: currentValue ? 1 : 0.5,
+                                                    whiteSpace: 'normal',
+                                                    wordBreak: 'break-word',
+                                                }}>
+                                                {isNumber
+                                                    ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
+                                                    : (currentValue || "-")
+                                                }
+
+
+                                            </div>
                                         </td>
                                     );
                                 })}
@@ -1404,31 +1303,33 @@ const Dyeing = () => {
                 </table>
             </div>
 
-            {!search && totalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
-                    <button
-                        style={{ ...pageButtonStyle(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                        onClick={() => goToPage(page - 1)} disabled={page === 1}
-                    >
-                        Prev
-                    </button>
-                    {pageNumbers.map((p, i) =>
-                        p === "..."
-                            ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span>
-                            : <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>{p}</button>
-                    )}
-                    <button
-                        style={{ ...pageButtonStyle(false), opacity: page === totalPages ? 0.4 : 1, cursor: page === totalPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                        onClick={() => goToPage(page + 1)} disabled={page === totalPages}
-                    >
-                        Next
-                    </button>
-                </div>
-            )}
+            {
+                !search && totalPages > 1 && (
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
+                        <button
+                            style={{ ...pageButtonStyle(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                            onClick={() => goToPage(page - 1)} disabled={page === 1}
+                        >
+                            Prev
+                        </button>
+                        {pageNumbers.map((p, i) =>
+                            p === "..."
+                                ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span>
+                                : <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>{p}</button>
+                        )}
+                        <button
+                            style={{ ...pageButtonStyle(false), opacity: page === totalPages ? 0.4 : 1, cursor: page === totalPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                            onClick={() => goToPage(page + 1)} disabled={page === totalPages}
+                        >
+                            Next
+                        </button>
+                    </div>
+                )
+            }
 
             {/* PORTALED COLUMN FILTER DROPDOWN */}
             {renderColumnFilterDropdown()}
-        </div>
+        </div >
     );
 };
 
