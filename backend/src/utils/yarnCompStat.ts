@@ -73,10 +73,20 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
         const workOrders = s.workOrders ?? [];
         const rows = s.rows ?? [];
 
-        // Create an array that maps 1-to-1 with your table rows
-        const compBreakdown = rows.map((row: any) => ({ styleRequirementRowId: row.id }));
-        
-        // Build a lookup once per style (O(rows + compositions) instead of O(rows * compositions))
+        // 1-to-1 with table rows, now carrying reconciliation data through
+        const compBreakdown = rows.map((row: any) => {
+            // Works whether Prisma returns an object (1-1) or an array (1-many)
+            const reconciliation = Array.isArray(row.reconciliation)
+                ? row.reconciliation[0] ?? null
+                : row.reconciliation ?? null;
+
+            return {
+                styleRequirementRowId: row.id,
+                reconciliation,
+                reconciliationDate: reconciliation?.submittedDate ?? null,
+            } as Record<string, any>;
+        });
+
         const rowIndexByKey = new Map<string, number>();
         rows.forEach((row: any, index: number) => {
             const key = `${String(row.color).trim()}|${String(row.composition).trim()}`;
@@ -91,7 +101,7 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
             }
             const orderType = w.orderType || "Unknown";
 
-            // ── 1. Handle Standard Compositions (Knitting, Dyeing, AOP) ──
+            // ── 1. Standard compositions (Knitting, Dyeing, AOP) ──
             if (orderType !== "yarnDyeingOrder" && w.compositions) {
                 w.compositions.forEach((c: any) => {
                     const key = `${String(c.color).trim()}|${String(c.composition).trim()}`;
@@ -112,8 +122,7 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
                         breakdown[wqKey] = (breakdown[wqKey] ?? 0) + c.workOrderQty;
                     }
 
-                    const deliveries = c.deliveries ?? [];
-                    deliveries.forEach((d: any) => {
+                    (c.deliveries ?? []).forEach((d: any) => {
                         const safeDeliveryType = String(d.deliveryType ?? "Unknown").replace(/\s+/g, "_");
                         const deliveryKey = `${orderType}_${safeDeliveryType}`;
                         breakdown[deliveryKey] = (breakdown[deliveryKey] ?? 0) + (d.deliveryQty || 0);
@@ -121,10 +130,9 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
                 });
             }
 
-            // ── 2. Handle Yarn Dyeing Jobs (NEW) ──
+            // ── 2. Yarn dyeing jobs ──
             if (orderType === "yarnDyeingOrder" && w.yarnDyeingJobs) {
                 w.yarnDyeingJobs.forEach((yj: any) => {
-                    // For yarn dyeing, "bookingColor" is the equivalent of "color" for matching
                     const key = `${String(yj.bookingColor).trim()}|${String(yj.composition).trim()}`;
                     const matchingRowIndex = rowIndexByKey.get(key);
 
@@ -137,7 +145,6 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
 
                     const breakdown = compBreakdown[matchingRowIndex];
 
-                    // Add yarn dyeing qty to the breakdown
                     if (typeof yj.qty === "number") {
                         const wqKey = `${orderType}_workOrderQty`;
                         breakdown[wqKey] = (breakdown[wqKey] ?? 0) + yj.qty;

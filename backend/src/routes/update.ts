@@ -23,7 +23,7 @@ updateRouters.patch("/update-style-req/:jobId", responseTimeMonitor, authenticat
 updateRouters.patch("/update-work-order/:workOrderId", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateWorkOrder);
 
 // ✅ CORRECT: No trailing space
-updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, styleReconciliation);
+updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, authenticate, styleReconciliation);
 
 updateRouters.patch("/request-for-approval/:requestType/:workOrderId/:requestToId", responseTimeMonitor, authenticate, requestForApproval);
 

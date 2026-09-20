@@ -118,6 +118,6 @@ getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
 
 getRouters.get('/job-wise-mis-view/:jobNo/:deliveryType/:orderType', misDetailViewByJobNo);
 
-getRouters.get('/detail-challan-view/:orderType/:challanNo', challanMovementByChallanNo);
+getRouters.get('/detail-challan-view/:orderType/:challanNo/:jobNo', challanMovementByChallanNo);
 
 export default getRouters;

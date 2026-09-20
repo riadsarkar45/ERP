@@ -252,7 +252,7 @@ model refreshToken {
 }
 
 model reconciliationData {
-  id                        Int                  @id @default(autoincrement())
+  id                        Int                   @id @default(autoincrement())
   fabricIssueCuttingDept    Int
   cadConsumption            Int
   plannedCuttingQty         Int
@@ -269,13 +269,23 @@ model reconciliationData {
   plannedLeftOverQty        Int
   physicalFoundLeftOver     Int
   submittedBy               String
-  submittedDate             DateTime             @default(now())
-  manufacturingUnite        String               @default("NULL")
-  sentForEmbellishment      Int                  @default(0)
-  receivedFromEmbellishment Int                  @default(0)
-  styleRequirementRow       StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
-  styleRequirementRowId     Int?                 @unique
+  submittedDate             DateTime              @default(now())
+  dateOfReconciliation      DateTime
+  manufacturingUnite        String                @default("NULL")
+  sentForEmbellishment      Int                   @default(0)
+  receivedFromEmbellishment Int                   @default(0)
+  styleRequirementRow       StyleRequirementRow?  @relation(fields: [styleRequirementRowId], references: [id])
+  styleRequirementRowId     Int?                  @unique
   note                      String?
+  reconciliationNotes       reconciliationNotes[]
+}
+
+model reconciliationNotes {
+  id                 Int                @id @default(autoincrement())
+  dateTime           DateTime           @default(now())
+  reconciliationNote String
+  reconciliationId   Int
+  reconciliations    reconciliationData @relation(fields: [reconciliationId], references: [id])
 }
 
 model yarnStock {

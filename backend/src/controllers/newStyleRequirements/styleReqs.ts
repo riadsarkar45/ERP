@@ -51,10 +51,13 @@ const buildWhereClause = (
 
 export const styleRequirements = async (req: Request, res: Response) => {
     try {
-        
+
         const requestStart = process.hrtime.bigint();
 
         const { jobNo } = req.params as { jobNo: string | undefined };
+        // reconciliation
+        const recon = req.query.reconciliation === 'true';
+        console.log(recon, "reconciliation");
         const {
             filters: filtersParam,
         } = req.query as { filters?: string };
@@ -96,31 +99,34 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             orderQty: true,
                             finishRequiredQty: true,
                             additional: true,
-                            reconciliation: {
-                                select: {
-                                    id: true,
-                                    actualCuttingQty: true,
-                                    cadConsumption: true,
-                                    cuttingToSewingInput: true,
-                                    fabricIssueCuttingDept: true,
-                                    finishInputQty: true,
-                                    finishOutputQty: true,
-                                    note: true,
-                                    packingInputQty: true,
-                                    packingOutputQty: true,
-                                    physicalFound: true,
-                                    physicalFoundLeftOver: true,
-                                    plannedCuttingQty: true,
-                                    plannedLeftOverQty: true,
-                                    sewingInputQty: true,
-                                    sewingOutputQty: true,
-                                    shippedQty: true,
-                                    manufacturingUnite: true,
+                            ...recon && {
+                                reconciliation: {
+                                    select: {
+                                        id: true,
+                                        submittedDate: true,
+                                        actualCuttingQty: true,
+                                        cadConsumption: true,
+                                        cuttingToSewingInput: true,
+                                        fabricIssueCuttingDept: true,
+                                        finishInputQty: true,
+                                        finishOutputQty: true,
+                                        note: true,
+                                        packingInputQty: true,
+                                        packingOutputQty: true,
+                                        physicalFound: true,
+                                        physicalFoundLeftOver: true,
+                                        plannedCuttingQty: true,
+                                        plannedLeftOverQty: true,
+                                        sewingInputQty: true,
+                                        sewingOutputQty: true,
+                                        shippedQty: true,
+                                        manufacturingUnite: true,
+                                    }
                                 }
                             }
                         },
                     },
-                    
+
                     workOrders: {
                         select: {
                             orderType: true,

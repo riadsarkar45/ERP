@@ -1163,7 +1163,7 @@ const Knitting = () => {
                                     if (th.key === 'jobNo' || th.key === 'composition') {
                                         return (
                                             <td key={th.key} style={baseStyle}>
-                                                <span style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}</span>
+                                                <span onClick={th.key === 'jobNo' ? () => handlePrepareChallanEdit(row.challanNo, row[th.key]) : undefined} style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}</span>
                                             </td>
                                         );
                                     }
@@ -1174,7 +1174,7 @@ const Knitting = () => {
                                     return (
                                         <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
                                             <div
-                                                onClick={th.key === 'challanNo' ? () => handlePrepareChallanEdit(row.challanNo) : undefined} style={{
+                                                 style={{
                                                     minHeight: '20px', textAlign: 'center',
                                                     opacity: currentValue ? 1 : 0.5,
                                                     whiteSpace: 'normal',

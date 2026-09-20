@@ -23,7 +23,7 @@ const ShortExcess = ({ value }) => {
     );
 };
 
-const STICKY_COL_WIDTHS = [50, 140, 120, 150, 220, 300, 100, 150];
+const STICKY_COL_WIDTHS = [50, 140, 120, 150, 220, 300, 100, 100, 150];
 const STICKY_LEFT_OFFSETS = STICKY_COL_WIDTHS.reduce((acc, w, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + STICKY_COL_WIDTHS[i - 1]);
     return acc;
@@ -73,22 +73,6 @@ const formatMonthLabel = (key) => {
 const getRowKey = (com, fallbackIndex) => {
     if (com && com.id !== undefined && com.id !== null && com.id !== "") return String(com.id);
     return `idx-${fallbackIndex}`;
-};
-
-const LS_KEYS = {
-    remarks: (jobNo, rowKey) => `reconciliation_remarks_${jobNo}_${rowKey}`,
-    date: (jobNo) => `reconciliation_date_${jobNo}`,
-    manuUnit: (jobNo, rowKey) => `reconciliation_manuUnit_${jobNo}_${rowKey}`,
-};
-
-const lsGet = (key) => {
-    try { return localStorage.getItem(key); } catch { return null; }
-};
-const lsSet = (key, value) => {
-    try {
-        if (value === null || value === undefined) localStorage.removeItem(key);
-        else localStorage.setItem(key, String(value));
-    } catch { /* ignore */ }
 };
 
 const EXCELJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
@@ -196,7 +180,7 @@ const Reconciliation = () => {
     });
 
     const YARN_TABLE_HEADERS = [
-        "", "DATE OF RECONCILIATION", "BUYER NAME", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "MANUFACTURING UNIT",
+        "", "DATE OF RECONCILIATION", "BUYER NAME", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "ADDITIONAL QTY", "MANUFACTURING UNIT",
         "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY",
         "SHORT & EXCESS",
         "YARN RETURN", "GREY RECEIVED",
@@ -246,10 +230,11 @@ const Reconciliation = () => {
     const fetchFilteredData = useCallback(async () => {
         setIsDataLoading(true);
         try {
-            const params = { page: 1, limit: 10000 };
+            const params = { page: 1, limit: 10000, reconciliation: true };
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setReportData(res.data.data);
+            console.log(res.data);
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
@@ -263,23 +248,15 @@ const Reconciliation = () => {
         job?.dateOfReconciliation ?? job?.rows?.[0]?.reconciliation?.dateOfReconciliation ?? null;
 
     const getEffectiveDateRaw = useCallback((jobNo, job) => {
-        const localDate = lsGet(LS_KEYS.date(jobNo));
-        if (localDate !== null) return localDate;
         return getJobReconciliationDate(job);
     }, []);
 
     const getEffectiveManuUnit = useCallback((jobNo, com, fallbackIndex) => {
-        const rowKey = getRowKey(com, fallbackIndex);
-        const localUnit = lsGet(LS_KEYS.manuUnit(jobNo, rowKey));
-        if (localUnit !== null) return localUnit;
         const saved = com?.reconciliation?.manufacturingUnite;
         return saved != null && saved !== "NULL" ? String(saved) : "";
     }, []);
 
     const getEffectiveRemarks = useCallback((jobNo, com, fallbackIndex) => {
-        const rowKey = getRowKey(com, fallbackIndex);
-        const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
-        if (localRemarks !== null) return localRemarks;
         const saved = com?.reconciliation?.remarks;
         return saved != null && saved !== "NULL" ? String(saved) : "";
     }, []);
@@ -619,18 +596,10 @@ const Reconciliation = () => {
 
     const handleInputChange = (jobNo, subRowIdx, fieldKey, value, rowKey) => {
         setEditValues(prev => ({ ...prev, [`${jobNo}-${subRowIdx}-${fieldKey}`]: value }));
-        if (fieldKey === "remarks") {
-            lsSet(LS_KEYS.remarks(jobNo, rowKey), value);
-        } else if (fieldKey === "manufacturingUnite") {
-            lsSet(LS_KEYS.manuUnit(jobNo, rowKey), value);
-        }
     };
 
     const handleJobFieldChange = (jobNo, fieldKey, value) => {
         setEditValues(prev => ({ ...prev, [`${jobNo}-${fieldKey}`]: value }));
-        if (fieldKey === "dateOfReconciliation") {
-            lsSet(LS_KEYS.date(jobNo), value);
-        }
     };
 
     const handleStartEdit = (jobNo, job) => {
@@ -639,44 +608,24 @@ const Reconciliation = () => {
         const subRowCount = getSubRowCount(job);
         const initialValues = {};
 
-        const localDate = lsGet(LS_KEYS.date(jobNo));
-        const existingDate = (localDate !== null)
-            ? localDate
-            : getJobReconciliationDate(job);
+        const existingDate = getJobReconciliationDate(job);
         initialValues[`${jobNo}-dateOfReconciliation`] = toDateInputValue(existingDate);
 
         for (let i = 0; i < subRowCount; i++) {
             const com = comps[i];
             const reconciliation = com?.reconciliation || {};
-            const rowKey = getRowKey(com, i);
 
             TRAILING_FIELDS.forEach(field => {
                 if (field.type !== "FORMULA") {
-                    if (field.key === "remarks") {
-                        const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
-                        const serverRemarks = reconciliation[field.key];
-                        if (localRemarks !== null) {
-                            initialValues[`${jobNo}-${i}-${field.key}`] = localRemarks;
-                        } else {
-                            initialValues[`${jobNo}-${i}-${field.key}`] =
-                                serverRemarks != null && serverRemarks !== "NULL" ? String(serverRemarks) : "";
-                        }
-                    } else {
-                        const savedVal = reconciliation[field.key];
-                        initialValues[`${jobNo}-${i}-${field.key}`] =
-                            savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
-                    }
-                }
-            });
-            STICKY_EDITABLE_FIELDS.forEach(field => {
-                const localUnit = lsGet(LS_KEYS.manuUnit(jobNo, rowKey));
-                const savedVal = reconciliation[field.key];
-                if (localUnit !== null) {
-                    initialValues[`${jobNo}-${i}-${field.key}`] = localUnit;
-                } else {
+                    const savedVal = reconciliation[field.key];
                     initialValues[`${jobNo}-${i}-${field.key}`] =
                         savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
                 }
+            });
+            STICKY_EDITABLE_FIELDS.forEach(field => {
+                const savedVal = reconciliation[field.key];
+                initialValues[`${jobNo}-${i}-${field.key}`] =
+                    savedVal != null && savedVal !== "NULL" ? String(savedVal) : "";
             });
         }
         setEditValues(prev => ({ ...prev, ...initialValues }));
@@ -684,16 +633,6 @@ const Reconciliation = () => {
     };
 
     const handleCancelEdit = (jobNo, job) => {
-        try {
-            lsSet(LS_KEYS.date(jobNo), null);
-            const comps = job?.rows || [];
-            const subRowCount = getSubRowCount(job);
-            for (let i = 0; i < subRowCount; i++) {
-                const rowKey = getRowKey(comps[i], i);
-                lsSet(LS_KEYS.remarks(jobNo, rowKey), null);
-                lsSet(LS_KEYS.manuUnit(jobNo, rowKey), null);
-            }
-        } catch { /* ignore */ }
         setEditValues(prev => {
             const next = { ...prev };
             Object.keys(next).forEach(k => { if (k.startsWith(`${jobNo}-`)) delete next[k]; });
@@ -759,7 +698,6 @@ const Reconciliation = () => {
             const com = comps[i];
             if (!com || !com.id) continue;
             const rowPayload = { styleRequirementRowId: com.id };
-            const rowKey = getRowKey(com, i);
 
             TRAILING_FIELDS.forEach(field => {
                 if (field.type !== "FORMULA") {
@@ -769,13 +707,8 @@ const Reconciliation = () => {
                         if (raw !== undefined && raw !== null) {
                             finalValue = String(raw);
                         } else {
-                            const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
-                            if (localRemarks !== null) {
-                                finalValue = localRemarks;
-                            } else {
-                                const existing = com.reconciliation?.[field.key];
-                                if (existing != null && existing !== "NULL") finalValue = String(existing);
-                            }
+                            const existing = com.reconciliation?.[field.key];
+                            if (existing != null && existing !== "NULL") finalValue = String(existing);
                         }
                         rowPayload[field.key] = finalValue;
                     } else {
@@ -800,13 +733,8 @@ const Reconciliation = () => {
                 if (raw !== undefined && raw !== null) {
                     rowPayload[field.key] = String(raw).trim() === "" ? "" : String(raw);
                 } else {
-                    const localUnit = lsGet(LS_KEYS.manuUnit(jobNo, rowKey));
-                    if (localUnit !== null) {
-                        rowPayload[field.key] = localUnit;
-                    } else {
-                        const saved = com?.reconciliation?.[field.key];
-                        rowPayload[field.key] = saved != null && saved !== "NULL" ? String(saved) : "";
-                    }
+                    const saved = com?.reconciliation?.[field.key];
+                    rowPayload[field.key] = saved != null && saved !== "NULL" ? String(saved) : "";
                 }
             });
 
@@ -818,12 +746,7 @@ const Reconciliation = () => {
         if (rawDate !== undefined && rawDate !== null) {
             dateOfReconciliation = rawDate;
         } else {
-            const localDate = lsGet(LS_KEYS.date(jobNo));
-            if (localDate !== null) {
-                dateOfReconciliation = localDate;
-            } else {
-                dateOfReconciliation = getJobReconciliationDate(job) || "";
-            }
+            dateOfReconciliation = getJobReconciliationDate(job) || "";
         }
 
         return { jobNo: job?.jobNo ?? jobNo, dateOfReconciliation, rows };
@@ -850,6 +773,7 @@ const Reconciliation = () => {
 
     const handleGlobalSubmit = () => {
         const jobsToSave = processedReportData.filter(job => selectedJobs.has(job.jobNo)).map(job => ({ jobNo: job.jobNo, job }));
+        console.log(jobsToSave);
         setPendingSaveJobs(jobsToSave);
         setNotes("");
         setShowNotesModal(true);
@@ -866,7 +790,7 @@ const Reconciliation = () => {
             payload.notes = "";
 
             await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
-
+            console.log(payload, "payload reconciliation");
             setEditingJobNo(null);
             setEditValues(prev => {
                 const next = { ...prev };
@@ -920,6 +844,7 @@ const Reconciliation = () => {
     const footerTotals = useMemo(() => {
         const totals = {
             orderQty: 0, finishRequiredQty: 0, yarnRequiredQty: 0, knitYarnDelivery: 0,
+            additionalQty: 0,
             yarnShortExcessReq: 0, yarnShortExcessReturn: 0, knitYarnReturn: 0, knitGreyReceived: 0,
             knitShortExcess: 0, dyeGreyDelivery: 0, dyeGreyReturn: 0, dyeGreyReceived: 0,
             dyeFinishReceived: 0, dyeShortExcess: 0, aopSent: 0, aopReceived: 0,
@@ -950,6 +875,7 @@ const Reconciliation = () => {
                 const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
                 const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
                 const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
+                const addi = Number(com?.additional) || 0;
                 const dyeGreyReturn = Number(comp?.dyeingOrder_Grey_Return) || 0;
                 const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
                 const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
@@ -977,6 +903,7 @@ const Reconciliation = () => {
                 totals.aopGreyReceived += aopGreyReceived;
                 totals.aopFinishReceived += aopFinishReceived;
                 totals.aopShortExcess += aopShortExcess;
+                totals.additionalQty += addi;
 
                 TRAILING_FIELDS.forEach(field => {
                     if (field.key === "remarks") return;
@@ -1103,8 +1030,6 @@ const Reconciliation = () => {
                     rowValues[25] = comp ? aopProcessLoss : "";
                     rowValues[26] = comp ? aopShortExcess : "";
 
-                    const rowKey = getRowKey(com, i);
-
                     TRAILING_FIELDS.forEach((field, idx) => {
                         const colIdx = FIXED_COLUMN_COUNT + idx;
                         const isFormula = field.type === "FORMULA";
@@ -1116,13 +1041,8 @@ const Reconciliation = () => {
                                 if (ev !== undefined && ev !== null) valStr = ev;
                             }
                             if (valStr === null || valStr === undefined) {
-                                const localRemarks = lsGet(LS_KEYS.remarks(jobNo, rowKey));
-                                if (localRemarks !== null) {
-                                    valStr = localRemarks;
-                                } else {
-                                    const saved = com?.reconciliation?.[field.key];
-                                    if (saved != null && saved !== "NULL" && saved !== "") valStr = saved;
-                                }
+                                const saved = com?.reconciliation?.[field.key];
+                                if (saved != null && saved !== "NULL" && saved !== "") valStr = saved;
                             }
                             rowValues[colIdx] = valStr || "";
                         } else if (isFormula) {
@@ -1369,7 +1289,7 @@ const Reconciliation = () => {
                         onClick={() => setOpenFilterCol(null)}
                         className="px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-[#47637a] rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-1 transition-colors"
                     >
-                       Clear
+                        Clear
                     </button>
                     <button
                         type="button"
@@ -1710,8 +1630,11 @@ const Reconciliation = () => {
                                             <td className={`${stickyBodyClass(6)} ${selectedCellClass(rowFlatIndex, 6)}`} style={stickyCellStyle(6, stickyBg)} {...cellProps(rowFlatIndex, 6)}>
                                                 <div className="flex items-center justify-center h-full font-mono text-sm">{com?.orderQty ?? "-"}</div>
                                             </td>
+                                            <td className={`${stickyBodyClass(7)} ${selectedCellClass(rowFlatIndex, 7)}`} style={stickyCellStyle(7, stickyBg)} {...cellProps(rowFlatIndex, 6)}>
+                                                <div className={`flex items-center ${com?.additional && "bg-yellow-100 text-yellow-900 rounded-lg border-yellow-300 border"} justify-center h-full font-mono text-sm`}>{com?.additional ?? "-"}</div>
+                                            </td>
 
-                                            <td className={`${stickyBodyClass(7)} ${selectedCellClass(rowFlatIndex, 7)}`} style={stickyCellStyle(7, stickyBg, true)} {...cellProps(rowFlatIndex, 7)}>
+                                            <td className={`${stickyBodyClass(8)} ${selectedCellClass(rowFlatIndex, 8)}`} style={stickyCellStyle(8, stickyBg, true)} {...cellProps(rowFlatIndex, 7)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
                                                         <input
@@ -1727,9 +1650,21 @@ const Reconciliation = () => {
                                                     )}
                                                 </div>
                                             </td>
+                                            {/* finish required qty */}
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 8)}`} style={cellStyle} {...cellProps(rowFlatIndex, 8)}>
+                                                {(() => {
+                                                    if (!com) return "-";
+                                                    const additional = Number(com.additional) || 0;
+                                                    const lossQty = additional * ((Number(job.processLoss) || 0) / 100);
+                                                    const netAdditional = additional - lossQty;
+                                                    const increaseFinishQty = (Number(com.finishRequiredQty) || 0) + netAdditional;
+                                                    return increaseFinishQty.toFixed(2);
+                                                })()}
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 8)}`} style={cellStyle} {...cellProps(rowFlatIndex, 8)}>{com?.finishRequiredQty != null ? Number(com.finishRequiredQty).toFixed(2) : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>{com ? yarnRequiredQty.toFixed(2) : "-"}</td>
+                                            </td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>
+                                                {(Number(com.finishRequiredQty) * (1 + Number(job.processLoss) / 100) + Number(com.additional)).toFixed(2)}
+                                            </td>
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>
                                                 {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
                                                     ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2) : "-"}
@@ -1768,8 +1703,8 @@ const Reconciliation = () => {
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
 
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>
-                                                {comp?.aopOrder_Sent_for_AOP && !isNaN(Number(comp.aopOrder_Sent_for_AOP))
-                                                    ? Number(comp.aopOrder_Sent_for_AOP).toFixed(2) : "-"}
+                                                {comp?.aopOrder_Sent_For_Aop && !isNaN(Number(comp.aopOrder_Sent_For_Aop))
+                                                    ? Number(comp.aopOrder_Sent_For_Aop).toFixed(2) : "-"}
                                             </td>
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>
                                                 {comp?.aopOrder_Return_From_Aop && !isNaN(Number(comp.aopOrder_Return_From_Aop))
@@ -1876,8 +1811,11 @@ const Reconciliation = () => {
                                     <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(6, "#6b7280", false), borderTop: "2px solid #47637a" }}>
                                         {footerTotals.orderQty.toFixed(2)}
                                     </td>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(7, "#6b7280", false), borderTop: "2px solid #47637a" }}>
+                                        {footerTotals.additionalQty.toFixed(2)}
+                                    </td>
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(7, "#6b7280", true)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(8, "#6b7280", true)} />
 
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.finishRequiredQty.toFixed(2)}

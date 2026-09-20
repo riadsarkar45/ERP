@@ -868,17 +868,17 @@ const Aop = () => {
 
     const allVisibleSelected = filteredRows.length > 0 && filteredRows.every(r => selectedRows.has(r.rowKey));
 
-    const handlePrepareChallanEdit = async(challanNo) => {
-        if (!challanNo) return;
-        console.log(challanNo, "challan no from diff edit");
+    const handlePrepareChallanEdit = async (challanNo, jobNo) => {
+        if (!challanNo || !jobNo) return;
+        console.log(challanNo, jobNo, "challan no from diff edit");
         setIsChallanDataLoading(true)
         setIsChallanEditing(true);
         try {
-            const res = await axiosPublic.get(`/api/detail-challan-view/aopOrder/${challanNo}`)
+            const res = await axiosPublic.get(`/api/detail-challan-view/aopOrder/${challanNo}/${jobNo}`)
             console.log(res.data, "challan data");
             setChallanToEditData(res.data);
             setIsChallanDataLoading(false)
-        }catch (error) {
+        } catch (error) {
             console.error("Error preparing challan edit:", error);
         }
     }
@@ -1333,7 +1333,10 @@ const Aop = () => {
                                     if (th.key === 'jobNo' || th.key === 'composition') {
                                         return (
                                             <td key={th.key} style={baseStyle}>
-                                                <span style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}</span>
+                                                <span
+                                                    onClick={th.key === 'jobNo' ? () => handlePrepareChallanEdit(row.challanNo, row[th.key]) : undefined}
+                                                    style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}
+                                                </span>
                                             </td>
                                         );
                                     }
@@ -1344,7 +1347,7 @@ const Aop = () => {
                                     return (
                                         <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
                                             <div
-                                                onClick={th.key === 'challanNo' ? () => handlePrepareChallanEdit(row.challanNo) : undefined} style={{
+                                                style={{
                                                     minHeight: '20px', textAlign: 'center',
                                                     opacity: currentValue ? 1 : 0.5,
                                                     whiteSpace: 'normal',

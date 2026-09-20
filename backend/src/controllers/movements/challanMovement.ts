@@ -76,7 +76,7 @@ export const challanMovement = async (req: Request, res: Response) => {
 };
 
 export const challanMovementByChallanNo = async (req: Request, res: Response) => {
-    const { challanNo, deliveryType, orderType } = req.params as { challanNo: string, deliveryType: string, orderType: string };
+    const { challanNo, deliveryType, orderType, jobNo } = req.params as { challanNo: string, jobNo: string, deliveryType: string, orderType: string };
 
     if (!challanNo || !orderType) {
         return res.status(400).send({ msg: "Missing required parameters", type: "error" });
@@ -87,9 +87,14 @@ export const challanMovementByChallanNo = async (req: Request, res: Response) =>
 
         const findComps = await prisma.composition.findMany(
             {
-                where: { orderType: orderType, },
+                where: {
+                    orderType: orderType, workOrder: {
+                        jobNo: jobNo,
+                    }
+                },
                 select: {
                     composition: true,
+
                     deliveries: {
                         where: { challanNo: Number(challanNo) },
                         select: {

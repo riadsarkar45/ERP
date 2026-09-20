@@ -58,7 +58,9 @@ const toNumber = (raw: unknown): number | null => {
 export const styleReconciliation = async (req: Request, res: Response) => {
     try {
         const { jobNo } = req.params as { jobNo: string };
-        if (!jobNo) {
+        console.log(jobNo, "job no request hit");
+        const userId = req.user?.userId
+        if (!jobNo || !userId) {
             return res.status(400).json({ message: "jobNo is required" });
         }
 
@@ -82,10 +84,10 @@ export const styleReconciliation = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "rows array is required and cannot be empty" });
         }
 
-        const submittedBy = "Riad"; // TODO: swap for req.user?.username once auth middleware attaches it
+        const submittedBy = userId;
 
         const prepared: Array<{ styleRequirementRowId: number; data: Record<string, number | string | null> }> = [];
-
+        console.log(prepared, "prepared data for reconciliation");
         for (const row of rows) {
             const styleRequirementRowId = Number(row.styleRequirementRowId);
             if (!styleRequirementRowId || Number.isNaN(styleRequirementRowId)) {
@@ -161,6 +163,8 @@ export const styleReconciliation = async (req: Request, res: Response) => {
                     styleRequirementRowId,
                 } as any,
             })
+
+            
         );
 
         // Execute all upserts and the status update in a single atomic transaction
