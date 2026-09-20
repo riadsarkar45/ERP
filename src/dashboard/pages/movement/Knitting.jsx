@@ -752,13 +752,13 @@ const Knitting = () => {
 
 
 
-    const handlePrepareChallanEdit = async (challanNo) => {
+    const handlePrepareChallanEdit = async (challanNo, jobNo) => {
         if (!challanNo) return;
         console.log(challanNo, "challan no from diff edit");
         setIsChallanDataLoading(true)
         setIsChallanEditing(true);
         try {
-            const res = await axiosPublic.get(`/api/detail-challan-view/knittingOrder/${challanNo}`)
+            const res = await axiosPublic.get(`/api/detail-challan-view/knittingOrder/${challanNo}/${jobNo}`)
             console.log(res.data, "challan data");
             setChallanToEditData(res.data);
             setIsChallanDataLoading(false)
