@@ -97,6 +97,7 @@ export const challanMovementByChallanNo = async (req: Request, res: Response) =>
 
                     deliveries: {
                         where: { challanNo: Number(challanNo) },
+                        orderBy: {id: "desc"},
                         select: {
                             id: true,
                             deliveryQty: true,
