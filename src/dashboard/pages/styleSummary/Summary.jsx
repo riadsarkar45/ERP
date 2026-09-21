@@ -603,6 +603,13 @@ export default function Summary() {
                     changedTable: cell.changedTable,
                     rowId: cell.rowId
                 };
+
+                // Additional booking is saved per job, so the request must include the job number
+                if (cell.changedTable === "compositionAdd") {
+                    const parentRow = rawData.find(r => r.rows?.some(sub => sub.id === cell.rowId));
+                    updatedData.jobNo = parentRow?.jobNo;
+                }
+
                 return axiosPrivate.patch(`/api/update-style-req/${cell.rowId}`, updatedData);
             });
 
