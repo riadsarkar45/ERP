@@ -45,6 +45,10 @@ import DailyFinishing from "../dashboard/pages/production/DailyFinishing";
 import DailyExport from "../dashboard/pages/production/DailyExport";
 import HeatSet from "../dashboard/pages/movement/others/HeatSet";
 import Trumble from "../dashboard/pages/movement/others/Trumble";
+import UserList from "../dashboard/pages/users/addNewUser/UserList";
+import UserPermission from "../dashboard/pages/users/addNewUser/UserPermission";
+import AssetSummary from "../dashboard/pages/MIS/FixedAsset/AssetSummary";
+import AssetMovement from "../dashboard/pages/MIS/FixedAsset/AssetMovement";
 
 const routers = createBrowserRouter([
     {
@@ -233,12 +237,20 @@ const routers = createBrowserRouter([
                         element: <DailyExport/>
                     },
                     {
-                        // path: "heat-set",
-                        // element: <HeatSet/>
+                        path: "user-list",
+                        element: <UserList/>
                     },
                     {
-                        // path: "trumble",
-                        // element: <Trumble/>
+                        path: "user-permission",
+                        element: <UserPermission/>
+                    },
+                    {
+                        path: "asset-summary",
+                        element: <AssetSummary/>
+                    },
+                    {
+                        path: "asset-movement",
+                        element: <AssetMovement/>
                     },
                 ]
             }
