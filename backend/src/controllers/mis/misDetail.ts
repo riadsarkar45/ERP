@@ -43,9 +43,16 @@ export const misDetailView = async (req: Request, res: Response) => {
 
 type Kind = "sent" | "returned" | "received" | "other";
 
+type DeliveryGroups = {
+    sent: string[];
+    returned: string[];
+    received: string[];
+    other?: string[];
+};
+
 // sent = counts as delivered, returned = subtracted from delivered,
 // received = comes back from the factory, other = shown as a column only
-const DELIVERY_CONFIG: Record<string, { sent: string[]; returned: string[]; received: string[]; other?: string[] }> = {
+const DELIVERY_CONFIG: Record<string, DeliveryGroups> = {
     knittingOrder: {
         sent: ["Yarn Delivery"],
         returned: ["Yarn Return"],
@@ -54,7 +61,14 @@ const DELIVERY_CONFIG: Record<string, { sent: string[]; returned: string[]; rece
     dyeingOrder: {
         sent: ["Grey Delivery"],
         returned: ["Grey Return"],
-        received: ["Grey Received", "Received From Compacting", "Received From Reprocess", "Received From HEAT Set", "Received From Trumble"],
+        received: [
+            "Grey Received",
+            "Received From Compacting",
+            "Received From Reprocess",
+            "Received From HEAT Set",
+            "Received From Trumble",
+            "Finish Received",
+        ],
     },
     aopOrder: {
         sent: ["Sent For Aop"],
@@ -69,11 +83,7 @@ const DELIVERY_CONFIG: Record<string, { sent: string[]; returned: string[]; rece
     },
 };
 
-const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const clean = (val?: string | null) => (val?.replace(/\s+/g, "") || "") || "Unknown";
-const addTo = (m: Record<string, number>, k: string, v: number) => {
-    m[k] = (m[k] || 0) + v;
-};
+type Column = { deliveryType: string; kind: Kind };
 
 type Acc = {
     woQty: number;
@@ -83,36 +93,70 @@ type Acc = {
     types: Record<string, number>;
     to: Record<string, number>;
 };
+
+type Row = {
+    workOrderQty: number;
+    types: Record<string, number>;
+    sentQty: number;
+    returnedQty: number;
+    receivedQty: number;
+    deliveredQty: number;
+    pendingQty: number;
+    yetToReceive: number;
+    toFactory: { factory: string; qty: number }[];
+};
+
+type WorkOrderRow = Row & { workOrderNo: string };
+type FactoryAcc = { acc: Acc; workOrders: WorkOrderRow[] };
+
+const round = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
+const clean = (val?: string | null): string => val?.replace(/\s+/g, "") || "Unknown";
+
+// "Sent For Aop", "SentForAop", "sent for aop" all match the same key
+const norm = (val?: string | null): string => (val ?? "").replace(/\s+/g, "").toLowerCase();
+
+const addTo = (m: Record<string, number>, key: string, value: number): void => {
+    m[key] = (m[key] ?? 0) + value;
+};
+
 const newAcc = (): Acc => ({ woQty: 0, sent: 0, returned: 0, received: 0, types: {}, to: {} });
 
-const addAcc = (target: Acc, src: Acc) => {
+const addAcc = (target: Acc, src: Acc): void => {
     target.woQty += src.woQty;
     target.sent += src.sent;
     target.returned += src.returned;
     target.received += src.received;
-    for (const [k, v] of Object.entries(src.types)) addTo(target.types, k, v);
-    for (const [k, v] of Object.entries(src.to)) addTo(target.to, k, v);
+    Object.keys(src.types).forEach((k) => addTo(target.types, k, src.types[k] ?? 0));
+    Object.keys(src.to).forEach((k) => addTo(target.to, k, src.to[k] ?? 0));
 };
 
-// Turns an accumulator into the row shape the frontend uses (work order, factory and job level)
-const toRow = (a: Acc) => {
+const roundMap = (m: Record<string, number>): Record<string, number> => {
+    const out: Record<string, number> = {};
+    Object.keys(m).forEach((k) => {
+        out[k] = round(m[k] ?? 0);
+    });
+    return out;
+};
+
+const toRow = (a: Acc): Row => {
     const delivered = a.sent - a.returned;
     return {
         workOrderQty: round(a.woQty),
-        types: Object.fromEntries(Object.entries(a.types).map(([k, v]) => [k, round(v)])),
+        types: roundMap(a.types),
         sentQty: round(a.sent),
         returnedQty: round(a.returned),
         receivedQty: round(a.received),
-        deliveredQty: round(delivered),                    // sent - returned
-        pendingQty: round(a.woQty - delivered),            // negative = over-delivered
+        deliveredQty: round(delivered),          // sent - returned
+        pendingQty: round(a.woQty - delivered),  // negative = over-delivered
         yetToReceive: round(delivered - a.received),
-        toFactory: Object.entries(a.to)
-            .map(([factory, qty]) => ({ factory, qty: round(qty) }))
+        toFactory: Object.keys(a.to)
+            .map((factory) => ({ factory, qty: round(a.to[factory] ?? 0) }))
             .sort((x, y) => y.qty - x.qty),
     };
 };
 
-export const misDetailViewByJobNo = async (req: Request, res: Response) => {
+export const misDetailViewByJobNo = async (req: Request, res: Response): Promise<Response> => {
     const { jobNo, orderType } = req.params as { jobNo: string; orderType: string };
 
     if (!jobNo || !orderType) {
@@ -124,15 +168,22 @@ export const misDetailViewByJobNo = async (req: Request, res: Response) => {
         return res.status(400).send({ message: "Unsupported order type.", type: "error" });
     }
 
-    const kindOf = new Map<string, Kind>();
-    config.sent.forEach((t) => kindOf.set(t, "sent"));
-    config.returned.forEach((t) => kindOf.set(t, "returned"));
-    config.received.forEach((t) => kindOf.set(t, "received"));
-    (config.other ?? []).forEach((t) => kindOf.set(t, "other"));
+    const columns: Column[] = [];
+    const kindByLabel = new Map<string, Kind>();
+    const labelByKey = new Map<string, string>(); // normalized name -> column label
 
-    // Every delivery type becomes a table column, in config order
-    const columns = Array.from(kindOf.entries()).map(([deliveryType, kind]) => ({ deliveryType, kind }));
-    const allTypes = columns.map((c) => c.deliveryType);
+    const register = (label: string, kind: Kind): void => {
+        const key = norm(label);
+        if (labelByKey.has(key)) return;
+        labelByKey.set(key, label);
+        kindByLabel.set(label, kind);
+        columns.push({ deliveryType: label, kind });
+    };
+
+    config.sent.forEach((t) => register(t, "sent"));
+    config.returned.forEach((t) => register(t, "returned"));
+    config.received.forEach((t) => register(t, "received"));
+    (config.other ?? []).forEach((t) => register(t, "other"));
 
     try {
         const workOrders = await prisma.workOrder.findMany({
@@ -144,8 +195,8 @@ export const misDetailViewByJobNo = async (req: Request, res: Response) => {
                     where: { orderType },
                     select: {
                         workOrderQty: true,
+                        // no deliveryType filter, so types missing from the config are not lost
                         deliveries: {
-                            where: { deliveryType: { in: allTypes } },
                             select: { deliveryType: true, deliveryQty: true, toFactory: true },
                         },
                     },
@@ -158,7 +209,7 @@ export const misDetailViewByJobNo = async (req: Request, res: Response) => {
         }
 
         const jobAcc = newAcc();
-        const factories: Record<string, { acc: Acc; workOrders: ({ workOrderNo: string } & ReturnType<typeof toRow>)[] }> = {};
+        const factories = new Map<string, FactoryAcc>();
 
         for (const wo of workOrders) {
             const acc = newAcc();
@@ -168,9 +219,18 @@ export const misDetailViewByJobNo = async (req: Request, res: Response) => {
 
                 for (const d of comp.deliveries) {
                     const qty = d.deliveryQty ?? 0;
-                    const kind = kindOf.get(d.deliveryType) ?? "other";
 
-                    addTo(acc.types, d.deliveryType, qty);
+                    // Match the config by normalized name. Anything unlisted gets its own "other" column.
+                    const key = norm(d.deliveryType);
+                    let label = labelByKey.get(key);
+                    if (!label) {
+                        label = (d.deliveryType ?? "").trim() || "Unknown";
+                        register(label, "other");
+                        labelByKey.set(key, label);
+                    }
+                    const kind: Kind = kindByLabel.get(label) ?? "other";
+
+                    addTo(acc.types, label, qty);
 
                     if (kind === "sent") {
                         acc.sent += qty;
@@ -184,19 +244,24 @@ export const misDetailViewByJobNo = async (req: Request, res: Response) => {
             }
 
             const factory = clean(wo.factoryName);
-            const f = (factories[factory] ??= { acc: newAcc(), workOrders: [] });
+            let f = factories.get(factory);
+            if (!f) {
+                f = { acc: newAcc(), workOrders: [] };
+                factories.set(factory, f);
+            }
+
             addAcc(f.acc, acc);
             addAcc(jobAcc, acc);
-            f.workOrders.push({ workOrderNo: wo.workOrderNo, ...toRow(acc) });
+            f.workOrders.push({ workOrderNo: String(wo.workOrderNo), ...toRow(acc) });
         }
 
         return res.status(200).send({
             data: {
                 jobNo,
                 orderType,
-                columns,                       // [{ deliveryType, kind }]
-                summary: toRow(jobAcc),        // job totals
-                factoryWise: Object.entries(factories).map(([factory, f]) => ({
+                columns,
+                summary: toRow(jobAcc),
+                factoryWise: Array.from(factories.entries()).map(([factory, f]) => ({
                     factory,
                     ...toRow(f.acc),
                     workOrders: f.workOrders,
