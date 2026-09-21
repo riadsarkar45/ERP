@@ -46,6 +46,9 @@ export const updateStyleReq = async (req: Request, res: Response) => {
     console.log(req.body);
 
     try {
+        // ─────────────────────────────────────────────────────────────
+        // Edits to styleRequirementRow fields (color, composition, dia, qty)
+        // ─────────────────────────────────────────────────────────────
         if (changedTable === "styleRequirementRows") {
             const rowIdNum = Number(rowId);
             if (!rowId || isNaN(rowIdNum)) {
@@ -116,20 +119,22 @@ export const updateStyleReq = async (req: Request, res: Response) => {
             return res.status(200).send({ message: "Update Successful", type: "success" });
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // Additional booking edit
+        // ─────────────────────────────────────────────────────────────
         if (changedTable === "compositionAdd") {
             const rowIdNum = Number(rowId);
             if (!rowId || isNaN(rowIdNum)) {
                 return res.status(400).send({ message: "rowId is required", type: "error" });
             }
 
-            // Accept number or string, and treat null/undefined as missing.
+            // Accept number or string; null/undefined means missing.
             const additionalStr = toTrimmedString(additional);
             if (additionalStr === undefined) {
                 return res.status(400).send({ message: "A valid additional value is required", type: "error" });
             }
 
-            // Empty string clears the value (0). Anything unparseable is rejected
-            // instead of being silently saved as 0.
+            // Empty string clears the value (0). Unparseable values are rejected.
             const additionalNum = additionalStr === "" ? 0 : evaluateQtyExpression(additionalStr);
             if (additionalNum === null || additionalNum === undefined || isNaN(additionalNum)) {
                 return res.status(400).send({ message: "A valid additional value is required", type: "error" });
@@ -144,34 +149,21 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                 return res.status(404).send({ message: "Row not found", type: "error" });
             }
 
-            // Job-wise update: a job is always required, and we never fall back to "all jobs".
-            // If the client didn't send jobNo, use this style requirement's own jobNo
-            // (the row's parent), so the update stays scoped to a single job.
-            let jobNoTrimmed = toTrimmedString(jobNo) ?? "";
-            if (!jobNoTrimmed) {
-                const parentStyleReq = await prisma.styleRequirement.findUnique({
-                    where: { id: targetRow.styleRequirementId },
-                    select: { jobNo: true },
-                });
-                jobNoTrimmed = parentStyleReq?.jobNo?.trim() ?? "";
-                if (jobNoTrimmed) {
-                    console.warn(
-                        `compositionAdd: jobNo missing in request for row=${rowIdNum}, using style requirement jobNo=${jobNoTrimmed}`
-                    );
-                }
-            }
+            const parentStyleReq = await prisma.styleRequirement.findUnique({
+                where: { id: targetRow.styleRequirementId },
+                select: { jobNo: true },
+            });
+            const parentJobNo = parentStyleReq?.jobNo?.trim() ?? "";
 
+            // Use the jobNo from the request, otherwise the row's own job.
+            // Never falls back to "all jobs".
+            const jobNoTrimmed = toTrimmedString(jobNo) || parentJobNo;
             if (!jobNoTrimmed) {
                 return res.status(400).send({ message: "jobNo is required", type: "error" });
             }
 
-            // NOTE: styleRequirementRow.additional is intentionally NOT updated here.
-            // That row is shared by every job under the style requirement, so writing
-            // to it would overwrite the value for all jobs. The per-job value lives
-            // on composition.additional.
-
-            const [linked, legacy] = await prisma.$transaction([
-                // Primary path: compositions linked by FK, limited to this job's work orders
+            const ops: Prisma.PrismaPromise<any>[] = [
+                // Per-job value on compositions (may match 0 rows if no work orders exist yet)
                 prisma.composition.updateMany({
                     where: {
                         styleRequirementRowId: rowIdNum,
@@ -182,7 +174,7 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                     },
                     data: { additional: additionalNum },
                 }),
-                // Legacy fallback: rows created before the FK existed
+                // Legacy compositions created before the FK existed
                 prisma.composition.updateMany({
                     where: {
                         styleRequirementRowId: null,
@@ -195,20 +187,33 @@ export const updateStyleReq = async (req: Request, res: Response) => {
                     },
                     data: { additional: additionalNum },
                 }),
-            ]);
+            ];
+
+            // The summary table displays additional from the styleRequirementRow.
+            // Only write it when this is the style requirement's own job, so the
+            // value of other jobs is never overwritten.
+            const updateRowAdditional = jobNoTrimmed === parentJobNo;
+            if (updateRowAdditional) {
+                ops.push(
+                    prisma.styleRequirementRow.update({
+                        where: { id: rowIdNum },
+                        data: { additional: additionalNum },
+                    })
+                );
+            }
+
+            const results = await prisma.$transaction(ops);
 
             console.log(
-                `compositionAdd job=${jobNoTrimmed} row=${rowIdNum}: linked=${linked.count}, legacy=${legacy.count}`
+                `compositionAdd job=${jobNoTrimmed} row=${rowIdNum}: linked=${results[0].count}, legacy=${results[1].count}, rowUpdated=${updateRowAdditional}`
             );
-
-            if (linked.count + legacy.count === 0) {
-                return res.status(404).send({ message: `No compositions found for job ${jobNoTrimmed}`, type: "error" });
-            }
 
             return res.status(200).send({ message: "Update Successful", type: "success" });
         }
 
-        // updating styleRequirement parent fields
+        // ─────────────────────────────────────────────────────────────
+        // styleRequirement parent fields (salesContact, buyer, style, po, jobNo)
+        // ─────────────────────────────────────────────────────────────
         const jobIdToNumber = Number(jobId);
         if (isNaN(jobIdToNumber)) {
             return res.status(400).send({ message: "Invalid jobId", type: "error" });

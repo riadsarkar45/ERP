@@ -604,7 +604,7 @@ export default function Summary() {
                     rowId: cell.rowId
                 };
 
-                // Additional booking is saved per job, so the request must include the job number
+                // Additional booking is saved per job, so send the job number
                 if (cell.changedTable === "compositionAdd") {
                     const parentRow = rawData.find(r => r.rows?.some(sub => sub.id === cell.rowId));
                     updatedData.jobNo = parentRow?.jobNo;
@@ -622,6 +622,7 @@ export default function Summary() {
             }
         } catch (err) {
             console.error("Failed to save updates:", err);
+            alert(err.response?.data?.message || "Failed to save updates");
         } finally {
             setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
         }
