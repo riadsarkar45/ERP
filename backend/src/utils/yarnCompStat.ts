@@ -68,14 +68,18 @@ export const calculateYarnCompStat = (orders: any[]) => {
         }));
 };
 
+const clean = (v: unknown) => String(v ?? "").trim();
+const fullKey = (color: unknown, comp: unknown, additional: unknown) =>
+    `${clean(color)}|${clean(comp)}|${clean(additional)}`;
+const looseKey = (color: unknown, comp: unknown) =>
+    `${clean(color)}|${clean(comp)}`;
+
 export const calculateOrdersForStyleSummary = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
         const rows = s.rows ?? [];
 
-        // 1-to-1 with table rows, now carrying reconciliation data through
         const compBreakdown = rows.map((row: any) => {
-            // Works whether Prisma returns an object (1-1) or an array (1-many)
             const reconciliation = Array.isArray(row.reconciliation)
                 ? row.reconciliation[0] ?? null
                 : row.reconciliation ?? null;
@@ -87,35 +91,70 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
             } as Record<string, any>;
         });
 
-        const rowIndexByKey = new Map<string, number>();
+        // Lookups: every key maps to a LIST of row indexes, so duplicates aren't lost
+        const rowIndexById = new Map<string | number, number>();
+        const rowsByFullKey = new Map<string, number[]>();
+        const rowsByLooseKey = new Map<string, number[]>();
+
+        const push = (m: Map<string, number[]>, k: string, i: number) => {
+            const arr = m.get(k);
+            if (arr) arr.push(i);
+            else m.set(k, [i]);
+        };
+
         rows.forEach((row: any, index: number) => {
-            const key = `${String(row.color).trim()}|${String(row.composition).trim()}`;
-            rowIndexByKey.set(key, index);
+            rowIndexById.set(row.id, index);
+            push(rowsByFullKey, fullKey(row.color, row.composition, row.additional), index);
+            push(rowsByLooseKey, looseKey(row.color, row.composition), index);
         });
 
-        workOrders.forEach((w: any) => {
-            if (!w.orderType) {
-                console.warn(
-                    `[calculateOrdersForStyleSummary] styleReq id=${s.id} (${s.styleNo}) has a workOrder with no orderType set.`
-                );
+        // Resolves which row a work-order composition / yarn job belongs to
+        const resolveRowIndex = (
+            item: any,
+            color: unknown,
+            composition: unknown,
+            occurrenceCounter: Map<string, number>
+        ): number | undefined => {
+            // 1. Best: explicit FK (once you add it to the schema)
+            if (item.styleRequirementRowId != null) {
+                return rowIndexById.get(item.styleRequirementRowId);
             }
-            const orderType = w.orderType || "Unknown";
 
-            // ── 1. Standard compositions (Knitting, Dyeing, AOP) ──
+            // 2. color + composition + additional
+            let candidates = rowsByFullKey.get(fullKey(color, composition, item.additional));
+            // 3. fallback: color + composition only
+            if (!candidates?.length) {
+                candidates = rowsByLooseKey.get(looseKey(color, composition));
+            }
+            if (!candidates?.length) return undefined;
+            if (candidates.length === 1) return candidates[0];
+
+            // 4. Still ambiguous: nth item with this key → nth duplicate row
+            const k = fullKey(color, composition, item.additional);
+            const n = occurrenceCounter.get(k) ?? 0;
+            occurrenceCounter.set(k, n + 1);
+
+            
+            return candidates[Math.min(n, candidates.length - 1)];
+        };
+
+        workOrders.forEach((w: any) => {
+            const orderType = w.orderType || "Unknown";
+            // reset per work order, so each work order's compositions map to rows in order
+            const occurrence = new Map<string, number>();
+
+            // ── 1. Standard compositions ──
             if (orderType !== "yarnDyeingOrder" && w.compositions) {
                 w.compositions.forEach((c: any) => {
-                    const key = `${String(c.color).trim()}|${String(c.composition).trim()}`;
-                    const matchingRowIndex = rowIndexByKey.get(key);
-
-                    if (matchingRowIndex === undefined) {
+                    const idx = resolveRowIndex(c, c.color, c.composition, occurrence);
+                    if (idx === undefined) {
                         console.warn(
-                            `[calculateOrdersForStyleSummary] styleReq id=${s.id} (${s.styleNo}): ` +
-                            `no matching row for color="${c.color}" composition="${c.composition}"`
+                            `[calculateOrdersForStyleSummary] styleReq id=${s.id}: no row for color="${c.color}" composition="${c.composition}"`
                         );
                         return;
                     }
 
-                    const breakdown = compBreakdown[matchingRowIndex];
+                    const breakdown = compBreakdown[idx];
 
                     if (typeof c.workOrderQty === "number") {
                         const wqKey = `${orderType}_workOrderQty`;
@@ -123,8 +162,8 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
                     }
 
                     (c.deliveries ?? []).forEach((d: any) => {
-                        const safeDeliveryType = String(d.deliveryType ?? "Unknown").replace(/\s+/g, "_");
-                        const deliveryKey = `${orderType}_${safeDeliveryType}`;
+                        const t = String(d.deliveryType ?? "Unknown").replace(/\s+/g, "_");
+                        const deliveryKey = `${orderType}_${t}`;
                         breakdown[deliveryKey] = (breakdown[deliveryKey] ?? 0) + (d.deliveryQty || 0);
                     });
                 });
@@ -133,21 +172,12 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
             // ── 2. Yarn dyeing jobs ──
             if (orderType === "yarnDyeingOrder" && w.yarnDyeingJobs) {
                 w.yarnDyeingJobs.forEach((yj: any) => {
-                    const key = `${String(yj.bookingColor).trim()}|${String(yj.composition).trim()}`;
-                    const matchingRowIndex = rowIndexByKey.get(key);
-
-                    if (matchingRowIndex === undefined) {
-                        console.warn(
-                            `[calculateOrdersForStyleSummary] yarnDyeing: no matching row for bookingColor="${yj.bookingColor}" composition="${yj.composition}"`
-                        );
-                        return;
-                    }
-
-                    const breakdown = compBreakdown[matchingRowIndex];
+                    const idx = resolveRowIndex(yj, yj.bookingColor, yj.composition, occurrence);
+                    if (idx === undefined) return;
 
                     if (typeof yj.qty === "number") {
                         const wqKey = `${orderType}_workOrderQty`;
-                        breakdown[wqKey] = (breakdown[wqKey] ?? 0) + yj.qty;
+                        compBreakdown[idx][wqKey] = (compBreakdown[idx][wqKey] ?? 0) + yj.qty;
                     }
                 });
             }

@@ -57,7 +57,6 @@ export const styleRequirements = async (req: Request, res: Response) => {
         const { jobNo } = req.params as { jobNo: string | undefined };
         // reconciliation
         const recon = req.query.reconciliation === 'true';
-        console.log(recon, "reconciliation");
         const {
             filters: filtersParam,
         } = req.query as { filters?: string };
@@ -80,7 +79,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
         const [styles, total] = await Promise.all([
             prisma.styleRequirement.findMany({
                 where: whereClause,
-                orderBy: { id: "asc" },
+                orderBy: { id: "desc" },
                 take: 40,
                 select: {
                     salesContact: true,
