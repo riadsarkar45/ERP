@@ -202,10 +202,10 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
 
     /* MIS drill-down is disabled while a row is being edited */
     const safeMisDetail = useCallback(
-        (type, jobNo) => {
+        (jobNo) => {
             if (editingJob != null) return;
             if (typeof handleGetMisDetail === "function") {
-                handleGetMisDetail(type, jobNo);
+                handleGetMisDetail(jobNo);
             }
         },
         [editingJob, handleGetMisDetail]
@@ -354,8 +354,8 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                     const rowBg = rowEditing
                         ? EDIT_BG
                         : i % 2 === 1
-                        ? "#F2F7F4"
-                        : "#ffffff";
+                            ? "#F2F7F4"
+                            : "#ffffff";
 
                     return (
                         <tr
@@ -364,6 +364,7 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                         >
                             {/* 1 - Job No */}
                             <td
+                                onClick={() => safeMisDetail(r.jobNo)}
                                 style={{
                                     ...cellStyle,
                                     backgroundColor: rowBg,
@@ -385,7 +386,6 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Sent For Aop", r.jobNo)}
                             >
                                 {fmt(r.sentForAop)}
                             </td>
@@ -417,7 +417,6 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Received From Aop", r.jobNo)}
                             >
                                 {fmt(r.receivedFromAop)}
                             </td>
@@ -429,7 +428,6 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("AOP Finish Fabric Rcvd", r.jobNo)}
                             >
                                 {fmt(r.aopFinishFabricRcvd)}
                             </td>
@@ -441,7 +439,6 @@ const AopGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Return From Aop", r.jobNo)}
                             >
                                 {fmt(r.returnFromAop)}
                             </td>

@@ -811,7 +811,7 @@ const Dyeing = () => {
         setIsChallanDataLoading(true)
         setIsChallanEditing(true);
         try {
-            const res = await axiosPublic.get(`/api/detail-challan-view/knittingOrder/${challanNo}/${jobNo}`)
+            const res = await axiosPublic.get(`/api/detail-challan-view/dyeingOrder/${challanNo}/${jobNo}`)
             console.log(res.data, "challan data");
             setChallanToEditData(res.data);
             setIsChallanDataLoading(false)

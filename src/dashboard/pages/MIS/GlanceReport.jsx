@@ -249,10 +249,10 @@ const GlanceReport = () => {
         setPage(1);
     };
 
-    const handleGetMisDetail = async (detailColumn, jobNo) => {
+    const handleGetMisDetail = async (jobNo) => {
         setModalState({ isLoading: true, isShowGlanceModal: true });
         try {
-            const res = await axiosPrivate.get(`/api/job-wise-mis-view/${jobNo}/${detailColumn}/${selectOrderType}`);
+            const res = await axiosPrivate.get(`/api/job-wise-mis-view/${jobNo}/${selectOrderType}`);
             setJobDetails(res?.data?.data);
             console.log(res.data);
         } catch (e) {

@@ -116,7 +116,7 @@ getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, d
 
 getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
 
-getRouters.get('/job-wise-mis-view/:jobNo/:deliveryType/:orderType', misDetailViewByJobNo);
+getRouters.get('/job-wise-mis-view/:jobNo/:orderType', misDetailViewByJobNo);
 
 getRouters.get('/detail-challan-view/:orderType/:challanNo/:jobNo', challanMovementByChallanNo);
 

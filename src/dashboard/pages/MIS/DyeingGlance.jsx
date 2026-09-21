@@ -204,10 +204,10 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
     }, []);
 
     const safeMisDetail = useCallback(
-        (type, jobNo) => {
+        (jobNo) => {
             if (editingJob != null) return;
             if (typeof handleGetMisDetail === "function") {
-                handleGetMisDetail(type, jobNo);
+                handleGetMisDetail(jobNo);
             }
         },
         [editingJob, handleGetMisDetail]
@@ -352,8 +352,8 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                     const rowBg = rowEditing
                         ? EDIT_BG
                         : i % 2 === 1
-                        ? "#F2F7F4"
-                        : "#ffffff";
+                            ? "#F2F7F4"
+                            : "#ffffff";
 
                     return (
                         <tr
@@ -362,6 +362,7 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                         >
                             {/* 1 - Job No */}
                             <td
+                                onClick={() => safeMisDetail(r.jobNo)}
                                 style={{
                                     ...cellStyle,
                                     backgroundColor: rowBg,
@@ -378,7 +379,6 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("dyeingWorkOrder", r.jobNo)}
                             >
                                 {fmt(r.wo)}
                             </td>
@@ -390,7 +390,6 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Grey Delivery", r.jobNo)}
                             >
                                 {fmt(r.greyDelivery)}
                             </td>
@@ -422,7 +421,6 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Grey Return", r.jobNo)}
                             >
                                 {fmt(r.greyReturn)}
                             </td>
@@ -434,7 +432,6 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Grey Received", r.jobNo)}
                             >
                                 {fmt(r.greyReceived)}
                             </td>
@@ -446,7 +443,7 @@ const DyeingGlance = ({ detailView, handleGetMisDetail, onSave }) => {
                                     backgroundColor: rowBg,
                                     cursor: "pointer",
                                 }}
-                                onClick={() => safeMisDetail("Finish Received", r.jobNo)}
+
                             >
                                 {fmt(r.finishReceived)}
                             </td>
