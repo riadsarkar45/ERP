@@ -3,8 +3,15 @@ import Input from '../../../../components/Input';
 import useAxiosPublic from '../../../../hooks/Axios';
 import useAxiosPrivate from '../../../../hooks/UseAxiosPrivate';
 // import useAxiosPrivate from '../../../../hooks/useAxiosPrivate';
-const roleOptions = ["SUPER ADMIN", "ADMIN", "AUDITOR"];
-const workingStations = ["SM SOURCING","APPAREL TODAY LTD", "MANGO TEX LTD", "ADVANCED COMPOSITE LTD"];
+const roleOptions = ['SUPER ADMIN',
+    'ADMIN',
+    'MERCHANDISING',
+    'FABRIC PLANNING',
+    'FABRIC MANAGER',
+    "QC'S",
+    "AUDITOR'S",
+    'MANAGEMENT',];
+const workingStations = ["SM SOURCING", "APPAREL TODAY LTD", "MANGO TEX LTD", "ADVANCED COMPOSITE LTD", "HEAD OFFICE"];
 
 const initialForm = {
     name: "",
@@ -60,6 +67,7 @@ const AddNewUser = () => {
         <div>
             <div className='bg-gray-100 p-2'>
                 <Input
+                    isShowOutLabel={true}
                     type='text'
                     label="Name"
                     className='mb-2'
@@ -67,6 +75,8 @@ const AddNewUser = () => {
                     onChange={handleChange("name")}
                 />
                 <Input
+                    isShowOutLabel={true}
+
                     type='text'
                     label="Phone Number"
                     className='mb-2'
@@ -74,6 +84,8 @@ const AddNewUser = () => {
                     onChange={handleChange("phoneNo")}
                 />
                 <Input
+                    isShowOutLabel={true}
+
                     type='password'
                     label="Password"
                     className='mb-2'
@@ -81,6 +93,8 @@ const AddNewUser = () => {
                     onChange={handleChange("password")}
                 />
                 <Input
+                    isShowOutLabel={true}
+
                     options={workingStations}
                     type='select'
                     label="Work Station"
@@ -89,6 +103,8 @@ const AddNewUser = () => {
                     onChange={handleChange("workStation")}
                 />
                 <Input
+                    isShowOutLabel={true}
+
                     options={roleOptions}
                     type='select'
                     label="User Role"
