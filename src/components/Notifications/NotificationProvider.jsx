@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../../hooks/socket.io/socketContext';
-import notiSound from '../../assets/anime-ahh.mp3';
+import notiSound from '../../assets/notification_o14egLP.mp3';
 
 export default function GlobalNotifications() {
     const socket = useSocket();

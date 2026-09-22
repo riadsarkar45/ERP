@@ -121,7 +121,6 @@ const NUMFMT_PCT_2 = '0.00"%"';
 const SHORT_EXCESS_FIXED_COLS = new Set([12, 15, 21, 27]);
 const PERCENT_FIXED_COLS_1DP = new Set([20, 26]);
 
-// Filter dropdown width (original was w-72 = 18rem = 288px)
 const FILTER_DROPDOWN_WIDTH = 220;
 
 const Reconciliation = () => {
@@ -137,7 +136,6 @@ const Reconciliation = () => {
     const [tempSelected, setTempSelected] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Portal dropdown refs & state
     const filterButtonRefs = useRef({});
     const filterDropdownRef = useRef(null);
     const [dropdownPos, setDropdownPos] = useState(null);
@@ -153,7 +151,7 @@ const Reconciliation = () => {
     const [showNotesModal, setShowNotesModal] = useState(false);
     const [notes, setNotes] = useState("");
     const [pendingSaveJobs, setPendingSaveJobs] = useState([]);
-    const [isReconciliationSubmitted, setIsReconciliationSubmitted] = useState({ messageType: "", message: "", isVisible: false })
+    const [isReconciliationSubmitted, setIsReconciliationSubmitted] = useState({ messageType: "", message: "", isVisible: false });
 
     const [selectedCell, setSelectedCell] = useState(null);
     const wrapperRef = useRef(null);
@@ -201,7 +199,7 @@ const Reconciliation = () => {
         3: { key: "jobNo", label: "JOB NO" },
         4: { key: "color", label: "COLOR" },
         5: { key: "composition", label: "COMPOSITION" },
-        7: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
+        8: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" }, // Fixed index from 7 to 8
     };
 
     const JOB_LEVEL_FILTER_KEYS = new Set(["dateOfReconciliation"]);
@@ -232,10 +230,13 @@ const Reconciliation = () => {
         setIsDataLoading(true);
         try {
             const params = { page: 1, limit: 10000, reconciliation: true };
-            if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
+            // Backend expects flat filters and handles deep nesting internally
+            if (Object.keys(activeFilters).length > 0) {
+                params.filters = JSON.stringify(activeFilters);
+            }
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setReportData(res.data.data);
-            console.log(res.data);
+            console.log(res.data, "recon data");
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
@@ -378,29 +379,63 @@ const Reconciliation = () => {
         }
 
         if (colKey === "manufacturingUnite") {
-            const set = new Set();
-            reportData.forEach(job => {
-                const comps = job?.rows || [];
-                const subRowCount = getSubRowCount(job);
-                for (let i = 0; i < subRowCount; i++) {
-                    set.add(getEffectiveManuUnit(job.jobNo, comps[i], i));
+            try {
+                const otherFilters = { ...activeFilters };
+                delete otherFilters[colKey];
+                const params = Object.keys(otherFilters).length > 0
+                    ? { filters: JSON.stringify(otherFilters) }
+                    : {};
+                const res = await axiosPrivate.get(`/api/glance/filter-options/${colKey}`, { params });
+                let options = res.data?.data || [];
+
+                if (options.length === 0) {
+                    const set = new Set();
+                    reportData.forEach(job => {
+                        const comps = job?.rows || [];
+                        const subRowCount = getSubRowCount(job);
+                        for (let i = 0; i < subRowCount; i++) {
+                            set.add(getEffectiveManuUnit(job.jobNo, comps[i], i));
+                        }
+                    });
+                    options = Array.from(set);
                 }
-            });
-            const options = Array.from(set).sort((a, b) => {
-                if (a === "" && b !== "") return 1;
-                if (b === "" && a !== "") return -1;
-                return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
-            });
-            setDropdownOptions(options);
-            const currentActive = activeFilters[colKey] || [];
-            setTempSelected(new Set(currentActive.length > 0 ? currentActive : options));
+
+                options.sort((a, b) => {
+                    if (a === "" && b !== "") return 1;
+                    if (b === "" && a !== "") return -1;
+                    return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
+                });
+                setDropdownOptions(options);
+                const currentActive = activeFilters[colKey] || [];
+                setTempSelected(new Set(currentActive.length > 0 ? currentActive : options));
+            } catch (err) {
+                console.error("Failed to fetch manufacturingUnite filter options:", err);
+                const set = new Set();
+                reportData.forEach(job => {
+                    const comps = job?.rows || [];
+                    const subRowCount = getSubRowCount(job);
+                    for (let i = 0; i < subRowCount; i++) {
+                        set.add(getEffectiveManuUnit(job.jobNo, comps[i], i));
+                    }
+                });
+                const options = Array.from(set).sort((a, b) => {
+                    if (a === "" && b !== "") return 1;
+                    if (b === "" && a !== "") return -1;
+                    return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
+                });
+                setDropdownOptions(options);
+                const currentActive = activeFilters[colKey] || [];
+                setTempSelected(new Set(currentActive.length > 0 ? currentActive : options));
+            }
             return;
         }
 
         try {
             const otherFilters = { ...activeFilters };
             delete otherFilters[colKey];
-            const params = Object.keys(otherFilters).length > 0 ? { filters: JSON.stringify(otherFilters) } : {};
+            const params = Object.keys(otherFilters).length > 0
+                ? { filters: JSON.stringify(otherFilters) }
+                : {};
 
             const res = await axiosPrivate.get(`/api/glance/filter-options/${colKey}`, { params });
             const options = res.data?.data || [];
@@ -446,7 +481,6 @@ const Reconciliation = () => {
 
     const getSubRowCount = (job) => Math.max((job?.rows || []).length, (job?.compBreakdown || []).length, 1);
 
-    // ===== PORTAL DROPDOWN POSITIONING =====
     const updateFilterDropdownPos = useCallback(() => {
         if (openFilterCol === null) return;
         const btn = filterButtonRefs.current[openFilterCol];
@@ -494,7 +528,6 @@ const Reconciliation = () => {
             document.removeEventListener('keydown', handleKey);
         };
     }, [openFilterCol]);
-    // ===== END PORTAL DROPDOWN POSITIONING =====
 
     const { flatRows, rowIndexMap } = useMemo(() => {
         const rows = [];
@@ -632,7 +665,7 @@ const Reconciliation = () => {
         setEditValues(prev => ({ ...prev, ...initialValues }));
         setEditingJobNo(jobNo);
     };
-
+console.log(editValues, "editing values");
     const handleCancelEdit = (jobNo, job) => {
         setEditValues(prev => {
             const next = { ...prev };
@@ -774,7 +807,6 @@ const Reconciliation = () => {
 
     const handleGlobalSubmit = () => {
         const jobsToSave = processedReportData.filter(job => selectedJobs.has(job.jobNo)).map(job => ({ jobNo: job.jobNo, job }));
-        console.log(jobsToSave);
         setPendingSaveJobs(jobsToSave);
         setNotes("");
         setShowNotesModal(true);
@@ -791,7 +823,6 @@ const Reconciliation = () => {
             payload.notes = "";
 
             await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
-            console.log(payload, "payload reconciliation");
             setEditingJobNo(null);
             setEditValues(prev => {
                 const next = { ...prev };
@@ -814,10 +845,8 @@ const Reconciliation = () => {
                 const payload = buildJobPayload(jobNo, job);
                 if (!payload || payload.rows.length === 0) continue;
                 payload.notes = notes;
-                console.log(payload.jobNo, "reconciliation saving data");
-                // await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
-                const submitReconciliation = await axiosPrivate.post(`/api/submit-reconciliation/${payload.jobNo}`, { notes: payload.notes })
-                console.log(submitReconciliation?.data?.message, "submitted option");
+
+                const submitReconciliation = await axiosPrivate.post(`/api/submit-reconciliation/${payload.jobNo}`, { notes: payload.notes });
                 if (submitReconciliation.status === 201) {
                     setIsReconciliationSubmitted({
                         message: submitReconciliation?.data?.message,
@@ -836,7 +865,6 @@ const Reconciliation = () => {
             setSelectedJobs(new Set());
             setEditingJobNo(null);
             setEditValues({});
-            // setShowNotesModal(false);
             setPendingSaveJobs([]);
             setNotes("");
             await fetchFilteredData();
@@ -947,7 +975,6 @@ const Reconciliation = () => {
         setIsExporting(true);
         try {
             const ExcelJS = await loadExcelJS();
-
             const wb = new ExcelJS.Workbook();
             wb.creator = "Reconciliation Report";
             wb.created = new Date();
@@ -1016,7 +1043,6 @@ const Reconciliation = () => {
                     const aopShortExcess = aopSent - aopReceived;
 
                     const manuUnitDisplay = getEffectiveManuUnit(jobNo, com, i);
-
                     const rowValues = new Array(TOTAL_COLS).fill("");
 
                     rowValues[0] = "";
@@ -1131,7 +1157,6 @@ const Reconciliation = () => {
                 }
 
                 const jobEndRow = ws.rowCount;
-
                 if (jobEndRow > jobStartRow) {
                     ws.mergeCells(jobStartRow, 2, jobEndRow, 2);
                     ws.mergeCells(jobStartRow, 4, jobEndRow, 4);
@@ -1232,13 +1257,12 @@ const Reconciliation = () => {
             URL.revokeObjectURL(url);
         } catch (err) {
             console.error("Excel export failed:", err);
-            alert("Excel export failed. Please check your internet connection (ExcelJS loads from CDN on first export) and try again.");
+            alert("Excel export failed. Please check your internet connection and try again.");
         } finally {
             setIsExporting(false);
         }
     };
 
-    // ===== PORTALED FILTER DROPDOWN =====
     const renderFilterDropdown = () => {
         if (openFilterCol === null || !dropdownPos) return null;
         const colMeta = FILTERABLE_COLS[openFilterCol];
@@ -1322,7 +1346,6 @@ const Reconciliation = () => {
             document.body
         );
     };
-    // ===== END PORTALED FILTER DROPDOWN =====
 
     return (
         <div className="min-h-screen w-full p-1 md:p-4 font-sans bg-stone-50">
@@ -1439,7 +1462,6 @@ const Reconciliation = () => {
                     onKeyDown={handleTableKeyDown}
                 >
                     <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
-                        {/* FIX: thead z-index raised from z-20 to z-50 so sticky header cells sit above the z-30 sticky body cells */}
                         <thead className="sticky top-0 z-50">
                             <tr>
                                 {YARN_TABLE_HEADERS.map((header, I) => {
@@ -1495,12 +1517,14 @@ const Reconciliation = () => {
                         </thead>
                         <tbody>
                             {isLoading && (
-                                <tr><td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle border-b border-[#47637a]">
-                                    <div className="flex flex-col items-center justify-center gap-3">
-                                        <RefreshCcw size={24} className="animate-spin text-blue-600" />
-                                        <span className="text-sm font-medium text-slate-500">Loading reconciliation data...</span>
-                                    </div>
-                                </td></tr>
+                                <tr>
+                                    <td colSpan={YARN_TABLE_HEADERS.length} className="px-4 py-20 text-center align-middle border-b border-[#47637a]">
+                                        <div className="flex flex-col items-center justify-center gap-3">
+                                            <RefreshCcw size={24} className="animate-spin text-blue-600" />
+                                            <span className="text-sm font-medium text-slate-500">Loading reconciliation data...</span>
+                                        </div>
+                                    </td>
+                                </tr>
                             )}
 
                             {!isLoading && processedReportData.length === 0 && (
@@ -1649,11 +1673,10 @@ const Reconciliation = () => {
                                             <td className={`${stickyBodyClass(6)} ${selectedCellClass(rowFlatIndex, 6)}`} style={stickyCellStyle(6, stickyBg)} {...cellProps(rowFlatIndex, 6)}>
                                                 <div className="flex items-center justify-center h-full font-mono text-sm">{com?.orderQty ?? "-"}</div>
                                             </td>
-                                            <td className={`${stickyBodyClass(7)} ${selectedCellClass(rowFlatIndex, 7)}`} style={stickyCellStyle(7, stickyBg)} {...cellProps(rowFlatIndex, 6)}>
+                                            <td className={`${stickyBodyClass(7)} ${selectedCellClass(rowFlatIndex, 7)}`} style={stickyCellStyle(7, stickyBg)} {...cellProps(rowFlatIndex, 7)}>
                                                 <div className={`flex items-center ${com?.additional && "bg-yellow-100 text-yellow-900 rounded-lg border-yellow-300 border"} justify-center h-full font-mono text-sm`}>{com?.additional ?? "-"}</div>
                                             </td>
-
-                                            <td className={`${stickyBodyClass(8)} ${selectedCellClass(rowFlatIndex, 8)}`} style={stickyCellStyle(8, stickyBg, true)} {...cellProps(rowFlatIndex, 7)}>
+                                            <td className={`${stickyBodyClass(8)} ${selectedCellClass(rowFlatIndex, 8)}`} style={stickyCellStyle(8, stickyBg, true)} {...cellProps(rowFlatIndex, 8)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob ? (
                                                         <input
@@ -1669,8 +1692,8 @@ const Reconciliation = () => {
                                                     )}
                                                 </div>
                                             </td>
-                                            {/* finish required qty */}
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 8)}`} style={cellStyle} {...cellProps(rowFlatIndex, 8)}>
+
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>
                                                 {(() => {
                                                     if (!com) return "-";
                                                     const additional = Number(com.additional) || 0;
@@ -1679,67 +1702,66 @@ const Reconciliation = () => {
                                                     const increaseFinishQty = (Number(com.finishRequiredQty) || 0) + netAdditional;
                                                     return increaseFinishQty.toFixed(2);
                                                 })()}
-
-                                            </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>
-                                                {(Number(com.finishRequiredQty) * (1 + Number(job.processLoss) / 100) + Number(com.additional)).toFixed(2)}
                                             </td>
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>
+                                                {(Number(com.finishRequiredQty) * (1 + Number(job.processLoss) / 100) + Number(com.additional)).toFixed(2)}
+                                            </td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 11)}`} style={cellStyle} {...cellProps(rowFlatIndex, 11)}>
                                                 {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
                                                     ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 11)}`} style={cellStyle} {...cellProps(rowFlatIndex, 11)}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 13)}`} style={cellStyle} {...cellProps(rowFlatIndex, 13)}>
                                                 {comp?.knittingOrder_Yarn_Return && !isNaN(Number(comp.knittingOrder_Yarn_Return))
                                                     ? Number(comp.knittingOrder_Yarn_Return).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 13)}`} style={cellStyle} {...cellProps(rowFlatIndex, 13)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 14)}`} style={cellStyle} {...cellProps(rowFlatIndex, 14)}>
                                                 {comp?.knittingOrder_Grey_Fabric_Received && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received))
                                                     ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 14)}`} style={cellStyle} {...cellProps(rowFlatIndex, 14)}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 15)}`} style={cellStyle} {...cellProps(rowFlatIndex, 15)}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 15)}`} style={cellStyle} {...cellProps(rowFlatIndex, 15)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 16)}`} style={cellStyle} {...cellProps(rowFlatIndex, 16)}>
                                                 {comp?.dyeingOrder_Grey_Delivery && !isNaN(Number(comp.dyeingOrder_Grey_Delivery))
                                                     ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 16)}`} style={cellStyle} {...cellProps(rowFlatIndex, 16)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 17)}`} style={cellStyle} {...cellProps(rowFlatIndex, 17)}>
                                                 {comp?.dyeingOrder_Grey_Return && !isNaN(Number(comp.dyeingOrder_Grey_Return))
                                                     ? Number(comp.dyeingOrder_Grey_Return).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 17)}`} style={cellStyle} {...cellProps(rowFlatIndex, 17)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 18)}`} style={cellStyle} {...cellProps(rowFlatIndex, 18)}>
                                                 {comp?.dyeingOrder_Grey_Received && !isNaN(Number(comp.dyeingOrder_Grey_Received))
                                                     ? Number(comp.dyeingOrder_Grey_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 18)}`} style={cellStyle} {...cellProps(rowFlatIndex, 18)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 19)}`} style={cellStyle} {...cellProps(rowFlatIndex, 19)}>
                                                 {comp?.dyeingOrder_Finish_Received && !isNaN(Number(comp.dyeingOrder_Finish_Received))
                                                     ? Number(comp.dyeingOrder_Finish_Received).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 19)}`} style={cellStyle} {...cellProps(rowFlatIndex, 19)}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>
                                                 {comp?.aopOrder_Sent_For_Aop && !isNaN(Number(comp.aopOrder_Sent_For_Aop))
                                                     ? Number(comp.aopOrder_Sent_For_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 23)}`} style={cellStyle} {...cellProps(rowFlatIndex, 23)}>
                                                 {comp?.aopOrder_Return_From_Aop && !isNaN(Number(comp.aopOrder_Return_From_Aop))
                                                     ? Number(comp.aopOrder_Return_From_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 23)}`} style={cellStyle} {...cellProps(rowFlatIndex, 23)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 24)}`} style={cellStyle} {...cellProps(rowFlatIndex, 24)}>
                                                 {comp?.aopOrder_Received_From_Aop && !isNaN(Number(comp.aopOrder_Received_From_Aop))
                                                     ? Number(comp.aopOrder_Received_From_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 24)}`} style={cellStyle} {...cellProps(rowFlatIndex, 24)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 25)}`} style={cellStyle} {...cellProps(rowFlatIndex, 25)}>
                                                 {comp?.aopOrder_AOP_Finish_Fabric_Rcvd && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd))
                                                     ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 25)}`} style={cellStyle} {...cellProps(rowFlatIndex, 25)}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 26)}`} style={cellStyle} {...cellProps(rowFlatIndex, 26)}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 26)}`} style={cellStyle} {...cellProps(rowFlatIndex, 26)}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 27)}`} style={cellStyle} {...cellProps(rowFlatIndex, 27)}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
 
                                             {TRAILING_FIELDS.map((field, idx) => {
                                                 const colIndex = FIXED_COLUMN_COUNT + idx;
@@ -1815,7 +1837,6 @@ const Reconciliation = () => {
                         </tbody>
 
                         {!isLoading && processedReportData.length > 0 && (
-                            /* FIX: tfoot z-index raised from z-20 to z-50 for the same reason as thead */
                             <tfoot className="sticky bottom-0 z-50 bg-[#6b7280]">
                                 <tr>
                                     <td className="sticky bottom-0 left-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle" style={stickyCellStyle(0, "#6b7280", false)} />
@@ -1929,7 +1950,6 @@ const Reconciliation = () => {
                 </div>
             </div>
 
-            {/* PORTALED FILTER DROPDOWN — rendered on top of everything */}
             {renderFilterDropdown()}
 
             {showNotesModal && (
@@ -1943,7 +1963,6 @@ const Reconciliation = () => {
                                 type="button"
                                 onClick={() => {
                                     cancelNotesModal();
-
                                     setIsReconciliationSubmitted({
                                         message: "",
                                         messageType: "",
@@ -1957,18 +1976,14 @@ const Reconciliation = () => {
                             </button>
                         </div>
                         <div className="p-5">
-                            {
-                                isReconciliationSubmitted.isVisible === true && (
-                                    <label className={`block ${isReconciliationSubmitted.messageType === "error" ? "bg-red-300 text-red-800 p-3 border border-red-500" : "bg-green-300 text-green-800 p-3 border border-green-500"} rounded-md mb-4 text-xs font-semibold uppercase tracking-wider`}>
-                                        {isReconciliationSubmitted.message}
-                                    </label>
-                                )
-                            }
+                            {isReconciliationSubmitted.isVisible === true && (
+                                <label className={`block ${isReconciliationSubmitted.messageType === "error" ? "bg-red-300 text-red-800 p-3 border border-red-500" : "bg-green-300 text-green-800 p-3 border border-green-500"} rounded-md mb-4 text-xs font-semibold uppercase tracking-wider`}>
+                                    {isReconciliationSubmitted.message}
+                                </label>
+                            )}
                             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
                                 Add notes for this reconciliation (optional)
                             </label>
-
-
                             <textarea
                                 className="w-full h-40 px-3 py-2.5 text-sm text-slate-900 bg-white border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none disabled:bg-slate-100 disabled:text-slate-400"
                                 placeholder="e.g. Adjustments made due to..., Reconciled with supervisor..."
@@ -2005,9 +2020,8 @@ const Reconciliation = () => {
                         </div>
                     </div>
                 </div>
-            )
-            }
-        </div >
+            )}
+        </div>
     );
 };
 

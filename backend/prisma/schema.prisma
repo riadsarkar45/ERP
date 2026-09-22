@@ -101,6 +101,7 @@ model StyleRequirement {
   styleNo              String
   processLoss          Float
   isReconciliationDone Boolean?              @default(false)
+  dateOfReconciliation DateTime              @default(now())
   rows                 StyleRequirementRow[]
   sizes                sizes[]
   workOrders           WorkOrder[]

@@ -19,7 +19,6 @@ const buildWhereClause = (
     jobNo: string | undefined,
     filters: StyleFilters | undefined
 ): Prisma.StyleRequirementWhereInput => {
-    // Added condition to only fetch jobs where reconciliation is NOT done
     const where: any = {
         isReconciliationDone: false,
         ...(jobNo ? { jobNo } : {}),
@@ -27,7 +26,8 @@ const buildWhereClause = (
 
     if (!filters) return where;
 
-    const rowsConditions: any[] = [];
+    const rowLevelConditions: any = {};
+    let hasRowLevelConditions = false;
 
     for (const [columnName, values] of Object.entries(filters)) {
         if (!values || values.length === 0) continue;
@@ -35,15 +35,21 @@ const buildWhereClause = (
         if (DIRECT_FIELDS.has(columnName)) {
             where[columnName] = { in: values };
         } else if (ROWS_RELATION_FIELDS.has(columnName)) {
-            rowsConditions.push({ [columnName]: { in: values } });
+            rowLevelConditions[columnName] = { in: values };
+            hasRowLevelConditions = true;
+        } else if (columnName === "manufacturingUnite") {
+            rowLevelConditions.reconciliation = {
+                manufacturingUnite: { in: values }
+            };
+            hasRowLevelConditions = true;
         }
     }
 
-    if (rowsConditions.length > 0) {
-        where.AND = [
-            ...(where.AND ?? []),
-            ...rowsConditions.map((cond) => ({ rows: { some: cond } })),
-        ];
+    // Deep filtering: Ensure a SINGLE row matches ALL row-level conditions simultaneously
+    if (hasRowLevelConditions) {
+        where.rows = {
+            some: rowLevelConditions
+        };
     }
 
     return where;
@@ -51,16 +57,11 @@ const buildWhereClause = (
 
 export const styleRequirements = async (req: Request, res: Response) => {
     try {
-
         const requestStart = process.hrtime.bigint();
 
         const { jobNo } = req.params as { jobNo: string | undefined };
-        // reconciliation
         const recon = req.query.reconciliation === 'true';
-        const {
-            filters: filtersParam,
-        } = req.query as { filters?: string };
-
+        const { filters: filtersParam } = req.query as { filters?: string };
 
         let filters: StyleFilters | undefined;
         if (filtersParam) {
@@ -88,6 +89,9 @@ export const styleRequirements = async (req: Request, res: Response) => {
                     jobNo: true,
                     processLoss: true,
                     poNo: true,
+                    ...recon && {
+                        dateOfReconciliation: true,
+                    },
                     id: true,
                     rows: {
                         select: {
@@ -125,7 +129,6 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             }
                         },
                     },
-
                     workOrders: {
                         select: {
                             orderType: true,
@@ -188,10 +191,13 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
             }
         }
 
-        if (
-            !DIRECT_FIELDS.has(columnName) &&
-            !ROWS_RELATION_FIELDS.has(columnName)
-        ) {
+        const filterableFields = new Set([
+            ...DIRECT_FIELDS,
+            ...ROWS_RELATION_FIELDS,
+            "manufacturingUnite"
+        ]);
+
+        if (!filterableFields.has(columnName)) {
             return res.status(400).json({
                 type: "error",
                 message: `Column "${columnName}" is not filterable`,
@@ -217,7 +223,7 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
                     (value: unknown): value is string =>
                         typeof value === "string" && value.length > 0
                 );
-        } else {
+        } else if (ROWS_RELATION_FIELDS.has(columnName)) {
             const rows = await prisma.styleRequirementRow.findMany({
                 where: {
                     styleRequirement: scopingWhere,
@@ -234,6 +240,32 @@ export const getGlanceFilterOptions = async (req: Request, res: Response) => {
                     (value: unknown): value is string =>
                         typeof value === "string" && value.length > 0
                 );
+        } else if (columnName === "manufacturingUnite") {
+            const rows = await prisma.styleRequirementRow.findMany({
+                where: {
+                    styleRequirement: scopingWhere,
+                    reconciliation: {
+                        isNot: null
+                    }
+                },
+                select: {
+                    reconciliation: {
+                        select: {
+                            manufacturingUnite: true
+                        }
+                    }
+                },
+            });
+
+            const rawValues = rows
+                .map((row: any) => row.reconciliation?.manufacturingUnite)
+                .filter(
+                    (value: unknown): value is string =>
+                        typeof value === "string" && value.trim().length > 0
+                );
+
+            // Remove duplicates and sort
+            values = Array.from(new Set(rawValues)).sort((a, b) => a.localeCompare(b));
         }
 
         values.sort((a, b) => a.localeCompare(b));
