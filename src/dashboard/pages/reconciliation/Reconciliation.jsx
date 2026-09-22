@@ -30,7 +30,7 @@ const STICKY_LEFT_OFFSETS = STICKY_COL_WIDTHS.reduce((acc, w, i) => {
 }, []);
 const LAST_STICKY_INDEX = STICKY_COL_WIDTHS.length - 1;
 
-const FIXED_COLUMN_COUNT = 27;
+const FIXED_COLUMN_COUNT = 28;
 
 const normalizeFilterVal = (v) => {
     if (v === null || v === undefined) return "";
@@ -118,8 +118,8 @@ const NUMFMT_SHORT_EXCESS = '[Green]+0.00;[Red]-0.00;0.00';
 const NUMFMT_PCT_1 = '0.0"%"';
 const NUMFMT_PCT_2 = '0.00"%"';
 
-const SHORT_EXCESS_FIXED_COLS = new Set([11, 14, 20, 26]);
-const PERCENT_FIXED_COLS_1DP = new Set([19, 25]);
+const SHORT_EXCESS_FIXED_COLS = new Set([12, 15, 21, 27]);
+const PERCENT_FIXED_COLS_1DP = new Set([20, 26]);
 
 // Filter dropdown width (original was w-72 = 18rem = 288px)
 const FILTER_DROPDOWN_WIDTH = 220;
@@ -153,6 +153,7 @@ const Reconciliation = () => {
     const [showNotesModal, setShowNotesModal] = useState(false);
     const [notes, setNotes] = useState("");
     const [pendingSaveJobs, setPendingSaveJobs] = useState([]);
+    const [isReconciliationSubmitted, setIsReconciliationSubmitted] = useState({ messageType: "", message: "", isVisible: false })
 
     const [selectedCell, setSelectedCell] = useState(null);
     const wrapperRef = useRef(null);
@@ -813,13 +814,29 @@ const Reconciliation = () => {
                 const payload = buildJobPayload(jobNo, job);
                 if (!payload || payload.rows.length === 0) continue;
                 payload.notes = notes;
-                await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
+                console.log(payload.jobNo, "reconciliation saving data");
+                // await axiosPrivate.patch(`/api/styles/${encodeURIComponent(jobNo)}/reconciliation`, payload);
+                const submitReconciliation = await axiosPrivate.post(`/api/submit-reconciliation/${payload.jobNo}`, { notes: payload.notes })
+                console.log(submitReconciliation?.data?.message, "submitted option");
+                if (submitReconciliation.status === 201) {
+                    setIsReconciliationSubmitted({
+                        message: submitReconciliation?.data?.message,
+                        messageType: "success",
+                        isVisible: true
+                    });
+                } else {
+                    setIsReconciliationSubmitted({
+                        message: "Failed to submit reconciliation",
+                        messageType: "error",
+                        isVisible: true
+                    });
+                }
             }
 
             setSelectedJobs(new Set());
             setEditingJobNo(null);
             setEditValues({});
-            setShowNotesModal(false);
+            // setShowNotesModal(false);
             setPendingSaveJobs([]);
             setNotes("");
             await fetchFilteredData();
@@ -1009,26 +1026,27 @@ const Reconciliation = () => {
                     rowValues[4] = com?.color ?? "";
                     rowValues[5] = com?.composition ?? "";
                     rowValues[6] = com?.orderQty != null ? Number(com.orderQty) : "";
-                    rowValues[7] = manuUnitDisplay;
-                    rowValues[8] = com?.finishRequiredQty != null ? Number(com.finishRequiredQty) : "";
-                    rowValues[9] = com ? yarnRequiredQty : "";
-                    rowValues[10] = comp?.knittingOrder_Yarn_Delivery != null && !isNaN(Number(comp.knittingOrder_Yarn_Delivery)) ? Number(comp.knittingOrder_Yarn_Delivery) : "";
-                    rowValues[11] = comp ? yarnShortExcessReq : "";
-                    rowValues[12] = comp?.knittingOrder_Yarn_Return != null && !isNaN(Number(comp.knittingOrder_Yarn_Return)) ? Number(comp.knittingOrder_Yarn_Return) : "";
-                    rowValues[13] = comp?.knittingOrder_Grey_Fabric_Received != null && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received)) ? Number(comp.knittingOrder_Grey_Fabric_Received) : "";
-                    rowValues[14] = comp ? knitShortExcess : "";
-                    rowValues[15] = comp?.dyeingOrder_Grey_Delivery != null && !isNaN(Number(comp.dyeingOrder_Grey_Delivery)) ? Number(comp.dyeingOrder_Grey_Delivery) : "";
-                    rowValues[16] = comp?.dyeingOrder_Grey_Return != null && !isNaN(Number(comp.dyeingOrder_Grey_Return)) ? Number(comp.dyeingOrder_Grey_Return) : "";
-                    rowValues[17] = comp?.dyeingOrder_Grey_Received != null && !isNaN(Number(comp.dyeingOrder_Grey_Received)) ? Number(comp.dyeingOrder_Grey_Received) : "";
-                    rowValues[18] = comp?.dyeingOrder_Finish_Received != null && !isNaN(Number(comp.dyeingOrder_Finish_Received)) ? Number(comp.dyeingOrder_Finish_Received) : "";
-                    rowValues[19] = comp ? dyeProcessLoss : "";
-                    rowValues[20] = comp ? dyeShortExcess : "";
-                    rowValues[21] = comp?.aopOrder_Sent_for_AOP != null && !isNaN(Number(comp.aopOrder_Sent_for_AOP)) ? Number(comp.aopOrder_Sent_for_AOP) : "";
-                    rowValues[22] = comp?.aopOrder_Return_From_Aop != null && !isNaN(Number(comp.aopOrder_Return_From_Aop)) ? Number(comp.aopOrder_Return_From_Aop) : "";
-                    rowValues[23] = comp?.aopOrder_Received_From_Aop != null && !isNaN(Number(comp.aopOrder_Received_From_Aop)) ? Number(comp.aopOrder_Received_From_Aop) : "";
-                    rowValues[24] = comp?.aopOrder_AOP_Finish_Fabric_Rcvd != null && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd)) ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd) : "";
-                    rowValues[25] = comp ? aopProcessLoss : "";
-                    rowValues[26] = comp ? aopShortExcess : "";
+                    rowValues[7] = com?.additional != null ? Number(com.additional) : "";
+                    rowValues[8] = manuUnitDisplay;
+                    rowValues[9] = com?.finishRequiredQty != null ? Number(com.finishRequiredQty) : "";
+                    rowValues[10] = com ? yarnRequiredQty : "";
+                    rowValues[11] = comp?.knittingOrder_Yarn_Delivery != null && !isNaN(Number(comp.knittingOrder_Yarn_Delivery)) ? Number(comp.knittingOrder_Yarn_Delivery) : "";
+                    rowValues[12] = comp ? yarnShortExcessReq : "";
+                    rowValues[13] = comp?.knittingOrder_Yarn_Return != null && !isNaN(Number(comp.knittingOrder_Yarn_Return)) ? Number(comp.knittingOrder_Yarn_Return) : "";
+                    rowValues[14] = comp?.knittingOrder_Grey_Fabric_Received != null && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received)) ? Number(comp.knittingOrder_Grey_Fabric_Received) : "";
+                    rowValues[15] = comp ? knitShortExcess : "";
+                    rowValues[16] = comp?.dyeingOrder_Grey_Delivery != null && !isNaN(Number(comp.dyeingOrder_Grey_Delivery)) ? Number(comp.dyeingOrder_Grey_Delivery) : "";
+                    rowValues[17] = comp?.dyeingOrder_Grey_Return != null && !isNaN(Number(comp.dyeingOrder_Grey_Return)) ? Number(comp.dyeingOrder_Grey_Return) : "";
+                    rowValues[18] = comp?.dyeingOrder_Grey_Received != null && !isNaN(Number(comp.dyeingOrder_Grey_Received)) ? Number(comp.dyeingOrder_Grey_Received) : "";
+                    rowValues[19] = comp?.dyeingOrder_Finish_Received != null && !isNaN(Number(comp.dyeingOrder_Finish_Received)) ? Number(comp.dyeingOrder_Finish_Received) : "";
+                    rowValues[20] = comp ? dyeProcessLoss : "";
+                    rowValues[21] = comp ? dyeShortExcess : "";
+                    rowValues[22] = comp?.aopOrder_Sent_for_AOP != null && !isNaN(Number(comp.aopOrder_Sent_for_AOP)) ? Number(comp.aopOrder_Sent_for_AOP) : "";
+                    rowValues[23] = comp?.aopOrder_Return_From_Aop != null && !isNaN(Number(comp.aopOrder_Return_From_Aop)) ? Number(comp.aopOrder_Return_From_Aop) : "";
+                    rowValues[24] = comp?.aopOrder_Received_From_Aop != null && !isNaN(Number(comp.aopOrder_Received_From_Aop)) ? Number(comp.aopOrder_Received_From_Aop) : "";
+                    rowValues[25] = comp?.aopOrder_AOP_Finish_Fabric_Rcvd != null && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd)) ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd) : "";
+                    rowValues[26] = comp ? aopProcessLoss : "";
+                    rowValues[27] = comp ? aopShortExcess : "";
 
                     TRAILING_FIELDS.forEach((field, idx) => {
                         const colIdx = FIXED_COLUMN_COUNT + idx;
@@ -1131,25 +1149,26 @@ const Reconciliation = () => {
             const subtotalValues = new Array(TOTAL_COLS).fill("");
             subtotalValues[3] = "SUB-TOTAL";
             subtotalValues[6] = footerTotals.orderQty;
-            subtotalValues[8] = footerTotals.finishRequiredQty;
-            subtotalValues[9] = footerTotals.yarnRequiredQty;
-            subtotalValues[10] = footerTotals.knitYarnDelivery;
-            subtotalValues[11] = footerTotals.yarnShortExcessReq;
-            subtotalValues[12] = footerTotals.knitYarnReturn;
-            subtotalValues[13] = footerTotals.knitGreyReceived;
-            subtotalValues[14] = footerTotals.knitShortExcess;
-            subtotalValues[15] = footerTotals.dyeGreyDelivery;
-            subtotalValues[16] = footerTotals.dyeGreyReturn;
-            subtotalValues[17] = footerTotals.dyeGreyReceived;
-            subtotalValues[18] = footerTotals.dyeFinishReceived;
-            subtotalValues[19] = "";
-            subtotalValues[20] = footerTotals.dyeShortExcess;
-            subtotalValues[21] = footerTotals.aopSent;
-            subtotalValues[22] = footerTotals.aopReceived;
-            subtotalValues[23] = footerTotals.aopGreyReceived;
-            subtotalValues[24] = footerTotals.aopFinishReceived;
-            subtotalValues[25] = "";
-            subtotalValues[26] = footerTotals.aopShortExcess;
+            subtotalValues[7] = footerTotals.additionalQty;
+            subtotalValues[9] = footerTotals.finishRequiredQty;
+            subtotalValues[10] = footerTotals.yarnRequiredQty;
+            subtotalValues[11] = footerTotals.knitYarnDelivery;
+            subtotalValues[12] = footerTotals.yarnShortExcessReq;
+            subtotalValues[13] = footerTotals.knitYarnReturn;
+            subtotalValues[14] = footerTotals.knitGreyReceived;
+            subtotalValues[15] = footerTotals.knitShortExcess;
+            subtotalValues[16] = footerTotals.dyeGreyDelivery;
+            subtotalValues[17] = footerTotals.dyeGreyReturn;
+            subtotalValues[18] = footerTotals.dyeGreyReceived;
+            subtotalValues[19] = footerTotals.dyeFinishReceived;
+            subtotalValues[20] = "";
+            subtotalValues[21] = footerTotals.dyeShortExcess;
+            subtotalValues[22] = footerTotals.aopSent;
+            subtotalValues[23] = footerTotals.aopReceived;
+            subtotalValues[24] = footerTotals.aopGreyReceived;
+            subtotalValues[25] = footerTotals.aopFinishReceived;
+            subtotalValues[26] = "";
+            subtotalValues[27] = footerTotals.aopShortExcess;
 
             TRAILING_FIELDS.forEach((field, idx) => {
                 const colIdx = FIXED_COLUMN_COUNT + idx;
@@ -1922,7 +1941,15 @@ const Reconciliation = () => {
                             </h3>
                             <button
                                 type="button"
-                                onClick={cancelNotesModal}
+                                onClick={() => {
+                                    cancelNotesModal();
+
+                                    setIsReconciliationSubmitted({
+                                        message: "",
+                                        messageType: "",
+                                        isVisible: false
+                                    });
+                                }}
                                 disabled={savingJob}
                                 className="p-1 rounded hover:bg-slate-200 transition-colors text-slate-700 hover:text-slate-900 disabled:opacity-50"
                             >
@@ -1930,9 +1957,18 @@ const Reconciliation = () => {
                             </button>
                         </div>
                         <div className="p-5">
+                            {
+                                isReconciliationSubmitted.isVisible === true && (
+                                    <label className={`block ${isReconciliationSubmitted.messageType === "error" ? "bg-red-300 text-red-800 p-3 border border-red-500" : "bg-green-300 text-green-800 p-3 border border-green-500"} rounded-md mb-4 text-xs font-semibold uppercase tracking-wider`}>
+                                        {isReconciliationSubmitted.message}
+                                    </label>
+                                )
+                            }
                             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
                                 Add notes for this reconciliation (optional)
                             </label>
+
+
                             <textarea
                                 className="w-full h-40 px-3 py-2.5 text-sm text-slate-900 bg-white border-2 border-[#47637a] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none disabled:bg-slate-100 disabled:text-slate-400"
                                 placeholder="e.g. Adjustments made due to..., Reconciled with supervisor..."
@@ -1969,8 +2005,9 @@ const Reconciliation = () => {
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };
 

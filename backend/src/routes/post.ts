@@ -8,6 +8,7 @@ import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 import { generateBill } from "../controllers/generateBill/generatebill";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 import { authenticate } from "../middleware/Authenticate.middleware";
+import { submitReconciliation } from "../controllers/newStyleRequirements/submitRecon";
 
 const router = express.Router();
 
@@ -24,6 +25,8 @@ router.post("/new-style-requirements", responseTimeMonitor, authenticate, create
 router.post("/cutting-production", responseTimeMonitor, cuttingDataUpdate)
 
 router.post("/generate-bill", responseTimeMonitor, generateBill);
+
+router.post("/submit-reconciliation/:jobNo", responseTimeMonitor, authenticate, submitReconciliation);
 
 
 export default router;

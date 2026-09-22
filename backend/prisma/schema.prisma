@@ -106,6 +106,7 @@ model StyleRequirement {
   workOrders           WorkOrder[]
   createdBy            Int?
   user                 user?                 @relation(fields: [createdBy], references: [id])
+  reconciliationNotes  reconciliationNotes[]
 
   @@index([buyerName])
   @@index([jobNo])
@@ -223,19 +224,20 @@ model jobs {
 }
 
 model user {
-  id                Int                        @id @default(autoincrement())
-  userName          String?                    @default("NULL")
-  name              String
-  phoneNo           String                     @unique
-  password          String
-  userRole          String
-  workingStation    String?                    @default("NULL")
-  refreshTokens     refreshToken[]
-  deliveries        deliveries[]
-  workOrders        WorkOrder[]                @relation("WorkOrderCreatedBy")
-  styleRequirements StyleRequirement[]
-  requestsReceived  workOrderApprovalRequest[] @relation("RequestTo")
-  requestsMade      workOrderApprovalRequest[] @relation("RequestedBy")
+  id                  Int                        @id @default(autoincrement())
+  userName            String?                    @default("NULL")
+  name                String
+  phoneNo             String                     @unique
+  password            String
+  userRole            String
+  workingStation      String?                    @default("NULL")
+  refreshTokens       refreshToken[]
+  deliveries          deliveries[]
+  workOrders          WorkOrder[]                @relation("WorkOrderCreatedBy")
+  styleRequirements   StyleRequirement[]
+  requestsReceived    workOrderApprovalRequest[] @relation("RequestTo")
+  requestsMade        workOrderApprovalRequest[] @relation("RequestedBy")
+  reconciliationNotes reconciliationNotes[]
 }
 
 model refreshToken {
@@ -252,7 +254,7 @@ model refreshToken {
 }
 
 model reconciliationData {
-  id                        Int                   @id @default(autoincrement())
+  id                        Int                  @id @default(autoincrement())
   fabricIssueCuttingDept    Int
   cadConsumption            Int
   plannedCuttingQty         Int
@@ -269,23 +271,24 @@ model reconciliationData {
   plannedLeftOverQty        Int
   physicalFoundLeftOver     Int
   submittedBy               String
-  submittedDate             DateTime              @default(now())
-  dateOfReconciliation      DateTime
-  manufacturingUnite        String                @default("NULL")
-  sentForEmbellishment      Int                   @default(0)
-  receivedFromEmbellishment Int                   @default(0)
-  styleRequirementRow       StyleRequirementRow?  @relation(fields: [styleRequirementRowId], references: [id])
-  styleRequirementRowId     Int?                  @unique
+  submittedDate             DateTime             @default(now())
+  dateOfReconciliation      DateTime             @default(now())
+  manufacturingUnite        String               @default("NULL")
+  sentForEmbellishment      Int                  @default(0)
+  receivedFromEmbellishment Int                  @default(0)
+  styleRequirementRow       StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
+  styleRequirementRowId     Int?                 @unique
   note                      String?
-  reconciliationNotes       reconciliationNotes[]
 }
 
 model reconciliationNotes {
-  id                 Int                @id @default(autoincrement())
-  dateTime           DateTime           @default(now())
+  id                 Int              @id @default(autoincrement())
+  dateTime           DateTime         @default(now())
   reconciliationNote String
-  reconciliationId   Int
-  reconciliations    reconciliationData @relation(fields: [reconciliationId], references: [id])
+  styleRequirementId Int
+  stylesRequirements StyleRequirement @relation(fields: [styleRequirementId], references: [id])
+  userId             Int              @default(1)
+  submittedBy        user             @relation(fields: [userId], references: [id])
 }
 
 model yarnStock {
