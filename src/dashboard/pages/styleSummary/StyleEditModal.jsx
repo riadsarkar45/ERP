@@ -1,18 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X, Save, Plus, Trash2, Loader2 } from 'lucide-react';
 import Input from '../../../components/Input';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
-// Generates a temp id for freshly-added composition rows so we can tell
-// them apart from existing rows when building the save diff, and so React
-// has a stable key even before the row round-trips through the backend.
 let tempIdCounter = 0;
 const generateTempId = () => `temp-${Date.now()}-${++tempIdCounter}`;
 
 const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSave }) => {
     const [styles, setStyles] = useState([]);
-
-    // Snapshot of the data exactly as it arrived, used as the diff baseline.
-    // Keyed by style.id -> { ...style, rowsById: Map }
+    const [isSuccess, setIsSuccess] = useState({ isSuccess: null, message: "" });
+    const [isLoading1, setIsLoading1] = useState(false);
+    const axiosSecure = useAxiosPrivate();
     const originalMapRef = useRef(new Map());
 
     useEffect(() => {
@@ -70,6 +68,8 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                 finishDia: '',
                                 orderQty: '',
                                 finishRequiredQty: '',
+                                processLoss: '',
+                                additional: '',
                             },
                             ...(s.rows || []),
                         ],
@@ -79,24 +79,48 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
         );
     };
 
-    const removeBreakdownRow = (styleIndex, rowIndex) => {
-        setStyles((prev) =>
-            prev.map((s, i) =>
-                i === styleIndex
-                    ? { ...s, rows: (s.rows || []).filter((_, j) => j !== rowIndex) }
-                    : s
-            )
-        );
+    const removeBreakdownRow = async (styleIndex, rowIndex, compId, deleteType) => {
+        console.log(compId, "composition id");
+        setIsLoading1(true);
+
+        try {
+            const res = await axiosSecure.delete(`/api/delete-style-data/${compId}/${deleteType}`);
+            console.log(res, "delete response");
+            
+            // Robust success check covering all common API response shapes
+            const isSuccessful = 
+                res.status === 200 || 
+                res.status === 204 || 
+                res.data?.status === 200 || 
+                res.data?.data === 200 ||
+                res.data?.type === "success";
+
+            if (isSuccessful) {
+                setIsLoading1(false);
+                setIsSuccess({ isSuccess: true, message: "Delete successful" });
+                setStyles((prev) =>
+                    prev.map((s, i) =>
+                        i === styleIndex
+                            ? { ...s, rows: (s.rows || []).filter((_, j) => j !== rowIndex) }
+                            : s
+                    )
+                );
+            } else {
+                setIsSuccess({ isSuccess: false, message: res.data?.message || "Failed to delete" });
+                setIsLoading1(false);
+            }
+        } catch (e) {
+            console.error("Delete error:", e);
+            setIsSuccess({ isSuccess: false, message: e.response?.data?.message || "Failed to delete" });
+            setIsLoading1(false);
+        }
     };
 
     const handleClose = () => {
         setStyleEditingData({ isShowStyleEditModal: false, data: [] });
+        setIsSuccess({ isSuccess: null, message: "" });
     };
 
-    // Builds a minimal payload containing only what actually changed,
-    // diffed against the snapshot taken when the modal was opened.
-    // Every job in editingStyleData is an EXISTING job — this modal only
-    // edits, it does not create new jobs/requirements.
     const buildChangePayload = useCallback(() => {
         const originalMap = originalMapRef.current;
         const payload = [];
@@ -166,11 +190,27 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
 
     const isDirty = useMemo(() => buildChangePayload().length > 0, [buildChangePayload]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const changedPayload = buildChangePayload();
 
-        // eslint-disable-next-line no-console
         console.log('StyleEditModal save payload (edited data only):', changedPayload);
+        setIsLoading1(true);
+        
+        try {
+            const res = await axiosSecure.put("/api/edit-style-requirement", changedPayload);
+            console.log(res.data);
+
+            if (res.status === 200 || res.data?.type === "success" || (res.data?.data && res.data.data.length > 0)) {
+                setIsSuccess({ isSuccess: true, message: "Update successful" });
+            } else {
+                setIsSuccess({ isSuccess: false, message: res.data?.message || "Update failed" });
+            }
+        } catch (error) {
+            console.error(error);
+            setIsSuccess({ isSuccess: false, message: error.response?.data?.message || "Update failed" });
+        } finally {
+            setIsLoading1(false);
+        }
 
         if (typeof onSave === 'function') {
             onSave(changedPayload);
@@ -185,19 +225,16 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
 
     return (
         <>
-            {/* Backdrop with frosted glass effect */}
             <div
                 onClick={handleClose}
                 className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] animate-fade-in transition-opacity"
             />
 
-            {/* Modal Wrapper */}
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 overflow-hidden pointer-events-none">
                 <div
                     onClick={(e) => e.stopPropagation()}
                     className="relative flex flex-col w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden pointer-events-auto animate-slide-in"
                 >
-                    {/* Modal Loader Overlay */}
                     {isLoading && (
                         <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in">
                             <div className="flex flex-col items-center gap-3">
@@ -207,8 +244,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                         </div>
                     )}
 
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white flex-shrink-0">
+                    <div className="flex items-center mb-3 justify-between px-6 py-4 border-b border-slate-200 bg-white flex-shrink-0">
                         <div>
                             <h2 className="text-lg font-bold text-slate-800">Edit Requirement</h2>
                             <p className="text-xs text-slate-500">Edit style specifications and composition breakdowns</p>
@@ -222,7 +258,18 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                         </button>
                     </div>
 
-                    {/* Scrollable Content */}
+                    {isSuccess.message && (
+                        isSuccess.isSuccess === true ? (
+                            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-md mx-6 mt-2">
+                                {isSuccess.message}
+                            </div>
+                        ) : (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-md mx-6 mt-2">
+                                {isSuccess.message}
+                            </div>
+                        )
+                    )}
+
                     <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6 bg-slate-50/40">
                         {styles?.map((row, styleIdx) => {
                             const rows = row.rows || [];
@@ -231,13 +278,21 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                     key={row.id || styleIdx}
                                     className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-6"
                                 >
-                                    {/* General Information Section */}
                                     <div className="space-y-4">
-                                        <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
-                                            <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
-                                            <h3 className="text-sm font-semibold text-slate-800">
-                                                General Information
-                                            </h3>
+                                        <div className="flex justify-between items-center gap-2 border-b border-slate-100 pb-2.5">
+                                            <div className='flex gap-2 items-center'>
+                                                <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
+                                                <h3 className="text-sm font-semibold text-slate-800">
+                                                    General Information {row.id}
+                                                </h3>
+                                            </div>
+
+                                            <button
+                                                onClick={() => removeBreakdownRow(styleIdx, "rowIdx", row.id, "delWholeJob")}
+                                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -245,7 +300,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                 <label className="block text-xs font-semibold text-slate-700">
                                                     Sales Contact
                                                 </label>
-                                                <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                     <Input
                                                         type="text"
                                                         placeholder="Enter sales contact"
@@ -262,7 +317,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                 <label className="block text-xs font-semibold text-slate-700">
                                                     Buyer Name
                                                 </label>
-                                                <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                     <Input
                                                         type="text"
                                                         placeholder="Enter buyer name"
@@ -281,7 +336,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                 <label className="block text-xs font-semibold text-slate-700">
                                                     Job No
                                                 </label>
-                                                <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                     <Input
                                                         type="text"
                                                         placeholder="Enter job number"
@@ -298,7 +353,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                 <label className="block text-xs font-semibold text-slate-700">
                                                     Style No
                                                 </label>
-                                                <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                     <Input
                                                         type="text"
                                                         placeholder="Enter style number"
@@ -315,7 +370,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                 <label className="block text-xs font-semibold text-slate-700">
                                                     Process Loss
                                                 </label>
-                                                <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                     <Input
                                                         type="text"
                                                         placeholder="Enter process loss (%)"
@@ -330,7 +385,6 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                         </div>
                                     </div>
 
-                                    {/* Breakdown Specifications Section */}
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                                             <div className="flex items-center gap-2">
@@ -342,7 +396,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                             <button
                                                 type="button"
                                                 onClick={() => addBreakdownRow(styleIdx)}
-                                                disabled={isLoading}
+                                                disabled={isLoading || isLoading1}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
                                             >
                                                 <Plus className="w-3.5 h-3.5" />
@@ -362,13 +416,13 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                                 {rowIdx + 1}
                                                             </span>
                                                             <span className="text-xs font-semibold text-slate-700">
-                                                                Item Specification
+                                                                Item Specification {r.id}
                                                             </span>
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            onClick={() => removeBreakdownRow(styleIdx, rowIdx)}
-                                                            disabled={isLoading}
+                                                            onClick={() => removeBreakdownRow(styleIdx, rowIdx, r.id, "delComp")}
+                                                            disabled={isLoading || isLoading1}
                                                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                             aria-label="Remove item"
                                                         >
@@ -376,12 +430,12 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                         </button>
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
                                                         <div className="space-y-1.5">
                                                             <label className="block text-xs font-medium text-slate-700">
                                                                 Composition
                                                             </label>
-                                                            <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                                 <Input
                                                                     type="text"
                                                                     placeholder="e.g. 100% Cotton"
@@ -398,7 +452,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                             <label className="block text-xs font-medium text-slate-700">
                                                                 Color
                                                             </label>
-                                                            <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                                 <Input
                                                                     type="text"
                                                                     placeholder="Color"
@@ -415,7 +469,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                             <label className="block text-xs font-medium text-slate-700">
                                                                 Finish Dia
                                                             </label>
-                                                            <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                                 <Input
                                                                     type="text"
                                                                     placeholder="Finish Dia"
@@ -432,7 +486,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                             <label className="block text-xs font-medium text-slate-700">
                                                                 Order Qty
                                                             </label>
-                                                            <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                                 <Input
                                                                     type="text"
                                                                     placeholder="Order Qty"
@@ -444,18 +498,50 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                                 />
                                                             </div>
                                                         </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="block text-xs font-medium text-slate-700">
+                                                                Process Loss
+                                                            </label>
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                                <Input
+                                                                    type="text"
+                                                                    placeholder="Process Loss"
+                                                                    value={r.processLoss || ''}
+                                                                    onChange={(e) =>
+                                                                        updateBreakdownField(styleIdx, rowIdx, 'processLoss', e.target.value)
+                                                                    }
+                                                                    className="w-full px-2.5 py-1.5 text-xs text-slate-800 bg-transparent rounded-lg focus:outline-none"
+                                                                />
+                                                            </div>
+                                                        </div>
 
                                                         <div className="space-y-1.5">
                                                             <label className="block text-xs font-medium text-slate-700">
                                                                 Finish Required Qty
                                                             </label>
-                                                            <div className="relative rounded-lg  bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                                                 <Input
                                                                     type="text"
                                                                     placeholder="Required Qty"
                                                                     value={r.finishRequiredQty || ''}
                                                                     onChange={(e) =>
                                                                         updateBreakdownField(styleIdx, rowIdx, 'finishRequiredQty', e.target.value)
+                                                                    }
+                                                                    className="w-full px-2.5 py-1.5 text-xs text-slate-800 bg-transparent rounded-lg focus:outline-none"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="block text-xs font-medium text-slate-700">
+                                                                Additional
+                                                            </label>
+                                                            <div className="relative rounded-lg bg-white shadow-2xs hover:border-slate-400 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                                                <Input
+                                                                    type="text"
+                                                                    placeholder="Additional"
+                                                                    value={r.additional || ''}
+                                                                    onChange={(e) =>
+                                                                        updateBreakdownField(styleIdx, rowIdx, 'additional', e.target.value)
                                                                     }
                                                                     className="w-full px-2.5 py-1.5 text-xs text-slate-800 bg-transparent rounded-lg focus:outline-none"
                                                                 />
@@ -471,12 +557,11 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                         })}
                     </div>
 
-                    {/* Footer */}
                     <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-white flex-shrink-0">
                         <button
                             type="button"
                             onClick={handleClose}
-                            disabled={isLoading}
+                            disabled={isLoading || isLoading1}
                             className="px-4 py-2 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
                         >
                             Cancel
@@ -484,10 +569,10 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                         <button
                             type="button"
                             onClick={handleSave}
-                            disabled={isLoading || !isDirty}
+                            disabled={isLoading1 || !isDirty}
                             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isLoading ? (
+                            {isLoading1 ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                                 <Save className="w-4 h-4" />

@@ -9,6 +9,7 @@ import { styleReconciliation } from "../controllers/newStyleRequirements/styleRe
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 import { requestForApproval } from "../controllers/orders/requestForApproval";
 import { editChallan } from "../controllers/movements/update.challan";
+import { editStyleRequirement } from "../controllers/newStyleRequirements/editStyleRequirement";
 
 const updateRouters = express.Router();
 
@@ -22,10 +23,12 @@ updateRouters.patch("/update-style-req/:jobId", responseTimeMonitor, authenticat
 
 updateRouters.patch("/update-work-order/:workOrderId", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateWorkOrder);
 
-// ✅ CORRECT: No trailing space
 updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, authenticate, styleReconciliation);
 
 updateRouters.patch("/request-for-approval/:requestType/:workOrderId/:requestToId", responseTimeMonitor, authenticate, requestForApproval);
 
 updateRouters.patch("/edit-challan", responseTimeMonitor, authenticate, editChallan);
+
+updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, editStyleRequirement)
+
 export default updateRouters;

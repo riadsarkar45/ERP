@@ -30,9 +30,9 @@ model WorkOrder {
   jobNo                     String
   orderType                 String
   compositions              Composition[]
-  styleRequirement          StyleRequirement?          @relation(fields: [styleRequirementId], references: [id])
+  styleRequirement          StyleRequirement?          @relation(fields: [styleRequirementId], references: [id], onDelete: Cascade)
   styleRequirementId        Int?
-  jobs                      jobs?                      @relation(fields: [jobId], references: [id])
+  jobs                      jobs?                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   jobId                     Int?
   factoryName               String                     @default("NULL")
   yarnCount                 String                     @default("NULL")
@@ -82,7 +82,7 @@ model Composition {
   workOrderId           Int
   deliveries            deliveries[]
   orderType             String               @default("null")
-  styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
+  styleRequirementRow   StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id], onDelete: Cascade)
   styleRequirementRowId Int?
   challans              Challan[]
   yarnColors            YarnColorBooking[]
@@ -100,6 +100,7 @@ model StyleRequirement {
   poNo                 String
   styleNo              String
   processLoss          Float
+  hodDate              DateTime              @default(now())
   isReconciliationDone Boolean?              @default(false)
   dateOfReconciliation DateTime              @default(now())
   rows                 StyleRequirementRow[]
@@ -117,9 +118,10 @@ model StyleRequirement {
 model StyleRequirementRow {
   id                 Int                 @id @default(autoincrement())
   styleRequirementId Int
-  styleRequirement   StyleRequirement    @relation(fields: [styleRequirementId], references: [id])
+  styleRequirement   StyleRequirement    @relation(fields: [styleRequirementId], references: [id], onDelete: Cascade)
   color              String
   composition        String
+  processLoss        String              @default("NULL")
   finishDia          String
   orderQty           Int
   finishRequiredQty  Float
@@ -186,7 +188,7 @@ model deliveries {
   toFactory    String
   fromFactory  String
 
-  composition Composition? @relation(fields: [yarnCompId], references: [id])
+  composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
   yarnCompId  Int?
 
   challan   Challan? @relation(fields: [challanId], references: [id])
@@ -287,7 +289,7 @@ model reconciliationNotes {
   dateTime           DateTime         @default(now())
   reconciliationNote String
   styleRequirementId Int
-  stylesRequirements StyleRequirement @relation(fields: [styleRequirementId], references: [id])
+  stylesRequirements StyleRequirement @relation(fields: [styleRequirementId], references: [id], onDelete: Cascade)
   userId             Int              @default(1)
   submittedBy        user             @relation(fields: [userId], references: [id])
 }

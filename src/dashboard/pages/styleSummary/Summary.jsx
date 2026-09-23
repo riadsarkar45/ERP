@@ -66,22 +66,33 @@ const PERCENT_COLUMN_INDEXES = new Set([10, 34, 40]);
 const NO_TOTAL_COLUMN_INDEXES = new Set([20]);
 
 // ── Helper functions ─────────────────────────────────────────────────────────
+const safeNum = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
+};
+
 const getBreakdownValue = (item, key) => {
-    if (!item) return 0;
-    if (item.status) return 0;
-    return Number(item[key]) || 0;
+    if (!item || item.status) return 0;
+    const val = parseFloat(item[key]);
+    return isNaN(val) ? 0 : val;
 };
 
 const formatNumber = (val, fallback = "_") => {
     if (val === undefined || val === null || val === "") return fallback;
-    const num = Number(val);
-    return Number.isFinite(num) ? num.toFixed(2) : val;
+    const num = parseFloat(val);
+    return isNaN(num) ? fallback : num.toFixed(2);
 };
 
-// ─ Filter Dropdown Component ────────────────────────────────────────────────
-
-
-// FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading, onApply, onClear, onClose, anchorRef })
+// Priority: cell.processLoss > row.processLoss > 0
+const getProcessLoss = (cell, row) => {
+    if (cell?.processLoss !== undefined && cell?.processLoss !== null && cell?.processLoss !== '') {
+        const val = parseFloat(cell.processLoss);
+        return isNaN(val) ? 0 : val;
+    }
+    const val = parseFloat(row?.processLoss);
+    return isNaN(val) ? 0 : val;
+};
 
 // ─ Summary Page ────────────────────────────────────────────────────────────
 export default function Summary() {
@@ -130,7 +141,6 @@ export default function Summary() {
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setRawData(res.data.data);
-            console.log(res.data);
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
@@ -167,11 +177,6 @@ export default function Summary() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length);
 
-    // ── FIX: capture the computed totals object in its own variable, and
-    // memoize so it only recalculates when filteredData actually changes.
-    // Previously the call result was discarded, so every `footerTotals[colIndex]`
-    // lookup below was reading properties off the *function* itself (always
-    // undefined), making the footer row and Excel export totals blank.
     const totals = useMemo(
         () => footerTotals({ FROZEN_COUNT, filteredData, COLUMNS, getBreakdownValue }),
         [filteredData]
@@ -294,8 +299,6 @@ export default function Summary() {
         maxWidth: `${UNFROZEN_WIDTH}px`,
     });
 
-
-
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
         const cellKey = `${rowId}-${editingField}`;
         setEditingCells(prev => {
@@ -344,7 +347,6 @@ export default function Summary() {
                     rowId: cell.rowId
                 };
 
-                // Additional booking is saved per job, so send the job number
                 if (cell.changedTable === "compositionAdd") {
                     const parentRow = rawData.find(r => r.rows?.some(sub => sub.id === cell.rowId));
                     updatedData.jobNo = parentRow?.jobNo;
@@ -374,12 +376,9 @@ export default function Summary() {
 
     const openEditJobModal = async (jobNo) => {
         setStyleEditingData({ isShowStyleEditModal: true, isLoading: true, data: [] })
-        console.log("clicked...");
         try {
             const req = await axiosPrivate.get(`/api/styles/${jobNo}`);
-            console.log(req.data.data, "prepare editing data");
             if (req.data.type === "success") {
-                console.log(req.data.data, "inside condition prepare editing data");
                 setStyleEditingData({ isShowStyleEditModal: true, isLoading: false, data: req?.data?.data })
             }
         } finally {
@@ -388,15 +387,9 @@ export default function Summary() {
     };
 
     const handleExportExcelFile = () => {
-        const wsData = [];
-        wsData.push(COLUMNS);
         handleExportExcel({ filteredData, COLUMNS, getBreakdownValue, FROZEN_COUNT, footerTotals: totals, NO_TOTAL_COLUMN_INDEXES, PERCENT_COLUMN_INDEXES })
     };
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  PDF — now includes an "Additional Booking" column (highlighted) so any
-    //  additional qty added through the modal appears on the booking sheet.
-    // ══════════════════════════════════════════════════════════════════════════
     const generateBooking = (rowData) => {
         generatePDFBooking(rowData)
     };
@@ -492,8 +485,6 @@ export default function Summary() {
                         />
                     )
                 }
-
-
 
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
@@ -603,7 +594,6 @@ export default function Summary() {
                 }
             `}</style>
 
-
             <div
                 ref={scrollContainerRef}
                 className="relative overflow-auto shadow-xs"
@@ -615,7 +605,6 @@ export default function Summary() {
                 >
                     <thead className="sticky top-0 z-30 text-sm text-body">
                         <tr>
-                            {/* Checkbox Column Header */}
                             <th
                                 scope="col"
                                 className="px-3 py-3 font-medium"
@@ -713,7 +702,6 @@ export default function Summary() {
 
                             return (
                                 <tr key={row.id || i} className={`group ${isSelected ? 'bg-blue-50' : ''}`}>
-                                    {/* Checkbox Column */}
                                     <td
                                         className="px-3 py-2 align-middle"
                                         style={{
@@ -737,7 +725,6 @@ export default function Summary() {
                                         />
                                     </td>
 
-                                    {/* 1. SALES CONTACT */}
                                     <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(0)}>
                                         {editingCells[`${row.id}-salesContact`] ? (
                                             <input
@@ -750,7 +737,6 @@ export default function Summary() {
                                         ) : row.salesContact}
                                     </td>
 
-                                    {/* 2. BUYER */}
                                     <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(1)}>
                                         {editingCells[`${row.id}-buyerName`] ? (
                                             <input
@@ -763,7 +749,6 @@ export default function Summary() {
                                         ) : row.buyerName}
                                     </td>
 
-                                    {/* 3. JOB NO (With Edit Button) */}
                                     <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(2)}>
                                         <div className="flex items-center justify-center gap-2">
                                             <span
@@ -788,14 +773,13 @@ export default function Summary() {
                                                     openEditJobModal(row.jobNo);
                                                 }}
                                                 className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
-                                                title="Edit Job Details (Colors, Compositions, Additional Booking, etc.)"
+                                                title="Edit Job Details"
                                             >
                                                 {editLoading ? <Loader size={16} className="animate-spin" /> : <Pen size={16} />}
                                             </button>
                                         </div>
                                     </td>
 
-                                    {/* 4. STYLE */}
                                     <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(3)}>
                                         {editingCells[`${row.id}-styleNo`] ? (
                                             <input
@@ -812,7 +796,6 @@ export default function Summary() {
                                         ) : row.styleNo}
                                     </td>
 
-                                    {/* 5. PO NO */}
                                     <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(4)}>
                                         {editingCells[`${row.id}-poNo`] ? (
                                             <input
@@ -829,7 +812,6 @@ export default function Summary() {
                                         ) : row.poNo}
                                     </td>
 
-                                    {/* 6. COLOR */}
                                     <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
@@ -852,7 +834,6 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 7. COMPOSITION */}
                                     <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(6)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
@@ -875,7 +856,6 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 8. FINISH DIA */}
                                     <td className="p-0 align-top" style={getFrozenStyle(7)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
@@ -894,7 +874,6 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 9. ORDER QTY - NO TOFIXED */}
                                     <td className="p-0 align-top" style={getCellStyle(8)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
@@ -913,31 +892,40 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 10. 1st BOOKING (formula) */}
-                                    <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-[#14b8a6]">
-                                            {row.rows.map((cell, j) => (
-                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
-                                                    {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
-
-                                    {/* PROCESS LOSS % */}
-                                    <td className="p-0 align-top" style={getCellStyle(10)}>
-                                        <div className="divide-y divide-[#14b8a6]">
-                                            {row.rows.map((_, j) => <div key={j} className={`px-3 py-2 subrow-cell`}>{Number(row.processLoss || 0).toFixed(2)}%</div>)}
-                                        </div>
-                                    </td>
-
-                                    {/* 11. FINISH REQUIRED QTY */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
-                                                const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
-                                                const netAdditional = Number(cell.additional) - lossQty;
-                                                const inCreaseFinishQty = (Number(cell.finishRequiredQty) + netAdditional).toFixed(2);
+                                                const loss = getProcessLoss(cell, row);
+                                                const finishReq = safeNum(cell.finishRequiredQty);
+                                                const additional = safeNum(cell.additional);
+                                                const val = (finishReq * (1 + loss / 100) + additional);
+                                                return (
+                                                    <div key={j} className={`px-3 py-2 subrow-cell`}>
+                                                        {isNaN(val) ? "0.00" : val.toFixed(2)}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+
+                                    <td className="p-0 align-top" style={getCellStyle(10)}>
+                                        <div className="divide-y divide-[#14b8a6]">
+                                            {row.rows.map((cell, j) => {
+                                                const loss = getProcessLoss(cell, row);
+                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{loss.toFixed(2)}%</div>;
+                                            })}
+                                        </div>
+                                    </td>
+
+                                    <td className="p-0 align-top" style={getFormulaCellStyle()}>
+                                        <div className="divide-y divide-[#14b8a6]">
+                                            {row.rows.map((cell, j) => {
+                                                const loss = getProcessLoss(cell, row);
+                                                const additional = safeNum(cell.additional);
+                                                const lossQty = additional * (loss / 100);
+                                                const netAdditional = additional - lossQty;
+                                                const finishReq = safeNum(cell.finishRequiredQty);
+                                                const inCreaseFinishQty = finishReq + netAdditional;
                                                 return (
                                                     <div
                                                         key={j}
@@ -953,7 +941,7 @@ export default function Summary() {
                                                                 type="text"
                                                             />
                                                         ) : (
-                                                            inCreaseFinishQty
+                                                            isNaN(inCreaseFinishQty) ? "0.00" : inCreaseFinishQty.toFixed(2)
                                                         )}
                                                     </div>
                                                 );
@@ -961,7 +949,6 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* ADDITIONAL BOOKING */}
                                     <td className="p-0 align-top" style={getCellStyle(12)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
@@ -982,44 +969,46 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    {/* 12. REQUIRED YARN QTY (formula) */}
-                                    <td className="p-0 align-top" style={getFormulaCellStyle()}>
-                                        <div className="divide-y divide-[#14b8a6]">
-                                            {row.rows.map((cell, j) => (
-                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
-                                                    {(Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)).toFixed(2)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </td>
-
-                                    {/* 13. KNITTING WORK ORDER QTY */}
-                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_workOrderQty', num: 14 })}
-
-                                    {/* 14. SHORT & EXCESS (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
-                                                const cb = compBreakdown[j] || {};
-                                                if (cb.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
-                                                const finishRequiredQty = cell.finishRequiredQty || 0;
-                                                const processLoss = row.processLoss || 0;
-                                                const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                                                const diff0 = (Number(finishRequiredQty) * (1 + Number(processLoss) / 100) + Number(cell.additional || 0)) - Number(knittingWorkOrderQty);
-                                                const isExceeded0 = diff0 > 0;
+                                                const loss = getProcessLoss(cell, row);
+                                                const finishReq = safeNum(cell.finishRequiredQty);
+                                                const additional = safeNum(cell.additional);
+                                                const val = (finishReq * (1 + loss / 100) + additional);
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
-                                                        {isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2)}
+                                                    <div key={j} className={`px-3 py-2 subrow-cell`}>
+                                                        {isNaN(val) ? "0.00" : val.toFixed(2)}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 15. YARN DELIVERY */}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_workOrderQty', num: 14 })}
+
+                                    <td className="p-0 align-top" style={getFormulaCellStyle()}>
+                                        <div className="divide-y divide-[#14b8a6]">
+                                            {row.rows.map((cell, j) => {
+                                                const cb = compBreakdown[j] || {};
+                                                if (cb.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
+                                                const loss = getProcessLoss(cell, row);
+                                                const finishRequiredQty = safeNum(cell.finishRequiredQty);
+                                                const additional = safeNum(cell.additional);
+                                                const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
+                                                const diff0 = (finishRequiredQty * (1 + loss / 100) + additional) - knittingWorkOrderQty;
+                                                const isExceeded0 = diff0 > 0;
+                                                return (
+                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
+                                                        {isNaN(diff0) ? "0.00" : (isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2))}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_Yarn_Delivery', num: 16 })}
 
-                                    {/* 16. SHORT & EXCESS (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
@@ -1034,33 +1023,27 @@ export default function Summary() {
 
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExcess ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
-                                                        {delivered === 0 && workOrderQty === 0 ? "_" : isExcess ? `(${diff1.toFixed(2)})` : Math.abs(diff1).toFixed(2)}
+                                                        {delivered === 0 && workOrderQty === 0 ? "_" : (isNaN(diff1) ? "0.00" : (isExcess ? `(${diff1.toFixed(2)})` : Math.abs(diff1).toFixed(2)))}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 17. RAW YARN DELIVERY FOR DYED */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', num: 18 })}
 
-                                    {/* 18. YARN RECEIVED AFTER DYED */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', num: 19 })}
 
-                                    {/* 19. PARTY STOCK */}
                                     <td className="p-0 align-top" style={getCellStyle(20)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((_, j) => <div key={j} className={`px-3 py-2 subrow-cell`}>-</div>)}
                                         </div>
                                     </td>
 
-                                    {/* 20. TOTAL KNITTING (GREY) */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_Grey_Fabric_Received', num: 21 })}
 
-                                    {/* 21. RETURN YARN RECEIVED */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_Yarn_Return', num: 22 })}
 
-                                    {/* 22. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
@@ -1071,26 +1054,21 @@ export default function Summary() {
                                                 const balance = (greyReceived + yarnReturn) - yarnDelivery;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell font-bold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                                                        {balance === 0 ? "_" : balance.toFixed(2)}
+                                                        {balance === 0 || isNaN(balance) ? "_" : balance.toFixed(2)}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 23. GREY DELIVERY FOR DYEING */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Grey_Delivery', num: 24 })}
 
-                                    {/* 24. GREY RETURN FROM DYEING */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Grey_Return', num: 25 })}
 
-                                    {/* 25. GREY RECEIVED FROM DYEING */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Grey_Received', num: 26 })}
 
-                                    {/* 26. FINISH RECEIVED FROM DYEING */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Finish_Received', num: 27 })}
 
-                                    {/* 27. GREY BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
@@ -1103,26 +1081,21 @@ export default function Summary() {
                                                     getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
-                                                        {!hasAnyData ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
+                                                        {!hasAnyData || isNaN(diff) ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 29. FINISH DELIVERY FROM AOP */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_Sent_For_Aop', num: 29 })}
 
-                                    {/* 30. FABRIC RETURN FROM AOP */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_Fabric_Return', num: 30 })}
 
-                                    {/* 31. AFTER AOP FABRIC RCVD */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_After_Aop_Fabric_Rcvd', num: 31 })}
 
-                                    {/* 32. FINISH RECEIVED FROM AOP */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_Received_From_Aop', num: 32 })}
 
-                                    {/* 33. AOP FAB. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
@@ -1133,39 +1106,33 @@ export default function Summary() {
                                                 const isExceeded = diff > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
-                                                        {sent === 0 && received === 0 ? "_" : (isExceeded ? `(${Math.abs(diff).toFixed(2)})` : Math.abs(diff).toFixed(2))}
+                                                        {(sent === 0 && received === 0) || isNaN(diff) ? "_" : (isExceeded ? `(${Math.abs(diff).toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 34. AOP PROCESS LOSS (%) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
-                                                const loss = sent > 0 ? (((sent - received) / sent) * 100).toFixed(2) : "_";
-                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{loss === "_" ? "_" : `${loss}%`}</div>;
+                                                const loss = sent > 0 ? (((sent - received) / sent) * 100) : 0;
+                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{sent === 0 || isNaN(loss) ? "_" : `${loss.toFixed(2)}%`}</div>;
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 35. SENT FOR RE-PROCESS */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Sent_for_Re_Process', num: 35 })}
 
-                                    {/* 36. RETURN RCVD */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Return_Received', num: 36 })}
 
-                                    {/* 37. RECEIVED AFTER RE-PROCESS (GREY) */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Received_After_Re_Process_Grey', num: 37 })}
 
-                                    {/* 38. RECEIVED AFTER RE-PROCESS (FINISH) */}
                                     {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Received_After_Re_Process_Finish', num: 38 })}
 
-                                    {/* 39. RE-PROCESS FAB. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
@@ -1177,14 +1144,13 @@ export default function Summary() {
                                                 const isExceeded = diff > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
-                                                        {sent === 0 && receivedGrey === 0 && receivedFinish === 0 ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
+                                                        {(sent === 0 && receivedGrey === 0 && receivedFinish === 0) || isNaN(diff) ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </td>
 
-                                    {/* 40. RE-PROCESS PROCESS LOSS (%) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
@@ -1192,8 +1158,8 @@ export default function Summary() {
                                                 const sent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
                                                 const receivedGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
                                                 const receivedFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
-                                                const loss = sent > 0 ? (((sent - (receivedGrey + receivedFinish)) / sent) * 100).toFixed(2) : "_";
-                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{loss === "_" ? "_" : `${loss}%`}</div>;
+                                                const loss = sent > 0 ? (((sent - (receivedGrey + receivedFinish)) / sent) * 100) : 0;
+                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{sent === 0 || isNaN(loss) ? "_" : `${loss.toFixed(2)}%`}</div>;
                                             })}
                                         </div>
                                     </td>
@@ -1211,11 +1177,9 @@ export default function Summary() {
                         )}
                     </tbody>
 
-                    {/* FOOTER TOTAL ROW */}
                     {!isLoading.refreshLoading && filteredData.length > 0 && !isAnyModalOpen && (
                         <tfoot>
                             <tr>
-                                {/* Merged TOTAL cell spanning checkbox + all frozen columns (9 columns total) */}
                                 <td
                                     colSpan={FROZEN_COUNT + 1}
                                     style={{
@@ -1238,7 +1202,6 @@ export default function Summary() {
                                 >
                                     TOTAL
                                 </td>
-                                {/* Only render cells for non-frozen columns (index 8 onwards) */}
                                 {COLUMNS.slice(FROZEN_COUNT).map((_, idx) => {
                                     const colIndex = idx + FROZEN_COUNT;
                                     let displayValue = "";

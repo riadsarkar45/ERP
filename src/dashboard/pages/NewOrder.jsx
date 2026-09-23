@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
-import { Loader2, Save, X, Plus, Package, FileText, ClipboardList, Factory, Layers, Rotate3D, Building2, Building } from "lucide-react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { Loader2, Save, X, Plus, Package, FileText, ClipboardList, Factory, Layers, Rotate3D, Building2, Building, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
 import DashboardLayout from "../../components/DashboardLayout";
 import Input from "../../components/Input";
 import Toast from "../../components/Toast";
@@ -16,6 +16,50 @@ const ORDER_TYPE_RULES = {
 };
 
 const getRules = (orderType) => ORDER_TYPE_RULES[orderType] || {};
+
+// Extracted so it can be reused both on initial load AND by the
+// "restore removed items" refresh button, without duplicating the mapping.
+const buildRowsFromStyle = (style) => {
+    const initialRows = (style?.rows || []).map((row, index) => ({
+        id: row.id || Date.now() + index,
+        composition: row.composition || "",
+        color: row.color || "",
+        orderQty: row.orderQty || "",
+        finishRequiredQty: row.finishRequiredQty || "",
+        finishDia: row.finishDia || "",
+        processLoss: row.processLoss || "",
+        additional: row.additional || "",
+        unitPrice: row.unitPrice || "",
+        workOrderQty: "",
+        stichLength: "",
+        machineDia: "",
+        lotNo: "",
+        yarnCount: "",
+        yarnColors: [defaultYarnColor()],
+    }));
+
+    return initialRows.length > 0
+        ? initialRows
+        : [
+            {
+                id: Date.now(),
+                composition: "",
+                color: "",
+                orderQty: "",
+                finishRequiredQty: "",
+                finishDia: "",
+                processLoss: "",
+                additional: "",
+                unitPrice: "",
+                workOrderQty: "",
+                stichLength: "",
+                machineDia: "",
+                lotNo: "",
+                yarnCount: "",
+                yarnColors: [defaultYarnColor()],
+            },
+        ];
+};
 
 const SectionCard = ({ icon: Icon, title, description, children, aside }) => (
     <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -49,6 +93,10 @@ const NewOrder = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [factoryData, setFactoryData] = useState([])
     const [isFactoryDataLoading, setFactoryLoading] = useState(false)
+
+    // NEW: toggle controlling whether a successful submit redirects to the
+    // style-requirement page. Defaults to on (matches previous behavior).
+    const [autoRedirect, setAutoRedirect] = useState(true);
 
     const [formData, setFormData] = useState({
         workOrderPlaceDate: "",
@@ -142,7 +190,7 @@ const NewOrder = () => {
                 }
 
                 setStyleData(style);
-
+                console.log(style, "work order style data");
                 setFormData({
                     workOrderPlaceDate: "",
                     workOrderNo: "",
@@ -161,43 +209,7 @@ const NewOrder = () => {
                     processLoss: style.processLoss || "",
                 });
 
-                const initialRows = (style.rows || []).map((row, index) => ({
-                    id: row.id || Date.now() + index,
-                    composition: row.composition || "",
-                    color: row.color || "",
-                    orderQty: row.orderQty || "",
-                    finishRequiredQty: row.finishRequiredQty || "",
-                    additional: row.additional || "",
-                    unitPrice: row.unitPrice || "",
-                    workOrderQty: "",
-                    stichLength: "",
-                    machineDia: "",
-                    lotNo: "",
-                    yarnCount: "",
-                    yarnColors: [defaultYarnColor()],
-                }));
-
-                setRows(
-                    initialRows.length > 0
-                        ? initialRows
-                        : [
-                            {
-                                id: Date.now(),
-                                composition: "",
-                                color: "",
-                                orderQty: "",
-                                finishRequiredQty: "",
-                                additional: "",
-                                unitPrice: "",
-                                workOrderQty: "",
-                                stichLength: "",
-                                machineDia: "",
-                                lotNo: "",
-                                yarnCount: "",
-                                yarnColors: [defaultYarnColor()],
-                            },
-                        ]
-                );
+                setRows(buildRowsFromStyle(style));
             } catch (error) {
                 console.error("Failed to fetch style data:", error);
                 showNotification("Failed to load style data", "error");
@@ -235,6 +247,17 @@ const NewOrder = () => {
         }
         setRows((prev) => prev.filter((_, i) => i !== index));
     };
+
+    // NEW: restores the composition list back to what it was when this
+    // style was originally loaded — undoes any removed rows. Values typed
+    // into work-order-specific fields (workOrderQty, unitPrice, etc.) are
+    // reset for everyone since the whole list is rebuilt from styleData,
+    // which mirrors what happens on a normal page load.
+    const handleRefreshRows = useCallback(() => {
+        if (!styleData) return;
+        setRows(buildRowsFromStyle(styleData));
+        showNotification("Compositions restored", "success");
+    }, [styleData]);
 
     const handleAddYarnColor = (rowIndex) => {
         setRows((prev) =>
@@ -394,7 +417,10 @@ const NewOrder = () => {
             const res = await axiosPrivate.post("/api/create-job", payload);
             if (res.data.type === "success") {
                 showNotification("Order created successfully", "success");
-                setTimeout(() => navigate("/dashboard/style-requirement"), 1500);
+                // CHANGED: redirect only happens when autoRedirect is on.
+                if (autoRedirect) {
+                    setTimeout(() => navigate("/dashboard/style-requirement"), 1500);
+                }
             } else {
                 showNotification(res.data.message || "Failed to create order", "error");
             }
@@ -490,11 +516,42 @@ const NewOrder = () => {
                             Buyer <span className="font-medium text-slate-700">{formData.buyer || "—"}</span>
                         </p>
                     </div>
-                    {orderType && (
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                            {orderType.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}
-                        </span>
-                    )}
+
+                    {/* NEW: top-right controls — redirect toggle + refresh */}
+                    <div className="flex items-center gap-3">
+                        {orderType && (
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                                {orderType.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}
+                            </span>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={handleRefreshRows}
+                            title="Restore any removed compositions back to the original list"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                        >
+                            <RefreshCw size={13} />
+                            Refresh Items
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setAutoRedirect((prev) => !prev)}
+                            title={
+                                autoRedirect
+                                    ? "On: you'll be redirected to Style Requirement after a successful save"
+                                    : "Off: you'll stay on this page after a successful save"
+                            }
+                            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${autoRedirect
+                                ? "border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100"
+                                : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                }`}
+                        >
+                            {autoRedirect ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
+                            Redirect after save: {autoRedirect ? "On" : "Off"}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px] gap-6 items-start">
@@ -570,7 +627,7 @@ const NewOrder = () => {
                                             className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden transition-colors hover:border-slate-300"
                                         >
                                             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-50/70 border-b border-slate-100">
-                                                <div className="flex items-center gap-2 min-w-0">
+                                                <div className="flex gap-2 items-center min-w-0">
                                                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-800 text-[11px] font-semibold text-white">
                                                         {index + 1}
                                                     </span>
@@ -579,6 +636,25 @@ const NewOrder = () => {
                                                         {styleRow.color ? (
                                                             <span className="ml-2 text-xs font-normal text-slate-500">
                                                                 {styleRow.color}
+                                                            </span>
+                                                        ) : null}
+                                                        {styleRow.finishRequiredQty ? (
+                                                            <span className="ml-2 text-xs inline-flex bg-blue-100 font-extrabold rounded-lg text-blue-700 p-1 border border-blue-700">
+                                                                Finish Required Qty:{" "}
+                                                                {(
+                                                                    Number(styleRow.finishRequiredQty) *
+                                                                    (1 + Number(styleRow.processLoss || 0) / 100)
+                                                                ).toFixed(2)}
+                                                            </span>
+                                                        ) : null}
+                                                        {styleRow.finishDia ? (
+                                                            <span className="ml-2 text-xs inline-flex bg-blue-100 font-extrabold  text-blue-700 p-1 rounded-lg border border-blue-700">
+                                                                Finish Dia : {styleRow.finishDia}
+                                                            </span>
+                                                        ) : "No data"}
+                                                        {styleRow.additional ? (
+                                                            <span className="ml-3 text-xs inline-flex bg-red-100 font-extrabold  text-red-700 p-1 rounded-lg border border-red-700">
+                                                                Additional : {styleRow.additional}
                                                             </span>
                                                         ) : null}
                                                     </p>

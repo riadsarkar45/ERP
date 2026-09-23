@@ -5,6 +5,14 @@ import useAxiosPublic from '../hooks/Axios';
 import { RefreshCcw } from "lucide-react";
 import { usePostData } from '../hooks/post';
 
+const formatJobNo = (value) => {
+    if (!value) return '';
+    const cleaned = value.toUpperCase().replace(/[\s\-/]+/g, '');
+    return cleaned
+        .replace(/^SM(\d{2})(\d{4})/, 'SM$1-$2')
+        .replace(/(\d)([A-Z])/, '$1-$2');
+};
+
 const defaultRow = () => ({
     id: Date.now() + Math.random(),
     color: '',
@@ -12,10 +20,12 @@ const defaultRow = () => ({
     finishDia: '',
     orderQty: '',
     finishRequiredQty: '',
+    processLoss: '',
+    additional: '',
 });
 
 // Order of fields in each row, left -> right, matching the visible columns.
-const FIELDS = ['color', 'composition', 'finishDia', 'orderQty', 'finishRequiredQty'];
+const FIELDS = ['color', 'composition', 'finishDia', 'orderQty', 'finishRequiredQty', 'processLoss', 'additional'];
 
 const evaluateQtyExpression = (expr) => {
     if (expr === undefined || expr === null) return null;
@@ -41,7 +51,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             jobNo: '',
             poNo: '',
             styleNo: '',
-            processLoss: '',
+            hodTypeDate: '',
         }
     )
 
@@ -76,13 +86,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         );
 
     // Keyboard handler for a single cell input.
-    // - ArrowUp / ArrowDown: move to the same field in the row above/below.
-    // - ArrowLeft / ArrowRight: move to the previous/next field in the same
-    //   row, but only when the cursor is already at the start/end of the
-    //   text, so normal in-text cursor movement still works.
-    // - Ctrl+D (or Cmd+D on Mac): "fill down" — copies the value from the
-    //   same field in the row directly above into the current row's field,
-    //   just like Excel's fill-down shortcut.
     const handleCellKeyDown = (e, rowIndex, fieldIndex, row) => {
         const field = FIELDS[fieldIndex];
         const input = e.target;
@@ -128,11 +131,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         }
     };
 
-    // Grand totals across all rows for the numeric columns. Recomputed on
-    // every render from `rows` (no separate state to keep in sync) —
-    // non-numeric/empty inputs count as 0 so a half-filled row doesn't
-    // break the running total or show NaN. The final finish qty total
-    // sums the EVALUATED expression per row, not the raw typed text.
+    // Grand totals across all rows for the numeric columns.
     const totalOrderQty = rows.reduce(
         (sum, row) => sum + (Number(row.orderQty) || 0),
         0
@@ -141,21 +140,37 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         (sum, row) => sum + (Number(row.finishRequiredQty) || 0),
         0
     );
-    const totalFinalFinishQty = rows.reduce(
-        (sum, row) => sum + (evaluateQtyExpression(row.finishRequiredQty) || 0),
+    
+    const totalYarnRequiredQty = rows.reduce(
+        (sum, row) => {
+            const finishReq = evaluateQtyExpression(row.finishRequiredQty) || 0;
+            const processLoss = Number(row.processLoss) || 0;
+            const additional = Number(row.additional) || 0;
+            return sum + (finishReq * (1 + processLoss / 100) + additional);
+        },
         0
     );
 
     const createNewRequirement = async () => {
         const payload = {
             orderInfo,
-            rows: rows.map(row => ({
-                color: row.color,
-                composition: row.composition,
-                finishDia: row.finishDia,
-                orderQty: row.orderQty,
-                finishRequiredQty: evaluateQtyExpression(row.finishRequiredQty) || 0,
-            }))
+            rows: rows.map(row => {
+                const finishReq = evaluateQtyExpression(row.finishRequiredQty) || 0;
+                const processLoss = Number(row.processLoss) || 0;
+                const additional = Number(row.additional) || 0;
+                const yarnRequiredQty = finishReq * (1 + processLoss / 100) + additional;
+
+                return {
+                    color: row.color,
+                    composition: row.composition,
+                    finishDia: row.finishDia,
+                    orderQty: row.orderQty,
+                    finishRequiredQty: finishReq,
+                    processLoss: row.processLoss,
+                    additional: row.additional,
+                    yarnRequiredQty: yarnRequiredQty,
+                };
+            })
         };
 
         try {
@@ -164,8 +179,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                 axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data) });
             }
         } catch (e) {
-            console.log(e.response.data.message);
-            console.log(e.response.data.type);
+            console.log(e.response?.data?.message);
+            console.log(e.response?.data?.type);
         }
     }
 
@@ -179,7 +194,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             {/* Modal */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
                 <div
-                    className="bg-white rounded-md border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-hidden pointer-events-auto animate-slide-in"
+                    className="bg-white rounded-md border border-gray-200 w-full max-w-6xl max-h-[90vh] overflow-hidden pointer-events-auto animate-slide-in"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
@@ -195,7 +210,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
 
                     {
                         error && (
-                            <div className='bg-yellow-500 p-3 rounded-md mt-3  bg-opacity-25 border-yellow-500 text-yellow-700'>{error.message}</div>
+                            <div className='bg-yellow-500 p-3 rounded-md mt-3 bg-opacity-25 border-yellow-500 text-yellow-700'>{error.message}</div>
                         )
                     }
 
@@ -209,7 +224,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 isShowOutLabel={true}
                                 type='text'
                                 name="salesContact"
-                                onChange={(e) => setOrderInfo({ ...orderInfo, salesContact: e.target.value })}
+                                onChange={(e) => setOrderInfo({ ...orderInfo, salesContact: e.target.value.toUpperCase() })}
                                 placeholder='Sales Contact'
                                 value={orderInfo.salesContact}
                                 required
@@ -218,7 +233,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 label="Buyer Name"
                                 type='text'
                                 name="buyerName"
-                                onChange={(e) => setOrderInfo({ ...orderInfo, buyerName: e.target.value })}
+                                onChange={(e) => setOrderInfo({ ...orderInfo, buyerName: e.target.value.toUpperCase() })}
                                 value={orderInfo.buyerName}
                                 isShowOutLabel={true}
                                 placeholder='Buyer Name'
@@ -229,7 +244,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 isShowOutLabel={true}
                                 type='text'
                                 name="jobNo"
-                                onChange={(e) => setOrderInfo({ ...orderInfo, jobNo: e.target.value })}
+                                onChange={(e) => setOrderInfo({ ...orderInfo, jobNo: formatJobNo(e.target.value) })}
                                 value={orderInfo.jobNo}
                                 placeholder='Job No'
                                 required
@@ -239,7 +254,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 isShowOutLabel={true}
                                 type='text'
                                 name="poNo"
-                                onChange={(e) => setOrderInfo({ ...orderInfo, poNo: e.target.value })}
+                                onChange={(e) => setOrderInfo({ ...orderInfo, poNo: e.target.value.toUpperCase() })}
                                 value={orderInfo.poNo}
                                 placeholder='Po No'
                                 required
@@ -249,19 +264,19 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 isShowOutLabel={true}
                                 type='text'
                                 name="styleNo"
-                                onChange={(e) => setOrderInfo({ ...orderInfo, styleNo: e.target.value })}
+                                onChange={(e) => setOrderInfo({ ...orderInfo, styleNo: e.target.value.toUpperCase() })}
                                 value={orderInfo.styleNo}
                                 placeholder='Style No'
                                 required
                             />
                             <Input
-                                label="Process Loss"
+                                label="HOD"
                                 isShowOutLabel={true}
-                                type='text'
-                                name="processLoss"
-                                onChange={(e) => setOrderInfo({ ...orderInfo, processLoss: e.target.value })}
-                                value={orderInfo.processLoss}
-                                placeholder='Process Loss %'
+                                type='date'
+                                name="hodTypeDate"
+                                onChange={(e) => setOrderInfo({ ...orderInfo, hodTypeDate: e.target.value })}
+                                value={orderInfo.hodTypeDate}
+                                placeholder='HOD'
                                 required
                             />
                         </div>
@@ -285,8 +300,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             </div>
 
                             {/* Column headers */}
-                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mb-1 px-1">
-                                {['Color', 'Composition', 'Finish Dia', 'Order Qty', 'Finished Req. Qty', 'Final Finish Qty', ''].map((h, i) => (
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mb-1 px-1">
+                                {['Color', 'Composition', 'Finish Dia', 'Order Qty', 'Finished Req. Qty', 'Process Loss', 'Additional', 'Yarn Require Qty', ''].map((h, i) => (
                                     <span key={i} className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                         {h}
                                     </span>
@@ -296,19 +311,21 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             {/* Dynamic rows */}
                             <div className="flex flex-col gap-2">
                                 {rows.map((row, rowIndex) => {
-                                    // Live-evaluated result of whatever's typed in
-                                    // Finished Req. Qty for THIS row — recalculated
-                                    // on every keystroke since it's derived, not
-                                    // its own piece of state.
-                                    const finalFinishQty = evaluateQtyExpression(row.finishRequiredQty);
+                                    const finishReq = evaluateQtyExpression(row.finishRequiredQty) || 0;
+                                    const processLoss = Number(row.processLoss) || 0;
+                                    const additional = Number(row.additional) || 0;
+                                    const yarnRequiredQty = (finishReq * (1 + processLoss / 100) + additional).toFixed(2);
 
                                     return (
                                         <div
                                             key={row.id}
-                                            className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
+                                            className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
                                         >
                                             {FIELDS.map((field, fieldIndex) => {
+                                                const isNumeric = ['orderQty', 'finishRequiredQty', 'processLoss', 'additional'].includes(field);
                                                 const placeholder =
+                                                    field === 'additional' ? 'Additional' :
+                                                    field === 'processLoss' ? 'Process Loss' :
                                                     field === 'finishRequiredQty' ? 'e.g. 10+10+10' :
                                                     field === 'finishDia' ? 'Finish Dia' :
                                                     field === 'orderQty' ? 'Order Qty' :
@@ -324,26 +341,19 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                                         type="text"
                                                         placeholder={placeholder}
                                                         value={row[field]}
-                                                        onChange={(e) => updateRow(row.id, field, e.target.value)}
+                                                        onChange={(e) => updateRow(row.id, field, isNumeric ? e.target.value : e.target.value.toUpperCase())}
                                                         onKeyDown={(e) => handleCellKeyDown(e, rowIndex, fieldIndex, row)}
                                                         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400"
                                                     />
                                                 );
                                             })}
 
-                                            {/* Read-only computed output, not an
-                                                input — there's nothing to type
-                                                here, it just reflects Finished
-                                                Req. Qty's evaluated result. Shown
-                                                as a dash when that field is
-                                                empty or isn't a valid expression,
-                                                so it never displays a
-                                                misleading 0. */}
+                                            {/* Read-only computed output for Yarn Require Qty */}
                                             <div
                                                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 text-gray-700 font-medium"
-                                                title="Automatically calculated from Finished Req. Qty"
+                                                title="Automatically calculated from Finished Req. Qty, Process Loss, and Additional"
                                             >
-                                                {finalFinishQty === null ? '—' : finalFinishQty.toLocaleString()}
+                                                {yarnRequiredQty}
                                             </div>
 
                                             <button
@@ -360,8 +370,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             </div>
 
                             {/* Grand total row */}
-                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mt-2 px-1 pt-2 border-t border-gray-200">
-                                <span className="col-span-3 text-xs font-semibold text-gray-500 uppercase tracking-wide self-center">
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mt-2 px-1 pt-2 border-t border-gray-200">
+                                <span className="col-span-4 text-xs font-semibold text-gray-500 uppercase tracking-wide self-center">
                                     Grand Total
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800 px-3">
@@ -371,7 +381,13 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                     {totalFinishRequiredQty.toLocaleString()}
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800 px-3">
-                                    {totalFinalFinishQty.toLocaleString()}
+                                    —
+                                </span>
+                                <span className="text-sm font-semibold text-gray-800 px-3">
+                                    —
+                                </span>
+                                <span className="text-sm font-semibold text-gray-800 px-3">
+                                    {totalYarnRequiredQty.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                                 <span />
                             </div>

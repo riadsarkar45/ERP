@@ -14,6 +14,8 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
         return res.status(401).json({ type: "error", message: "Unauthorized" });
     }
 
+    console.log(orderInfo, "orderInfo");
+    console.log(rows, "order rows");
 
     try {
 
@@ -31,9 +33,10 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                     styleNo: orderInfo.styleNo as string,
                     buyerName: orderInfo.buyerName as string,
                     jobNo: orderInfo.jobNo as string,
-                    processLoss: Number(orderInfo.processLoss) as number,
+                    processLoss: 1 as number,
                     poNo: orderInfo.poNo as string,
                     salesContact: orderInfo.salesContact as string,
+                    hodDate: new Date(orderInfo.hodTypeDate) as Date,
                     createdBy: userId
                 },
                 select: {
@@ -51,6 +54,7 @@ export const createNewStyleRequirement = async (req: Request, res: Response) => 
                     finishDia: row.finishDia,
                     orderQty: Number(row.orderQty),
                     finishRequiredQty: Number(row.finishRequiredQty),
+                    processLoss: row.processLoss,
                 }))
             })
 

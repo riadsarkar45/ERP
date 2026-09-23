@@ -9,6 +9,7 @@ import { generateBill } from "../controllers/generateBill/generatebill";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 import { authenticate } from "../middleware/Authenticate.middleware";
 import { submitReconciliation } from "../controllers/newStyleRequirements/submitRecon";
+import { deleteStyleData } from "../controllers/newStyleRequirements/editStyleRequirement";
 
 const router = express.Router();
 
@@ -27,6 +28,8 @@ router.post("/cutting-production", responseTimeMonitor, cuttingDataUpdate)
 router.post("/generate-bill", responseTimeMonitor, generateBill);
 
 router.post("/submit-reconciliation/:jobNo", responseTimeMonitor, authenticate, submitReconciliation);
+
+router.delete("/delete-style-data/:compId/:deleteType", responseTimeMonitor, authenticate, deleteStyleData);
 
 
 export default router;

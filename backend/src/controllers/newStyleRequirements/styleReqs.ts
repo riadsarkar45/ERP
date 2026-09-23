@@ -102,6 +102,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             orderQty: true,
                             finishRequiredQty: true,
                             additional: true,
+                            processLoss:true,
                             ...recon && {
                                 reconciliation: {
                                     select: {
