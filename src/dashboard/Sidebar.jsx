@@ -496,7 +496,7 @@ const Sidebar = () => {
                             >
                                 <div className="flex items-center gap-3">
                                     <Folder size={20} className="shrink-0" />
-                                    {!isCollapsed && <span className="font-medium text-sm">Asset</span>}
+                                    {!isCollapsed && <span className="font-medium text-sm">Fixed Asset Info.</span>}
                                 </div>
                                 {!isCollapsed && (
                                     isAssetOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />

@@ -411,7 +411,7 @@ const AopOrder = ({
 
                     {/* DEL. SHORT & EXCESS Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 3)}>
-                        <div className={`${cellPad} text-white`} style={{ color: totals.shortExcess > 0 ? "red" : "green" }}>
+                        <div className={`${cellPad} text-white`} style={{ color: totals.shortExcess > 0 ? "white" : "white" }}>
                             {totals.shortExcess > 0 ? totals.shortExcess.toFixed(2) : `(${Math.abs(totals.shortExcess.toFixed(2))})`}
                         </div>
                     </td>
@@ -433,7 +433,7 @@ const AopOrder = ({
 
                     {/* RCVD SHORT & EXCESS Total */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
-                        <div className={`${cellPad} text-white`} style={{ color: totals.rcvdShortExcess > 0 ? "red" : "green" }}>
+                        <div className={`${cellPad} text-white`} style={{ color: totals.rcvdShortExcess > 0 ? "white" : "white" }}>
                             {totals.rcvdShortExcess > 0 ? totals.rcvdShortExcess.toFixed(2) : `(${Math.abs(totals.rcvdShortExcess.toFixed(2))})`}
                         </div>
                     </td>
