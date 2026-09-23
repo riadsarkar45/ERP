@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { X, Save, Plus, Trash2, Loader2 } from 'lucide-react';
+import { X, Save, Plus, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 import Input from '../../../components/Input';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
@@ -10,6 +10,10 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
     const [styles, setStyles] = useState([]);
     const [isSuccess, setIsSuccess] = useState({ isSuccess: null, message: "" });
     const [isLoading1, setIsLoading1] = useState(false);
+    
+    // State for custom delete confirmation modal
+    const [deleteTarget, setDeleteTarget] = useState(null);
+
     const axiosSecure = useAxiosPrivate();
     const originalMapRef = useRef(new Map());
 
@@ -79,15 +83,21 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
         );
     };
 
-    const removeBreakdownRow = async (styleIndex, rowIndex, compId, deleteType) => {
-        console.log(compId, "composition id");
+    // 1. Request deletion (opens custom modal)
+    const requestRemoveBreakdownRow = (styleIndex, rowIndex, compId, deleteType) => {
+        setDeleteTarget({ styleIndex, rowIndex, compId, deleteType });
+    };
+
+    // 2. Confirm deletion (executes API call and state update)
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+        const { styleIndex, rowIndex, compId, deleteType } = deleteTarget;
+        
         setIsLoading1(true);
 
         try {
             const res = await axiosSecure.delete(`/api/delete-style-data/${compId}/${deleteType}`);
-            console.log(res, "delete response");
             
-            // Robust success check covering all common API response shapes
             const isSuccessful = 
                 res.status === 200 || 
                 res.status === 204 || 
@@ -96,24 +106,36 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                 res.data?.type === "success";
 
             if (isSuccessful) {
-                setIsLoading1(false);
                 setIsSuccess({ isSuccess: true, message: "Delete successful" });
-                setStyles((prev) =>
-                    prev.map((s, i) =>
+                
+                // Update state based on what is being deleted
+                setStyles((prev) => {
+                    if (deleteType === "delWholeJob") {
+                        // Remove the entire style object from the array
+                        return prev.filter((_, i) => i !== styleIndex);
+                    }
+                    // Remove only the specific breakdown row
+                    return prev.map((s, i) =>
                         i === styleIndex
                             ? { ...s, rows: (s.rows || []).filter((_, j) => j !== rowIndex) }
                             : s
-                    )
-                );
+                    );
+                });
             } else {
                 setIsSuccess({ isSuccess: false, message: res.data?.message || "Failed to delete" });
-                setIsLoading1(false);
             }
         } catch (e) {
             console.error("Delete error:", e);
             setIsSuccess({ isSuccess: false, message: e.response?.data?.message || "Failed to delete" });
+        } finally {
             setIsLoading1(false);
+            setDeleteTarget(null); // Close modal
         }
+    };
+
+    // 3. Cancel deletion
+    const cancelDelete = () => {
+        setDeleteTarget(null);
     };
 
     const handleClose = () => {
@@ -288,8 +310,10 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                             </div>
 
                                             <button
-                                                onClick={() => removeBreakdownRow(styleIdx, "rowIdx", row.id, "delWholeJob")}
+                                                type="button"
+                                                onClick={() => requestRemoveBreakdownRow(styleIdx, "rowIdx", row.id, "delWholeJob")}
                                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                title="Delete entire job"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -421,10 +445,11 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                                                         </div>
                                                         <button
                                                             type="button"
-                                                            onClick={() => removeBreakdownRow(styleIdx, rowIdx, r.id, "delComp")}
+                                                            onClick={() => requestRemoveBreakdownRow(styleIdx, rowIdx, r.id, "delComp")}
                                                             disabled={isLoading || isLoading1}
                                                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                             aria-label="Remove item"
+                                                            title="Delete this item"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
@@ -582,6 +607,46 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                     </div>
                 </div>
             </div>
+
+            {/* Custom Delete Confirmation Modal */}
+            {deleteTarget && (
+                <>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] animate-fade-in" />
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 pointer-events-none">
+                        <div className="bg-white rounded-xl border border-slate-200 w-full max-w-sm p-6 pointer-events-auto animate-slide-in shadow-2xl">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600">
+                                    <AlertTriangle className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800">Confirm Deletion</h3>
+                            </div>
+                            <p className="text-sm text-slate-600 mb-6">
+                                Are you sure you want to delete this {deleteTarget.deleteType === "delWholeJob" ? "entire job" : "item"}? This action is permanent and cannot be undone.
+                            </p>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={cancelDelete}
+                                    disabled={isLoading1}
+                                    className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={isLoading1}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {isLoading1 ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        "Delete"
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             <style>
                 {`

@@ -21,11 +21,10 @@ const defaultRow = () => ({
     orderQty: '',
     finishRequiredQty: '',
     processLoss: '',
-    additional: '',
 });
 
 // Order of fields in each row, left -> right, matching the visible columns.
-const FIELDS = ['color', 'composition', 'finishDia', 'orderQty', 'finishRequiredQty', 'processLoss', 'additional'];
+const FIELDS = ['color', 'composition', 'finishDia', 'orderQty', 'finishRequiredQty', 'processLoss'];
 
 const evaluateQtyExpression = (expr) => {
     if (expr === undefined || expr === null) return null;
@@ -145,8 +144,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         (sum, row) => {
             const finishReq = evaluateQtyExpression(row.finishRequiredQty) || 0;
             const processLoss = Number(row.processLoss) || 0;
-            const additional = Number(row.additional) || 0;
-            return sum + (finishReq * (1 + processLoss / 100) + additional);
+            return sum + (finishReq * (1 + processLoss / 100));
         },
         0
     );
@@ -157,8 +155,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
             rows: rows.map(row => {
                 const finishReq = evaluateQtyExpression(row.finishRequiredQty) || 0;
                 const processLoss = Number(row.processLoss) || 0;
-                const additional = Number(row.additional) || 0;
-                const yarnRequiredQty = finishReq * (1 + processLoss / 100) + additional;
+                const yarnRequiredQty = finishReq * (1 + processLoss / 100);
 
                 return {
                     color: row.color,
@@ -167,7 +164,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                     orderQty: row.orderQty,
                     finishRequiredQty: finishReq,
                     processLoss: row.processLoss,
-                    additional: row.additional,
                     yarnRequiredQty: yarnRequiredQty,
                 };
             })
@@ -300,8 +296,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             </div>
 
                             {/* Column headers */}
-                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mb-1 px-1">
-                                {['Color', 'Composition', 'Finish Dia', 'Order Qty', 'Finished Req. Qty', 'Process Loss', 'Additional', 'Yarn Require Qty', ''].map((h, i) => (
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mb-1 px-1">
+                                {['Color', 'Composition', 'Finish Dia', 'Order Qty', 'Finished Req. Qty', 'Process Loss', 'Yarn Require Qty', ''].map((h, i) => (
                                     <span key={i} className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                         {h}
                                     </span>
@@ -313,18 +309,16 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 {rows.map((row, rowIndex) => {
                                     const finishReq = evaluateQtyExpression(row.finishRequiredQty) || 0;
                                     const processLoss = Number(row.processLoss) || 0;
-                                    const additional = Number(row.additional) || 0;
-                                    const yarnRequiredQty = (finishReq * (1 + processLoss / 100) + additional).toFixed(2);
+                                    const yarnRequiredQty = (finishReq * (1 + processLoss / 100)).toFixed(2);
 
                                     return (
                                         <div
                                             key={row.id}
-                                            className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
+                                            className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 items-center"
                                         >
                                             {FIELDS.map((field, fieldIndex) => {
-                                                const isNumeric = ['orderQty', 'finishRequiredQty', 'processLoss', 'additional'].includes(field);
+                                                const isNumeric = ['orderQty', 'finishRequiredQty', 'processLoss'].includes(field);
                                                 const placeholder =
-                                                    field === 'additional' ? 'Additional' :
                                                     field === 'processLoss' ? 'Process Loss' :
                                                     field === 'finishRequiredQty' ? 'e.g. 10+10+10' :
                                                     field === 'finishDia' ? 'Finish Dia' :
@@ -370,8 +364,8 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                             </div>
 
                             {/* Grand total row */}
-                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mt-2 px-1 pt-2 border-t border-gray-200">
-                                <span className="col-span-4 text-xs font-semibold text-gray-500 uppercase tracking-wide self-center">
+                            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_1fr_32px] gap-2 mt-2 px-1 pt-2 border-t border-gray-200">
+                                <span className="col-span-3 text-xs font-semibold text-gray-500 uppercase tracking-wide self-center">
                                     Grand Total
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800 px-3">
@@ -379,9 +373,6 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800 px-3">
                                     {totalFinishRequiredQty.toLocaleString()}
-                                </span>
-                                <span className="text-sm font-semibold text-gray-800 px-3">
-                                    —
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800 px-3">
                                     —
