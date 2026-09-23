@@ -124,6 +124,8 @@ export const styleRequirements = async (req: Request, res: Response) => {
                                         sewingOutputQty: true,
                                         shippedQty: true,
                                         manufacturingUnite: true,
+                                        sentForEmbellishment: true,
+                                        receivedFromEmbellishment: true,
                                     }
                                 }
                             }

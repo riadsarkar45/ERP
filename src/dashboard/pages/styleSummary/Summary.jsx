@@ -10,6 +10,12 @@ import { useFetchData } from "../../../hooks/fetch";
 import * as XLSX from "xlsx";
 import GlanceModal from "../../../components/GlanceModal";
 import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
+import { generatePDFBooking } from "./generatePdfBooking";
+import FilterDropDown from "./FilterDropDown";
+import { handleExportExcel } from "./exportExcel";
+import { footerTotals } from "./footerTotals";
+import BreakDownCell from "./BreakDownCell";
+import StyleEditModal from "./StyleEditModal";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -73,141 +79,9 @@ const formatNumber = (val, fallback = "_") => {
 };
 
 // ─ Filter Dropdown Component ────────────────────────────────────────────────
-function FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading, onApply, onClear, onClose, anchorRef }) {
-    const [search, setSearch] = useState("");
-    const [selected, setSelected] = useState(
-        activeValues !== null ? new Set(activeValues) : new Set(allValues)
-    );
-    const dropRef = useRef(null);
 
-    useEffect(() => {
-        setSelected(activeValues !== null ? new Set(activeValues) : new Set(allValues));
-    }, [allValues]);
 
-    useEffect(() => {
-        const handler = (e) => {
-            if (dropRef.current && !dropRef.current.contains(e.target) &&
-                anchorRef.current && !anchorRef.current.contains(e.target)) {
-                onClose();
-            }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, [onClose, anchorRef]);
-
-    const filtered = allValues.filter(v => v.toLowerCase().includes(search.toLowerCase()));
-    const allChecked = filtered.length > 0 && filtered.every(v => selected.has(v));
-
-    const toggleAll = () => {
-        const next = new Set(selected);
-        if (allChecked) {
-            filtered.forEach(v => next.delete(v));
-        } else {
-            filtered.forEach(v => next.add(v));
-        }
-        setSelected(next);
-    };
-
-    const toggle = (val) => {
-        const next = new Set(selected);
-        next.has(val) ? next.delete(val) : next.add(val);
-        setSelected(next);
-    };
-
-    return (
-        <div
-            ref={dropRef}
-            style={{
-                position: "fixed",
-                zIndex: 9999,
-                background: "#fff",
-                border: "1px solid #0d9488",
-                borderRadius: 6,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                minWidth: 220,
-                maxWidth: 280,
-            }}
-            className="filter-dropdown"
-        >
-            <div className="flex items-center justify-between px-3 py-2 subrow-cell border-b border-[#0d9488] bg-gray-50">
-                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide truncate">{colLabel}</span>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0">
-                    <X size={13} />
-                </button>
-            </div>
-
-            <div className="px-2 py-2 border-b border-gray-100">
-                <div className="flex items-center gap-1.5 bg-gray-100 rounded px-2 py-1">
-                    <Search size={12} className="text-gray-400 flex-shrink-0" />
-                    <input
-                        autoFocus
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Search..."
-                        className="bg-transparent text-xs outline-none w-full text-gray-700 placeholder-gray-400"
-                    />
-                    {search && (
-                        <button onClick={() => setSearch("")} className="text-gray-400 hover:text-gray-600">
-                            <X size={11} />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div className="px-3 py-1.5 border-b border-gray-100">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                        type="checkbox"
-                        checked={allChecked}
-                        onChange={toggleAll}
-                        disabled={isLoading}
-                        className="rounded text-teal-600"
-                    />
-                    <span className="text-xs font-medium text-gray-600">Select All</span>
-                    <span className="ml-auto text-xs text-gray-400">{selected.size}/{allValues.length}</span>
-                </label>
-            </div>
-
-            <div style={{ maxHeight: 200, overflowY: "auto" }} className="py-1">
-                {isLoading ? (
-                    <div className="px-3 py-6 flex items-center justify-center gap-2 text-xs text-gray-400">
-                        <RefreshCcw size={12} className="animate-spin" /> Loading options...
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <div className="px-3 py-4 text-xs text-gray-400 text-center">No matches</div>
-                ) : (
-                    filtered.map(val => (
-                        <label key={val} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-teal-50 select-none">
-                            <input
-                                type="checkbox"
-                                checked={selected.has(val)}
-                                onChange={() => toggle(val)}
-                                className="rounded text-teal-600"
-                            />
-                            <span className="text-xs text-gray-700 truncate" title={val}>{val || "(Blank)"}</span>
-                        </label>
-                    ))
-                )}
-            </div>
-
-            <div className="flex gap-2 px-3 py-2 subrow-cell border-t border-gray-100 bg-gray-50">
-                <button
-                    onClick={() => { onApply(selected); onClose(); }}
-                    disabled={isLoading}
-                    className="flex-1 text-xs bg-teal-600 text-white rounded px-3 py-1.5 font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
-                >
-                    Apply
-                </button>
-                <button
-                    onClick={() => { onClear(); onClose(); }}
-                    className="flex-1 text-xs bg-white border border-gray-300 text-gray-600 rounded px-3 py-1.5 font-medium hover:bg-gray-50 transition-colors"
-                >
-                    Clear
-                </button>
-            </div>
-        </div>
-    );
-}
+// FilterDropdown({ colIndex, colLabel, allValues, activeValues, isLoading, onApply, onClear, onClose, anchorRef })
 
 // ─ Summary Page ────────────────────────────────────────────────────────────
 export default function Summary() {
@@ -237,6 +111,7 @@ export default function Summary() {
     const [editingCells, setEditingCells] = useState({});
     const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
+    const [editingStyleData, setStyleEditingData] = useState({ isShowStyleEditModal: false, isLoading: null, data: [] })
     const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
 
@@ -292,102 +167,15 @@ export default function Summary() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length);
 
-    const footerTotals = useMemo(() => {
-        const totals = {};
-        for (let idx = FROZEN_COUNT; idx < COLUMNS.length; idx++) {
-            totals[idx] = 0;
-        }
-
-        filteredData.forEach(row => {
-            const compBreakdown = row.compBreakdown || (row.rows || []).map(() => ({}));
-            const numSubRows = (row.rows || []).length;
-
-            for (let j = 0; j < numSubRows; j++) {
-                const cell = row.rows[j] || {};
-                const cb = compBreakdown[j] || {};
-
-                totals[8] += Number(cell.orderQty) || 0;
-
-                const firstBooking = (Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)) || 0;
-                totals[9] += firstBooking;
-                totals[13] += firstBooking;
-
-                totals[10] += Number(row.processLoss) || 0;
-
-                const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
-                const netAdditional = Number(cell.additional) - lossQty;
-                const finishReqAdj = Number(cell.finishRequiredQty) + netAdditional;
-                totals[11] += Number.isFinite(finishReqAdj) ? finishReqAdj : 0;
-
-                totals[12] += Number(cell.additional) || 0;
-
-                if (cb?.status) continue;
-
-                const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                totals[14] += workOrderQty;
-                totals[15] += firstBooking - workOrderQty;
-
-                const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
-                totals[16] += yarnDelivery;
-                totals[17] += workOrderQty - yarnDelivery;
-
-                totals[18] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye');
-                totals[19] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye');
-
-                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
-                totals[21] += greyReceived;
-
-                const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
-                totals[22] += yarnReturn;
-                totals[23] += (greyReceived + yarnReturn) - yarnDelivery;
-
-                const greyDelivery = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
-                totals[24] += greyDelivery;
-                totals[25] += getBreakdownValue(cb, 'dyeingOrder_Grey_Return');
-
-                const greyReceivedDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received');
-                totals[26] += greyReceivedDyeing;
-                totals[27] += getBreakdownValue(cb, 'dyeingOrder_Finish_Received');
-
-                const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
-                const greyReceivedFromDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing');
-                const hasGreyData = greyReturnRcvd || greyReceivedFromDyeing || greyDelivery;
-                if (hasGreyData) {
-                    totals[28] += greyDelivery - greyReceivedDyeing - greyReturnRcvd;
-                }
-
-                const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
-                totals[29] += aopSent;
-                totals[30] += getBreakdownValue(cb, 'aopOrder_Fabric_Return');
-                totals[31] += getBreakdownValue(cb, 'aopOrder_After_Aop_Fabric_Rcvd');
-
-                const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
-                totals[32] += aopReceived;
-                totals[33] += aopReceived - aopSent;
-
-                if (aopSent > 0) {
-                    totals[34] += ((aopSent - aopReceived) / aopSent) * 100;
-                }
-
-                const rpSent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
-                totals[35] += rpSent;
-                totals[36] += getBreakdownValue(cb, 'reProcessOrder_Return_Received');
-
-                const rpGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
-                totals[37] += rpGrey;
-
-                const rpFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
-                totals[38] += rpFinish;
-                totals[39] += (rpGrey + rpFinish) - rpSent;
-
-                if (rpSent > 0) {
-                    totals[40] += ((rpSent - (rpGrey + rpFinish)) / rpSent) * 100;
-                }
-            }
-        });
-
-        return totals;
-    }, [filteredData]);
+    // ── FIX: capture the computed totals object in its own variable, and
+    // memoize so it only recalculates when filteredData actually changes.
+    // Previously the call result was discarded, so every `footerTotals[colIndex]`
+    // lookup below was reading properties off the *function* itself (always
+    // undefined), making the footer row and Excel export totals blank.
+    const totals = useMemo(
+        () => footerTotals({ FROZEN_COUNT, filteredData, COLUMNS, getBreakdownValue }),
+        [filteredData]
+    );
 
     const getPageNumbers = () => {
         const pages = [];
@@ -469,29 +257,6 @@ export default function Summary() {
     const BORDER_COLOR = "#14b8a6";
     const CELL_BG = "#ffffff";
 
-    const renderBreakdownCell = (compBreakdown, key, colIndex) => (
-        <td
-            className="p-0 align-top"
-            style={{
-                backgroundColor: CELL_BG,
-                borderRight: `1px solid ${BORDER_COLOR}`,
-                borderBottom: `1px solid ${BORDER_COLOR}`,
-                textAlign: 'center',
-                width: `${UNFROZEN_WIDTH}px`,
-                minWidth: `${UNFROZEN_WIDTH}px`,
-                maxWidth: `${UNFROZEN_WIDTH}px`,
-            }}
-        >
-            <div className="divide-y divide-[#14b8a6]">
-                {compBreakdown.map((cb, j) => {
-                    if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-black italic`}>_</div>;
-                    const value = cb?.[key];
-                    return <div key={j} className={`px-3 py-2 subrow-cell`}>{formatNumber(value)}</div>;
-                })}
-            </div>
-        </td>
-    );
-
     const getColBg = (index) => CELL_BG;
 
     const getFrozenStyle = (index) => ({
@@ -529,32 +294,7 @@ export default function Summary() {
         maxWidth: `${UNFROZEN_WIDTH}px`,
     });
 
-    const getFooterCellStyle = (index) => {
-        const isFrozen = index < FROZEN_COUNT;
-        return {
-            position: 'sticky',
-            bottom: 0,
-            left: isFrozen ? `${FROZEN_LEFTS[index]}px` : 'auto',
-            width: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
-            minWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
-            maxWidth: isFrozen ? `${FROZEN_WIDTHS[index]}px` : `${UNFROZEN_WIDTH}px`,
-            zIndex: isFrozen ? 60 : 55,
-            backgroundColor: HEADER_BG,
-            color: '#1f2937',
-            borderRight: `1px solid ${BORDER_COLOR}`,
-            borderTop: `2px solid ${BORDER_COLOR}`,
-            borderBottom: `1px solid ${BORDER_COLOR}`,
-            borderBottomLeftRadius: index === 0 ? '14px' : 0,
-            borderBottomRightRadius: index === COLUMNS.length - 1 ? '14px' : 0,
-            boxShadow: isFrozen && index === FROZEN_COUNT - 1 ? '2px 0 4px -2px rgba(0,0,0,0.2)' : 'none',
-            overflow: isFrozen && index === FROZEN_COUNT - 1 ? 'hidden' : 'visible',
-            textAlign: 'center',
-            fontWeight: 700,
-            fontSize: '0.8rem',
-            whiteSpace: 'nowrap',
-            padding: '10px 8px',
-        };
-    };
+
 
     const handleEdit = (rowId, editingField, currentValue, changedTable) => {
         const cellKey = `${rowId}-${editingField}`;
@@ -632,345 +372,33 @@ export default function Summary() {
         fetchFilteredData();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  OPEN EDIT MODAL — fetches the FULL previous data (colors, compositions,
-    //  additional bookings, breakdown) so the modal is pre-filled with what was
-    //  saved earlier. Falls back to the summary row if the fetch fails.
-    // ══════════════════════════════════════════════════════════════════════════
-    const openEditJobModal = async (row) => {
-        setEditLoading(true);
+    const openEditJobModal = async (jobNo) => {
+        setStyleEditingData({ isShowStyleEditModal: true, isLoading: true, data: [] })
+        console.log("clicked...");
         try {
-            // Deep clone the summary row as a safety net
-            let full = null;
-            try {
-                const res = await axiosPrivate.get(`/api/styles/${row.id}`);
-                full = res.data?.data || res.data;
-            } catch (e) {
-                try {
-                    const res = await axiosPrivate.get(`/api/styles/job/${row.jobNo}`);
-                    full = res.data?.data || res.data;
-                } catch (e2) {
-                    console.warn("Full job fetch failed, using summary row:", e2);
-                }
+            const req = await axiosPrivate.get(`/api/styles/${jobNo}`);
+            console.log(req.data.data, "prepare editing data");
+            if (req.data.type === "success") {
+                console.log(req.data.data, "inside condition prepare editing data");
+                setStyleEditingData({ isShowStyleEditModal: true, isLoading: false, data: req?.data?.data })
             }
-
-            const merged = {
-                ...JSON.parse(JSON.stringify(row)),
-                ...(full || {}),
-                rows: full?.rows?.length ? full.rows : (row.rows || []),
-                compBreakdown: full?.compBreakdown?.length ? full.compBreakdown : (row.compBreakdown || []),
-            };
-
-            setEditingJobData(merged);
-            setShowModal(true);
         } finally {
             setEditLoading(false);
         }
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcelFile = () => {
         const wsData = [];
         wsData.push(COLUMNS);
-
-        const merges = [];
-        let currentRow = 1;
-
-        filteredData.forEach(row => {
-            const compBreakdown = row.compBreakdown || row.rows.map(() => ({}));
-            const numSubRows = row.rows.length;
-
-            for (let j = 0; j < numSubRows; j++) {
-                const cell = row.rows[j];
-                const cb = compBreakdown[j] || {};
-
-                const finishQty = Number(cell.finishRequiredQty) || 0;
-                const processLoss = Number(row.processLoss) || 0;
-                const totalRequired = finishQty + finishQty * (processLoss / 100);
-                const knittingWOQty = Number(getBreakdownValue(cb, 'knittingOrder_workOrderQty')) || 0;
-
-                const shortExcess0 = cb?.status ? "_" : (totalRequired - knittingWOQty).toFixed(2);
-                const yarnDelivery = Number(getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery')) || 0;
-                const shortExcess1 = totalRequired === 0 ? "_" : (totalRequired - yarnDelivery).toFixed(2);
-
-                const yarnReturn = Number(getBreakdownValue(cb, 'knittingOrder_Yarn_Return')) || 0;
-                const greyReceived = Number(getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received')) || 0;
-                const balance = (greyReceived + yarnReturn) - (knittingWOQty - yarnDelivery);
-
-                const greyReturnRcvd = Number(getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received')) || 0;
-                const greyReceivedDyeing = Number(getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing')) || 0;
-                const greyDelivery = Number(getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery')) || 0;
-                const greyBalance = greyReturnRcvd + greyReceivedDyeing - greyDelivery;
-                const hasGreyData = greyReturnRcvd || greyReceivedDyeing || greyDelivery;
-
-                const aopSent = Number(getBreakdownValue(cb, 'aopOrder_Sent_for_AOP')) || 0;
-                const aopReceived = Number(getBreakdownValue(cb, 'aopOrder_Received_From_Aop')) || 0;
-                const aopBalance = aopReceived - aopSent;
-                const aopLoss = aopSent > 0 ? (((aopSent - aopReceived) / aopSent) * 100).toFixed(2) + "%" : "_";
-
-                const rpSent = Number(getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process')) || 0;
-                const rpGrey = Number(getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey')) || 0;
-                const rpFinish = Number(getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish')) || 0;
-                const rpBalance = (rpGrey + rpFinish) - rpSent;
-                const rpLoss = rpSent > 0 ? (((rpSent - (rpGrey + rpFinish)) / rpSent) * 100).toFixed(2) + "%" : "_";
-
-                wsData.push([
-                    j === 0 ? row.salesContact : "",
-                    j === 0 ? row.buyerName : "",
-                    j === 0 ? row.jobNo : "",
-                    j === 0 ? row.styleNo : "",
-                    j === 0 ? row.poNo : "",
-                    cell.color,
-                    cell.composition,
-                    cell.finishDia,
-                    cell.orderQty,
-                    totalRequired.toFixed(2),
-                    cell.additional || "additional",
-                    totalRequired.toFixed(2),
-                    cb?.status ? "_" : knittingWOQty.toFixed(2),
-                    cb?.status ? "_" : shortExcess0,
-                    cb?.status ? "_" : yarnDelivery.toFixed(2),
-                    cb?.status ? "_" : shortExcess1,
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye')) || 0).toFixed(2),
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye')) || 0).toFixed(2),
-                    "-",
-                    cb?.status ? "_" : greyReceived.toFixed(2),
-                    cb?.status ? "_" : yarnReturn.toFixed(2),
-                    cb?.status ? "_" : balance.toFixed(2),
-                    cb?.status ? "_" : greyDelivery.toFixed(2),
-                    cb?.status ? "_" : greyReturnRcvd.toFixed(2),
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'dyeingOrder_Grey_Received')) || 0).toFixed(2),
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'dyeingOrder_Finish_Received')) || 0).toFixed(2),
-                    cb?.status ? "_" : (!hasGreyData ? "_" : greyBalance.toFixed(2)),
-                    `${processLoss}%`,
-                    cb?.status ? "_" : aopSent.toFixed(2),
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'aopOrder_Fabric_Return')) || 0).toFixed(2),
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'aopOrder_After_Aop_Fabric_Rcvd')) || 0).toFixed(2),
-                    cb?.status ? "_" : aopReceived.toFixed(2),
-                    cb?.status ? "_" : (aopSent === 0 && aopReceived === 0 ? "_" : Math.abs(aopBalance).toFixed(2)),
-                    cb?.status ? "_" : aopLoss,
-                    cb?.status ? "_" : rpSent.toFixed(2),
-                    cb?.status ? "_" : (Number(getBreakdownValue(cb, 'reProcessOrder_Return_Received')) || 0).toFixed(2),
-                    cb?.status ? "_" : rpGrey.toFixed(2),
-                    cb?.status ? "_" : rpFinish.toFixed(2),
-                    cb?.status ? "_" : (rpSent === 0 && rpGrey === 0 && rpFinish === 0 ? "_" : Math.abs(rpBalance).toFixed(2)),
-                    cb?.status ? "_" : rpLoss,
-                ]);
-            }
-
-            if (numSubRows > 1) {
-                for (let col = 0; col < 5; col++) {
-                    merges.push({
-                        s: { r: currentRow, c: col },
-                        e: { r: currentRow + numSubRows - 1, c: col }
-                    });
-                }
-            }
-            currentRow += numSubRows;
-        });
-
-        const totalRow = new Array(COLUMNS.length).fill("");
-        totalRow[0] = "TOTAL";
-        for (let idx = FROZEN_COUNT; idx < COLUMNS.length; idx++) {
-            if (NO_TOTAL_COLUMN_INDEXES.has(idx)) continue;
-            const val = (footerTotals[idx] || 0).toFixed(2);
-            totalRow[idx] = PERCENT_COLUMN_INDEXES.has(idx) ? `${val}%` : val;
-        }
-        wsData.push(totalRow);
-
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = COLUMNS.map((_, i) => ({ wch: i < FROZEN_COUNT ? 20 : 18 }));
-        ws['!merges'] = merges;
-
-        const range = XLSX.utils.decode_range(ws['!ref']);
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-                if (!ws[cellAddress]) continue;
-                if (!ws[cellAddress].s) ws[cellAddress].s = {};
-                ws[cellAddress].s.alignment = { horizontal: "center", vertical: "center" };
-            }
-        }
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Summary");
-        XLSX.writeFile(wb, `Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        handleExportExcel({ filteredData, COLUMNS, getBreakdownValue, FROZEN_COUNT, footerTotals: totals, NO_TOTAL_COLUMN_INDEXES, PERCENT_COLUMN_INDEXES })
     };
 
     // ══════════════════════════════════════════════════════════════════════════
     //  PDF — now includes an "Additional Booking" column (highlighted) so any
     //  additional qty added through the modal appears on the booking sheet.
     // ══════════════════════════════════════════════════════════════════════════
-    const generatePDFBooking = (rowData) => {
-        const printWindow = window.open('', '_blank');
-
-        const processLoss = Number(rowData.processLoss) || 0;
-        const rows = rowData.rows || [];
-
-        let rowsHtml = '';
-        let grandOrder = 0;
-        let grandAdditional = 0;
-        let grandTotal = 0;
-
-        rows.forEach((row) => {
-            const finishQty = Number(row.finishRequiredQty) || 0;
-            const additional = Number(row.additional) || 0;
-            const totalRequired = finishQty * (1 + processLoss / 100) + additional;
-
-            grandOrder += finishQty;
-            grandAdditional += additional;
-            grandTotal += totalRequired;
-
-            rowsHtml += `
-                <tr>
-                    <td>${rowData.styleNo || ''}</td>
-                    <td>${rowData.poNo || ''}</td>
-                    <td>${row.color || ''}</td>
-                    <td>${row.composition || ''}</td>
-                    <td>${rowData.hod || ''}</td>
-                    <td>${finishQty.toFixed(2)}</td>
-                    <td class="${additional > 0 ? 'add-cell' : ''}">${additional > 0 ? additional.toFixed(2) : '-'}</td>
-                    <td>${totalRequired.toFixed(2)}</td>
-                    <td>${row.finishDia || ''}</td>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>${totalRequired.toFixed(2)}</td>
-                    <td>${totalRequired.toFixed(2)}</td>
-                    <td>BODY-Solid</td>
-                </tr>
-            `;
-        });
-
-        const htmlContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Fabric Booking Sheet - ${rowData.jobNo}</title>
-                <style>
-                    @media print {
-                        @page { margin: 0.5in; }
-                        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    }
-                    body {
-                        font-family: Arial, sans-serif;
-                        margin: 20px;
-                        font-size: 12px;
-                    }
-                    .header {
-                        text-align: center;
-                        margin-bottom: 20px;
-                    }
-                    .header h1 { margin: 5px 0; font-size: 18px; }
-                    .header h2 { margin: 5px 0; font-size: 16px; }
-                    .info-row {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 10px;
-                    }
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-top: 15px;
-                    }
-                    th, td {
-                        border: 1px solid #000;
-                        padding: 6px;
-                        text-align: center;
-                        font-size: 10px;
-                    }
-                    th { background-color: #f3ddc7; font-weight: bold; }
-                    th.add-head { background-color: #fde68a; }
-                    td.add-cell { background-color: #fef3c7; font-weight: bold; color: #92400e; }
-                    tfoot td { background-color: #f3ddc7; font-weight: bold; }
-                    .footer {
-                        margin-top: 30px;
-                        display: flex;
-                        justify-content: space-between;
-                    }
-                    .signature {
-                        text-align: center;
-                        margin-top: 40px;
-                    }
-                    button { margin: 10px 5px; padding: 8px 16px; cursor: pointer; }
-                </style>
-            </head>
-            <body>
-                <div style="text-align: right; margin-bottom: 10px;">
-                    <button onclick="window.print()">🖨️ Print / Save as PDF</button>
-                    <button onclick="window.close()">Close</button>
-                </div>
-
-                <div class="header">
-                    <h1>SM SOURCING</h1>
-                    <h2>Fabric Booking Sheet</h2>
-                </div>
-
-                <div class="info-row">
-                    <div>
-                        <strong>Buyer:</strong> ${rowData.buyerName || ''}<br/>
-                        <strong>Process loss below 8%.</strong>
-                    </div>
-                    <div style="text-align: center;">
-                        <strong>HOD:</strong> ${rowData.hod || 'N/A'}
-                    </div>
-                    <div style="text-align: right;">
-                        <strong>JOB NO:</strong> ${rowData.jobNo}<br/>
-                        <strong>Date:</strong> ${new Date().toLocaleDateString()}
-                    </div>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Style No</th>
-                            <th>PO No</th>
-                            <th>Color</th>
-                            <th>Fabrication</th>
-                            <th>HOD</th>
-                            <th>Order Qty</th>
-                            <th class="add-head">Additional Booking</th>
-                            <th>Total Booking</th>
-                            <th>Finished fab. Width</th>
-                            <th>Consumption PCS</th>
-                            <th>F. Fab</th>
-                            <th>2x1 rib lycra</th>
-                            <th>Total fabric</th>
-                            <th>Yarn req.</th>
-                            <th>Type Of work order</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rowsHtml}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="5">TOTAL</td>
-                            <td>${grandOrder.toFixed(2)}</td>
-                            <td class="add-cell">${grandAdditional.toFixed(2)}</td>
-                            <td>${grandTotal.toFixed(2)}</td>
-                            <td colspan="7"></td>
-                        </tr>
-                    </tfoot>
-                </table>
-
-                <div class="footer">
-                    <div>
-                        <p>Thanks &amp; Best regards</p>
-                    </div>
-                    <div>
-                        <p>CC To:</p>
-                    </div>
-                    <div class="signature">
-                        <p>Approved by:</p>
-                        <p style="margin-top: 40px;">_________________</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-        `;
-
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
+    const generateBooking = (rowData) => {
+        generatePDFBooking(rowData)
     };
 
     const handleToggleRow = (rowId) => {
@@ -992,7 +420,7 @@ export default function Summary() {
         selectedRows.forEach(rowId => {
             const rowData = filteredData.find(r => r.id === rowId);
             if (rowData) {
-                generatePDFBooking(rowData);
+                generateBooking(rowData);
             }
         });
     };
@@ -1065,10 +493,12 @@ export default function Summary() {
                     )
                 }
 
+
+
                 <div className="h-8 w-px bg-gray-300 mx-2 hidden sm:block"></div>
 
                 <div className="flex items-center gap-1">
-                    <button onClick={() => handleExportExcel()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export">
+                    <button onClick={() => handleExportExcelFile()} className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="Export">
                         <Download size={18} className="text-gray-600" />
                         Export
                     </button>
@@ -1134,8 +564,18 @@ export default function Summary() {
                 />
             )}
 
+            {
+                editingStyleData.isShowStyleEditModal === true && (
+                    <StyleEditModal
+                        editingStyleData={editingStyleData.data}
+                        isLoading={editingStyleData.isLoading}
+                        setStyleEditingData={setStyleEditingData}
+                    />
+                )
+            }
+
             {openFilter !== null && (
-                <FilterDropdown
+                <FilterDropDown
                     colIndex={openFilter}
                     colLabel={COLUMNS[openFilter]}
                     allValues={filterOptions}
@@ -1345,7 +785,7 @@ export default function Summary() {
                                                 disabled={editLoading}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    openEditJobModal(row);
+                                                    openEditJobModal(row.jobNo);
                                                 }}
                                                 className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
                                                 title="Edit Job Details (Colors, Compositions, Additional Booking, etc.)"
@@ -1554,7 +994,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 13. KNITTING WORK ORDER QTY */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_workOrderQty', 14)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_workOrderQty', num: 14 })}
 
                                     {/* 14. SHORT & EXCESS (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
@@ -1577,7 +1017,7 @@ export default function Summary() {
                                     </td>
 
                                     {/* 15. YARN DELIVERY */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Delivery', 16)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_Yarn_Delivery', num: 16 })}
 
                                     {/* 16. SHORT & EXCESS (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
@@ -1602,10 +1042,10 @@ export default function Summary() {
                                     </td>
 
                                     {/* 17. RAW YARN DELIVERY FOR DYED */}
-                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', 18)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye', num: 18 })}
 
                                     {/* 18. YARN RECEIVED AFTER DYED */}
-                                    {renderBreakdownCell(compBreakdown, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', 19)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye', num: 19 })}
 
                                     {/* 19. PARTY STOCK */}
                                     <td className="p-0 align-top" style={getCellStyle(20)}>
@@ -1615,10 +1055,10 @@ export default function Summary() {
                                     </td>
 
                                     {/* 20. TOTAL KNITTING (GREY) */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Grey_Fabric_Received', 21)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_Grey_Fabric_Received', num: 21 })}
 
                                     {/* 21. RETURN YARN RECEIVED */}
-                                    {renderBreakdownCell(compBreakdown, 'knittingOrder_Yarn_Return', 22)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'knittingOrder_Yarn_Return', num: 22 })}
 
                                     {/* 22. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
@@ -1639,16 +1079,16 @@ export default function Summary() {
                                     </td>
 
                                     {/* 23. GREY DELIVERY FOR DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Delivery', 24)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Grey_Delivery', num: 24 })}
 
                                     {/* 24. GREY RETURN FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Return', 25)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Grey_Return', num: 25 })}
 
                                     {/* 25. GREY RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Grey_Received', 26)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Grey_Received', num: 26 })}
 
                                     {/* 26. FINISH RECEIVED FROM DYEING */}
-                                    {renderBreakdownCell(compBreakdown, 'dyeingOrder_Finish_Received', 27)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'dyeingOrder_Finish_Received', num: 27 })}
 
                                     {/* 27. GREY BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
@@ -1671,16 +1111,16 @@ export default function Summary() {
                                     </td>
 
                                     {/* 29. FINISH DELIVERY FROM AOP */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Sent_For_Aop', 29)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_Sent_For_Aop', num: 29 })}
 
                                     {/* 30. FABRIC RETURN FROM AOP */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Fabric_Return', 30)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_Fabric_Return', num: 30 })}
 
                                     {/* 31. AFTER AOP FABRIC RCVD */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_After_Aop_Fabric_Rcvd', 31)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_After_Aop_Fabric_Rcvd', num: 31 })}
 
                                     {/* 32. FINISH RECEIVED FROM AOP */}
-                                    {renderBreakdownCell(compBreakdown, 'aopOrder_Received_From_Aop', 32)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'aopOrder_Received_From_Aop', num: 32 })}
 
                                     {/* 33. AOP FAB. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
@@ -1714,16 +1154,16 @@ export default function Summary() {
                                     </td>
 
                                     {/* 35. SENT FOR RE-PROCESS */}
-                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Sent_for_Re_Process', 35)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Sent_for_Re_Process', num: 35 })}
 
                                     {/* 36. RETURN RCVD */}
-                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Return_Received', 36)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Return_Received', num: 36 })}
 
                                     {/* 37. RECEIVED AFTER RE-PROCESS (GREY) */}
-                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Received_After_Re_Process_Grey', 37)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Received_After_Re_Process_Grey', num: 37 })}
 
                                     {/* 38. RECEIVED AFTER RE-PROCESS (FINISH) */}
-                                    {renderBreakdownCell(compBreakdown, 'reProcessOrder_Received_After_Re_Process_Finish', 38)}
+                                    {BreakDownCell({ compBreakdown, CELL_BG: CELL_BG, BORDER_COLOR: BORDER_COLOR, UNFROZEN_WIDTH: UNFROZEN_WIDTH, formatNumber: formatNumber, key: 'reProcessOrder_Received_After_Re_Process_Finish', num: 38 })}
 
                                     {/* 39. RE-PROCESS FAB. BALANCE (+/-) (formula) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
@@ -1804,7 +1244,7 @@ export default function Summary() {
                                     let displayValue = "";
 
                                     if (!NO_TOTAL_COLUMN_INDEXES.has(colIndex)) {
-                                        const sum = formatNumber(footerTotals[colIndex]);
+                                        const sum = formatNumber(totals[colIndex]);
                                         displayValue = (sum !== "_" && PERCENT_COLUMN_INDEXES.has(colIndex)) ? `${sum}%` : sum;
                                     }
 

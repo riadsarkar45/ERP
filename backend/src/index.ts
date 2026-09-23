@@ -39,7 +39,7 @@ process.on("SIGTERM", async () => {
   await disconnectDatabase();
   process.exit(0);
 });
-const PORT = 3000;
+const PORT = 4000;
 
 const start = async () => {
   await connectDatabase();

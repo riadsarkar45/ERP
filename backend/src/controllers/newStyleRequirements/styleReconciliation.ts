@@ -17,13 +17,18 @@ interface TrailingRowInput {
     physicalFoundLeftOver?: number | string;
     sentForEmbellishment?: number | string;
     receivedFromEmbellishment?: number | string;
-    // FIXED: was "manufacturingUnit" (no trailing "e") — the frontend actually
-    // sends the key as "manufacturingUnite" (matches the Prisma column name).
-    // That mismatch meant this field was ALWAYS undefined, so every save
-    // wrote null/"" regardless of what the user typed, and on first-time
-    // creates it threw "Argument `manufacturingUnite` must not be null."
-    // because the Prisma column is a required (non-nullable) String.
     manufacturingUnite?: string | null;
+    // FIXED: these three were computed client-side (buildJobPayload rounds
+    // them via calculateFormula) and sent on every save, but were never in
+    // REQUIRED_NUMERIC_KEYS / OPTIONAL_NUMERIC_KEYS, so the row-processing
+    // loop never picked them up — they were silently dropped every time.
+    cadConsumption?: number | string;
+    plannedCuttingQty?: number | string;
+    plannedLeftOverQty?: number | string;
+    // FIXED: remarks is a string field the frontend sends per row; it was
+    // also missing from both key lists (which only ever handled numbers),
+    // so remarks never made it into the upsert `data` object either.
+    remarks?: string | null;
 }
 
 const REQUIRED_NUMERIC_KEYS = [
@@ -46,13 +51,30 @@ const OPTIONAL_NUMERIC_KEYS = [
     "receivedFromEmbellishment",
 ] as const;
 
+// FIXED: new list for the persisted formula fields (cadConsumption,
+// plannedCuttingQty, plannedLeftOverQty). Treated as numeric/optional —
+// same conversion as OPTIONAL_NUMERIC_KEYS — because the frontend already
+// rounds them before sending, but a row may still omit them.
+const FORMULA_NUMERIC_KEYS = [
+    "cadConsumption",
+    "plannedCuttingQty",
+    "plannedLeftOverQty",
+] as const;
+
 type RequiredNumericKey = (typeof REQUIRED_NUMERIC_KEYS)[number];
 type OptionalNumericKey = (typeof OPTIONAL_NUMERIC_KEYS)[number];
+type FormulaNumericKey = (typeof FORMULA_NUMERIC_KEYS)[number];
 
 const toNumber = (raw: unknown): number | null => {
     if (raw === "" || raw == null) return 0;
     const num = Math.round(Number(raw));
     return Number.isNaN(num) ? null : num;
+};
+
+const toStringOrNull = (raw: unknown): string | null => {
+    if (raw == null) return null;
+    const s = String(raw).trim();
+    return s === "" ? "" : s;
 };
 
 export const styleReconciliation = async (req: Request, res: Response) => {
@@ -77,7 +99,6 @@ export const styleReconciliation = async (req: Request, res: Response) => {
 
         const validRowIds = new Set(job.rows.map((r) => r.id));
 
-        // FIXED: dateOfReconciliation is now actually pulled out of the body
         const { rows, notes, dateOfReconciliation } = req.body as {
             rows: TrailingRowInput[];
             notes?: string | null;
@@ -92,7 +113,51 @@ export const styleReconciliation = async (req: Request, res: Response) => {
         const prepared: Array<{ styleRequirementRowId: number; data: Record<string, number | string | null> }> = [];
 
         for (const row of rows) {
-            // ... unchanged row-processing loop ...
+            const rowId = Number(row.styleRequirementRowId);
+            if (!Number.isFinite(rowId) || !validRowIds.has(rowId)) {
+                // Skip rows that don't belong to this job / are invalid ids
+                continue;
+            }
+
+            const data: Record<string, number | string | null> = {};
+
+            for (const key of REQUIRED_NUMERIC_KEYS as readonly RequiredNumericKey[]) {
+                const num = toNumber(row[key]);
+                if (num !== null) data[key] = num;
+            }
+
+            for (const key of OPTIONAL_NUMERIC_KEYS as readonly OptionalNumericKey[]) {
+                if (row[key] === undefined) continue;
+                const num = toNumber(row[key]);
+                if (num !== null) data[key] = num;
+            }
+
+            // FIXED: previously missing entirely — cadConsumption,
+            // plannedCuttingQty, plannedLeftOverQty now actually get written.
+            for (const key of FORMULA_NUMERIC_KEYS as readonly FormulaNumericKey[]) {
+                if (row[key] === undefined) continue;
+                const num = toNumber(row[key]);
+                if (num !== null) data[key] = num;
+            }
+
+            // FIXED: previously missing entirely — manufacturingUnite and
+            // remarks now actually get written (as strings, not run through
+            // toNumber, which would have turned them into NaN/null anyway).
+            // NOTE: the Prisma column is `note`, not `remarks` — the error
+            // log's "Available options" list confirmed this — so the
+            // frontend's `remarks` field is mapped to `note` here.
+            if (row.manufacturingUnite !== undefined) {
+                data.manufacturingUnite = toStringOrNull(row.manufacturingUnite);
+            }
+            if (row.remarks !== undefined) {
+                data.note = toStringOrNull(row.remarks);
+            }
+
+            prepared.push({ styleRequirementRowId: rowId, data });
+        }
+
+        if (prepared.length === 0) {
+            return res.status(400).json({ message: "No valid rows to save for this job" });
         }
 
         const transactionOperations: any[] = prepared.map(({ styleRequirementRowId, data }) =>
@@ -105,9 +170,6 @@ export const styleReconciliation = async (req: Request, res: Response) => {
 
         const results = await prisma.$transaction(transactionOperations);
 
-        // FIXED: use job.id (a real unique field from the earlier lookup) instead of
-        // `where: jobNo`, which isn't valid Prisma shape and would throw.
-        // Also only touch the date if one was actually sent, and parse it into a Date.
         if (dateOfReconciliation) {
             await prisma.styleRequirement.update({
                 where: { id: job.id },
