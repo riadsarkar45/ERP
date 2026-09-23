@@ -577,9 +577,19 @@ const KnittingOrder = ({
                         <div className= {`${cellPad} text-white`}>{formatNumber(totals.totalYarnDelivery?.toFixed(2))}</div>
                     </td>
 
-                    {/* COL 15 — DEL SHORT & EXCESS total */}
+                    {/* COL 15 — DEL SHORT & EXCESS total - FIXED FORMATTING */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 7)}>
-                        <div className= {`${cellPad} text-white`}>{(totals.delShortExcess?.toFixed(2))}</div>
+                        <div 
+                            className={`${cellPad} font-bold text-white`} 
+                            style={{ 
+                                color: "white" 
+                            }}
+                        >
+                            {totals?.delShortExcess > 0 
+                                ? `(${Math.abs(totals?.delShortExcess)?.toFixed(2)})` 
+                                : Math.abs(totals?.delShortExcess)?.toFixed(2)
+                            }
+                        </div>
                     </td>
 
                     {/* COL 16 — YARN RETURN total */}
@@ -592,9 +602,19 @@ const KnittingOrder = ({
                         <div className= {`${cellPad} text-white`}>{formatNumber(totals.GreyFabricReceived?.toFixed(2))}</div>
                     </td>
 
-                    {/* COL 18 — RCVD SHORT & EXCESS total */}
+                    {/* COL 18 — RCVD SHORT & EXCESS total - FIXED FORMATTING */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 10)}>
-                        <div className= {`${cellPad} text-white`}>{(-totals.rcvdShortExcess?.toFixed(2))}</div>
+                        <div 
+                            className={`${cellPad} font-bold text-white`}
+                            style={{ 
+                                color: "white" 
+                            }}
+                        >
+                            {totals?.rcvdShortExcess < 0 
+                                ? `(${Math.abs(totals?.rcvdShortExcess)?.toFixed(2)})` 
+                                : Math.abs(totals?.rcvdShortExcess)?.toFixed(2)
+                            }
+                        </div>
                     </td>
 
                     {/* COL 19 — UNIT PRICE (blank) */}
