@@ -472,10 +472,7 @@ const DyeingOrder = ({
 
             <tfoot>
                 <tr>
-                    {/* ===== FROZEN FOOTER CELLS =====
-                        Rendered as INDIVIDUAL cells (no colSpan).
-                        colSpan + position:sticky is broken in Chromium,
-                        which is why the frozen side of the footer was not sticking. */}
+                    {/* ===== FROZEN FOOTER CELLS ===== */}
                     {Array.from({ length: FROZEN_COUNT }).map((_, i) => (
                         <td key={`footer-frozen-${i}`} style={getFooterCellStyle(i)}>
                             {i === 0 ? (
@@ -524,11 +521,19 @@ const DyeingOrder = ({
                         <div className={`${cellPad} text-white`}>{totals?.totalGreyDelivery?.toFixed(2)}</div>
                     </td>
 
-                    {/* DEL SHORT & EXCESS Total */}
+                    {/* DEL SHORT & EXCESS Total - FIXED FORMATTING */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 8)}>
-                        <div className={` text-white`}> 
-                                {totals?.shortExcess?.toFixed(2)}
-                                
+                        <div 
+                            className={`text-white`} 
+                            style={{ 
+                                color: "white",
+                                fontWeight: "bold" 
+                            }}
+                        > 
+                            {totals?.shortExcess > 0 
+                                ? totals?.shortExcess?.toFixed(2) 
+                                : `(${Math.abs(totals?.shortExcess)?.toFixed(2)})`
+                            }
                         </div>
                     </td>
 
@@ -547,12 +552,19 @@ const DyeingOrder = ({
                         <div className={`${cellPad} text-white`}>{totals?.finishReceived?.toFixed(2)}</div>
                     </td>
 
-                    {/* RCVD SHORT & EXCESS Total */}
+                    {/* RCVD SHORT & EXCESS Total - FIXED FORMATTING */}
                     <td style={getFooterCellStyle(FROZEN_COUNT + 12)}>
-                        <div className={` text-white`}>
-                           
-                                {Math.abs(totals.finishVsGreyDiff?.toFixed(2))}
-                                
+                        <div 
+                            className={`text-white`}
+                            style={{ 
+                                color: "white", 
+                                fontWeight: "bold" 
+                            }}
+                        >
+                            {totals?.finishVsGreyDiff < 0 
+                                ? Math.abs(totals?.finishVsGreyDiff)?.toFixed(2) 
+                                : `(${Math.abs(totals?.finishVsGreyDiff)?.toFixed(2)})`
+                            }
                         </div>
                     </td>
 

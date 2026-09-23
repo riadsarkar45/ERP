@@ -26,6 +26,9 @@ const rowMatches = (row, filters, skipKey) =>
 
 const formatNumber = (n) => Number(n).toLocaleString('en-IN')
 
+// BDT currency display, e.g. 45,000 -> ৳ 45,000
+const formatCurrency = (n) => `৳ ${formatNumber(n)}`
+
 const clampPosition = (x, y, width, height) => ({
     x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - width - 8)),
     y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - height - 8)),
@@ -53,6 +56,7 @@ const GROUPS = [
     { id: 'item', label: 'Item Details', head: 'bg-sky-100 text-sky-800', sub: 'bg-sky-50 text-sky-900' },
     { id: 'supplier', label: 'Asset & Supplier', head: 'bg-indigo-100 text-indigo-800', sub: 'bg-indigo-50 text-indigo-900' },
     { id: 'qty', label: 'Quantity', head: 'bg-emerald-100 text-emerald-800', sub: 'bg-emerald-50 text-emerald-900' },
+    { id: 'price', label: 'Price Details', head: 'bg-rose-100 text-rose-800', sub: 'bg-rose-50 text-rose-900' },
     { id: 'movement', label: 'Movement', head: 'bg-amber-100 text-amber-800', sub: 'bg-amber-50 text-amber-900' },
     { id: 'notes', label: 'Notes', head: 'bg-slate-100 text-slate-700', sub: 'bg-slate-50 text-slate-800' },
 ]
@@ -77,6 +81,9 @@ const COLUMNS = [
     { key: 'disposedQty', label: 'Disposed Qty', group: 'qty', width: 100, type: 'number' },
     { key: 'sentQty', label: 'Send to Another Unit Qty', group: 'qty', width: 130, type: 'number' },
     { key: 'receivedQty', label: 'Received From Another Unit Qty', group: 'qty', width: 145, type: 'number' },
+    { key: 'totalCarrying', label: 'Total Carrying', group: 'qty', width: 120, type: 'number', derived: true, cell: 'font-bold text-emerald-700' },
+    { key: 'priceValue', label: 'Price Value', group: 'price', width: 110, type: 'number', currency: true },
+    { key: 'amount', label: 'Amount', group: 'price', width: 110, type: 'number', currency: true, cell: 'font-semibold text-gray-900' },
     { key: 'from', label: 'From', group: 'movement', width: 110 },
     { key: 'to', label: 'To', group: 'movement', width: 110 },
     { key: 'destination', label: 'Destination', group: 'movement', width: 160, cell: 'font-medium' },
@@ -84,7 +91,15 @@ const COLUMNS = [
 ]
 
 const NUMBER_COLUMNS = COLUMNS.filter((c) => c.type === 'number')
-const EMPTY_FORM = COLUMNS.reduce((acc, col) => ({ ...acc, [col.key]: '' }), {})
+const EMPTY_FORM = COLUMNS.filter((c) => !c.derived).reduce((acc, col) => ({ ...acc, [col.key]: '' }), {})
+
+// Total Carrying = Opening + Additions - Disposed + Sent to Another Unit + Received From Another Unit
+const withDerived = (row) => ({
+    ...row,
+    totalCarrying:
+        Number(row.openingQty || 0) + Number(row.additionsQty || 0) + Number(row.receivedQty || 0) - Number(row.disposedQty || 0) - Number(row.sentQty || 0), 
+        
+})
 
 // Columns from the first one through this column stay frozen while scrolling sideways
 const FROZEN_UNTIL = 'assetCode'
@@ -104,14 +119,14 @@ const FROZEN_DIVIDER = 'border-r-2 border-r-slate-700'
 /* ------------------------------------------------------------------ */
 
 const SAMPLE_MOVEMENTS = [
-    { id: 1, date: '2026-09-01', challanNo: 'CH-2026-0101', source: 'Own', assetType: 'Machinery', category: 'Sewing Machine', description: 'Single Needle Lockstitch Machine', assetCode: 'AST-MC-001', assetId: 'ID-1001', supplier: 'Jack Sewing Machine Co.', model: 'Jack A4', origin: 'China', sku: 'Pcs', openingQty: 120, additionsQty: 10, disposedQty: 2, sentQty: 5, receivedQty: 3, from: 'Unit-1', to: 'Unit-2', destination: 'Sewing Floor - Line 3', remarks: '' },
-    { id: 2, date: '2026-09-03', challanNo: 'CH-2026-0102', source: 'Unit Transfer', assetType: 'Machinery', category: 'Sewing Machine', description: 'Overlock 4 Thread Machine', assetCode: 'AST-MC-002', assetId: 'ID-1002', supplier: 'Juki Bangladesh Ltd.', model: 'Juki MO-6816', origin: 'Japan', sku: 'Pcs', openingQty: 60, additionsQty: 6, disposedQty: 1, sentQty: 0, receivedQty: 2, from: 'Unit-2', to: 'Unit-1', destination: 'Sewing Floor - Line 1', remarks: 'Received in good condition' },
-    { id: 3, date: '2026-09-05', challanNo: 'INV-8841', source: 'Rental', assetType: 'Machinery', category: 'Cutting Machine', description: 'Straight Knife Cutting Machine', assetCode: 'AST-MC-014', assetId: 'ID-1014', supplier: 'Eastman Machine Co.', model: 'Eastman Blue Streak', origin: 'USA', sku: 'Pcs', openingQty: 8, additionsQty: 2, disposedQty: 0, sentQty: 0, receivedQty: 0, from: 'Store', to: 'Unit-1', destination: 'Cutting Section', remarks: 'Rental' },
-    { id: 4, date: '2026-09-08', challanNo: 'INV-8852', source: 'Purchase', assetType: 'Electrical', category: 'Generator', description: 'Diesel Generator 500 KVA', assetCode: 'AST-EL-003', assetId: 'ID-2003', supplier: 'Perkins Power Ltd.', model: 'Perkins 500P', origin: 'United Kingdom', sku: 'Set', openingQty: 2, additionsQty: 1, disposedQty: 0, sentQty: 0, receivedQty: 0, from: 'Supplier', to: 'Unit-1', destination: 'Generator Room', remarks: 'Backup power' },
-    { id: 5, date: '2026-09-10', challanNo: 'CH-2026-0110', source: 'Own', assetType: 'IT Equipment', category: 'Computer', description: 'Desktop Computer Set', assetCode: 'AST-IT-021', assetId: 'ID-3021', supplier: 'Star Tech & Engineering', model: 'Dell OptiPlex 3080', origin: 'China', sku: 'Set', openingQty: 45, additionsQty: 5, disposedQty: 3, sentQty: 2, receivedQty: 0, from: 'Unit-1', to: 'Head Office', destination: 'Merchandising Dept.', remarks: '' },
-    { id: 6, date: '2026-09-12', challanNo: 'INV-8869', source: 'Rental', assetType: 'IT Equipment', category: 'Printer', description: 'Laser Printer (Network)', assetCode: 'AST-IT-030', assetId: 'ID-3030', supplier: 'Ryans Computers', model: 'HP LaserJet M404', origin: 'Vietnam', sku: 'Pcs', openingQty: 6, additionsQty: 0, disposedQty: 1, sentQty: 0, receivedQty: 1, from: 'Head Office', to: 'Unit-1', destination: 'Admin Office', remarks: 'Rental' },
-    { id: 7, date: '2026-09-15', challanNo: 'CH-2026-0115', source: 'Own', assetType: 'Furniture', category: 'Office Furniture', description: 'Executive Office Table', assetCode: 'AST-FR-008', assetId: 'ID-4008', supplier: 'Otobi Limited', model: 'Otobi EX-120', origin: 'Bangladesh', sku: 'Pcs', openingQty: 30, additionsQty: 4, disposedQty: 0, sentQty: 1, receivedQty: 0, from: 'Unit-1', to: 'Unit-3', destination: 'Manager Room', remarks: '' },
-    { id: 8, date: '2026-09-18', challanNo: 'CH-2026-0118', source: 'Unit Transfer', assetType: 'Vehicle', category: 'Delivery Van', description: 'Covered Van 1 Ton', assetCode: 'AST-VH-002', assetId: 'ID-5002', supplier: 'Runner Automobiles', model: 'Tata Ace', origin: 'India', sku: 'Pcs', openingQty: 3, additionsQty: 0, disposedQty: 0, sentQty: 0, receivedQty: 1, from: 'Unit-2', to: 'Unit-1', destination: 'Transport Pool', remarks: 'Received from Unit-2' },
+    { id: 1, date: '2026-09-01', challanNo: 'CH-2026-0101', source: 'Own', assetType: 'Machinery', category: 'Sewing Machine', description: 'Single Needle Lockstitch Machine', assetCode: 'AST-MC-001', assetId: 'ID-1001', supplier: 'Jack Sewing Machine Co.', model: 'Jack A4', origin: 'China', sku: 'Pcs', openingQty: 120, additionsQty: 10, disposedQty: 2, sentQty: 5, receivedQty: 3, priceValue: 450, amount: 54000, from: 'Unit-1', to: 'Unit-2', destination: 'Sewing Floor - Line 3', remarks: '' },
+    { id: 2, date: '2026-09-03', challanNo: 'CH-2026-0102', source: 'Unit Transfer', assetType: 'Machinery', category: 'Sewing Machine', description: 'Overlock 4 Thread Machine', assetCode: 'AST-MC-002', assetId: 'ID-1002', supplier: 'Juki Bangladesh Ltd.', model: 'Juki MO-6816', origin: 'Japan', sku: 'Pcs', openingQty: 60, additionsQty: 6, disposedQty: 1, sentQty: 0, receivedQty: 2, priceValue: 620, amount: 41540, from: 'Unit-2', to: 'Unit-1', destination: 'Sewing Floor - Line 1', remarks: 'Received in good condition' },
+    { id: 3, date: '2026-09-05', challanNo: 'INV-8841', source: 'Rental', assetType: 'Machinery', category: 'Cutting Machine', description: 'Straight Knife Cutting Machine', assetCode: 'AST-MC-014', assetId: 'ID-1014', supplier: 'Eastman Machine Co.', model: 'Eastman Blue Streak', origin: 'USA', sku: 'Pcs', openingQty: 8, additionsQty: 2, disposedQty: 0, sentQty: 0, receivedQty: 0, priceValue: 1800, amount: 18000, from: 'Store', to: 'Unit-1', destination: 'Cutting Section', remarks: 'Rental' },
+    { id: 4, date: '2026-09-08', challanNo: 'INV-8852', source: 'Purchase', assetType: 'Electrical', category: 'Generator', description: 'Diesel Generator 500 KVA', assetCode: 'AST-EL-003', assetId: 'ID-2003', supplier: 'Perkins Power Ltd.', model: 'Perkins 500P', origin: 'United Kingdom', sku: 'Set', openingQty: 2, additionsQty: 1, disposedQty: 0, sentQty: 0, receivedQty: 0, priceValue: 950000, amount: 950000, from: 'Supplier', to: 'Unit-1', destination: 'Generator Room', remarks: 'Backup power' },
+    { id: 5, date: '2026-09-10', challanNo: 'CH-2026-0110', source: 'Own', assetType: 'IT Equipment', category: 'Computer', description: 'Desktop Computer Set', assetCode: 'AST-IT-021', assetId: 'ID-3021', supplier: 'Star Tech & Engineering', model: 'Dell OptiPlex 3080', origin: 'China', sku: 'Set', openingQty: 45, additionsQty: 5, disposedQty: 3, sentQty: 2, receivedQty: 0, priceValue: 38000, amount: 190000, from: 'Unit-1', to: 'Head Office', destination: 'Merchandising Dept.', remarks: '' },
+    { id: 6, date: '2026-09-12', challanNo: 'INV-8869', source: 'Rental', assetType: 'IT Equipment', category: 'Printer', description: 'Laser Printer (Network)', assetCode: 'AST-IT-030', assetId: 'ID-3030', supplier: 'Ryans Computers', model: 'HP LaserJet M404', origin: 'Vietnam', sku: 'Pcs', openingQty: 6, additionsQty: 0, disposedQty: 1, sentQty: 0, receivedQty: 1, priceValue: 21000, amount: 21000, from: 'Head Office', to: 'Unit-1', destination: 'Admin Office', remarks: 'Rental' },
+    { id: 7, date: '2026-09-15', challanNo: 'CH-2026-0115', source: 'Own', assetType: 'Furniture', category: 'Office Furniture', description: 'Executive Office Table', assetCode: 'AST-FR-008', assetId: 'ID-4008', supplier: 'Otobi Limited', model: 'Otobi EX-120', origin: 'Bangladesh', sku: 'Pcs', openingQty: 30, additionsQty: 4, disposedQty: 0, sentQty: 1, receivedQty: 0, priceValue: 15500, amount: 62000, from: 'Unit-1', to: 'Unit-3', destination: 'Manager Room', remarks: '' },
+    { id: 8, date: '2026-09-18', challanNo: 'CH-2026-0118', source: 'Unit Transfer', assetType: 'Vehicle', category: 'Delivery Van', description: 'Covered Van 1 Ton', assetCode: 'AST-VH-002', assetId: 'ID-5002', supplier: 'Runner Automobiles', model: 'Tata Ace', origin: 'India', sku: 'Pcs', openingQty: 3, additionsQty: 0, disposedQty: 0, sentQty: 0, receivedQty: 1, priceValue: 1250000, amount: 1250000, from: 'Unit-2', to: 'Unit-1', destination: 'Transport Pool', remarks: 'Received from Unit-2' },
 ]
 
 /* ===== XLSX EXPORT START ===== */
@@ -125,7 +140,8 @@ const SAMPLE_MOVEMENTS = [
 const XLSX_WIDTHS = {
     date: 12, challanNo: 20, FACsource: 15, assetType: 16, category: 18, description: 32, assetCode: 14,
     assetId: 12, supplier: 26, model: 22, origin: 18, sku: 10,
-    openingQty: 12, additionsQty: 12, disposedQty: 12, sentQty: 16, receivedQty: 18,
+    openingQty: 12, additionsQty: 12, disposedQty: 12, sentQty: 16, receivedQty: 18, totalCarrying: 14,
+    priceValue: 14, amount: 16,
     from: 14, to: 14, destination: 24, remarks: 26,
 }
 
@@ -134,11 +150,11 @@ const XLSX_COLUMNS = COLUMNS.map((col) => ({
     key: col.key,
     header: col.label,
     width: XLSX_WIDTHS[col.key] || 16,
-    kind: col.input === 'date' ? 'date' : col.type === 'number' ? 'qty' : 'text',
+    kind: col.input === 'date' ? 'date' : col.currency ? 'currency' : col.type === 'number' ? 'qty' : 'text',
 }))
 
 // cell style ids (see buildStylesXml)
-const XS = { TITLE: 1, HEADER: 2, HEADER_DIV: 3, TEXT: 4, TEXT_DIV: 5, DATE: 6, QTY: 7, TOTAL_QTY: 8 }
+const XS = { TITLE: 1, HEADER: 2, HEADER_DIV: 3, TEXT: 4, TEXT_DIV: 5, DATE: 6, QTY: 7, TOTAL_QTY: 8, CURRENCY: 9, TOTAL_CURRENCY: 10 }
 
 const xmlEscape = (value) =>
     String(value)
@@ -189,7 +205,7 @@ const buildStylesXml = () => {
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0;-#,##0;&quot;-&quot;"/><numFmt numFmtId="165" formatCode="dd\\-mm\\-yyyy"/></numFmts>
+<numFmts count="3"><numFmt numFmtId="164" formatCode="#,##0;-#,##0;&quot;-&quot;"/><numFmt numFmtId="165" formatCode="dd\\-mm\\-yyyy"/><numFmt numFmtId="166" formatCode="&quot;৳&quot;\\ #,##0;-&quot;৳&quot;\\ #,##0;&quot;-&quot;"/></numFmts>
 <fonts count="4">
 <font><sz val="10"/><color rgb="FF374151"/><name val="Calibri"/></font>
 <font><b/><sz val="10"/><color rgb="FF374151"/><name val="Calibri"/></font>
@@ -205,7 +221,7 @@ ${border(green, green, gray, gray)}
 ${border(green, divider, gray, gray)}
 </borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="9">
+<cellXfs count="11">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 ${xf(0, 3, 0, 0)}
 ${xf(0, 2, 2, 1)}
@@ -215,6 +231,8 @@ ${xf(0, 0, 0, 4)}
 ${xf(165, 0, 0, 3)}
 ${xf(164, 0, 0, 3)}
 ${xf(164, 2, 2, 1)}
+${xf(166, 0, 0, 3)}
+${xf(166, 2, 2, 1)}
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`
@@ -251,6 +269,7 @@ const buildSheetXml = (rows, totals, generatedOn) => {
         const r = firstDataRow + rowIndex
         const cells = XLSX_COLUMNS.map((col, i) => {
             const ref = `${xlsxColLetter(i)}${r}`
+            if (col.kind === 'currency') return cellNumber(ref, XS.CURRENCY, row[col.key])
             if (col.kind === 'qty') return cellNumber(ref, XS.QTY, row[col.key])
             if (col.kind === 'date') {
                 const serial = excelDateSerial(row[col.key])
@@ -266,9 +285,10 @@ const buildSheetXml = (rows, totals, generatedOn) => {
         const ref = `${xlsxColLetter(i)}${totalRow}`
         if (i === 0) return cellText(ref, XS.HEADER, 'TOTAL')
         if (i < FROZEN_COUNT) return cellBlank(ref, isDivider(i) ? XS.HEADER_DIV : XS.HEADER)
-        if (col.kind === 'qty') {
+        if (col.kind === 'qty' || col.kind === 'currency') {
             const l = xlsxColLetter(i)
-            return cellFormula(ref, XS.TOTAL_QTY, `SUM(${l}${firstDataRow}:${l}${lastDataRow})`, totals[col.key])
+            const style = col.kind === 'currency' ? XS.TOTAL_CURRENCY : XS.TOTAL_QTY
+            return cellFormula(ref, style, `SUM(${l}${firstDataRow}:${l}${lastDataRow})`, totals[col.key])
         }
         return cellBlank(ref, XS.HEADER)
     })
@@ -702,6 +722,7 @@ const AddChallanModal = ({ onSave, onClose }) => {
     const validate = () => {
         const next = {}
         COLUMNS.forEach((col) => {
+            if (col.derived) return
             const value = form[col.key].trim()
             if (col.required && !value) next[col.key] = `${col.label} is required`
             if (col.type === 'number' && value !== '') {
@@ -718,7 +739,7 @@ const AddChallanModal = ({ onSave, onClose }) => {
             setErrors(validationErrors)
             return
         }
-        const row = COLUMNS.reduce((acc, col) => {
+        const row = COLUMNS.filter((col) => !col.derived).reduce((acc, col) => {
             const value = form[col.key].trim()
             acc[col.key] = col.type === 'number' ? Number(value || 0) : value
             return acc
@@ -760,7 +781,8 @@ const AddChallanModal = ({ onSave, onClose }) => {
         >
             <div className="p-4 space-y-4">
                 {GROUPS.map((group) => {
-                    const fields = COLUMNS.filter((c) => c.group === group.id)
+                    const fields = COLUMNS.filter((c) => c.group === group.id && !c.derived)
+                    if (fields.length === 0) return null
                     return (
                         <section key={group.id} className="border border-gray-300 rounded-lg overflow-hidden">
                             <h4
@@ -825,7 +847,10 @@ const AssetMovement = () => {
 
     const activeFilterCount = Object.keys(filters).length
 
-    const visibleRows = useMemo(() => rows.filter((row) => rowMatches(row, filters)), [rows, filters])
+    // Every row gets its Total Carrying value attached before filtering, totalling, or export
+    const derivedRows = useMemo(() => rows.map(withDerived), [rows])
+
+    const visibleRows = useMemo(() => derivedRows.filter((row) => rowMatches(row, filters)), [derivedRows, filters])
 
     const totals = useMemo(
         () =>
@@ -840,10 +865,10 @@ const AssetMovement = () => {
     const modalValues = useMemo(() => {
         if (!filterModal) return []
         const unique = new Set(
-            rows.filter((row) => rowMatches(row, filters, filterModal.key)).map((row) => cellValue(row, filterModal.key))
+            derivedRows.filter((row) => rowMatches(row, filters, filterModal.key)).map((row) => cellValue(row, filterModal.key))
         )
         return [...unique].sort((a, b) => collator.compare(a, b))
-    }, [filterModal, rows, filters])
+    }, [filterModal, derivedRows, filters])
 
     const openFilter = (key, e) => {
         const rect = e.currentTarget.getBoundingClientRect()
@@ -900,7 +925,8 @@ const AssetMovement = () => {
     const renderCell = (col, row) => {
         if (col.type === 'number') {
             const value = Number(row[col.key] || 0)
-            return value === 0 ? <span className="text-gray-400">-</span> : formatNumber(value)
+            if (value === 0) return <span className="text-gray-400">-</span>
+            return col.currency ? formatCurrency(value) : formatNumber(value)
         }
         const text = displayValue(col, row)
         if (col.isBadge) {
@@ -1094,7 +1120,11 @@ const AssetMovement = () => {
                                         className={`bg-slate-500 text-white ${FOOTER_CELL} px-3 py-3 text-xs font-bold text-center`}
                                         style={{ position: 'sticky', bottom: 0, zIndex: 20 }}
                                     >
-                                        {totals[col.key] === 0 ? '-' : formatNumber(totals[col.key])}
+                                        {totals[col.key] === 0
+                                            ? '-'
+                                            : col.currency
+                                            ? formatCurrency(totals[col.key])
+                                            : formatNumber(totals[col.key])}
                                     </td>
                                 ))}
                                 <td

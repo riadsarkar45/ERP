@@ -91,7 +91,6 @@ const XLSX_COLUMNS = [
     { key: 'sentQty', header: 'Send to Another Unit Qty', width: 16, kind: 'qty' },
     { key: 'receivedQty', header: 'Received From Another Unit Qty', width: 18, kind: 'qty' },
     { key: 'carryingQty', header: 'Carrying Qty', width: 12, kind: 'carrying' },
-    { key: 'pricePerPcs', header: 'Price Per Pcs', width: 16, kind: 'money' },
     { key: 'totalValue', header: 'Total Value', width: 18, kind: 'total' },
     { key: 'remarks', header: 'Remarks', width: 26, kind: 'text' },
 ]
@@ -226,8 +225,8 @@ const buildSheetXml = (rows, totals, generatedOn) => {
                 case 'money':
                     return cellNumber(ref, XS.MONEY, row[col.key])
                 case 'total':
-                    // Carrying Qty x Price Per Pcs
-                    return cellFormula(ref, XS.TOTAL_VALUE, `${letter('carryingQty')}${r}*${letter('pricePerPcs')}${r}`, row.totalValue)
+                    // Carrying Qty x Price Per Pcs (price is no longer a column, so this is a plain value)
+                    return cellNumber(ref, XS.TOTAL_VALUE, row.totalValue)
                 default:
                     return cellText(ref, XS.TEXT, row[col.key] || '-')
             }
@@ -419,7 +418,6 @@ const COLUMNS = [
     { key: 'sentQty', label: 'Send to Another Unit Qty', width: 120, kind: 'qty' },
     { key: 'receivedQty', label: 'Received From Another Unit Qty', width: 135, kind: 'qty' },
     { key: 'carryingQty', label: 'Carrying Qty', width: 105, kind: 'carrying' },
-    { key: 'pricePerPcs', label: 'Price Per Pcs', width: 150, kind: 'price', cell: 'cursor-cell', format: (v) => formatCurrency(v) },
     { key: 'totalValue', label: 'Total Value', width: 145, kind: 'total', format: (v) => formatCurrency(v) },
     { key: 'remarks', label: 'Remarks', width: 180, kind: 'remarks', cell: 'cursor-cell text-left' },
 ]
@@ -731,9 +729,7 @@ const AssetSummary = () => {
     const [filters, setFilters] = useState({}) // { columnKey: Set }
     const [filterModal, setFilterModal] = useState(null) // { key, position }
     const [selectedIds, setSelectedIds] = useState(() => new Set())
-    const [edits, setEdits] = useState({}) // { asset id: typed price text } — unsaved Price Per Pcs edits
     const [remarkEdits, setRemarkEdits] = useState({}) // { asset id: typed remarks text } — unsaved Remarks edits
-    const [editingId, setEditingId] = useState(null) // the price cell open for typing (double-click)
     const [editingRemarkId, setEditingRemarkId] = useState(null) // the remarks cell open for typing (double-click)
     const [notice, setNotice] = useState(null) // { kind: 'success' | 'error', text }
     const selectAllRef = useRef(null)
@@ -741,21 +737,19 @@ const AssetSummary = () => {
     // Freezing needs room to scroll, so it is switched on for wide screens only
     const freezeEnabled = useMediaQuery('(min-width: 1280px)')
 
-    const editCount = Object.keys(edits).length + Object.keys(remarkEdits).length
+    const editCount = Object.keys(remarkEdits).length
     const hasEdits = editCount > 0
 
     // Add the calculated Carrying Qty and Total Value to every row.
-    // A valid unsaved price is used straight away, so totals update while typing.
     const rows = useMemo(
         () =>
             baseAssets.map((asset) => {
-                const typed = edits[asset.id] !== undefined ? parsePrice(edits[asset.id]) : null
-                const pricePerPcs = typed ?? asset.savedPrice
+                const pricePerPcs = asset.savedPrice
                 const carryingQty = getCarryingQty(asset)
                 const remarks = remarkEdits[asset.id] !== undefined ? remarkEdits[asset.id] : asset.savedRemarks
                 return { ...asset, pricePerPcs, remarks, carryingQty, totalValue: carryingQty * pricePerPcs }
             }),
-        [baseAssets, edits, remarkEdits]
+        [baseAssets, remarkEdits]
     )
 
     const sourceCounts = useMemo(
@@ -782,11 +776,8 @@ const AssetSummary = () => {
 
     // ...then the Excel-style column filters (a row being edited never disappears while typing)
     const filteredRows = useMemo(
-        () =>
-            baseRows.filter(
-                (r) => edits[r.id] !== undefined || remarkEdits[r.id] !== undefined || rowMatches(r, filters)
-            ),
-        [baseRows, filters, edits, remarkEdits]
+        () => baseRows.filter((r) => remarkEdits[r.id] !== undefined || rowMatches(r, filters)),
+        [baseRows, filters, remarkEdits]
     )
 
     // Footer totals follow the rows currently shown
@@ -854,20 +845,6 @@ const AssetSummary = () => {
         })
     }
 
-    /* ---- editable Price Per Pcs (double-click a price to edit it) ---- */
-    const handlePriceChange = (id, value) => {
-        if (!/^\d*\.?\d*$/.test(value)) return // digits and one dot only
-        setNotice(null)
-        const original = baseAssets.find((a) => a.id === id)?.savedPrice
-        setEdits((prev) => {
-            const next = { ...prev }
-            // Typing the original price back = nothing left to save
-            if (parsePrice(value) === original) delete next[id]
-            else next[id] = value
-            return next
-        })
-    }
-
     /* ---- editable Remarks (double-click a remarks cell to edit it) ---- */
     const handleRemarkChange = (id, value) => {
         setNotice(null)
@@ -882,55 +859,38 @@ const AssetSummary = () => {
     }
 
     const discardEdits = () => {
-        setEdits({})
         setRemarkEdits({})
-        setEditingId(null)
         setEditingRemarkId(null)
         setNotice(null)
     }
 
     const saveEdits = () => {
-        const hasInvalid = Object.keys(edits).some((id) => parsePrice(edits[id]) === null)
-        if (hasInvalid) {
-            setNotice({ kind: 'error', text: 'Enter a valid price (0 or more) in the red cells.' })
-            return
-        }
-        const priceUpdates = {}
-        Object.keys(edits).forEach((id) => {
-            priceUpdates[id] = parsePrice(edits[id])
-        })
         const remarkUpdates = { ...remarkEdits }
-        // TODO: send `priceUpdates` and `remarkUpdates` (asset id -> value) to your API here
+        // TODO: send `remarkUpdates` (asset id -> value) to your API here
         setAssets((prev) =>
             prev.map((asset) => {
-                let next = asset
-                if (priceUpdates[asset.id] !== undefined) next = { ...next, pricePerPcs: priceUpdates[asset.id] }
-                if (remarkUpdates[asset.id] !== undefined) next = { ...next, remarks: remarkUpdates[asset.id] }
-                return next
+                if (remarkUpdates[asset.id] !== undefined) return { ...asset, remarks: remarkUpdates[asset.id] }
+                return asset
             })
         )
-        setEdits({})
         setRemarkEdits({})
-        setEditingId(null)
         setEditingRemarkId(null)
         setNotice({ kind: 'success', text: `Saved ${editCount} change${editCount > 1 ? 's' : ''}.` })
     }
 
     // Esc discards the unsaved edits (the filter modal keeps its own Esc = close)
     useEffect(() => {
-        if ((!hasEdits && editingId === null && editingRemarkId === null) || filterModal) return
+        if ((!hasEdits && editingRemarkId === null) || filterModal) return
         const handleKeyDown = (e) => {
             if (e.key !== 'Escape') return
-            setEdits({})
             setRemarkEdits({})
-            setEditingId(null)
             setEditingRemarkId(null)
             setNotice(null)
             if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [hasEdits, editingId, editingRemarkId, filterModal])
+    }, [hasEdits, editingRemarkId, filterModal])
 
     /* ---- Excel export (rows and totals exactly as shown in the table) ---- */
     const handleExport = () => {
@@ -1029,45 +989,6 @@ const AssetSummary = () => {
                 return Number(row[col.key]) === 0 ? <span className="text-gray-400">-</span> : formatNumber(row[col.key])
             case 'carrying':
                 return <span className="font-bold text-gray-900">{formatNumber(row.carryingQty)}</span>
-            case 'price': {
-                if (editingId === row.id) {
-                    return (
-                        <div className="flex items-center justify-center gap-1">
-                            <span className="text-gray-500">৳</span>
-                            <input
-                                type="text"
-                                inputMode="decimal"
-                                autoFocus
-                                value={edits[row.id] !== undefined ? edits[row.id] : String(row.pricePerPcs)}
-                                onChange={(e) => handlePriceChange(row.id, e.target.value)}
-                                onFocus={(e) => e.target.select()}
-                                onBlur={() => setEditingId(null)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') e.currentTarget.blur()
-                                }}
-                                aria-label={`Price per pcs for ${row.description}`}
-                                className="w-24 px-2 py-1 text-xs text-center rounded-md border border-emerald-500 bg-white text-gray-900 outline-none ring-2 ring-emerald-100"
-                            />
-                        </div>
-                    )
-                }
-                const edited = edits[row.id] !== undefined
-                const invalid = edited && parsePrice(edits[row.id]) === null
-                return (
-                    <div
-                        title="Double-click to edit"
-                        className={`select-none rounded-md px-2 py-1 ${
-                            invalid
-                                ? 'bg-red-50 text-red-700 ring-1 ring-red-400'
-                                : edited
-                                  ? 'bg-amber-50 text-gray-900 ring-1 ring-amber-400 font-semibold'
-                                  : 'text-gray-700'
-                        }`}
-                    >
-                        {invalid ? 'Invalid' : formatCurrency(row.pricePerPcs)}
-                    </div>
-                )
-            }
             case 'remarks': {
                 if (editingRemarkId === row.id) {
                     return (
@@ -1307,11 +1228,7 @@ const AssetSummary = () => {
                                                     key={col.key}
                                                     className={`${rowBg} group-hover:bg-slate-50 ${BODY_CELL} ${dividerClass(index)} px-3 py-2 text-xs text-gray-700 text-center align-middle whitespace-normal break-words transition-colors ${col.cell || ''}`}
                                                     onDoubleClick={
-                                                        col.kind === 'price'
-                                                            ? () => setEditingId(row.id)
-                                                            : col.kind === 'remarks'
-                                                              ? () => setEditingRemarkId(row.id)
-                                                              : undefined
+                                                        col.kind === 'remarks' ? () => setEditingRemarkId(row.id) : undefined
                                                     }
                                                     style={{
                                                         height: 42,
@@ -1355,13 +1272,6 @@ const AssetSummary = () => {
                                             {totals[key] === 0 ? '-' : formatNumber(totals[key])}
                                         </td>
                                     ))}
-                                    {/* Price Per Pcs has no total */}
-                                    <td
-                                        className={`bg-slate-500 text-white ${FOOTER_CELL} px-3 py-3 text-xs font-bold text-center`}
-                                        style={{ position: 'sticky', bottom: 0, zIndex: 20 }}
-                                    >
-                                        -
-                                    </td>
                                     <td
                                         className={`bg-slate-500 text-white ${FOOTER_CELL} px-3 py-3 text-xs font-bold text-center`}
                                         style={{ position: 'sticky', bottom: 0, zIndex: 20 }}
