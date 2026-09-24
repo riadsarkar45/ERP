@@ -138,6 +138,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             compositions: {
                                 select: {
                                     color: true,
+                                    styleRequirementRowId: true,
                                     composition: true,
                                     workOrderQty: true,
                                     additional: true,

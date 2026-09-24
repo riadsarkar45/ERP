@@ -63,6 +63,12 @@ const toFloat = (raw: unknown): number | null => {
     return Number.isNaN(n) ? null : n;
 };
 
+// Keep your existing imports and helpers above this function, unchanged:
+// Request/Response, prisma, STYLE_STRING_KEYS, toInt, toFloat, StyleEditInput
+
+// Keep your existing imports and helpers above this function, unchanged:
+// Request/Response, prisma, STYLE_STRING_KEYS, toInt, toFloat, StyleEditInput
+
 export const editStyleRequirement = async (req: Request, res: Response) => {
     try {
         const payload = req.body as StyleEditInput[];
@@ -71,7 +77,13 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Request body must be a non-empty array of style edits" });
         }
 
-        const results: Array<{ id: number; updated: boolean; rowsUpdated: number; rowsCreated: number; rowsDeleted: number }> = [];
+        const results: Array<{
+            id: number;
+            updated: boolean;
+            rowsUpdated: number;
+            rowsCreated: number;
+            rowsDeleted: number;
+        }> = [];
 
         // Sequential per-style processing — each style's operations run in
         // their own transaction, so one bad entry in the array doesn't roll
@@ -113,6 +125,10 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
             }
 
             // --- Deleted rows ---
+            // NOTE: Composition has onDelete: Cascade to StyleRequirementRow, so deleting
+            // a row also deletes its work order compositions (and their deliveries).
+            // Never delete + re-create a row just to change its color/composition,
+            // send it in updatedRows instead.
             let deletedIds: number[] = [];
             if (styleEdit.deletedRowIds && styleEdit.deletedRowIds.length > 0) {
                 deletedIds = styleEdit.deletedRowIds
@@ -133,16 +149,31 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
             // --- Updated existing rows ---
             let rowsUpdatedCount = 0;
             if (styleEdit.updatedRows && styleEdit.updatedRows.length > 0) {
+                // Load the current color/composition of the rows being edited, so we know
+                // what changed and can find legacy compositions that have no row id yet.
+                const updatedRowIds = styleEdit.updatedRows
+                    .map((r) => Number(r.id))
+                    .filter((id) => Number.isFinite(id));
+
+                const existingRows = await prisma.styleRequirementRow.findMany({
+                    where: { id: { in: updatedRowIds }, styleRequirementId: styleId },
+                    select: { id: true, color: true, composition: true },
+                });
+                const existingRowMap = new Map(existingRows.map((r) => [r.id, r]));
+
                 for (const row of styleEdit.updatedRows) {
                     const rowId = Number(row.id);
                     if (!Number.isFinite(rowId)) continue;
+
+                    // Row doesn't exist or belongs to another job -> skip
+                    const existing = existingRowMap.get(rowId);
+                    if (!existing) continue;
 
                     const rowData: Record<string, string | number> = {};
                     if (row.composition !== undefined) rowData.composition = String(row.composition);
                     if (row.color !== undefined) rowData.color = String(row.color);
                     if (row.finishDia !== undefined) rowData.finishDia = String(row.finishDia);
                     if (row.processLoss !== undefined) rowData.processLoss = String(row.processLoss);
-                    if (row.additional !== undefined) rowData.additional = Number(row.additional);
                     if (row.orderQty !== undefined) {
                         const v = toInt(row.orderQty);
                         if (v !== null) rowData.orderQty = v;
@@ -156,15 +187,49 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
                         if (v !== null) rowData.additional = v;
                     }
 
-                    if (Object.keys(rowData).length > 0) {
-                        rowsUpdatedCount += 1;
+                    if (Object.keys(rowData).length === 0) continue;
+
+                    rowsUpdatedCount += 1;
+                    operations.push(
+                        prisma.styleRequirementRow.updateMany({
+                            where: {
+                                id: rowId,
+                                styleRequirementId: styleId, // scoped: can't edit another job's row
+                            },
+                            data: rowData,
+                        })
+                    );
+
+                    // ── Keep work order compositions in sync with the row ──
+                    const newColor = rowData.color as string | undefined;
+                    const newComposition = rowData.composition as string | undefined;
+                    const colorChanged = newColor !== undefined && newColor !== existing.color;
+                    const compositionChanged =
+                        newComposition !== undefined && newComposition !== existing.composition;
+
+                    if (colorChanged || compositionChanged) {
+                        const compositionData: { color?: string; composition?: string } = {};
+                        if (colorChanged) compositionData.color = newColor as string;
+                        if (compositionChanged) compositionData.composition = newComposition as string;
+
+                        // Primary path: compositions linked by styleRequirementRowId
                         operations.push(
-                            prisma.styleRequirementRow.updateMany({
+                            prisma.composition.updateMany({
+                                where: { styleRequirementRowId: rowId },
+                                data: compositionData,
+                            })
+                        );
+
+                        // Legacy compositions with no row id: match by the OLD text within this style
+                        operations.push(
+                            prisma.composition.updateMany({
                                 where: {
-                                    id: rowId,
-                                    styleRequirementId: styleId, // scoped: can't edit another job's row
+                                    styleRequirementRowId: null,
+                                    workOrder: { styleRequirementId: styleId },
+                                    composition: existing.composition,
+                                    color: existing.color,
                                 },
-                                data: rowData,
+                                data: compositionData,
                             })
                         );
                     }
@@ -186,7 +251,8 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
                                 orderQty: toInt(row.orderQty) ?? 0,
                                 finishRequiredQty: toFloat(row.finishRequiredQty) ?? 0,
                                 additional: toInt(row.additional) ?? 0,
-                                processLoss: row.processLoss,
+                                ...(row.processLoss !== undefined &&
+                                    row.processLoss !== null && { processLoss: String(row.processLoss) }),
                             },
                         })
                     );

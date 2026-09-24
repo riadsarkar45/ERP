@@ -462,6 +462,12 @@ const NewOrder = () => {
         fetchFactoryWiseWorkOrderTotal();
     }, [axiosPrivate, jobNumber, orderType]);
 
+    // put this above your component, or in a utils file
+    const toNum = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+
     if (isLoading) {
         return (
             <DashboardLayout title="Add New Order">
@@ -627,37 +633,51 @@ const NewOrder = () => {
                                             className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden transition-colors hover:border-slate-300"
                                         >
                                             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-50/70 border-b border-slate-100">
-                                                <div className="flex gap-2 items-center min-w-0">
-                                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-800 text-[11px] font-semibold text-white">
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    {/* Index Badge */}
+                                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white shadow-sm">
                                                         {index + 1}
                                                     </span>
-                                                    <p className="truncate text-sm font-medium text-slate-700">
-                                                        {styleRow.composition || "Composition"}
-                                                        {styleRow.color ? (
-                                                            <span className="ml-2 text-xs font-normal text-slate-500">
-                                                                {styleRow.color}
-                                                            </span>
-                                                        ) : null}
-                                                        {styleRow.finishRequiredQty ? (
-                                                            <span className="ml-2 text-xs inline-flex bg-blue-100 font-extrabold rounded-lg text-blue-700 p-1 border border-blue-700">
-                                                                Finish Required Qty:{" "}
-                                                                {(
-                                                                    Number(styleRow.finishRequiredQty) *
-                                                                    (1 + Number(styleRow.processLoss || 0) / 100)
-                                                                ).toFixed(2)}
-                                                            </span>
-                                                        ) : null}
-                                                        {styleRow.finishDia ? (
-                                                            <span className="ml-2 text-xs inline-flex bg-blue-100 font-extrabold  text-blue-700 p-1 rounded-lg border border-blue-700">
-                                                                Finish Dia : {styleRow.finishDia}
-                                                            </span>
-                                                        ) : "No data"}
-                                                        {styleRow.additional ? (
-                                                            <span className="ml-3 text-xs inline-flex bg-red-100 font-extrabold  text-red-700 p-1 rounded-lg border border-red-700">
-                                                                Additional : {styleRow.additional}
-                                                            </span>
-                                                        ) : null}
-                                                    </p>
+
+                                                    {/* Content Area */}
+                                                    <div className="flex flex-col min-w-0 flex-1 gap-1.5">
+
+                                                        {/* Title & Color Row */}
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <h3 className="truncate text-sm font-semibold text-slate-800">
+                                                                {styleRow.composition || "Composition"}
+                                                            </h3>
+                                                            {styleRow.color && (
+                                                                <span className="shrink-0 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                                                    {styleRow.color}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Tags / Metadata Row */}
+                                                        <div className="flex flex-wrap items-center gap-1.5">
+                                                            {toNum(styleRow.finishRequiredQty) > 0 && (
+                                                                <span className="inline-flex items-center text-[11px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
+                                                                    Yarn Req: {(toNum(styleRow.finishRequiredQty) * (1 + toNum(styleRow.processLoss) / 100)).toFixed(2)}
+                                                                </span>
+                                                            )}
+
+                                                            {styleRow.finishDia ? (
+                                                                <span className="inline-flex items-center text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200">
+                                                                    Dia: {styleRow.finishDia}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[11px] text-slate-400 italic">No finish dia</span>
+                                                            )}
+
+                                                            {styleRow.additional && (
+                                                                <span className="inline-flex items-center text-[11px] font-semibold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md border border-rose-200">
+                                                                    + {styleRow.additional}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                    </div>
                                                 </div>
                                                 <button
                                                     type="button"

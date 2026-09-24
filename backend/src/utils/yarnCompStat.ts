@@ -68,12 +68,24 @@ export const calculateYarnCompStat = (orders: any[]) => {
         }));
 };
 
-const clean = (v: unknown) => String(v ?? "").trim();
-const fullKey = (color: unknown, comp: unknown, additional: unknown) =>
-    `${clean(color)}|${clean(comp)}|${clean(additional)}`;
-const looseKey = (color: unknown, comp: unknown) =>
-    `${clean(color)}|${clean(comp)}`;
+// ── Key helpers ──────────────────────────────────────────────
+// Normalize text so case, extra spaces and null/undefined never break matching
+const norm = (v: unknown): string =>
+    String(v ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
 
+const looseKey = (color: unknown, composition: unknown): string =>
+    `${norm(color)}|${norm(composition)}`;
+
+const fullKey = (
+    color: unknown,
+    composition: unknown,
+    additional: unknown
+): string => `${looseKey(color, composition)}|${norm(additional)}`;
+
+// ── Main ─────────────────────────────────────────────────────
 export const calculateOrdersForStyleSummary = (styles: any[]) => {
     return styles.map((s: any) => {
         const workOrders = s.workOrders ?? [];
@@ -92,7 +104,7 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
         });
 
         // Lookups: every key maps to a LIST of row indexes, so duplicates aren't lost
-        const rowIndexById = new Map<string | number, number>();
+        const rowIndexById = new Map<number | string, number>();
         const rowsByFullKey = new Map<string, number[]>();
         const rowsByLooseKey = new Map<string, number[]>();
 
@@ -115,26 +127,28 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
             composition: unknown,
             occurrenceCounter: Map<string, number>
         ): number | undefined => {
-            // 1. Best: explicit FK (once you add it to the schema)
+            // 1. Best: explicit FK. Editing color/composition can no longer break the link.
             if (item.styleRequirementRowId != null) {
-                return rowIndexById.get(item.styleRequirementRowId);
+                const byId = rowIndexById.get(item.styleRequirementRowId);
+                if (byId !== undefined) return byId;
+                // FK points to a row that isn't in this list -> fall through to text matching
             }
 
-            // 2. color + composition + additional
+            // 2. Old data without FK: color + composition + additional
             let candidates = rowsByFullKey.get(fullKey(color, composition, item.additional));
-            // 3. fallback: color + composition only
+
+            // 3. Fallback: color + composition only
             if (!candidates?.length) {
                 candidates = rowsByLooseKey.get(looseKey(color, composition));
             }
             if (!candidates?.length) return undefined;
             if (candidates.length === 1) return candidates[0];
 
-            // 4. Still ambiguous: nth item with this key → nth duplicate row
+            // 4. Still ambiguous: nth item with this key -> nth duplicate row
             const k = fullKey(color, composition, item.additional);
             const n = occurrenceCounter.get(k) ?? 0;
             occurrenceCounter.set(k, n + 1);
 
-            
             return candidates[Math.min(n, candidates.length - 1)];
         };
 
@@ -149,7 +163,7 @@ export const calculateOrdersForStyleSummary = (styles: any[]) => {
                     const idx = resolveRowIndex(c, c.color, c.composition, occurrence);
                     if (idx === undefined) {
                         console.warn(
-                            `[calculateOrdersForStyleSummary] styleReq id=${s.id}: no row for color="${c.color}" composition="${c.composition}"`
+                            `[calculateOrdersForStyleSummary] styleReq id=${s.id}: no row for color="${c.color}" composition="${c.composition}" rowId=${c.styleRequirementRowId ?? "none"}`
                         );
                         return;
                     }
