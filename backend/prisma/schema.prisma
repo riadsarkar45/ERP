@@ -234,6 +234,9 @@ model user {
   password            String
   userRole            String
   workingStation      String?                    @default("NULL")
+  designation         String                     @default("Auditor")
+  dateOfJoin          DateTime                   @default(now())
+  isActive            Boolean                    @default(false)
   refreshTokens       refreshToken[]
   deliveries          deliveries[]
   workOrders          WorkOrder[]                @relation("WorkOrderCreatedBy")
@@ -241,6 +244,12 @@ model user {
   requestsReceived    workOrderApprovalRequest[] @relation("RequestTo")
   requestsMade        workOrderApprovalRequest[] @relation("RequestedBy")
   reconciliationNotes reconciliationNotes[]
+  @@index([userName])
+  @@index([userRole])
+  @@index([phoneNo])
+  @@index([isActive])
+  @@index([dateOfJoin])
+  @@index([designation])
 }
 
 model refreshToken {

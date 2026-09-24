@@ -108,7 +108,7 @@ getRouters.get("/generate-pdf-work-order/:id", responseTimeMonitor, authenticate
 
 getRouters.get("/all-users", responseTimeMonitor, authenticate, allUsers);
 
-getRouters.get("/requested-work-data", responseTimeMonitor, authenticate, requestedData);
+getRouters.get("/requested-work-data/:orderType", responseTimeMonitor, authenticate, requestedData);
 
 getRouters.get("/prepare-to-download/:userId", responseTimeMonitor, authenticate, prepareToGenerate);
 

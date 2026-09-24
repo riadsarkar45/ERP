@@ -10,6 +10,7 @@ import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
 import { requestForApproval } from "../controllers/orders/requestForApproval";
 import { editChallan } from "../controllers/movements/update.challan";
 import { editStyleRequirement } from "../controllers/newStyleRequirements/editStyleRequirement";
+import { userActiveInActive } from "../controllers/users/allUser";
 
 const updateRouters = express.Router();
 
@@ -30,5 +31,7 @@ updateRouters.patch("/request-for-approval/:requestType/:workOrderId/:requestToI
 updateRouters.patch("/edit-challan", responseTimeMonitor, authenticate, editChallan);
 
 updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, editStyleRequirement)
+
+updateRouters.patch("/update-user-activity/:userId/:status", responseTimeMonitor, authenticate, userActiveInActive)
 
 export default updateRouters;

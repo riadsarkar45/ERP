@@ -14,7 +14,6 @@ import {
     UserRoundPlus,
     ZoomIn,
     ZoomOut,
-    EqualApproximately,
     Users,
     ShieldCheck,
     UserCog,
@@ -87,25 +86,23 @@ const Sidebar = () => {
         { path: "/dashboard/daily-production/export", label: "Export", icon: Package },
     ];
 
-    /* ============================================================
-       NEW: ASSET SUB-ITEMS
-       Asset Summary / Asset Movement live inside an "Asset"
-       folder dropdown.
-       ============================================================ */
+    // Asset Sub-Items
     const assetSubItems = [
         { path: "/dashboard/asset-summary", label: "Asset Summary", icon: ClipboardList },
         { path: "/dashboard/asset-movement", label: "Asset Movement", icon: ArrowLeftRight },
     ];
 
-    /* ============================================================
-       USER MANAGEMENT SUB-ITEMS
-       Add New User / User List / User Permission live inside
-       a "User Management" dropdown instead of being flat links.
-       ============================================================ */
+    // User Management Sub-Items
     const userSubItems = [
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
         { path: "/dashboard/user-list", label: "User List", icon: Users },
         { path: "/dashboard/user-permission", label: "User Permission", icon: ShieldCheck },
+    ];
+
+    // Work Orders Sub-Items (NEW)
+    const workOrderSubItems = [
+        { path: "/dashboard/pending-work-orders", label: "My work Orders", icon: FileText },
+        { path: "/dashboard/requested-work-orders", label: "Requested Orders", icon: ClipboardList },
     ];
 
     // Split standalone nav items to place Daily Production dropdown in the correct order
@@ -113,47 +110,23 @@ const Sidebar = () => {
         { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
     ];
 
-    // Only the non-user items remain as flat links
+    // Bottom standalone items (Work Order Requests removed and converted to dropdown above)
     const bottomNavItems = [
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
-        { path: "/dashboard/requested-work-orders", label: "Work Order Requests", icon: EqualApproximately },
     ];
 
     // Dropdown open states
-    const [isYarnOpen, setIsYarnOpen] = useState(
-        () => yarnSubItems.some(item => item.path === location.pathname)
-    );
-
-    const [isOrdersOpen, setIsOrdersOpen] = useState(
-        () => orderSubItems.some(item => item.path === location.pathname)
-    );
-
-    const [isMovementOpen, setIsMovementOpen] = useState(
-        () => movementSubItems.some(item => item.path === location.pathname)
-            || othersSubItems.some(item => item.path === location.pathname)
-    );
-
-    const [isOthersOpen, setIsOthersOpen] = useState(
-        () => othersSubItems.some(item => item.path === location.pathname)
-    );
-
-    const [isMisOpen, setIsMisOpen] = useState(
-        () => misSubItems.some(item => item.path === location.pathname)
-    );
-
-    const [isDailyProductionOpen, setIsDailyProductionOpen] = useState(
-        () => dailyProductionSubItems.some(item => item.path === location.pathname)
-    );
-
-    // User Management dropdown open state (auto-opens on a matching route)
-    const [isUserOpen, setIsUserOpen] = useState(
-        () => userSubItems.some(item => item.path === location.pathname)
-    );
-
-    // NEW: Asset dropdown open state (auto-opens on a matching route)
-    const [isAssetOpen, setIsAssetOpen] = useState(
-        () => assetSubItems.some(item => item.path === location.pathname)
-    );
+    const [isYarnOpen, setIsYarnOpen] = useState(() => yarnSubItems.some(item => item.path === location.pathname));
+    const [isOrdersOpen, setIsOrdersOpen] = useState(() => orderSubItems.some(item => item.path === location.pathname));
+    const [isMovementOpen, setIsMovementOpen] = useState(() => movementSubItems.some(item => item.path === location.pathname) || othersSubItems.some(item => item.path === location.pathname));
+    const [isOthersOpen, setIsOthersOpen] = useState(() => othersSubItems.some(item => item.path === location.pathname));
+    const [isMisOpen, setIsMisOpen] = useState(() => misSubItems.some(item => item.path === location.pathname));
+    const [isDailyProductionOpen, setIsDailyProductionOpen] = useState(() => dailyProductionSubItems.some(item => item.path === location.pathname));
+    const [isUserOpen, setIsUserOpen] = useState(() => userSubItems.some(item => item.path === location.pathname));
+    const [isAssetOpen, setIsAssetOpen] = useState(() => assetSubItems.some(item => item.path === location.pathname));
+    
+    // NEW: Work Orders dropdown open state
+    const [isWorkOrdersOpen, setIsWorkOrdersOpen] = useState(() => workOrderSubItems.some(item => item.path === location.pathname));
 
     function ThreadIcon({ size = 16 }) {
         return (
@@ -210,8 +183,8 @@ const Sidebar = () => {
     const isMisActive = misSubItems.some(item => isActive(item.path));
     const isDailyProductionActive = dailyProductionSubItems.some(item => isActive(item.path));
     const isUserActive = userSubItems.some(item => isActive(item.path));
-    // NEW
     const isAssetActive = assetSubItems.some(item => isActive(item.path));
+    const isWorkOrdersActive = workOrderSubItems.some(item => isActive(item.path)); // NEW
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -224,17 +197,18 @@ const Sidebar = () => {
         }
         if (path.includes('style-requirement')) return { title: 'Style And Requirement' };
         if (path.includes('audits')) return { title: 'All Audits' };
-        // Prevented collision with new daily-production/cutting route
         if (path.includes('cutting') && !path.includes('daily-production')) return { title: 'Daily Fabric Cutting Report' };
         if (path.includes('new-user')) return { title: 'Add New User' };
-        // User List & User Permission page titles
         if (path.includes('user-list')) return { title: 'User List', subtitle: 'View and manage all users' };
         if (path.includes('user-permission')) return { title: 'User Permission', subtitle: 'Manage user access and permissions' };
-        // NEW: Asset page titles
         if (path.includes('asset-summary')) return { title: 'Asset Summary', subtitle: 'Overview of all assets' };
         if (path.includes('asset-movement')) return { title: 'Asset Movement', subtitle: 'Track asset movement' };
         if (path.includes('party-wise-view')) return { title: 'Manage Party Wise View' };
         if (path.includes('management-view')) return { title: 'Manage Management View' };
+        
+        // NEW: Work Orders page titles
+        if (path.includes('work-orders/pending')) return { title: 'Pending Work Orders', subtitle: 'Track and manage pending work orders' };
+        if (path.includes('work-orders/my-work-orders')) return { title: 'My Work Orders', subtitle: 'View your assigned work orders' };
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
@@ -248,9 +222,7 @@ const Sidebar = () => {
             '/dashboard/aop-order': { title: 'AOP Orders', subtitle: 'Manage AOP orders' },
             '/dashboard/new-order': { title: 'Add New Order', subtitle: 'Create new order' },
             '/dashboard/audits': { title: 'AUDITS', subtitle: 'Audits' },
-
         };
-
 
         const movementRouteMap = {
             '/dashboard/challan/aop': { title: 'AOP Movement', subtitle: 'Manage AOP challans' },
@@ -264,11 +236,8 @@ const Sidebar = () => {
 
         const misRouteMap = {
             '/dashboard/mis/glance': { title: 'MIS - AOP', subtitle: 'At A Glance' },
-
-
         };
 
-        // Daily Production Route Map
         const dailyProductionRouteMap = {
             '/dashboard/daily-production/cutting': { title: 'Daily Cutting', subtitle: 'Daily cutting production report' },
             '/dashboard/daily-production/sewing': { title: 'Daily Sewing', subtitle: 'Daily sewing production report' },
@@ -349,7 +318,7 @@ const Sidebar = () => {
                             </Link>
                         </li>
 
-                        {/* Yarn Dropdown (Includes Yarn Dyed Movement & Stock) */}
+                        {/* Yarn Dropdown */}
                         <li>
                             <button
                                 onClick={() => !isCollapsed && setIsYarnOpen(prev => !prev)}
@@ -482,11 +451,7 @@ const Sidebar = () => {
                             )}
                         </li>
 
-                        {/* ============================================================
-                            NEW: ASSET DROPDOWN (folder)
-                            Parent: "Asset"
-                            Children: Asset Summary / Asset Movement
-                           ============================================================ */}
+                        {/* Asset Dropdown */}
                         <li>
                             <button
                                 onClick={() => !isCollapsed && setIsAssetOpen(prev => !prev)}
@@ -524,11 +489,7 @@ const Sidebar = () => {
                             )}
                         </li>
 
-                        {/* ============================================================
-                            USER MANAGEMENT DROPDOWN
-                            Parent: "User Management"
-                            Children: Add New User / User List / User Permission
-                           ============================================================ */}
+                        {/* User Management Dropdown */}
                         <li>
                             <button
                                 onClick={() => !isCollapsed && setIsUserOpen(prev => !prev)}
@@ -548,6 +509,44 @@ const Sidebar = () => {
                             {isUserOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {userSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+
+                        {/* NEW: Work Orders Dropdown */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsWorkOrdersOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isWorkOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'Work Orders' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <FileText size={20} className="shrink-0" />
+                                    {!isCollapsed && <span className="font-medium text-sm">Work Orders</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    isWorkOrdersOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {isWorkOrdersOpen && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {workOrderSubItems.map(item => (
                                         <li key={item.path}>
                                             <Link
                                                 to={item.path}

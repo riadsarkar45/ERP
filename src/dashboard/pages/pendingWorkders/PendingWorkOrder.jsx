@@ -63,8 +63,6 @@ const NotApprovedWorkOrder = () => {
             const sendRequest = await axiosSecure.patch(`/api/request-for-approval/workOrderApproval/${workOrderId}/${value}`);
             if (sendRequest.status === 200) {
                 setError(null);
-                const { data } = await axiosSecure.get(`/api/pending/work-order/${selectOrderType}`);
-                setWorkOrder(Array.isArray(data) ? data : []);
 
                 if (!socket || !user) return console.warn("Socket or User missing");
 
