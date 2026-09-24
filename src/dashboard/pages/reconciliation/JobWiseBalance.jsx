@@ -29,8 +29,8 @@ const fmtPct = (n) => (n === null || n === undefined ? <span className="text-sla
 
 // --- Column Definitions ---
 const COLUMNS = [
-    { id: "jobNo", label: "Job No", width: 110, group: "yarn" },
-    { id: "yarnFactory", label: "Factory Name", width: 130, group: "yarn" },
+    { id: "jobNo", label: "Job No", width: 120, group: "yarn" },
+    { id: "yarnFactory", label: "Factory Name", width: 150, group: "yarn" },
     { id: "yarnReq", label: "Yarn Req", width: 90, group: "yarn" },
     { id: "yarnIssue", label: "Yarn Issue", width: 90, group: "yarn" },
     { id: "knittingGrey", label: "Knitting Grey", width: 100, group: "yarn" },
@@ -66,6 +66,13 @@ COLUMNS.forEach((c) => {
 const TOTAL_WIDTH = acc;
 
 const GROUP_HEADER_ROW_HEIGHT = 33;
+
+// Reinforced divider between the frozen "Yarn" block and the rest of the table.
+// Rendered as an inset box-shadow (instead of relying purely on border-right) so it
+// stays visually intact while the column is sticky and the table scrolls horizontally —
+// a plain border on a sticky cell can get painted over by neighboring cells in some
+// browsers, box-shadow does not.
+const FROZEN_DIVIDER_SHADOW = "inset -1px 0 0 0 #64748b";
 
 // --- Lazy ExcelJS loader from CDN (avoids Vite resolution + npm install) ---
 const EXCELJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
@@ -114,7 +121,7 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
             <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setOpenCol(isOpen ? null : colId); }}
-                className={`ml-1 inline-flex items-center justify-center w-4 h-4 rounded shrink-0 transition-colors ${isActive ? "bg-amber-400 text-[#0f2544]" : "bg-slate-300 text-slate-700 hover:bg-slate-400"}`}
+                className={`ml-1 inline-flex items-center justify-center w-4 h-4 rounded shrink-0 transition-colors ${isActive ? "bg-amber-400 text-[#dfebf0]" : "bg-white/20 text-white hover:bg-white/30"}`}
                 title="Filter this column"
             >
                 <svg viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
@@ -128,13 +135,13 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
                     className={`absolute z-50 top-6 ${align === "right" ? "right-0" : "left-0"} w-48 bg-white border border-slate-300 rounded-md shadow-lg p-2 normal-case font-normal text-slate-700`}
                 >
                     <label className="flex items-center gap-2 px-1 py-1 text-xs font-medium border-b border-slate-200 mb-1 cursor-pointer hover:bg-slate-50 rounded">
-                        <input type="checkbox" checked={excluded.size === 0} onChange={toggleAll} className="rounded border-slate-300 text-[#0f2544] focus:ring-[#0f2544]" />
+                        <input type="checkbox" checked={excluded.size === 0} onChange={toggleAll} className="rounded border-slate-300 text-[#dfebf0] focus:ring-[#dfebf0]" />
                         Select All
                     </label>
                     <div className="max-h-44 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
                         {uniqueValues.map((val) => (
                             <label key={val} className="flex items-center gap-2 px-1 py-1 text-xs cursor-pointer hover:bg-slate-50 rounded">
-                                <input type="checkbox" checked={!excluded.has(val)} onChange={() => toggleValue(val)} className="rounded border-slate-300 text-[#0f2544] focus:ring-[#0f2544]" />
+                                <input type="checkbox" checked={!excluded.has(val)} onChange={() => toggleValue(val)} className="rounded border-slate-300 text-[#dfebf0] focus:ring-[#dfebf0]" />
                                 <span className="truncate">{val}</span>
                             </label>
                         ))}
@@ -142,7 +149,7 @@ const ExcelFilter = ({ colId, allJobs, excluded, setExcluded, openCol, setOpenCo
                     </div>
                     <div className="flex justify-between mt-2 pt-2 border-t border-slate-200">
                         <button onClick={() => setExcluded(colId, new Set())} className="text-[11px] text-slate-500 hover:text-slate-800 font-medium">Clear</button>
-                        <button onClick={() => setOpenCol(null)} className="text-[11px] font-bold text-[#0f2544] hover:underline">OK</button>
+                        <button onClick={() => setOpenCol(null)} className="text-[11px] font-bold text-[#dfebf0] hover:underline">OK</button>
                     </div>
                 </div>
             )}
@@ -176,7 +183,7 @@ const BalanceSheet = () => {
     const [isExporting, setIsExporting] = useState(false);
 
     const axiosSecure = useAxiosPrivate();
-    const ITEMS_PER_PAGE = 10;
+    const ITEMS_PER_PAGE = 15;
 
     const setExcludedFor = (colId, set) => setColFilters((prev) => ({ ...prev, [colId]: set }));
 
@@ -191,6 +198,7 @@ const BalanceSheet = () => {
     };
 
     const handleDoubleClick = (jobIdx) => {
+
         setEditingCell(jobIdx);
     };
 
@@ -579,7 +587,23 @@ const BalanceSheet = () => {
             left: isFrozenCol ? getColLeft(colId) : undefined,
             width: w, minWidth: w, maxWidth: w,
             zIndex: isFrozenCol ? 30 : 20,
-            backgroundColor: '#f1f5f9',
+            backgroundColor: '#475569',
+            ...extra
+        };
+    };
+
+    // Sticky footer (Subtotal row): pinned to the bottom of the scroll container.
+    // Frozen columns get BOTH left and bottom offsets so their bottom-left corner
+    // stays pinned while the table scrolls in either direction.
+    const footerCellStyle = (colId, extra = {}) => {
+        const w = getColWidth(colId);
+        const isFrozenCol = isFrozen(colId);
+        return {
+            position: "sticky",
+            bottom: 0,
+            left: isFrozenCol ? getColLeft(colId) : undefined,
+            width: w, minWidth: w, maxWidth: w,
+            zIndex: isFrozenCol ? 35 : 25,
             ...extra
         };
     };
@@ -670,7 +694,7 @@ const BalanceSheet = () => {
                             onChange={(e) => setSearch(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
                             placeholder="Search job no. or factory..."
-                            className="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-md w-64 outline-none focus:border-[#0f2544] focus:ring-1 focus:ring-[#0f2544]/20 bg-white transition-all"
+                            className="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-md w-64 outline-none focus:border-[#dfebf0] focus:ring-1 focus:ring-[#dfebf0]/20 bg-white transition-all"
                         />
                     </div>
 
@@ -693,7 +717,7 @@ const BalanceSheet = () => {
                     <button
                         onClick={(e) => { e.stopPropagation(); exportExcel(); }}
                         disabled={isExporting || filteredJobs.length === 0}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#0f2544] hover:bg-[#1a365d] px-3 py-1.5 rounded-md shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-md shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExporting ? (
                             <>
@@ -732,17 +756,17 @@ const BalanceSheet = () => {
                 </div>
             )}
 
-            <div className="overflow-auto border border-slate-300 rounded-lg shadow-sm bg-white relative flex-1 min-h-0">
+            <div className="overflow-auto border border-[#b4bcc2] rounded-2xl shadow-sm bg-white relative flex-1 min-h-0">
                 {isLoading && (
                     <div className="absolute inset-0 bg-white/80 z-50 flex items-center justify-center">
                         <div className="flex flex-col items-center gap-2">
-                            <div className="w-6 h-6 border-2 border-[#0f2544] border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-6 h-6 border-2 border-[#dfebf0] border-t-transparent rounded-full animate-spin"></div>
                             <span className="text-xs font-medium text-slate-500">Loading data...</span>
                         </div>
                     </div>
                 )}
 
-                <table className="border-collapse tabular-nums text-[11px] border border-slate-300" style={{ width: TOTAL_WIDTH, minWidth: TOTAL_WIDTH }}>
+                <table className="border-separate border-spacing-0 tabular-nums text-[11px] border border-[#b4bcc2]" style={{ width: '100%', minWidth: TOTAL_WIDTH }}>
                     <thead>
                         <tr>
                             <th
@@ -750,21 +774,21 @@ const BalanceSheet = () => {
                                 style={{
                                     position: 'sticky', top: 0, left: 0, zIndex: 40,
                                     width: getColLeft('yarnBalance') + getColWidth('yarnBalance'),
-                                    backgroundColor: '#e2e8f0'
+                                    backgroundColor: '#475569'
                                 }}
-                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
+                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-white border-r border-b border-[#b4bcc2]"
                             >
                                 YARN / KNITTING
                             </th>
-                            <th colSpan={7} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300">
+                            <th colSpan={7} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#475569' }} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-white border-r border-b border-[#b4bcc2]">
                                 DYEING
                             </th>
-                            <th colSpan={6} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#e2e8f0' }} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300">
+                            <th colSpan={6} style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#475569' }} className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-white border-r border-b border-[#b4bcc2]">
                                 AOP
                             </th>
                             <th
-                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-700 border border-slate-300"
-                                style={{ position: 'sticky', top: 0, zIndex: 20, width: getColWidth('remarks'), backgroundColor: '#e2e8f0' }}
+                                className="px-0 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-white border-r border-b border-[#b4bcc2]"
+                                style={{ position: 'sticky', top: 0, zIndex: 20, width: getColWidth('remarks'), backgroundColor: '#475569' }}
                             >
                                 <div className="flex items-center justify-center gap-1">
                                     REMARKS
@@ -779,10 +803,9 @@ const BalanceSheet = () => {
                                     <th
                                         key={col.id}
                                         style={headerCellStyle(col.id, {
-                                            borderRight: isLastFrozen ? '2px solid #94a3b8' : '1px solid #cbd5e1',
-                                            borderBottom: '1px solid #cbd5e1'
+                                            boxShadow: isLastFrozen ? FROZEN_DIVIDER_SHADOW : undefined
                                         })}
-                                        className={`px-1 py-2 text-[10px] font-semibold uppercase border border-slate-300 ${col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'dyeingFactory' || col.id === 'aopFactory' ? 'text-left' : 'text-right'}`}
+                                        className={`px-1 py-2 text-[10px] font-semibold uppercase border-r border-b border-[#b4bcc2] text-white ${col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'dyeingFactory' || col.id === 'aopFactory' ? 'text-left' : 'text-right'}`}
                                     >
                                         <div className={`flex items-center ${col.id === 'jobNo' || col.id === 'yarnFactory' || col.id === 'dyeingFactory' || col.id === 'aopFactory' ? "" : "justify-end"} gap-1`}>
                                             {col.label}
@@ -815,37 +838,41 @@ const BalanceSheet = () => {
                                 const yRow = job.yarnRows[rowIdx];
                                 const dRow = job.dyeingRows[rowIdx];
                                 const aRow = job.aopRows[rowIdx];
+                                // Zebra-stripe by job group (matches the reference design) instead of
+                                // per-group tint colors — applied as an inline override so it also
+                                // works correctly on the sticky frozen columns.
+                                const stripeBg = jobIdx % 2 === 0 ? '#ffffff' : '#f3f8f5';
 
                                 return (
                                     <tr key={`${jobIdx}-${rowIdx}`} className="border-b border-slate-200 hover:bg-amber-50/40 transition-colors">
                                         {rowIdx === 0 && (
-                                            <td rowSpan={maxRows} style={cellStyle("jobNo")} className="px-2 py-2 border border-slate-300 align-middle text-center font-bold text-slate-800 bg-slate-50">{job.jobNo}</td>
+                                            <td rowSpan={maxRows} style={cellStyle("jobNo", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-center font-bold text-slate-800">{job.jobNo}</td>
                                         )}
 
-                                        <td style={cellStyle("yarnFactory")} className={`px-2 py-2 border border-slate-300 text-slate-600 bg-white text-left ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{yRow?.factory ?? ""}</td>
-                                        <td style={cellStyle("yarnReq")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.req) : ""}</td>
-                                        <td style={cellStyle("yarnIssue")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.issue) : ""}</td>
-                                        <td style={cellStyle("knittingGrey")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.knittingGrey) : ""}</td>
-                                        <td style={cellStyle("yarnReturn")} className="px-2 py-2 border border-slate-300 text-right bg-white">{yRow ? fmtNum(yRow.yarnReturn) : ""}</td>
-                                        <td style={cellStyle("yarnBalance")} className="px-2 py-2 border-r-2 border-r-slate-400 border-y border-slate-300 text-right bg-white font-medium">{yRow ? fmtNum(yarnBalance(yRow)) : ""}</td>
+                                        <td style={cellStyle("yarnFactory", { backgroundColor: stripeBg })} className={`px-2 py-2 border-r border-b border-[#b4bcc2] text-slate-600 text-left ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{yRow?.factory ?? ""}</td>
+                                        <td style={cellStyle("yarnReq", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] text-right">{yRow ? fmtNum(yRow.req) : ""}</td>
+                                        <td style={cellStyle("yarnIssue", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] text-right">{yRow ? fmtNum(yRow.issue) : ""}</td>
+                                        <td style={cellStyle("knittingGrey", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] text-right">{yRow ? fmtNum(yRow.knittingGrey) : ""}</td>
+                                        <td style={cellStyle("yarnReturn", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] text-right">{yRow ? fmtNum(yRow.yarnReturn) : ""}</td>
+                                        <td style={cellStyle("yarnBalance", { boxShadow: FROZEN_DIVIDER_SHADOW, backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] text-right font-medium">{yRow ? fmtNum(yarnBalance(yRow)) : ""}</td>
 
-                                        <td style={cellStyle("dyeingFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-teal-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{dRow?.factoryName ?? ""}</td>
-                                        <td style={cellStyle("greyDelivery")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyDelivery) : ""}</td>
-                                        <td style={cellStyle("greyReturn")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyReturn) : ""}</td>
-                                        <td style={cellStyle("greyRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>
-                                        <td style={cellStyle("finishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dRow.finishRcvd) : ""}</td>
-                                        <td style={cellStyle("dyeBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtNum(dyeBalance(dRow)) : ""}</td>
-                                        <td style={cellStyle("processLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-teal-50/40 font-medium">{dRow ? fmtPct(dyeProcessLoss(dRow)) : ""}</td>
+                                        <td style={cellStyle("dyeingFactory", { backgroundColor: stripeBg })} className={`px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-center ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{dRow?.factoryName ?? ""}</td>
+                                        <td style={cellStyle("greyDelivery", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{dRow ? fmtNum(dRow.greyDelivery) : ""}</td>
+                                        <td style={cellStyle("greyReturn", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{dRow ? fmtNum(dRow.greyReturn) : ""}</td>
+                                        <td style={cellStyle("greyRcvd", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{dRow ? fmtNum(dRow.greyRcvd) : ""}</td>
+                                        <td style={cellStyle("finishRcvd", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{dRow ? fmtNum(dRow.finishRcvd) : ""}</td>
+                                        <td style={cellStyle("dyeBalance", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{dRow ? fmtNum(dyeBalance(dRow)) : ""}</td>
+                                        <td style={cellStyle("processLoss", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{dRow ? fmtPct(dyeProcessLoss(dRow)) : ""}</td>
 
-                                        <td style={cellStyle("aopFactory")} className={`px-2 py-2 border border-slate-300 align-middle text-center bg-violet-50/40 ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{aRow?.factoryName ?? ""}</td>
-                                        <td style={cellStyle("sentForAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.sentForAop) : ""}</td>
-                                        <td style={cellStyle("receivedFromAop")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.receivedFromAop) : ""}</td>
-                                        <td style={cellStyle("aopFinishRcvd")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aRow.aopFinishRcvd) : ""}</td>
-                                        <td style={cellStyle("aopBalance")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtNum(aopBalance(aRow)) : ""}</td>
-                                        <td style={cellStyle("aopProcessLoss")} className="px-2 py-2 border border-slate-300 align-middle text-right bg-violet-50/40 font-medium">{aRow ? fmtPct(aopProcessLoss(aRow)) : ""}</td>
+                                        <td style={cellStyle("aopFactory", { backgroundColor: stripeBg })} className={`px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-center ${wrapText ? 'whitespace-normal' : 'whitespace-nowrap overflow-hidden text-ellipsis'}`}>{aRow?.factoryName ?? ""}</td>
+                                        <td style={cellStyle("sentForAop", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{aRow ? fmtNum(aRow.sentForAop) : ""}</td>
+                                        <td style={cellStyle("receivedFromAop", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{aRow ? fmtNum(aRow.receivedFromAop) : ""}</td>
+                                        <td style={cellStyle("aopFinishRcvd", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{aRow ? fmtNum(aRow.aopFinishRcvd) : ""}</td>
+                                        <td style={cellStyle("aopBalance", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{aRow ? fmtNum(aopBalance(aRow)) : ""}</td>
+                                        <td style={cellStyle("aopProcessLoss", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-right font-medium">{aRow ? fmtPct(aopProcessLoss(aRow)) : ""}</td>
 
                                         {rowIdx === 0 && (
-                                            <td rowSpan={maxRows} style={cellStyle("remarks")} className="px-2 py-2 border border-slate-300 align-middle text-center bg-white">
+                                            <td rowSpan={maxRows} style={cellStyle("remarks", { backgroundColor: stripeBg })} className="px-2 py-2 border-r border-b border-[#b4bcc2] align-middle text-center">
                                                 {editingCell === jobIdx ? (
                                                     <input
                                                         type="text"
@@ -855,7 +882,7 @@ const BalanceSheet = () => {
                                                         onKeyDown={(e) => e.key === 'Enter' && handleSaveRemarks()}
                                                         onClick={(e) => e.stopPropagation()}
                                                         autoFocus
-                                                        className="w-full px-2 py-1 text-xs text-slate-700 border border-[#0f2544] rounded focus:ring-1 focus:ring-[#0f2544]/20 outline-none text-center"
+                                                        className="w-full px-2 py-1 text-xs text-slate-700 border border-[#dfebf0] rounded focus:ring-1 focus:ring-[#dfebf0]/20 outline-none text-center"
                                                     />
                                                 ) : (
                                                     <div
@@ -876,31 +903,31 @@ const BalanceSheet = () => {
 
                     {filteredJobs.length > 0 && (
                         <tfoot>
-                            <tr className="bg-[#0f2544] text-white font-bold text-[11px]">
-                                <td style={cellStyle("jobNo")} className="px-2 py-3 border border-slate-600 bg-[#0f2544] text-center uppercase tracking-wide">Subtotal</td>
-                                <td style={cellStyle("yarnFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
-                                <td style={cellStyle("yarnReq")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.req.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("yarnIssue")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.issue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("knittingGrey")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.knittingGrey.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("yarnReturn")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.yarnReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("yarnBalance")} className="px-2 py-3 border-r-2 border-r-slate-400 border-y border-slate-600 text-right bg-[#0f2544]">{totals.yarnBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <tr className="bg-[#475569] text-white font-bold text-[11px]">
+                                <td style={footerCellStyle("jobNo", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] bg-[#475569] text-center uppercase tracking-wide">Subtotal</td>
+                                <td style={footerCellStyle("yarnFactory", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] bg-[#475569]"></td>
+                                <td style={footerCellStyle("yarnReq", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.req.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("yarnIssue", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.issue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("knittingGrey", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.knittingGrey.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("yarnReturn", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.yarnReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("yarnBalance", { borderTop: '1px solid #b4bcc2', boxShadow: FROZEN_DIVIDER_SHADOW })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.yarnBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
 
-                                <td style={cellStyle("dyeingFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
-                                <td style={cellStyle("greyDelivery")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyDelivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("greyReturn")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("greyRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("finishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.finishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("dyeBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("processLoss")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{(() => { const l = totals.greyDelivery ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
+                                <td style={footerCellStyle("dyeingFactory", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] bg-[#475569]"></td>
+                                <td style={footerCellStyle("greyDelivery", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.greyDelivery.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("greyReturn", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.greyReturn.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("greyRcvd", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("finishRcvd", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.finishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("dyeBalance", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("processLoss", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{(() => { const l = totals.greyDelivery ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
 
-                                <td style={cellStyle("aopFactory")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
-                                <td style={cellStyle("sentForAop")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.sentForAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("receivedFromAop")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.receivedFromAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("aopFinishRcvd")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.aopFinishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("aopBalance")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{totals.aopBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={cellStyle("aopProcessLoss")} className="px-2 py-3 border border-slate-600 text-right bg-[#0f2544]">{(() => { const l = totals.receivedFromAop ? (totals.receivedFromAop - totals.aopFinishRcvd) / totals.receivedFromAop : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
+                                <td style={footerCellStyle("aopFactory", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] bg-[#475569]"></td>
+                                <td style={footerCellStyle("sentForAop", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.sentForAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("receivedFromAop", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.receivedFromAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("aopFinishRcvd", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.aopFinishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("aopBalance", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.aopBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={footerCellStyle("aopProcessLoss", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{(() => { const l = totals.receivedFromAop ? (totals.receivedFromAop - totals.aopFinishRcvd) / totals.receivedFromAop : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
 
-                                <td style={cellStyle("remarks")} className="px-2 py-3 border border-slate-600 bg-[#0f2544]"></td>
+                                <td style={footerCellStyle("remarks", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] bg-[#475569]"></td>
                             </tr>
                         </tfoot>
                     )}

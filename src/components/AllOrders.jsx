@@ -157,6 +157,7 @@ const AllOrders = ({ orderType }) => {
                 { header: "COMPOSITION", width: 200, inputName: "composition" },
                 { header: "FINISH DIA", width: 160, inputName: "finishDia" },
                 { header: "SHADE (%)", width: 160, inputName: "shade(%)" },
+                { header: "Y/D COLOR NAME", width: 160, inputName: "y/dColorName" },
                 { header: "COLOR WISE ORDER QTY", width: 160, inputName: "orderColor", isNumeric: true },
                 { header: "PRICE PER KG", width: 160, inputName: "unitePrice", isNumeric: true },
                 { header: "YARN DELIVERY FOR Y/D", width: 160, inputName: "yarnDeliveryForYd", isNumeric: true },

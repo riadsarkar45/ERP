@@ -86,6 +86,13 @@ const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleIn
                     return (
                         <tr key={rowIndex} className="border-b border-gray-200">
 
+                            {/* MONTH (per work order) */}
+                            {isFirstOfWo && (
+                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
+                                    <div className={cellClass}>{wo?.month}</div>
+                                </td>
+                            )}
+
                             {/* FACTORY NAME (per work order) */}
                             {isFirstOfWo && (
                                 <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
@@ -101,12 +108,7 @@ const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleIn
                                 </td>
                             )}
 
-                            {/* JOB NO (per job) */}
-                            {isFirstOfJob && (
-                                <td className="border border-gray-200 px-3 py-1.5 text-sm align-top" rowSpan={jobRowSpan}>
-                                    {job.jobNo}
-                                </td>
-                            )}
+                            
 
                             {/* WORK ORDER NO (per work order) */}
                             {isFirstOfWo && (
@@ -122,24 +124,19 @@ const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleIn
                                 </td>
                             )}
 
+                            {/* JOB NO (per job) */}
+                            {isFirstOfJob && (
+                                <td className="border border-gray-200 px-3 py-1.5 text-sm align-top" rowSpan={jobRowSpan}>
+                                    {job.jobNo}
+                                </td>
+                            )}
+
                             {/* STYLE (per work order) */}
                             {isFirstOfWo && (
                                 <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
                                     <div className={cellClass}>{wo?.styleNo}</div>
                                 </td>
                             )}
-
-                            {/* MONTH (per work order) */}
-                            {isFirstOfWo && (
-                                <td className="border border-gray-200 align-top" rowSpan={woRowSpan}>
-                                    <div className={cellClass}>{wo?.month}</div>
-                                </td>
-                            )}
-
-                            {/* COMPOSITION (per composition) */}
-                            <td className="border border-gray-200 align-top">
-                                <div className={compCellClass}>{comp?.composition}</div>
-                            </td>
 
                             {/* BOOKING COLOR (per composition; may itself stack multiple yarnJobs, which just grows this one row) */}
                             <td className="border border-gray-200 align-top">
@@ -149,9 +146,19 @@ const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleIn
                                             <div onClick={() => handleEditRowData(comp?.id, y.id)} key={yi} className="border-b border-gray-100 last:border-b-0 py-0.5">{y.color} y id {"=>"} {y.id}  </div>
                                         ))
                                         : "-"}
-                                    booking color
+                                    Color
                                 </div>
                             </td>
+                            
+                            {/* COMPOSITION (per composition) */}
+                            <td className="border border-gray-200 align-top">
+                                <div className={compCellClass}>{comp?.composition}</div>
+                            </td>
+
+                            {/* FINISH DIA */}
+                            <td className="border border-gray-200 align-top">
+                                <div className={compCellClass}>{comp?.id}</div>
+                            </td>                      
 
                             {/* SHADE (%) (per composition) */}
                             <td className="border border-gray-200 align-top">
@@ -175,7 +182,7 @@ const YarnDyeOrders = ({ orders, isEdit, updatedFields, handleOnChange, handleIn
 
                             {/* PRICE PER KG (per composition) */}
                             <td className="border border-gray-200 align-top">
-                                <div className={compCellClass}>{comp?.unitePrice}</div>
+                                <div className={compCellClass}>{comp?.unitePrice?.toFixed(2)}</div>
                             </td>
 
                             {/* WORK ORDER QTY (per composition) */}
