@@ -482,8 +482,10 @@ const BalanceSheet = () => {
             });
 
             // Subtotal row
-            const dyeLossTotal = totals.greyDelivery
-                ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null;
+            // FIX: dyeing process loss must use Grey Received (greyRcvd) as the base,
+            // matching the per-row formula dyeProcessLoss() — not Grey Delivery.
+            const dyeLossTotal = totals.greyRcvd
+                ? (totals.greyRcvd - totals.finishRcvd) / totals.greyRcvd : null;
             const aopLossTotal = totals.receivedFromAop
                 ? (totals.receivedFromAop - totals.aopFinishRcvd) / totals.receivedFromAop : null;
 
@@ -918,7 +920,7 @@ const BalanceSheet = () => {
                                 <td style={footerCellStyle("greyRcvd", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.greyRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={footerCellStyle("finishRcvd", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.finishRcvd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                 <td style={footerCellStyle("dyeBalance", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.dyeBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                <td style={footerCellStyle("processLoss", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{(() => { const l = totals.greyDelivery ? (totals.greyDelivery - totals.finishRcvd) / totals.greyDelivery : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
+                                <td style={footerCellStyle("processLoss", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{(() => { const l = totals.greyRcvd ? (totals.greyRcvd - totals.finishRcvd) / totals.greyRcvd : null; return l === null ? "—" : `${(l * 100).toFixed(2)}%`; })()}</td>
 
                                 <td style={footerCellStyle("aopFactory", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] bg-[#475569]"></td>
                                 <td style={footerCellStyle("sentForAop", { borderTop: '1px solid #b4bcc2' })} className="px-2 py-3 border-r border-b border-[#b4bcc2] text-right bg-[#475569]">{totals.sentForAop.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
