@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import {  useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 import { AuthContext } from "../auth/AuthContext";
@@ -708,7 +708,7 @@ const Home = () => {
     const [deliveryLoading, setDeliveryLoading] = useState(true);
     const [deliveryDate, setDeliveryDate] = useState(todayBST);
     
-    const { user } = useContext(AuthContext);
+    // const { user } = useContext(AuthContext);
 
     useEffect(() => {
         const fetchChallanData = async () => {
