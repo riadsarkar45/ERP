@@ -16,6 +16,7 @@ const centeredCellStyle = {
     ...cellStyle,
     verticalAlign: "middle",
     textAlign: "center",
+
 };
 
 const footerCellStyle = {
@@ -25,6 +26,7 @@ const footerCellStyle = {
     zIndex: 5,
     // backgroundColor: "#f3f4f6",
     fontWeight: 700,
+    color: "#ffffff",
 };
 
 const normalizeToArray = (value) => {
@@ -174,7 +176,7 @@ const KnittingDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "YarnDelivery")), `yd-${i}`)}
                             </td>
-                            <td className="bg-yellow-100" style={cellStyle}>
+                            <td className="bg-[#d2e0e6]" style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => {
                                     const yarnDelivery = getDeliverySum(up.deliveries, "YarnDelivery");
                                     const workOrderQty = Number(up.workOrderQty) || 0;
@@ -187,7 +189,7 @@ const KnittingDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => formatNumber(getDeliverySum(up.deliveries, "YarnReturn")), `return-${i}`)}
                             </td>
-                            <td className="bg-yellow-100" style={cellStyle}>
+                            <td className="bg-[#d2e0e6]" style={cellStyle}>
                                 {renderBreakdownCell(compositions, (up) => {
                                     const yarnDelivery = getDeliverySum(up.deliveries, "YarnDelivery");
                                     const yarnReturn = getDeliverySum(up.deliveries, "YarnReturn");
@@ -214,27 +216,27 @@ const KnittingDetail = ({ detailView }) => {
             <tfoot>
                 <tr>
                     {/* 1. KNITTING FACTORY NAME */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
                     {/* 2. JOB NO. */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 3. COMPOSITION */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 4. KNITTING WORK ORDER QTY */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty.toFixed(2))}</div></td>
                     {/* 5. YARN DELIVERY */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnDelivery.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnDelivery.toFixed(2))}</div></td>
                     {/* 8. SHORT & EXCESS */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.yarnDelivery.toFixed(2) - totals.workOrderQty.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.yarnDelivery.toFixed(2) - totals.workOrderQty.toFixed(2))}</div></td>
                     {/* 6. GREY RECEIVED */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyFabricReceived)}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyFabricReceived)}</div></td>
                     {/* 7. YARN RETURN */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnReturn.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.yarnReturn.toFixed(2))}</div></td>
                     {/* 8. SHORT & EXCESS */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyFabricReceived + totals.yarnReturn - totals.yarnDelivery)}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyFabricReceived + totals.yarnReturn - totals.yarnDelivery)}</div></td>
                     {/* 9. PRICE PER KG */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
                     {/* 10. PAYABLE AMOUNT */}
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount.toFixed(2))}</div></td>
                 </tr>
             </tfoot>
         </>
