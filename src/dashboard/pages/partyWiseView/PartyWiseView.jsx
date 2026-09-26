@@ -5,7 +5,10 @@ import KnittingDetail from "./KnittingDetail";
 import DyeingDetail from "./DyeingDetail";
 import AopDetail from "./AopDetail";
 
-const BORDER_COLOR = "#aeb7c2";
+// ---- Table color tokens (matches the DailyCutting table design) ----
+const HEADER_BG = "#334155";      // slate-700
+const HEADER_BORDER = "#475569";  // slate-600
+const CARD_BORDER = "#e5e7eb";    // gray-200
 
 const getDeliveryBreakdownByType = (styles) => {
     return styles.map((s) => {
@@ -106,7 +109,7 @@ const applyDeepFilters = (data, activeFilters, orderType) => {
     }, []);
 };
 
-// ── Filter Dropdown Component ───────────────────────────────────────────────
+// ── Filter Dropdown Component (unchanged — already Excel-style: search, select all, Apply/Clear) ──
 function FilterDropdown({ colLabel, allValues, activeValues, onApply, onClear, onClose, anchorRef, style }) {
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState(
@@ -480,8 +483,11 @@ const PartyWiseView = () => {
                 </div>
             )}
 
-            {/* ERP Table */}
-            <div style={{ border: `2px solid ${BORDER_COLOR}`, background: "#fff", borderRadius: "4px" }}>
+            {/* ERP Table — styled to match the DailyCutting table design (dark slate header, card wrapper) */}
+            <div
+                className="rounded-lg shadow-sm bg-white"
+                style={{ border: `1px solid ${CARD_BORDER}` }}
+            >
                 <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "80vh" }}>
                     <table
                         style={{
@@ -513,17 +519,16 @@ const PartyWiseView = () => {
                                                 position: "sticky",
                                                 top: 0,
                                                 zIndex: 5,
-                                                border: `1px solid ${BORDER_COLOR}`,
-                                                borderBottom: `2px solid ${BORDER_COLOR}`,
-                                                backgroundColor: "#f3f4f6",
+                                                border: `1px solid ${HEADER_BORDER}`,
+                                                backgroundColor: HEADER_BG,
                                                 padding: "10px 8px",
                                                 textAlign: "center",
                                                 fontSize: "12px",
                                                 fontWeight: 600,
-                                                color: "#374151",
+                                                color: "#ffffff",
                                             }}
                                         >
-                                            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", gap: "6px" }}>
+                                            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", gap: "4px" }}>
                                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                     {col.header}
                                                 </span>
@@ -536,20 +541,20 @@ const PartyWiseView = () => {
                                                             display: "flex",
                                                             alignItems: "center",
                                                             justifyContent: "center",
-                                                            width: "20px",
-                                                            height: "20px",
-                                                            borderRadius: "4px",
-                                                            backgroundColor: hasFilter ? "#3b82f6" : "transparent",
-                                                            color: hasFilter ? "#fff" : "#9ca3af",
+                                                            width: "16px",
+                                                            height: "16px",
+                                                            padding: 0,
+                                                            background: "transparent",
+                                                            color: hasFilter ? "#fbbf24" : "#cbd5e1", // amber-400 active / slate-300 idle
                                                             border: "none",
                                                             cursor: "pointer",
-                                                            transition: "all 0.2s",
-                                                            flexShrink: 0
+                                                            transition: "color 0.15s",
+                                                            flexShrink: 0,
                                                         }}
-                                                        onMouseEnter={(e) => { if (!hasFilter) { e.currentTarget.style.backgroundColor = "#e5e7eb"; e.currentTarget.style.color = "#374151"; } }}
-                                                        onMouseLeave={(e) => { if (!hasFilter) { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#9ca3af"; } }}
+                                                        onMouseEnter={(e) => { if (!hasFilter) e.currentTarget.style.color = "#ffffff"; }}
+                                                        onMouseLeave={(e) => { if (!hasFilter) e.currentTarget.style.color = "#cbd5e1"; }}
                                                     >
-                                                        <Filter size={12} />
+                                                        <Filter size={12} fill={hasFilter ? "currentColor" : "none"} />
                                                     </button>
                                                 )}
                                             </div>
