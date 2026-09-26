@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useContext, useRef } from "react";
 import { DownloadCloudIcon, FunnelX, Loader, Loader2, Save, Search, X, Filter } from "lucide-react";
-import useAxiosPublic from "../hooks/Axios";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
 import YarnDyeOrders from "./YarnDyeOrders";
@@ -42,14 +41,12 @@ const getSavedFilters = (type) => {
 };
 
 const AllOrders = ({ orderType }) => {
-    const axiosPublic = useAxiosPublic();
     const axiosPrivate = useAxiosPrivate();
     const [jobId, setJobId] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [orders, setOrders] = useState([]);
     const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
     const [changedField, setChangedField] = useState({});
-    const [styleNo, setStyleNo] = useState("");
     const [deliveries, setDeliveries] = useState({});
     const [workOrderId, setWorkOrderId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -434,7 +431,9 @@ const AllOrders = ({ orderType }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    if (error) return <div className="p-4 bg-red-100 text-red-700 rounded">Something went wrong</div>;
+    console.log(error);
+
+    if (error) return <div className="p-4 bg-red-100 text-red-700 rounded">{error.message || error.msg || "Something Went Wrong"}</div>;
 
     if (loading && !hasLoadedOnce) {
         return (
@@ -759,12 +758,12 @@ const AllOrders = ({ orderType }) => {
                             const column = COLUMNS.find(c => c.inputName === columnName);
                             const columnHeader = column ? column.header : columnName;
                             const displayValues = Array.isArray(values) ? values : [values];
-                            
+
                             return (
                                 <div key={columnName} style={filterTagStyle}>
                                     <span style={filterTagLabelStyle}>{columnHeader}:</span>
                                     <span style={filterTagValueStyle}>
-                                        {displayValues.length > 2 
+                                        {displayValues.length > 2
                                             ? `${displayValues.slice(0, 2).join(", ")} +${displayValues.length - 2}`
                                             : displayValues.join(", ")
                                         }
@@ -1051,7 +1050,7 @@ const AllOrders = ({ orderType }) => {
                                     const isFilterable = col.inputName && FILTERABLE_COLUMNS.has(col.inputName);
                                     const isFrozen = i < FROZEN_COUNT;
                                     const hasActiveFilter = filters[col.inputName];
-                                    
+
                                     return (
                                         <th
                                             key={i}
@@ -1064,18 +1063,18 @@ const AllOrders = ({ orderType }) => {
                                             }}
                                         >
                                             <div style={{
-                                                display: "flex", 
-                                                justifyContent: "space-between", 
+                                                display: "flex",
+                                                justifyContent: "space-between",
                                                 alignItems: "center",
                                                 width: "100%",
                                                 gap: "4px"
                                             }}>
                                                 <span style={{
-                                                    textAlign: "center", 
-                                                    flex: 1, 
-                                                    fontWeight: 700, 
+                                                    textAlign: "center",
+                                                    flex: 1,
+                                                    fontWeight: 700,
                                                     fontSize: "11.5px",
-                                                    minWidth: 0, 
+                                                    minWidth: 0,
                                                     whiteSpace: "normal",
                                                     wordBreak: "break-word",
                                                     lineHeight: "1.3",

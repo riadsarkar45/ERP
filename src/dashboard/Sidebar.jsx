@@ -22,6 +22,7 @@ import {
     ArrowLeftRight,
 } from "lucide-react";
 import { AuthContext } from "./auth/AuthContext";
+import UseUserRoles from "./pages/users/allUsers/UserRoles";
 
 const Sidebar = () => {
     const location = useLocation();
@@ -33,6 +34,8 @@ const Sidebar = () => {
 
     const isActive = (path) => location.pathname === path;
     const { user } = useContext(AuthContext);
+    const { sections } = UseUserRoles();
+    console.log(sections.mis, "is user permitted");
 
     // Handle zoom changes with a fixed minimum of 70% and maximum of 200%
     const handleZoomChange = (e) => {
@@ -54,16 +57,16 @@ const Sidebar = () => {
     ];
 
     const orderSubItems = [
-        { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package },
-        { path: "/dashboard/dyeing-order", label: "Dyeing Orders", icon: Package },
-        { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Package },
-        { path: "/dashboard/aop-order", label: "AOP Orders", icon: Package },
+        { path: "/dashboard/knitting-order", label: "Knitting Orders", icon: Package, permission: "knittingOrder" },
+        { path: "/dashboard/dyeing-order", label: "Dyeing Orders", icon: Package, permission: "dyeingOrder" },
+        { path: "/dashboard/yarn-dye-order", label: "Yarn Dyeing Orders", icon: Package, permission: "yarnDyeingOrder" },
+        { path: "/dashboard/aop-order", label: "AOP Orders", icon: Package, permission: "aopOrder" },
     ];
 
     const movementSubItems = [
-        { path: "/dashboard/challan/aop", label: "Aop", icon: Package },
-        { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package },
-        { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package },
+        { path: "/dashboard/challan/aop", label: "Aop", icon: Package, permission: "aopOrder" },
+        { path: "/dashboard/challan/dyeing", label: "Dyeing", icon: Package, permission: "dyeingOrder" },
+        { path: "/dashboard/challan/knitting", label: "Knitting", icon: Package, permission: "knittingOrder" },
     ];
 
     const othersSubItems = [
@@ -107,8 +110,8 @@ const Sidebar = () => {
 
     // Split standalone nav items to place Daily Production dropdown in the correct order
     const topNavItems = [
-        { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
-    ];
+        sections.styleRequirements?.bookingView && { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
+    ].filter(Boolean);
 
     // Bottom standalone items (Work Order Requests removed and converted to dropdown above)
     const bottomNavItems = [
@@ -124,7 +127,7 @@ const Sidebar = () => {
     const [isDailyProductionOpen, setIsDailyProductionOpen] = useState(() => dailyProductionSubItems.some(item => item.path === location.pathname));
     const [isUserOpen, setIsUserOpen] = useState(() => userSubItems.some(item => item.path === location.pathname));
     const [isAssetOpen, setIsAssetOpen] = useState(() => assetSubItems.some(item => item.path === location.pathname));
-    
+
     // NEW: Work Orders dropdown open state
     const [isWorkOrdersOpen, setIsWorkOrdersOpen] = useState(() => workOrderSubItems.some(item => item.path === location.pathname));
 
@@ -205,7 +208,7 @@ const Sidebar = () => {
         if (path.includes('asset-movement')) return { title: 'Asset Movement', subtitle: 'Track asset movement' };
         if (path.includes('party-wise-view')) return { title: 'Manage Party Wise View' };
         if (path.includes('management-view')) return { title: 'Manage Management View' };
-        
+
         // NEW: Work Orders page titles
         if (path.includes('work-orders/pending')) return { title: 'Pending Work Orders', subtitle: 'Track and manage pending work orders' };
         if (path.includes('work-orders/my-work-orders')) return { title: 'My Work Orders', subtitle: 'View your assigned work orders' };
@@ -235,7 +238,12 @@ const Sidebar = () => {
         };
 
         const misRouteMap = {
-            '/dashboard/mis/glance': { title: 'MIS - AOP', subtitle: 'At A Glance' },
+            ...(sections?.mis !== undefined && sections?.mis !== null && {
+                '/dashboard/mis/glance': {
+                    title: 'MIS - AOP',
+                    subtitle: 'At A Glance'
+                }
+            })
         };
 
         const dailyProductionRouteMap = {
@@ -255,6 +263,8 @@ const Sidebar = () => {
     };
 
     const pageInfo = getPageInfo();
+
+    console.log(sections.workOrders, "work orders from sidebar");
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
@@ -357,61 +367,73 @@ const Sidebar = () => {
                         </li>
 
                         {/* Orders Dropdown */}
-                        <li>
-                            <button
-                                onClick={() => !isCollapsed && setIsOrdersOpen(prev => !prev)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
-                                title={isCollapsed ? 'Orders' : ''}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Package size={20} className="shrink-0" />
-                                    {!isCollapsed && <span className="font-medium text-sm">Orders</span>}
-                                </div>
-                                {!isCollapsed && (
-                                    isOrdersOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
-                                )}
-                            </button>
+                        {
+                            sections?.workOrders && (
+                                <li>
+                                    <button
+                                        onClick={() => !isCollapsed && setIsOrdersOpen(prev => !prev)}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isOrdersActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                            } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                        title={isCollapsed ? 'Orders' : ''}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Package size={20} className="shrink-0" />
+                                            {!isCollapsed && <span className="font-medium text-sm">Orders</span>}
+                                        </div>
+                                        {!isCollapsed && (
+                                            isOrdersOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                        )}
+                                    </button>
 
-                            {isOrdersOpen && !isCollapsed && (
-                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
-                                    {orderSubItems.map(item => (
+                                    {isOrdersOpen && !isCollapsed && (
+                                        <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                            {orderSubItems
+                                                .filter(item => sections.workOrders?.[item.permission] === true)
+                                                .map(item => (
+                                                    <li key={item.path}>
+                                                        <Link
+                                                            to={item.path}
+                                                            onClick={() => setIsMobileMenuOpen(false)}
+                                                            className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                                ? 'bg-primary-400 text-white font-medium'
+                                                                : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                                }`}
+                                                        >
+                                                            <item.icon size={16} className="shrink-0" />
+                                                            {item.label}
+                                                        </Link>
+                                                    </li>
+                                                ))}
+                                        </ul>
+                                    )}
+                                </li>
+                            )
+                        }
+
+                        {/* Standalone Nav Items (Top) */}
+                        {
+
+                            sections.styleRequirements && (
+                                topNavItems.map((item) => {
+                                    const Icon = item.icon;
+                                    return (
                                         <li key={item.path}>
                                             <Link
                                                 to={item.path}
                                                 onClick={() => setIsMobileMenuOpen(false)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
-                                                    ? 'bg-primary-400 text-white font-medium'
-                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                    }`}
+                                                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive(item.path) ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                                    } ${isCollapsed ? 'justify-center' : ''}`}
+                                                title={isCollapsed ? item.label : ''}
                                             >
-                                                <item.icon size={16} className="shrink-0" />
-                                                {item.label}
+                                                <Icon size={20} className="shrink-0" />
+                                                {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
                                             </Link>
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </li>
+                                    );
+                                })
+                            )
 
-                        {/* Standalone Nav Items (Top) */}
-                        {topNavItems.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                                <li key={item.path}>
-                                    <Link
-                                        to={item.path}
-                                        onClick={() => setIsMobileMenuOpen(false)}
-                                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 no-underline ${isActive(item.path) ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                            } ${isCollapsed ? 'justify-center' : ''}`}
-                                        title={isCollapsed ? item.label : ''}
-                                    >
-                                        <Icon size={20} className="shrink-0" />
-                                        {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
-                                    </Link>
-                                </li>
-                            );
-                        })}
+                        }
 
                         {/* Daily Production Dropdown */}
                         <li>
@@ -585,59 +607,28 @@ const Sidebar = () => {
                         })}
 
                         {/* Movement Dropdown */}
-                        <li>
-                            <button
-                                onClick={() => !isCollapsed && setIsMovementOpen(prev => !prev)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isMovementActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
-                                title={isCollapsed ? 'Movement' : ''}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Package size={20} className="shrink-0" />
-                                    {!isCollapsed && <span className="font-medium text-sm">Movement</span>}
-                                </div>
-                                {!isCollapsed && (
-                                    isMovementOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
-                                )}
-                            </button>
+                        {
+                            sections?.movementBilling && (
+                                <li>
+                                    <button
+                                        onClick={() => !isCollapsed && setIsMovementOpen(prev => !prev)}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isMovementActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                            } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                        title={isCollapsed ? 'Movement' : ''}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Package size={20} className="shrink-0" />
+                                            {!isCollapsed && <span className="font-medium text-sm">Movement</span>}
+                                        </div>
+                                        {!isCollapsed && (
+                                            isMovementOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                        )}
+                                    </button>
 
-                            {isMovementOpen && !isCollapsed && (
-                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
-                                    {movementSubItems.map(item => (
-                                        <li key={item.path}>
-                                            <Link
-                                                to={item.path}
-                                                onClick={() => setIsMobileMenuOpen(false)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
-                                                    ? 'bg-primary-400 text-white font-medium'
-                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                    }`}
-                                            >
-                                                <item.icon size={16} className="shrink-0" />
-                                                {item.label}
-                                            </Link>
-                                        </li>
-                                    ))}
-
-                                    {/* Others Nested Dropdown */}
-                                    <li>
-                                        <button
-                                            onClick={() => setIsOthersOpen(prev => !prev)}
-                                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 text-sm justify-between ${isOthersActive
-                                                ? 'bg-primary-400 text-white font-medium'
-                                                : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <Package size={16} className="shrink-0" />
-                                                Others
-                                            </div>
-                                            {isOthersOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                        </button>
-
-                                        {isOthersOpen && (
-                                            <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
-                                                {othersSubItems.map(item => (
+                                    {isMovementOpen && !isCollapsed && (
+                                        <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                            {movementSubItems.filter(item => sections.movementBilling?.[item.permission] === true)
+                                                .map(item => (
                                                     <li key={item.path}>
                                                         <Link
                                                             to={item.path}
@@ -652,50 +643,99 @@ const Sidebar = () => {
                                                         </Link>
                                                     </li>
                                                 ))}
-                                            </ul>
-                                        )}
-                                    </li>
-                                </ul>
-                            )}
-                        </li>
+
+                                            {/* Others Nested Dropdown */}
+                                            <li>
+                                                <button
+                                                    onClick={() => setIsOthersOpen(prev => !prev)}
+                                                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 text-sm justify-between ${isOthersActive
+                                                        ? 'bg-primary-400 text-white font-medium'
+                                                        : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <Package size={16} className="shrink-0" />
+                                                        Others
+                                                    </div>
+                                                    {isOthersOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                </button>
+
+                                                {isOthersOpen && (
+                                                    <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                                        {othersSubItems.map(item => (
+                                                            <li key={item.path}>
+                                                                <Link
+                                                                    to={item.path}
+                                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                                    className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                                        ? 'bg-primary-400 text-white font-medium'
+                                                                        : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                                        }`}
+                                                                >
+                                                                    <item.icon size={16} className="shrink-0" />
+                                                                    {item.label}
+                                                                </Link>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </li>
+                                        </ul>
+                                    )}
+                                </li>
+                            )
+                        }
 
                         {/* MIS Dropdown */}
-                        <li>
-                            <button
-                                onClick={() => !isCollapsed && setIsMisOpen(prev => !prev)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isMisActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
-                                title={isCollapsed ? 'MIS' : ''}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <FileText size={20} className="shrink-0" />
-                                    {!isCollapsed && <span className="font-medium text-sm">MIS</span>}
-                                </div>
-                                {!isCollapsed && (
-                                    isMisOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
-                                )}
-                            </button>
+                        {/* MIS Dropdown */}
+                        {sections?.mis && (
+                            <li>
+                                <button
+                                    onClick={() => !isCollapsed && setIsMisOpen(prev => !prev)}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isMisActive
+                                        ? 'bg-primary-400 text-white'
+                                        : 'text-white hover:bg-primary-600'
+                                        } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                    title={isCollapsed ? 'MIS' : ''}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <FileText size={20} className="shrink-0" />
 
-                            {isMisOpen && !isCollapsed && (
-                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
-                                    {misSubItems.map(item => (
-                                        <li key={item.path}>
-                                            <Link
-                                                to={item.path}
-                                                onClick={() => setIsMobileMenuOpen(false)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
-                                                    ? 'bg-primary-400 text-white font-medium'
-                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                    }`}
-                                            >
-                                                <item.icon size={16} className="shrink-0" />
-                                                {item.label}
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </li>
+                                        {!isCollapsed && (
+                                            <span className="font-medium text-sm">
+                                                MIS
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {!isCollapsed && (
+                                        isMisOpen
+                                            ? <ChevronDown size={16} />
+                                            : <ChevronRight size={16} />
+                                    )}
+                                </button>
+
+                                {isMisOpen && !isCollapsed && (
+                                    <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                        {misSubItems.map(item => (
+                                            <li key={item.path}>
+                                                <Link
+                                                    to={item.path}
+                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                    className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                        ? 'bg-primary-400 text-white font-medium'
+                                                        : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                        }`}
+                                                >
+                                                    <item.icon size={16} className="shrink-0" />
+                                                    {item.label}
+                                                </Link>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </li>
+                        )}
                     </ul>
                 </nav>
             </aside>

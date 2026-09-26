@@ -10,8 +10,6 @@ import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
-import { authenticate, authorize } from "../middleware/Authenticate.middleware";
-import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 import { challanMovement, challanMovementByChallanNo } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 import { misDetailView, misDetailViewByJobNo } from "../controllers/mis/misDetail";
@@ -29,36 +27,95 @@ import { allUsers } from "../controllers/users/allUser";
 import { requestedData } from "../controllers/orders/requestedData";
 import { downloadChallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
 import { balanceGlanceReport } from "../controllers/Glance/balanceGlanceReport";
+import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
+import { authenticate, authorize } from "../middleware/Authenticate.middleware";
+import { getHighLossJobs } from "../controllers/newStyleRequirements/jobLossReport";
 
 const getRouters = express.Router();
 
 console.log("getRouters loaded");
 
-getRouters.get("/work-order/:orderType", responseTimeMonitor, apiLimiter, getAllOrders);
+getRouters.get(
+  "/work-order/:orderType",
 
-getRouters.get("/dashboard-detail", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), dashboardController);
+  authenticate,
 
-getRouters.get("/style-requirement", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getOrderSummaryByStyle);
+  authorize(
+    "workOrders",
+    (req): string => {
+      const permissionMap: Record<string, string> = {
+        knittingOrder: "knittingOrder",
+        yarnDyeingOrder: "yarnDyeingOrder",
+        dyeingOrder: "dyeingOrder",
+        aopOrder: "aopOrder",
+      };
 
-getRouters.get("/audits", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), allAudits);
+      const orderType = req.params.orderType;
+      const normalizedOrderType = Array.isArray(orderType) ? orderType[0] : orderType;
 
-getRouters.get("/jobs", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), getAllJobs);
+      return normalizedOrderType ? permissionMap[normalizedOrderType] ?? "workOrders" : "workOrders";
+    }
+  ),
 
-getRouters.get("/styles", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
+  responseTimeMonitor,
+  apiLimiter,
+  getAllOrders
+);
+getRouters.get("/dashboard-detail", responseTimeMonitor, apiLimiter, authenticate, dashboardController);
 
-getRouters.get("/styles/:jobNo", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), styleRequirements);
+getRouters.get("/style-requirement", responseTimeMonitor, apiLimiter, authenticate, getOrderSummaryByStyle);
 
-getRouters.get("/deliveries/:orderType", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deliveryDetail);
+getRouters.get("/audits", responseTimeMonitor, apiLimiter, authenticate, allAudits);
 
-getRouters.delete("/delete-delivery/:deliveryId", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), deleteChallanFromDelivery)
+getRouters.get("/jobs", responseTimeMonitor, apiLimiter, authenticate, getAllJobs);
 
-getRouters.get("/glance-report", responseTimeMonitor, apiLimiter, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR", "FACTORY AUDITOR"), GlanceReport);
+getRouters.get(
+  "/styles",
+  responseTimeMonitor,
+  apiLimiter,
+  authenticate,
+
+  authorize(
+    "styleRequirements",
+    (req) => {
+      const recon = req.query.reconciliation === "true";
+
+      return recon
+        ? "reconciliation"
+        : "bookingView";
+    }
+  ),
+
+  styleRequirements
+);
+
+getRouters.get("/styles/:jobNo", responseTimeMonitor, apiLimiter, authenticate, styleRequirements);
+
+getRouters.get("/deliveries/:orderType", responseTimeMonitor, apiLimiter, authenticate, authorize("workOrders", ["workOrderDeliveries"]), deliveryDetail);
+
+getRouters.delete("/delete-delivery/:deliveryId", responseTimeMonitor, apiLimiter, authenticate, deleteChallanFromDelivery)
+
+getRouters.get("/glance-report", responseTimeMonitor, apiLimiter, authenticate, GlanceReport);
 
 getRouters.get("/party-view-report/:factoryName", responseTimeMonitor, apiLimiter, partyViewData);
 
 getRouters.get("/management-view/job-numbers", responseTimeMonitor, apiLimiter, getJobNumbers);
 // specific route FIRST
-getRouters.get("/management-view/:orderType", responseTimeMonitor, apiLimiter, managementReport);   // dynamic route AFTER
+getRouters.get("/management-view/:orderType", responseTimeMonitor, apiLimiter, authenticate, authorize(
+  "mis",
+  (req): string => {
+    const permissionMap: Record<string, string> = {
+      knittingOrder: "knittingOrder",
+      yarnDyeingOrder: "yarnDyeingOrder",
+      dyeingOrder: "dyeingOrder",
+      aopOrder: "aopOrder",
+    };
+
+    const orderType = req.params.orderType;
+    const normalizedOrderType = Array.isArray(orderType) ? orderType[0] : orderType;
+
+    return normalizedOrderType ? permissionMap[normalizedOrderType] ?? "mis" : "mis";
+  }), managementReport);   // dynamic route AFTER
 
 getRouters.get("/detail-party-report/:factoryName/:orderType", responseTimeMonitor, apiLimiter, partyData);
 
@@ -66,7 +123,35 @@ getRouters.get("/glance-report/:factoryName/:orderType", responseTimeMonitor, pa
 
 getRouters.get("/management-view", responseTimeMonitor, partyData);
 
-getRouters.get("/challan-movement/:orderType/", responseTimeMonitor, challanMovement);
+getRouters.get(
+  "/challan-movement/:orderType/",
+  responseTimeMonitor,
+  authenticate,
+
+  authorize(
+    "movementBilling",
+    (req): string => {
+      const permissionMap: Record<string, string> = {
+        knittingOrder: "knittingOrder",
+        yarnDyeingOrder: "yarnDyeingOrder",
+        dyeingOrder: "dyeingOrder",
+        aopOrder: "aopOrder",
+      };
+
+      const orderType = req.params.orderType;
+
+      const normalizedOrderType = Array.isArray(orderType)
+        ? orderType[0]
+        : orderType;
+
+      return normalizedOrderType
+        ? permissionMap[normalizedOrderType] ?? "__INVALID_PERMISSION__"
+        : "__INVALID_PERMISSION__";
+    }
+  ),
+
+  challanMovement
+);
 
 getRouters.get("/challan-movement/:orderType/:noOrderType", responseTimeMonitor, challanMovement);
 
@@ -80,7 +165,7 @@ getRouters.get("/mis/glance/detail/:columnName/:jobNo", responseTimeMonitor, mis
 
 getRouters.get("/glance/:jobNo/trailing-data", responseTimeMonitor, styleReconciliation);
 
-getRouters.get("/:orderType/challan/search", responseTimeMonitor, searchChallans);
+getRouters.get("/:orderType/challan/search", responseTimeMonitor, authenticate, searchChallans);
 
 getRouters.get("/:orderType/:noOrderType/challan/search", responseTimeMonitor, searchChallans);
 
@@ -108,16 +193,24 @@ getRouters.get("/generate-pdf-work-order/:id", responseTimeMonitor, authenticate
 
 getRouters.get("/all-users", responseTimeMonitor, authenticate, allUsers);
 
+getRouters.get("/all-users/:userId", responseTimeMonitor, authenticate, allUsers);
+
 getRouters.get("/requested-work-data/:orderType", responseTimeMonitor, authenticate, requestedData);
 
 getRouters.get("/prepare-to-download/:userId", responseTimeMonitor, authenticate, prepareToGenerate);
 
 getRouters.get("/challan/download/:userId", responseTimeMonitor, authenticate, downloadChallan);
 
-getRouters.get("/balance/sheet", responseTimeMonitor, balanceGlanceReport);
+getRouters.get("/balance/sheet", responseTimeMonitor, authenticate, authorize("styleRequirements", [
+  "balanceSheet"
+]), balanceGlanceReport);
 
 getRouters.get('/job-wise-mis-view/:jobNo/:orderType', misDetailViewByJobNo);
 
 getRouters.get('/detail-challan-view/:orderType/:challanNo/:jobNo', challanMovementByChallanNo);
+
+getRouters.get('/high-loss-job', getHighLossJobs);
+
+
 
 export default getRouters;

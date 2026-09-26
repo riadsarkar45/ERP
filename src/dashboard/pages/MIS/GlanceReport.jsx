@@ -6,6 +6,7 @@ import DyeingGlance from "./DyeingGlance";
 import KnittingGlance from "./KnittingGlance";
 import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
 import JobModal from "./JobModal";
+import UseUserRoles from "../users/allUsers/UserRoles";
 
 const BORDER_COLOR = "#aeb7c2";
 const PAGE_SIZE = 30;
@@ -141,7 +142,7 @@ const ExcelFilterDropdown = ({ allValues, selectedValues, onApply }) => {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 const GlanceReport = () => {
-    const { fetchData, loading } = useFetchData();
+    const { fetchData, error, loading } = useFetchData();
 
     const [selectOrderType, setSelectOrderType] = useState("knittingOrder");
     const [data, setData] = useState([]);
@@ -156,9 +157,14 @@ const GlanceReport = () => {
     const [modalState, setModalState] = useState({ isLoading: false, isShowGlanceModal: false });
     const axiosPrivate = useAxiosPrivate();
     const [jobDetails, setJobDetails] = useState([]);
+    const { sections } = UseUserRoles();
 
-    const partyViews = ["knittingOrder", "dyeingOrder", "aopOrder"];
-
+    // const partyViews = ["knittingOrder", "dyeingOrder", "aopOrder"];
+    const partyViews = [
+        { label: "knittingOrder", permission: "knittingOrder" },
+        { label: "dyeingOrder", permission: "dyeingOrder" },
+        { label: "aopOrder", permission: "aopOrder" }
+    ];
     let COLUMNS = [];
     if (selectOrderType === "knittingOrder") {
         COLUMNS.push(
@@ -266,6 +272,8 @@ const GlanceReport = () => {
         setModalState({ isLoading: false, isShowGlanceModal: false });
     };
 
+
+
     return (
         <div>
             {/* Job detail modal */}
@@ -278,16 +286,18 @@ const GlanceReport = () => {
 
             {/* Tabs */}
             <div className="flex gap-2 border-b border-gray-300 pb-2 mb-4">
-                {partyViews.map((v, i) => (
+                {partyViews
+                .filter(item => sections.mis?.[item.permission] === true)
+                .map((v, i) => (
                     <button
                         key={i}
-                        onClick={() => handleOrderType(v)}
-                        className={`px-4 py-2 text-sm uppercase font-medium transition-colors ${selectOrderType === v
+                        onClick={() => handleOrderType(v.label)}
+                        className={`px-4 py-2 text-sm uppercase font-medium transition-colors ${selectOrderType === v.label
                             ? "bg-blue-800 text-white"
                             : "bg-blue-100 text-blue-900 hover:bg-blue-200"
                             }`}
                     >
-                        {v}
+                        {v.label}
                     </button>
                 ))}
                 {loading && (
@@ -295,6 +305,14 @@ const GlanceReport = () => {
                         <Loader2 />
                     </button>
                 )}
+
+
+                {
+                    error && (
+                        <div className="p-4 bg-red-100 text-red-700 rounded">{error.message || error.msg || "Something Went Wrong"}</div>
+                    )
+                }
+
                 {selectedJobNos.length > 0 && (
                     <span className="ml-2 self-center text-xs text-gray-500">
                         Filtered: {selectedJobNos.length} job{selectedJobNos.length > 1 ? "s" : ""} selected

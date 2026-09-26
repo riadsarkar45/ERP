@@ -82,6 +82,7 @@ export const styleReconciliation = async (req: Request, res: Response) => {
         const { jobNo } = req.params as { jobNo: string };
         const userId = req.user?.userId;
         if (!jobNo || !userId) {
+            console.log(jobNo, userId);
             return res.status(400).json({ message: "jobNo is required" });
         }
 

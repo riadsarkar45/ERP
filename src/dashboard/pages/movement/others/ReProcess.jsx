@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchData } from '../../../../hooks/fetch';
 import { formatToErpDate } from '../../../../helpers/date/formateDate';
-import useAxiosPublic from '../../../../hooks/Axios';
+import useAxiosPrivate from '../../../../hooks/UseAxiosPrivate';
 
 const cellStyle = {
     border: "1px solid #999",
@@ -69,7 +69,7 @@ const ReProcess = () => {
     const [editPrice, setEditPrice] = useState("");
 
     const { fetchData, loading } = useFetchData();
-    const axiosPublic = useAxiosPublic();
+    const axiosPrivate = useAxiosPrivate();
 
     useEffect(() => {
         if (search) return;
@@ -259,7 +259,7 @@ const ReProcess = () => {
     const handleGenerateBill = async () => {
         if (challanIds.length === 0) { alert("Please select at least one challan to generate the bill."); return; }
         try {
-            const response = await axiosPublic.post("/api/generate-bill", { challanIds }, { responseType: "blob" });
+            const response = await axiosPrivate.post("/api/generate-bill", { challanIds }, { responseType: "blob" });
             const blob = new Blob([response.data], { type: "application/pdf" });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -280,7 +280,7 @@ const ReProcess = () => {
         setSearchLoading(true); setSearchError(null); setPage(1);
         const challanArray = search.split(/[\s,]+/).filter(Boolean);
         try {
-            const res = await axiosPublic.get("/api/reprocess/challan/search", { params: { challans: challanArray.join(","), context: "dyeingOrder" } });
+            const res = await axiosPrivate.get("/api/reprocess/challan/search", { params: { challans: challanArray.join(","), context: "dyeingOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;

@@ -244,12 +244,31 @@ model user {
   requestsReceived    workOrderApprovalRequest[] @relation("RequestTo")
   requestsMade        workOrderApprovalRequest[] @relation("RequestedBy")
   reconciliationNotes reconciliationNotes[]
+  permissionSections  permissionSection[]
+
   @@index([userName])
   @@index([userRole])
   @@index([phoneNo])
   @@index([isActive])
   @@index([dateOfJoin])
   @@index([designation])
+}
+
+model permissionSection {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  permittedSection   String
+  createdAt DateTime @default(now())
+  user        user          @relation(fields: [userId], references: [id])
+  isPermitted isPermitted[]
+}
+
+model isPermitted {
+  id                  Int      @id @default(autoincrement())
+  isPermitted         String
+  permissionSectionId Int
+  createdAt           DateTime @default(now())
+  permissionSection permissionSection @relation(fields: [permissionSectionId], references: [id])
 }
 
 model refreshToken {

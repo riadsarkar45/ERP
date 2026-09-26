@@ -16,6 +16,7 @@ import { handleExportExcel } from "./exportExcel";
 import { footerTotals } from "./footerTotals";
 import BreakDownCell from "./BreakDownCell";
 import StyleEditModal from "./StyleEditModal";
+import UseUserRoles from "../users/allUsers/UserRoles";
 
 // ── Column definitions ────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -125,6 +126,7 @@ export default function Summary() {
     const [editingStyleData, setStyleEditingData] = useState({ isShowStyleEditModal: false, isLoading: null, data: [] })
     const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
+    const { sections } = UseUserRoles();
 
     const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
@@ -428,15 +430,19 @@ export default function Summary() {
     return (
         <DashboardLayout>
             <div className="flex gap-2 mb-4 items-center flex-wrap">
-                <button
-                    onClick={() => {
-                        setEditingJobData(null);
-                        setShowModal(true);
-                    }}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600"
-                >
-                    <PlusCircle size={18} /> Add Job
-                </button>
+                {
+                    sections.styleRequirements.addJob && (
+                        <button
+                            onClick={() => {
+                                setEditingJobData(null);
+                                setShowModal(true);
+                            }}
+                            className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600"
+                        >
+                            <PlusCircle size={18} /> Add Job
+                        </button>
+                    )
+                }
                 {
                     isLoading.refreshLoading ?
                         <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
@@ -494,16 +500,18 @@ export default function Summary() {
                         Export
                     </button>
                     {
-                        glanceReport.isGlanceLoading ?
-                            <button className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="See MAKE YOUR RECONCIALATION">
-                                <span className="animate-spin"><RefreshCcw size={18} className="text-gray-600" /></span>
-                            </button> :
-                            <Link to={"/dashboard/style/reconciliation"}>
-                                <button className="flex font-semibold items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="RECONCIALATION">
-                                    <Pen size={20} className="text-gray-600" />
-                                    MAKE YOUR RECONCIALATION
-                                </button>
-                            </Link>
+                        sections.styleRequirements?.reconciliation && (
+                            glanceReport.isGlanceLoading ?
+                                <button className="flex items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="See MAKE YOUR RECONCIALATION">
+                                    <span className="animate-spin"><RefreshCcw size={18} className="text-gray-600" /></span>
+                                </button> :
+                                <Link to={"/dashboard/style/reconciliation"}>
+                                    <button className="flex font-semibold items-center justify-center h-9 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors shadow-sm p-2" title="RECONCIALATION">
+                                        <Pen size={20} className="text-gray-600" />
+                                        MAKE YOUR RECONCIALATION
+                                    </button>
+                                </Link>
+                        )
                     }
                 </div>
 
@@ -766,17 +774,21 @@ export default function Summary() {
                                                     />
                                                 ) : row.jobNo}
                                             </span>
-                                            <button
-                                                disabled={editLoading}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openEditJobModal(row.jobNo);
-                                                }}
-                                                className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
-                                                title="Edit Job Details"
-                                            >
-                                                {editLoading ? <Loader size={16} className="animate-spin" /> : <Pen size={16} />}
-                                            </button>
+                                            {
+                                                sections?.styleRequirements?.infoEdit && (
+                                                    <button
+                                                        disabled={editLoading}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openEditJobModal(row.jobNo);
+                                                        }}
+                                                        className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-md transition-colors flex-shrink-0 disabled:opacity-50"
+                                                        title="Edit Job Details"
+                                                    >
+                                                        {editLoading ? <Loader size={16} className="animate-spin" /> : <Pen size={16} />}
+                                                    </button>
+                                                )
+                                            }
                                         </div>
                                     </td>
 

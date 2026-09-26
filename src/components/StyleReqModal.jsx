@@ -1,9 +1,9 @@
 import { X, Save, Plus } from 'lucide-react';
 import Input from './Input';
 import { useState, useRef } from 'react';
-import useAxiosPublic from '../hooks/Axios';
 import { RefreshCcw } from "lucide-react";
 import { usePostData } from '../hooks/post';
+import useAxiosPrivate from '../hooks/UseAxiosPrivate';
 
 const formatJobNo = (value) => {
     if (!value) return '';
@@ -54,7 +54,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         }
     )
 
-    const axiosPublic = useAxiosPublic();
+    const axiosPrivate = useAxiosPrivate();
     const { postData, loading, error } = usePostData();
 
     // Grid of input DOM refs, keyed by "rowIndex-fieldIndex", so arrow keys
@@ -172,7 +172,7 @@ const StyleReqModal = ({ setShowModal, setRawData }) => {
         try {
             const res = await postData("/api/new-style-requirements", payload);
             if (res?.type === "success") {
-                axiosPublic.get("/api/styles").then((res) => { setRawData(res.data.data) });
+                axiosPrivate.get("/api/styles").then((res) => { setRawData(res.data.data) });
             }
         } catch (e) {
             console.log(e.response?.data?.message);
