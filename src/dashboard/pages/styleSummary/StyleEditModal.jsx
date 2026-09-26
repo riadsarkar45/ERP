@@ -256,7 +256,7 @@ const StyleEditModal = ({ editingStyleData, setStyleEditingData, isLoading, onSa
                 {/* INCREASED WIDTH HERE: max-w-7xl and max-h-[95vh] */}
                 <div
                     onClick={(e) => e.stopPropagation()}
-                    className="relative flex flex-col w-full max-w-8xl max-h-[95vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden pointer-events-auto animate-slide-in"
+                    className="relative flex flex-col w-full max-w-7xl max-h-[100vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden pointer-events-auto animate-slide-in"
                 >
                     {isLoading && (
                         <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in">

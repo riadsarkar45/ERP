@@ -53,7 +53,7 @@ const KEY_TO_INDEX = Object.entries(FILTERABLE_COLS).reduce((acc, [idx, col]) =>
 
 // ─ Frozen column widths ─────────────────────────────────────────────────────
 const CHECKBOX_WIDTH = 50;
-const FROZEN_WIDTHS = [120, 120, 180, 110, 120, 230, 290, 100];
+const FROZEN_WIDTHS = [115, 110, 180, 110, 110, 260, 290, 100];
 const FROZEN_COUNT = FROZEN_WIDTHS.length;
 const UNFROZEN_WIDTH = 110;
 
@@ -880,7 +880,7 @@ export default function Summary() {
                                                             className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
                                                             type="text"
                                                         />
-                                                    ) : formatNumber(cell.finishDia, cell.finishDia)}
+                                                    ) :(cell.finishDia, cell.finishDia)}
                                                 </div>
                                             ))}
                                         </div>

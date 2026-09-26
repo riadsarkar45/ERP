@@ -24,6 +24,7 @@ const footerCellStyle = {
     zIndex: 5,
     // backgroundColor: "#f3f4f6",
     fontWeight: 700,
+    color: "#ffffff",
 };
 
 const normalizeToArray = (value) => {
@@ -176,7 +177,7 @@ const DyeingDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => formatNumber(getDeliverySum(up.deliveries, "GreyDelivery")), `yd-${i}`)}
                             </td>
-                            <td className="bg-yellow-100" style={cellStyle}>
+                            <td className="bg-[#d2e0e6]" style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => {
                                     const greyDelivery = getDeliverySum(up.deliveries, "GreyDelivery");
                                     const workOrderQty = Number(up.workOrderQty) || 0;
@@ -193,7 +194,7 @@ const DyeingDetail = ({ detailView }) => {
                             <td style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => formatNumber(getDeliverySum(up.deliveries, "FinishReceived")), `finish-${i}`)}
                             </td>
-                            <td className="bg-yellow-100" style={cellStyle}>
+                            <td className="bg-[#d2e0e6]" style={cellStyle}>
                                 {renderBreakdownCell(unitePrice, (up) => {
                                     const GreyDelivery = getDeliverySum(up.deliveries, "GreyDelivery");
                                     const GreyReceived = getDeliverySum(up.deliveries, "GreyReceived");
@@ -218,18 +219,18 @@ const DyeingDetail = ({ detailView }) => {
 
             <tfoot>
                 <tr>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty.toFixed(2))}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyDelivery.toFixed(2))}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyDelivery.toFixed(2) - totals.workOrderQty.toFixed(2))}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReturn.toFixed(2))}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReceived.toFixed(2))}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.finishReceived.toFixed(2))}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyReceived + totals.greyReturn - totals.greyDelivery)}</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
-                    <td className="bg-yellow-100" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount)}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>TOTAL</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.workOrderQty.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyDelivery.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyDelivery.toFixed(2) - totals.workOrderQty.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReturn.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.greyReceived.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatNumber(totals.finishReceived.toFixed(2))}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{renderColoredShortExcess(totals.greyReceived + totals.greyReturn - totals.greyDelivery)}</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>&nbsp;</div></td>
+                    <td className="bg-[#16455a]" style={footerCellStyle}><div style={{ padding: "10px 8px" }}>{formatMoney(totals.payableAmount)}</div></td>
                 </tr>
             </tfoot>
         </>
