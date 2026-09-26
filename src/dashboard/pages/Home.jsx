@@ -97,18 +97,42 @@ const HourlyBookingBoard = ({ payload, loading }) => {
     const { users, grandTotal, peakHour, maxCell } = useMemo(() => {
         const map = new Map();
         const hourTotals = Array(24).fill(0);
+
         rows.forEach((r) => {
             const h = hourOf(r.hour);
             const u = map.get(r.userId) ?? {
-                userId: r.userId, userName: r.userName,
-                hours: Array(24).fill(0), total: 0, peakHour: null, peakCount: 0,
+                userId: r.userId,
+                userName: r.userName,
+                hours: Array(24).fill(0),
+                total: 0,
+                peakHour: null,
+                peakCount: 0,
+                hourBreakdown: new Map() // Tracks orderType breakdown per hour
             };
-            u.hours[h] += r.bookingCount;
-            u.total += r.bookingCount;
-            hourTotals[h] += r.bookingCount;
-            if (r.bookingCount > u.peakCount) { u.peakCount = r.bookingCount; u.peakHour = h; }
+
+            // Safely handle both 'bookingCount' and 'workOrderCount' field names
+            const count = Number(r.bookingCount ?? r.workOrderCount ?? 0);
+
+            u.hours[h] += count;
+            u.total += count;
+            hourTotals[h] += count;
+
+            if (count > u.peakCount) {
+                u.peakCount = count;
+                u.peakHour = h;
+            }
+
+            if (!u.hourBreakdown.has(h)) {
+                u.hourBreakdown.set(h, new Map());
+            }
+            const otMap = u.hourBreakdown.get(h);
+            // Fallback to "General Booking" if orderType is an empty string or missing
+            const ot = r.orderType || "General Booking";
+            otMap.set(ot, (otMap.get(ot) || 0) + count);
+
             map.set(r.userId, u);
         });
+
         const users = [...map.values()].sort((a, b) => b.total - a.total);
         return {
             users,
@@ -151,35 +175,52 @@ const HourlyBookingBoard = ({ payload, loading }) => {
             </div>
 
             <div className="space-y-3">
-                {users.map((u, idx) => (
-                    <div key={u.userId} className="flex items-center gap-4">
-                        <div className="flex w-44 shrink-0 items-center gap-3">
-                            <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${AVATAR_STYLES[idx % AVATAR_STYLES.length]}`}>
-                                {initials(u.userName)}
-                            </div>
-                            <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-slate-700">{u.userName}</p>
-                                <p className="text-[11px] text-slate-400">peak {u.peakHour != null ? fmtHour(u.peakHour) : "—"}</p>
-                            </div>
-                        </div>
+                {users.map((u, idx) => {
+                    const getTooltip = (h) => {
+                        const breakdown = u.hourBreakdown.get(h);
+                        if (!breakdown || breakdown.size === 0) return `${u.userName} · ${fmtHour(h)} → 0 bookings`;
 
-                        <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
-                            {u.hours.map((v, h) => (
-                                <div
-                                    key={h}
-                                    title={`${u.userName} · ${fmtHour(h)} → ${v.toLocaleString()} bookings`}
-                                    className="h-8 rounded-md cursor-default transition-shadow hover:ring-2 hover:ring-blue-300"
-                                    style={{ background: heatColor(v, maxCell) }}
-                                />
-                            ))}
-                        </div>
+                        let text = `${u.userName} · ${fmtHour(h)}\n`;
+                        let total = 0;
+                        breakdown.forEach((count, ot) => {
+                            const label = ORDER_LABELS[ot] || ot;
+                            text += `• ${label}: ${count.toLocaleString()}\n`;
+                            total += count;
+                        });
+                        text += `Total: ${total.toLocaleString()} bookings`;
+                        return text;
+                    };
 
-                        <div className="w-28 shrink-0 text-right">
-                            <p className="text-sm font-semibold tabular-nums text-slate-800">{u.total.toLocaleString()}</p>
-                            <p className="text-[11px] text-slate-400 -mt-0.5">bookings</p>
+                    return (
+                        <div key={u.userId} className="flex items-center gap-4">
+                            <div className="flex w-44 shrink-0 items-center gap-3">
+                                <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${AVATAR_STYLES[idx % AVATAR_STYLES.length]}`}>
+                                    {initials(u.userName)}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-slate-700">{u.userName}</p>
+                                    <p className="text-[11px] text-slate-400">peak {u.peakHour != null ? fmtHour(u.peakHour) : "—"}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
+                                {u.hours.map((v, h) => (
+                                    <div
+                                        key={h}
+                                        title={getTooltip(h)}
+                                        className="h-8 rounded-md cursor-default transition-shadow hover:ring-2 hover:ring-blue-300"
+                                        style={{ background: heatColor(v, maxCell) }}
+                                    />
+                                ))}
+                            </div>
+
+                            <div className="w-28 shrink-0 text-right">
+                                <p className="text-sm font-semibold tabular-nums text-slate-800">{u.total.toLocaleString()}</p>
+                                <p className="text-[11px] text-slate-400 -mt-0.5">bookings</p>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             <div className="mt-2 flex items-center gap-4">
@@ -195,7 +236,7 @@ const HourlyBookingBoard = ({ payload, loading }) => {
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-                <p className="text-[11px] text-slate-400">Hover a cell for the exact count</p>
+                <p className="text-[11px] text-slate-400">Hover a cell for order type breakdown</p>
                 <div className="flex items-center gap-2 text-[11px] text-slate-400">
                     Less
                     <span className="h-2 w-24 rounded-full bg-gradient-to-r from-slate-200 to-[#378ADD]" />
@@ -225,12 +266,13 @@ const HourlyWorkOrderBoard = ({ payload, loading }) => {
                 hourBreakdown: new Map()
             };
 
-            u.hours[h] += r.workOrderCount;
-            u.total += r.workOrderCount;
-            hourTotals[h] += r.workOrderCount;
+            const count = Number(r.workOrderCount ?? 0);
+            u.hours[h] += count;
+            u.total += count;
+            hourTotals[h] += count;
 
-            if (r.workOrderCount > u.peakCount) {
-                u.peakCount = r.workOrderCount;
+            if (count > u.peakCount) {
+                u.peakCount = count;
                 u.peakHour = h;
             }
 
@@ -239,7 +281,7 @@ const HourlyWorkOrderBoard = ({ payload, loading }) => {
             }
             const otMap = u.hourBreakdown.get(h);
             const ot = r.orderType || "Unknown";
-            otMap.set(ot, (otMap.get(ot) || 0) + r.workOrderCount);
+            otMap.set(ot, (otMap.get(ot) || 0) + count);
 
             map.set(r.userId, u);
         });
@@ -696,11 +738,11 @@ const Home = () => {
         const fetchBookingData = async () => {
             try {
                 const res = await axiosPrivate.get("/api/hourly-booking");
-                setBooking(res.data); // FIXED: Now correctly sets booking state
+                setBooking(res.data);
             } catch (err) {
                 console.error("Failed to fetch booking data", err);
             } finally {
-                setBookingLoading(false); // FIXED: Now correctly sets booking loading state
+                setBookingLoading(false);
             }
         };
         fetchBookingData();
