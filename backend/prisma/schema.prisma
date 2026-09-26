@@ -43,6 +43,7 @@ model WorkOrder {
   isApproved                Boolean                    @default(false)
   approvedBy                Int?                       @default(0)
   isRequested               Boolean?                   @default(false)
+  createdAt                 DateTime                   @default(now())
   workOrderApprovalRequests workOrderApprovalRequest[]
 
   @@index([yarnCount])
@@ -103,6 +104,7 @@ model StyleRequirement {
   hodDate              DateTime              @default(now())
   isReconciliationDone Boolean?              @default(false)
   dateOfReconciliation DateTime              @default(now())
+  createdAt            DateTime              @default(now())
   rows                 StyleRequirementRow[]
   sizes                sizes[]
   workOrders           WorkOrder[]
@@ -255,20 +257,20 @@ model user {
 }
 
 model permissionSection {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  permittedSection   String
-  createdAt DateTime @default(now())
-  user        user          @relation(fields: [userId], references: [id])
-  isPermitted isPermitted[]
+  id               Int           @id @default(autoincrement())
+  userId           Int
+  permittedSection String
+  createdAt        DateTime      @default(now())
+  user             user          @relation(fields: [userId], references: [id])
+  isPermitted      isPermitted[]
 }
 
 model isPermitted {
-  id                  Int      @id @default(autoincrement())
+  id                  Int               @id @default(autoincrement())
   isPermitted         String
   permissionSectionId Int
-  createdAt           DateTime @default(now())
-  permissionSection permissionSection @relation(fields: [permissionSectionId], references: [id])
+  createdAt           DateTime          @default(now())
+  permissionSection   permissionSection @relation(fields: [permissionSectionId], references: [id])
 }
 
 model refreshToken {

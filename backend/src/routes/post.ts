@@ -34,6 +34,8 @@ router.post("/submit-reconciliation/:jobNo", responseTimeMonitor, authenticate, 
 
 router.delete("/delete-style-data/:compId/:deleteType", responseTimeMonitor, authenticate, deleteStyleData);
 
-router.post("/users/:userId/permissions", responseTimeMonitor, authenticate, userRole)
+router.post("/users/:userId/permissions", responseTimeMonitor, authenticate, authorize("userManagement", [
+  "setUserPermission",
+]), userRole)
 
 export default router;

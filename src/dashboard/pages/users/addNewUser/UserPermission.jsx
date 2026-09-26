@@ -27,6 +27,15 @@ const PRODUCTION_ITEMS = [
 
 const PERMISSION_SECTIONS = [
     {
+        key: 'userManagement',
+        title: "User Management",
+        items: [
+            yes('addNewUser', "ADD NEW USER"),
+            yes('setUserPermission', "SET USER PERMISSION"),
+            yes('deleteExistingUser', "DELETE EXISTING USER"),
+        ],
+    },
+    {
         key: 'workOrders',
         title: "WORK ORDER'S",
         items: [
@@ -101,11 +110,8 @@ const PERMISSION_SECTIONS = [
         key: 'partyWiseView',
         title: 'PARTY WISE VIEW',
         items: [
-            edit('knittingFilter', 'KNITTING FILTER'),
             yes('knittingDataExport', 'KNITTING DATA EXPORT'),
-            edit('dyeingFilter', 'DYEING FILTER'),
             yes('dyeingDataExport', 'DYEING DATA EXPORT'),
-            yes('aopFilter', 'AOP FILTER'),
             yes('aopDataExport', 'AOP DATA EXPORT'),
             yes('readOnly', 'READ ONLY'),
         ],

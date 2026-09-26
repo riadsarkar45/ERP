@@ -97,9 +97,8 @@ const Sidebar = () => {
 
     // User Management Sub-Items
     const userSubItems = [
-        { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus },
-        { path: "/dashboard/user-list", label: "User List", icon: Users },
-        { path: "/dashboard/user-permission", label: "User Permission", icon: ShieldCheck },
+        { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus, permission: "addNewUser" },
+        { path: "/dashboard/user-list", label: "User List", icon: Users, permission: "setUserPermission" },
     ];
 
     // Work Orders Sub-Items (NEW)
@@ -512,42 +511,50 @@ const Sidebar = () => {
                         </li>
 
                         {/* User Management Dropdown */}
-                        <li>
-                            <button
-                                onClick={() => !isCollapsed && setIsUserOpen(prev => !prev)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isUserActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
-                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
-                                title={isCollapsed ? 'User Management' : ''}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <UserCog size={20} className="shrink-0" />
-                                    {!isCollapsed && <span className="font-medium text-sm">User Management</span>}
-                                </div>
-                                {!isCollapsed && (
-                                    isUserOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
-                                )}
-                            </button>
 
-                            {isUserOpen && !isCollapsed && (
-                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
-                                    {userSubItems.map(item => (
-                                        <li key={item.path}>
-                                            <Link
-                                                to={item.path}
-                                                onClick={() => setIsMobileMenuOpen(false)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
-                                                    ? 'bg-primary-400 text-white font-medium'
-                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                    }`}
-                                            >
-                                                <item.icon size={16} className="shrink-0" />
-                                                {item.label}
-                                            </Link>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </li>
+                        {
+                            sections.userManagement && (
+                                <li>
+                                    <button
+                                        onClick={() => !isCollapsed && setIsUserOpen(prev => !prev)}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isUserActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                            } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                        title={isCollapsed ? 'User Management' : ''}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <UserCog size={20} className="shrink-0" />
+                                            {!isCollapsed && <span className="font-medium text-sm">User Management</span>}
+                                        </div>
+                                        {!isCollapsed && (
+                                            isUserOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                        )}
+                                    </button>
+
+                                    {isUserOpen && !isCollapsed && (
+                                        <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                            {
+                                                userSubItems.filter(item => sections?.userManagement[item.permission] === true)
+                                                .map(item => (
+                                                    <li key={item.path}>
+                                                        <Link
+                                                            to={item.path}
+                                                            onClick={() => setIsMobileMenuOpen(false)}
+                                                            className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                                ? 'bg-primary-400 text-white font-medium'
+                                                                : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                                }`}
+                                                        >
+                                                            <item.icon size={16} className="shrink-0" />
+                                                            {item.label}
+                                                        </Link>
+                                                    </li>
+                                                ))
+                                            }
+                                        </ul>
+                                    )}
+                                </li>
+                            )
+                        }
 
                         {/* NEW: Work Orders Dropdown */}
                         <li>

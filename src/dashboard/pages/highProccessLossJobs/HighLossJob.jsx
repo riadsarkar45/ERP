@@ -40,7 +40,7 @@ const FIXED_COLS = [
     { key: "styleNo", label: "Style No", width: 120, left: 120 },
     { key: "buyerName", label: "Buyer", width: 140, left: 240 },
     { key: "poNo", label: "PO No", width: 120, left: 380 },
-    { key: "targetProcessLoss", label: "Target Loss %", width: 110, left: 500, isRight: true },
+    { key: "targetProcessLoss", label: "Process Loss %", width: 110, left: 500, isRight: true },
     { key: "yarnRequiredQty", label: "Yarn Req Qty", width: 120, left: 610, isRight: true },
     { key: "totalFinishRequiredQty", label: "Finish Req Qty", width: 130, left: 730, isRight: true },
 ];
@@ -192,7 +192,7 @@ const HighLossJob = () => {
                                         Excess %
                                     </th>
                                     <th className="sticky top-[38px] z-30 px-3 py-2 text-center font-medium whitespace-nowrap bg-slate-700 border border-black">
-                                        Flag
+                                        Excess
                                     </th>
                                 </React.Fragment>
                             ))}
@@ -319,7 +319,7 @@ const HighLossJob = () => {
                                                     {wo ? (
                                                         wo.isFlagged ? (
                                                             <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                                                Flagged
+                                                                Excess
                                                             </span>
                                                         ) : (
                                                             <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">

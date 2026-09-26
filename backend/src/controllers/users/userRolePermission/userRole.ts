@@ -11,6 +11,7 @@ const MASTER_PERMISSIONS: Record<string, string[]> = {
     production: ['summary', 'dailyCuttingUpdate', 'dailySewingUpdate', 'dailyFinishingUpdate', 'dailyExportUpdate', 'infoEdit', 'readOnly'],
     partyWiseView: ['knittingFilter', 'knittingDataExport', 'dyeingFilter', 'dyeingDataExport', 'aopFilter', 'aopDataExport', 'readOnly'],
     movementBilling: ['qtyEdit', 'billingMake', 'billApproved', 'challanInfoExport', 'priceChange', 'billInfoSee', 'aopOrder', 'dyeingOrder', 'knittingOrder'],
+    userManagement: ['addNewUser', 'setUserPermission', 'deleteExistingUser'],
 };
 
 type SectionPayload = {

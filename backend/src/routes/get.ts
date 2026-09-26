@@ -30,6 +30,7 @@ import { balanceGlanceReport } from "../controllers/Glance/balanceGlanceReport";
 import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { getHighLossJobs } from "../controllers/newStyleRequirements/jobLossReport";
+import { hourlyWorkOrder } from "../controllers/users/hrlyNewWorkOrder";
 
 const getRouters = express.Router();
 
@@ -191,9 +192,14 @@ getRouters.get("/requested/work-order/:orderType", responseTimeMonitor, authenti
 
 getRouters.get("/generate-pdf-work-order/:id", responseTimeMonitor, authenticate, generateKnittingPdfWorkOrder);
 
-getRouters.get("/all-users", responseTimeMonitor, authenticate, allUsers);
+getRouters.get("/all-users", responseTimeMonitor, authenticate,  authorize("userManagement", [
+  "setUserPermission"
+]), allUsers);
 
-getRouters.get("/all-users/:userId", responseTimeMonitor, authenticate, allUsers);
+getRouters.get("/all-users/:userId", responseTimeMonitor, authenticate,authorize(
+    "userManagement",
+    ["setUserPermission"]
+  ), allUsers);
 
 getRouters.get("/requested-work-data/:orderType", responseTimeMonitor, authenticate, requestedData);
 
@@ -210,6 +216,10 @@ getRouters.get('/job-wise-mis-view/:jobNo/:orderType', misDetailViewByJobNo);
 getRouters.get('/detail-challan-view/:orderType/:challanNo/:jobNo', challanMovementByChallanNo);
 
 getRouters.get('/high-loss-job', getHighLossJobs);
+
+getRouters.get('/hourly-work-order', hourlyWorkOrder);
+
+getRouters.get('/hourly-booking', hourlyWorkOrder);
 
 
 

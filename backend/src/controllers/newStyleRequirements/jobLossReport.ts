@@ -1,42 +1,153 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
-import { buildJobHistoryReport, findHighLossJobReports } from "./helperHighLossJobReport";
+
+const DEFAULT_MARGIN = 0.5;
+
+export type WorkOrderTypeReport = {
+    count: number;
+    totalWorkOrderQty: number;
+    excessPct: number;
+    isFlagged: boolean;
+};
+
+export type JobLossHistoryReport = {
+    jobNo: string;
+    styleNo: string | null;
+    buyerName: string | null;
+    poNo: string | null;
+    targetProcessLoss: number;
+    isFlagged: boolean;
+    flaggedOrderTypes: string[];
+    totalWorkOrders: number;
+    totalDeliveries: number;
+    totalFinishRequiredQty: number;
+    yarnRequiredQty: number;
+    workOrderTotalsByType: Record<string, WorkOrderTypeReport>;
+    deliveryTotalsByType: Record<string, number>;
+};
+
+/**
+ * Computes the excess percentage of work order quantity vs required yarn quantity.
+ * Returns Infinity if required is 0 but work order qty exists (guarantees flagging).
+ */
+const computeExcessPct = (yarnRequiredQty: number, workOrderQty: number): number => {
+    if (yarnRequiredQty <= 0) {
+        return workOrderQty > 0 ? Infinity : 0;
+    }
+    return ((workOrderQty - yarnRequiredQty) / yarnRequiredQty) * 100;
+};
+
+export const buildJobHistoryReport = (
+    style: any,
+    margin: number = DEFAULT_MARGIN
+): JobLossHistoryReport => {
+    const workOrders = style.workOrders ?? [];
+    const rows = style.rows ?? [];
+
+    // FIX: Use Number() to safely handle Prisma Decimal types or string representations
+    // preventing accidental string concatenation (e.g., "0" + "10.5" = "010.5")
+    const totalFinishRequiredQty = rows.reduce(
+        (sum: number, row: any) => sum + Number(row.finishRequiredQty || 0),
+        0
+    );
+
+    const processLoss = Number(style.processLoss || 0);
+    
+    // Step 1: finishRequiredQty -> yarnRequiredQty, using the job's target processLoss
+    const yarnRequiredQty = totalFinishRequiredQty * (1 + processLoss / 100);
+
+    const rawTotalsByType: Record<string, { count: number; qty: number }> = {};
+    const deliveryTotalsByType: Record<string, number> = {};
+    let totalDeliveries = 0;
+
+    for (const wo of workOrders) {
+        const type = wo.orderType || "Unknown";
+        if (!rawTotalsByType[type]) {
+            rawTotalsByType[type] = { count: 0, qty: 0 };
+        }
+        rawTotalsByType[type].count++;
+
+        for (const comp of wo.compositions ?? []) {
+            // FIX: Explicit Number casting for accurate math
+            const woQty = Number(comp.workOrderQty || 0);
+            rawTotalsByType[type].qty += woQty;
+
+            for (const d of comp.deliveries ?? []) {
+                totalDeliveries++;
+                const deliveryType = (d.deliveryType || "Unknown").replace(/\s+/g, "");
+                const dQty = Number(d.deliveryQty || 0);
+                
+                deliveryTotalsByType[deliveryType] =
+                    (deliveryTotalsByType[deliveryType] || 0) + dQty;
+            }
+        }
+    }
+
+    // Step 2: compare each order type's actual workOrderQty against yarnRequiredQty
+    const workOrderTotalsByType: Record<string, WorkOrderTypeReport> = {};
+    const flaggedOrderTypes: string[] = [];
+
+    for (const [type, raw] of Object.entries(rawTotalsByType)) {
+        const excessPct = computeExcessPct(yarnRequiredQty, raw.qty);
+        
+        // Being UNDER yarnRequiredQty is always fine (negative excessPct never flags)
+        // Being OVER it only matters once the excess is more than the margin
+        const isFlagged = excessPct > margin;
+
+        if (isFlagged) {
+            flaggedOrderTypes.push(type);
+        }
+
+        workOrderTotalsByType[type] = {
+            count: raw.count,
+            totalWorkOrderQty: raw.qty,
+            // Cap Infinity to 999999 to prevent JSON.stringify from converting it to null
+            excessPct: excessPct === Infinity ? 999999 : Number(excessPct.toFixed(2)),
+            isFlagged,
+        };
+    }
+
+    return {
+        jobNo: style.jobNo,
+        styleNo: style.styleNo,
+        buyerName: style.buyerName,
+        poNo: style.poNo,
+        targetProcessLoss: processLoss,
+        isFlagged: flaggedOrderTypes.length > 0,
+        flaggedOrderTypes,
+        totalWorkOrders: workOrders.length,
+        totalDeliveries,
+        totalFinishRequiredQty,
+        yarnRequiredQty,
+        workOrderTotalsByType,
+        deliveryTotalsByType,
+    };
+};
+
+export const findHighLossJobReports = (
+    styles: any[],
+    margin: number = DEFAULT_MARGIN
+): JobLossHistoryReport[] =>
+    styles
+        .map((s) => buildJobHistoryReport(s, margin))
+        .filter((r) => r.isFlagged);
 
 /**
  * GET /api/style-requirements/high-loss-jobs
- * Optional query:
- *   ?jobNo=<jobNo>   scope to a single job
- *   ?margin=<number> tolerance % over yarnRequiredQty before flagging
- *                    (default 0.5). Being UNDER yarnRequiredQty never
- *                    flags, no matter how large the gap.
- *   ?debug=true      return EVERY job's computed report, flagged or not,
- *                    so you can sanity-check the numbers
- *
- * Step 1: yarnRequiredQty = totalFinishRequiredQty (from StyleRequirementRow,
- * summed across the job's rows) * (1 + StyleRequirement.processLoss / 100).
- *
- * Step 2: Order types (aopOrder / knittingOrder / dyeingOrder / etc.) are
- * kept SEPARATE. Each type's excessPct = (that type's totalWorkOrderQty -
- * yarnRequiredQty) / yarnRequiredQty * 100. A job is flagged if ANY single
- * order type's excessPct exceeds the margin (default 0.5%) on its own.
- *
- * Report includes total deliveries, total work orders, and totals
- * (with per-type excessPct/isFlagged) per order type, plus delivery
- * totals per delivery type (spaces stripped from delivery type keys).
  */
 export const getHighLossJobs = async (req: Request, res: Response) => {
     try {
-        const { jobNo, debug } = req.query as {
+        const { jobNo, debug, margin: marginQuery } = req.query as {
             jobNo?: string;
             debug?: string;
+            margin?: string;
         };
-        const margin = req.query.margin
-            ? Number(req.query.margin)
-            : undefined;
+        
+        // FIX: Properly parse margin, fallback to DEFAULT_MARGIN (0.5)
+        const margin = marginQuery !== undefined ? Number(marginQuery) : DEFAULT_MARGIN;
 
         const styles = await prisma.styleRequirement.findMany({
             where: jobNo ? { jobNo } : {},
-            // take: 15,
             select: {
                 id: true,
                 jobNo: true,
@@ -82,11 +193,11 @@ export const getHighLossJobs = async (req: Request, res: Response) => {
             console.log(`[high-loss-jobs debug] jobs fetched: ${styles.length}`);
             debugData.slice(0, 3).forEach((r) => {
                 console.log(
-                    `  jobNo=${r.jobNo} target=${r.targetProcessLoss} totalFinishRequiredQty=${r.totalFinishRequiredQty} yarnRequiredQty=${r.yarnRequiredQty}`
+                    `  jobNo=${r.jobNo} target=${r.targetProcessLoss}% totalFinishRequiredQty=${r.totalFinishRequiredQty} yarnRequiredQty=${r.yarnRequiredQty}`
                 );
                 Object.entries(r.workOrderTotalsByType).forEach(([type, t]) => {
                     console.log(
-                        `    ${type}: workOrderQty=${t.totalWorkOrderQty} excessPct=${t.excessPct} flagged=${t.isFlagged}`
+                        `    ${type}: workOrderQty=${t.totalWorkOrderQty} excessPct=${t.excessPct}% flagged=${t.isFlagged}`
                     );
                 });
             });
@@ -108,7 +219,7 @@ export const getHighLossJobs = async (req: Request, res: Response) => {
             data: reports,
         });
     } catch (error) {
-        console.error(error);
+        console.error("Error in getHighLossJobs:", error);
         return res.status(500).json({
             type: "error",
             message: "Internal server error",
