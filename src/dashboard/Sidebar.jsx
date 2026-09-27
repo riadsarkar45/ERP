@@ -35,7 +35,6 @@ const Sidebar = () => {
     const isActive = (path) => location.pathname === path;
     const { user } = useContext(AuthContext);
     const { sections } = UseUserRoles();
-    console.log(sections.mis, "is user permitted");
 
     // Handle zoom changes with a fixed minimum of 70% and maximum of 200%
     const handleZoomChange = (e) => {
@@ -263,7 +262,6 @@ const Sidebar = () => {
 
     const pageInfo = getPageInfo();
 
-    console.log(sections.workOrders, "work orders from sidebar");
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-gray-50">

@@ -7,9 +7,11 @@ import useAxiosPrivate from '../hooks/UseAxiosPrivate';
 
 const formatJobNo = (value) => {
     if (!value) return '';
+
     const cleaned = value.toUpperCase().replace(/[\s\-/]+/g, '');
+
     return cleaned
-        .replace(/^SM(\d{2})(\d{4})/, 'SM$1-$2')
+        .replace(/^(SMP|ATL|SM|MANGO|MAN)(\d{2})(\d{4})/, '$1$2-$3')
         .replace(/(\d)([A-Z])/, '$1-$2');
 };
 

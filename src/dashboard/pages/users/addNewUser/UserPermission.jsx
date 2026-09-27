@@ -36,6 +36,15 @@ const PERMISSION_SECTIONS = [
         ],
     },
     {
+        key: 'dashboard',
+        title: "Dashboard",
+        items: [
+            yes('hourlyChallanActivity', "Hourly Challan Activity"),
+            yes('hourlyWorkOrderActivity', "Hourly Work Activity"),
+            yes('hourlyBookingActivity', "Hourly Booking Activity"),
+        ],
+    },
+    {
         key: 'workOrders',
         title: "WORK ORDER'S",
         items: [

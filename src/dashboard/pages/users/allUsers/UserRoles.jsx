@@ -5,7 +5,7 @@ import { AuthContext } from '../../../auth/AuthContext';
 const UseUserRoles = () => {
     const { user } = useContext(AuthContext);
 
-    const { allUsers, setOptionalUserId } = UseAllUsers();
+    const { setOptionalUserId } = UseAllUsers();
 
     useEffect(() => {
         if (!user?.id) return;
@@ -25,7 +25,6 @@ const UseUserRoles = () => {
         ])
     );
 
-    console.log(sections, "sections");
 
     return {
         sections

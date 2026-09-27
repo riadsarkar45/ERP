@@ -171,7 +171,7 @@ getRouters.get("/:orderType/challan/search", responseTimeMonitor, authenticate, 
 
 getRouters.get("/:orderType/:noOrderType/challan/search", responseTimeMonitor, searchChallans);
 
-getRouters.get("/reports/hourly-challan", responseTimeMonitor, hourlyChallanReport);
+getRouters.get("/reports/hourly-challan", responseTimeMonitor, authenticate, authorize("dashboard", ["hourlyChallanActivity"]), hourlyChallanReport);
 
 getRouters.get("/reports/daily-delivery", responseTimeMonitor, hourlyDeliveryMovement);
 
@@ -193,14 +193,14 @@ getRouters.get("/requested/work-order/:orderType", responseTimeMonitor, authenti
 
 getRouters.get("/generate-pdf-work-order/:id", responseTimeMonitor, authenticate, generateKnittingPdfWorkOrder);
 
-getRouters.get("/all-users", responseTimeMonitor, authenticate,  authorize("userManagement", [
+getRouters.get("/all-users", responseTimeMonitor, authenticate, authorize("userManagement", [
   "setUserPermission"
 ]), allUsers);
 
-getRouters.get("/all-users/:userId", responseTimeMonitor, authenticate,authorize(
-    "userManagement",
-    ["setUserPermission"]
-  ), allUsers);
+getRouters.get("/all-users/:userId", responseTimeMonitor, authenticate, authorize(
+  "userManagement",
+  ["setUserPermission"]
+), allUsers);
 
 getRouters.get("/requested-work-data/:orderType", responseTimeMonitor, authenticate, requestedData);
 
@@ -216,11 +216,13 @@ getRouters.get('/job-wise-mis-view/:jobNo/:orderType', misDetailViewByJobNo);
 
 getRouters.get('/detail-challan-view/:orderType/:challanNo/:jobNo', challanMovementByChallanNo);
 
-getRouters.get('/high-loss-job', getHighLossJobs);
+getRouters.get('/high-loss-job', authenticate, getHighLossJobs);
 
-getRouters.get('/hourly-work-order', hourlyWorkOrder);
+getRouters.get('/hourly-work-order', authenticate, authorize("dashboard", [
+  "hourlyWorkOrderActivity"
+]), hourlyWorkOrder);
 
-getRouters.get('/hourly-booking', hourlyBooking);
+getRouters.get('/hourly-booking', authenticate, authorize("dashboard", ["hourlyBookingActivity"]), hourlyBooking);
 
 
 

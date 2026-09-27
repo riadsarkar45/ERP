@@ -3,10 +3,8 @@ import DashboardLayout from "../../components/DashboardLayout";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 import { AuthContext } from "../auth/AuthContext";
 import TotalSummary from "../../components/deliveryTotalsSummary/TotalSummary";
+import UseUserRoles from "./users/allUsers/UserRoles";
 
-/* -------------------------------------------------------------------------- */
-/*  CONSTANTS & HELPERS                                                       */
-/* -------------------------------------------------------------------------- */
 const AVATAR_STYLES = [
     "bg-blue-50 text-blue-700",
     "bg-emerald-50 text-emerald-700",
@@ -707,6 +705,7 @@ const Home = () => {
     const [delivery, setDelivery] = useState(null);
     const [deliveryLoading, setDeliveryLoading] = useState(true);
     const [deliveryDate, setDeliveryDate] = useState(todayBST);
+    const { sections } = UseUserRoles();
     
     // const { user } = useContext(AuthContext);
 
@@ -772,11 +771,23 @@ const Home = () => {
                     height={""}
                 />
 
-                <HourlyChallanBoard payload={challan} loading={challanLoading} />
+                {
+                    sections?.dashboard?.hourlyChallanActivity && (
+                        <HourlyChallanBoard payload={challan} loading={challanLoading} />
+                    )
+                }
 
-                <HourlyWorkOrderBoard payload={workOrder} loading={workOrderLoading} />
+                {
+                    sections?.dashboard?.hourlyWorkOrderActivity && (
+                        <HourlyWorkOrderBoard payload={workOrder} loading={workOrderLoading} />
+                    )
+                }
 
-                <HourlyBookingBoard payload={booking} loading={bookingLoading} />
+                {
+                    sections?.dashboard?.hourlyBookingActivity && (
+                        <HourlyBookingBoard payload={booking} loading={bookingLoading} />
+                    )
+                }
 
                 <DailyDeliveryBoard
                     payload={delivery}
