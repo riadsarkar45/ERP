@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import prisma from '../../../database/prismaClient/prisma';
 
 const MASTER_PERMISSIONS: Record<string, string[]> = {
-    workOrders: ['knittingOrder', 'yarnDyeingOrder', 'dyeingOrder', 'aopOrder', 'workOrderDeliveries', "sendWorkOrderApprovalRequest", "sendWorkOrderApprovalRequest", "seeRequestedWorkOrders", 'readOnly'],
+    workOrders: ['knittingOrder', 'yarnDyeingOrder', 'dyeingOrder', 'aopOrder', 'workOrderDeliveries', "sendWorkOrderApprovalRequest", "sendWorkOrderApprovalRequest", "seeRequestedWorkOrders", "workOrderAnalysis", 'readOnly'],
     mis: ['knittingOrder', 'yarnDyeingOrder', 'dyeingOrder', 'aopOrder', 'readOnly'],
     workOrderApproval: ['workOrderReq', 'workOrderApp', 'revisedWorkOrder', 'printWorkOrder', 'cancelWorkOrder', 'readOnly'],
     styleRequirements: ['addJob', 'reconciliation', 'bookingView', 'balanceSheet', 'infoEdit', 'reconciliationSubmission', 'readOnly'],
