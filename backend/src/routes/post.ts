@@ -11,6 +11,7 @@ import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { submitReconciliation } from "../controllers/newStyleRequirements/submitRecon";
 import { deleteStyleData } from "../controllers/newStyleRequirements/editStyleRequirement";
 import { userRole } from "../controllers/users/userRolePermission/userRole";
+import { newProduction } from "../controllers/production/newProduction";
 
 const router = express.Router();
 
@@ -37,5 +38,7 @@ router.delete("/delete-style-data/:compId/:deleteType", responseTimeMonitor, aut
 router.post("/users/:userId/permissions", responseTimeMonitor, authenticate, authorize("userManagement", [
   "setUserPermission",
 ]), userRole)
+
+router.post("/enter-production/:colorId", responseTimeMonitor, authenticate, newProduction)
 
 export default router;

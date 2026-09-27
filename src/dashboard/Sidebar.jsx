@@ -102,8 +102,9 @@ const Sidebar = () => {
 
     // Work Orders Sub-Items (NEW)
     const workOrderSubItems = [
-        { path: "/dashboard/pending-work-orders", label: "My work Orders", icon: FileText },
-        { path: "/dashboard/requested-work-orders", label: "Requested Orders", icon: ClipboardList },
+        { path: "/dashboard/pending-work-orders", label: "My work Orders", icon: FileText, permission: "seeMyWorkOrders" },
+        { path: "/dashboard/requested-work-orders", label: "Requested Orders", icon: ClipboardList, permission: "seeRequestedWorkOrders" },
+     { path: "/dashboard/high-loss-job", label: "Work Order Analysis", icon: FileText, permission: "workOrderAnalysis" }
     ];
 
     // Split standalone nav items to place Daily Production dropdown in the correct order
@@ -532,21 +533,21 @@ const Sidebar = () => {
                                         <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                             {
                                                 userSubItems.filter(item => sections?.userManagement[item.permission] === true)
-                                                .map(item => (
-                                                    <li key={item.path}>
-                                                        <Link
-                                                            to={item.path}
-                                                            onClick={() => setIsMobileMenuOpen(false)}
-                                                            className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
-                                                                ? 'bg-primary-400 text-white font-medium'
-                                                                : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                                }`}
-                                                        >
-                                                            <item.icon size={16} className="shrink-0" />
-                                                            {item.label}
-                                                        </Link>
-                                                    </li>
-                                                ))
+                                                    .map(item => (
+                                                        <li key={item.path}>
+                                                            <Link
+                                                                to={item.path}
+                                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                                    ? 'bg-primary-400 text-white font-medium'
+                                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                                    }`}
+                                                            >
+                                                                <item.icon size={16} className="shrink-0" />
+                                                                {item.label}
+                                                            </Link>
+                                                        </li>
+                                                    ))
                                             }
                                         </ul>
                                     )}
@@ -573,7 +574,9 @@ const Sidebar = () => {
 
                             {isWorkOrdersOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
-                                    {workOrderSubItems.map(item => (
+                                    {
+                                    workOrderSubItems.filter(item => sections?.workOrders?.[item.permission] === true)
+                                    .map(item => (
                                         <li key={item.path}>
                                             <Link
                                                 to={item.path}

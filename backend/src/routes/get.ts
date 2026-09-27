@@ -216,7 +216,7 @@ getRouters.get('/job-wise-mis-view/:jobNo/:orderType', misDetailViewByJobNo);
 
 getRouters.get('/detail-challan-view/:orderType/:challanNo/:jobNo', challanMovementByChallanNo);
 
-getRouters.get('/high-loss-job', authenticate, getHighLossJobs);
+getRouters.get('/high-loss-job', authenticate, authorize("workOrders", ["workOrderAnalysis"]), getHighLossJobs);
 
 getRouters.get('/hourly-work-order', authenticate, authorize("dashboard", [
   "hourlyWorkOrderActivity"

@@ -130,6 +130,7 @@ model StyleRequirementRow {
   additional         Int                 @default(0)
   compositions       Composition[]
   reconciliation     reconciliationData?
+  productionDatas    productionData[]
 
   @@index([styleRequirementId])
   @@index([color])
@@ -247,6 +248,7 @@ model user {
   requestsMade        workOrderApprovalRequest[] @relation("RequestedBy")
   reconciliationNotes reconciliationNotes[]
   permissionSections  permissionSection[]
+  productionDatas     productionData[]
 
   @@index([userName])
   @@index([userRole])
@@ -377,4 +379,19 @@ model yarnPurchasePiDetails {
   qty          Float
   price        Float          @default(0.0)
   supplierName String
+}
+
+model productionData {
+  id                    Int                 @id @default(autoincrement())
+  productionType        String
+  department            String
+  productionQty         Int
+  productionDate        DateTime
+  createdAt             DateTime            @default(now())
+  createdBy             Int
+  styleRequirementRowId Int
+  jobNumber             String
+  remarks               String
+  user                  user                @relation(fields: [createdBy], references: [id])
+  styleRowId            StyleRequirementRow @relation(fields: [styleRequirementRowId], references: [id])
 }
