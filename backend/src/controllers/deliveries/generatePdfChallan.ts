@@ -21,12 +21,6 @@ interface ChallanData {
 
 /* -------------------------------------------------------------------------- */
 /*  In-memory queue                                                           */
-/*  Still in memory (so no frontend / schema change is needed), but now:      */
-/*   - every read is scoped to ONE user                                       */
-/*   - entries are removed after a successful download                        */
-/*   - duplicates are ignored and stale entries expire                        */
-/*  NOTE: this is still lost on a Render restart/deploy. For a fully stateless*/
-/*  flow, call GET /download?deliveryIds=1,2,3 (supported below).             */
 /* -------------------------------------------------------------------------- */
 const QUEUE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const TZ = "Asia/Dhaka";
@@ -62,7 +56,6 @@ export const generatePdfChallan = (
         yarnAndUserIds.push({ yarnId, lastInsertedId, userId, queuedAt: Date.now() });
     }
 
-    // Only ever hand back this user's own entries
     return yarnAndUserIds.filter((c) => c.userId === userId);
 };
 
@@ -74,7 +67,6 @@ export const prepareToGenerate = (req: Request, res: Response): void => {
         return;
     }
 
-    // A user may only see their own queue
     const authUserId = Number(req.user?.userId);
     if (authUserId && authUserId !== userId) {
         res.status(403).send({ message: "Access Denied", type: "err" });
@@ -96,13 +88,11 @@ export const prepareToGenerate = (req: Request, res: Response): void => {
 /*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */
 
-// Treat empty / "0" placeholder values as "not set" so they don't print as "0" or "Lot 0"
 const clean = (v: unknown): string => {
     const s = String(v ?? "").trim();
     return s && s !== "0" && s.toUpperCase() !== "NULL" ? s : "";
 };
 
-// Always format in Bangladesh time (Render runs in UTC)
 const fmtDate = (d: Date | string | number | null | undefined) => {
     if (!d) return "   /   /";
     return new Intl.DateTimeFormat("en-GB", {
@@ -124,7 +114,6 @@ const fmtTime = (d: Date | string | number | null | undefined) => {
     }).format(new Date(d));
 };
 
-// avoid floating point noise like 1112.0000000001
 const fmtQty = (n: number) => String(Number(n.toFixed(2)));
 
 interface DeliveryRow {
@@ -164,8 +153,6 @@ interface Line {
     dl: DeliveryRow;
 }
 
-// The result is cast to our own row types so the file never depends on Prisma's
-// generated payload types (adjust the interfaces above if your schema differs).
 const fetchCompositions = async (
     compositionWhere: Record<string, unknown>,
     deliveryWhere: Record<string, unknown>
@@ -213,12 +200,6 @@ const fetchCompositions = async (
     return rows as unknown as CompositionRow[];
 };
 
-/* -------------------------------------------------------------------------- */
-/*  Download                                                                  */
-/*  Two modes:                                                                */
-/*   1) GET /download?deliveryIds=1,2,3   -> stateless (recommended)          */
-/*   2) GET /download                     -> uses this user's queued entries  */
-/* -------------------------------------------------------------------------- */
 export const downloadChallan = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = Number(req.user?.userId);
@@ -242,7 +223,7 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        /* ---------- DATA FETCH (only this user's data) ---------- */
+        /* ---------- DATA FETCH ---------- */
         const results = useQueue
             ? await Promise.all(
                   queued.map((q) =>
@@ -262,7 +243,7 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
                   ),
               ];
 
-        /* ---------- ONE LINE PER DELIVERY (dedupe, drop empty compositions) ---------- */
+        /* ---------- ONE LINE PER DELIVERY (dedupe) ---------- */
         const seen = new Set<number>();
         const lines: Line[] = [];
         for (const comp of results.flat()) {
@@ -273,7 +254,6 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
             }
         }
 
-        // print in ascending challan order
         lines.sort(
             (a, b) =>
                 String(a.dl.challanNo ?? "").localeCompare(String(b.dl.challanNo ?? ""), undefined, {
@@ -281,11 +261,7 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
                 }) || a.dl.id - b.dl.id
         );
 
-        /* ---------- JOB / BUYER / STYLE (with fallbacks) ----------
-           1) composition -> styleRequirementRow -> styleRequirement   (new data)
-           2) composition -> workOrder -> styleRequirement             (legacy data)
-           3) StyleRequirement looked up by workOrder.jobNo            (jobNo is unique)
-           4) workOrder.jobNo / workOrder.styleNo strings              (buyer stays empty) */
+        /* ---------- JOB / BUYER / STYLE RESOLUTION ---------- */
         const jobNosToLookup = Array.from(
             new Set(
                 lines
@@ -321,7 +297,7 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
             };
         };
 
-        /* ---------- GROUP BY (challanNo + from + to + jobNo) ---------- */
+        /* ---------- GROUP BY ---------- */
         const groupMap = new Map<string, Line[]>();
         for (const line of lines) {
             const jobNo = resolveStyle(line).jobNo || "NA";
@@ -332,27 +308,49 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
         }
         const groups = Array.from(groupMap.values());
 
-        // nothing to print -> never send a blank PDF
         if (groups.length === 0) {
             res.status(404).json({ message: "No deliveries found to generate challan." });
             return;
         }
 
-        /* ---------- BUILD TABLE ROWS PER GROUP ---------- */
-        const buildRows = (items: Line[]) =>
+        /* ---------- BUILD TABLE ROWS PER GROUP (MULTI-LINE SUPPORT) ---------- */
+        interface TableRowData {
+            descLines: string[];
+            unit: string;
+            qty: number;
+        }
+
+        const buildRows = (items: Line[]): TableRowData[] =>
             items.map(({ comp, dl }) => {
+                const lines: string[] = [];
+                
+                // 1. Composition
+                const compText = clean(comp.composition);
+                if (compText) lines.push(compText);
+                
+                // 2. Color
+                const colorText = clean(comp.color);
+                if (colorText) lines.push(colorText);
+                
+                // 3. Lot No, Yarn Count, Dia (combined on the 3rd line)
                 const lot = clean(comp.workOrder?.lotNo);
                 const dia = clean(comp.workOrder?.machineDia);
+                const yarnCount = clean(comp.workOrder?.yarnCount);
+                
+                const details: string[] = [];
+                if (yarnCount) details.push(yarnCount);
+                if (lot) details.push(`Lot ${lot}`);
+                if (dia) details.push(`Dia ${dia}`);
+                
+                if (details.length > 0) {
+                    lines.push(details.join(" | "));
+                }
+
+                // Fallback if nothing is available
+                if (lines.length === 0) lines.push("N/A");
+
                 return {
-                    desc: [
-                        clean(comp.workOrder?.yarnCount),
-                        clean(comp.composition),
-                        clean(comp.color),
-                        lot ? `Lot ${lot}` : "",
-                        dia ? `Dia ${dia}` : "",
-                    ]
-                        .filter(Boolean)
-                        .join(" "),
+                    descLines: lines,
                     unit: "CHT",
                     qty: Number(dl.deliveryQty) || 0,
                 };
@@ -364,7 +362,6 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="challans-${userId}-${Date.now()}.pdf"`);
 
-        // Clear the queued entries we used only after the response was fully sent
         if (useQueue) {
             const used = new Set(queued);
             res.on("finish", () => {
@@ -384,11 +381,12 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
 
         const COL_W: number[] = [45, 265, 70, 85, 50];
         const colWidth = (i: number): number => COL_W[i] ?? 0;
-        const TABLE_TOP = 195;
+        
+        const TABLE_TOP = 180; // Adjusted to give more room for the table
         const HEAD_H = 22;
-        const ROW_H = 20;
-        const MIN_ROWS = 21; // empty ruled rows to look like the paper form
-        const MAX_ROWS = 24; // max rows that fit on one page
+        const ROW_H = 55; // Increased to comfortably fit 3 lines of text (16px * 3 = 48px + margins)
+        const MAX_ROWS = 10; // Reduced to prevent page overflow with taller rows (10 * 55 = 550px)
+        const MIN_ROWS = 10; 
 
         const field = (label: string, value: string, x: number, y: number, w: number) => {
             doc.font("Helvetica").fontSize(9.5).fillColor("#000");
@@ -404,7 +402,7 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
 
         let pageCount = 0;
 
-        /* ---------- ONE PAGE PER GROUP ---------- */
+        /* ---------- ONE PAGE PER GROUP (OR CHUNK) ---------- */
         groups.forEach((group) => {
             const allRows = buildRows(group);
             const first = group[0];
@@ -465,10 +463,7 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
                 doc.strokeColor("#000").lineWidth(0.7);
                 doc.moveTo(L, TABLE_TOP).lineTo(R, TABLE_TOP).stroke();
                 doc.moveTo(L, TABLE_TOP + HEAD_H).lineTo(R, TABLE_TOP + HEAD_H).stroke();
-                for (let r = 1; r <= BODY_ROWS; r++) {
-                    const yy = TABLE_TOP + HEAD_H + r * ROW_H;
-                    doc.moveTo(L, yy).lineTo(R, yy).stroke();
-                }
+                
                 let vx = L;
                 doc.moveTo(vx, TABLE_TOP).lineTo(vx, TABLE_BOT).stroke();
                 COL_W.forEach((cw) => {
@@ -484,28 +479,53 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
                     hx += colWidth(i);
                 });
 
-                // Table rows
+                // Draw horizontal lines for each row
+                for (let r = 1; r <= BODY_ROWS; r++) {
+                    const yy = TABLE_TOP + HEAD_H + r * ROW_H;
+                    doc.moveTo(L, yy).lineTo(R, yy).stroke();
+                }
+
+                // Table rows text
                 doc.font("Helvetica").fontSize(9);
                 const slOffset = chunkIdx * MAX_ROWS;
                 rows.forEach((row, i) => {
                     const ry = TABLE_TOP + HEAD_H + i * ROW_H;
                     let cx = L;
-                    [String(slOffset + i + 1), row.desc, row.unit, `${fmtQty(row.qty)} lb`, ""].forEach((txt, ci) => {
-                        // fixed height + ellipsis so long descriptions never overlap the next row
-                        doc.text(txt, cx + 4, ry + 5, { width: colWidth(ci) - 8, height: ROW_H - 6, ellipsis: true });
-                        cx += colWidth(ci);
+                    
+                    // 1. Sl. No.
+                    doc.text(String(slOffset + i + 1), cx + 4, ry + 20, { width: colWidth(0) - 8, align: "center" });
+                    cx += colWidth(0);
+                    
+                    // 2. Description (Multiple Lines)
+                    let textY = ry + 6;
+                    row.descLines.forEach((lineText) => {
+                        doc.text(lineText, cx + 4, textY, { width: colWidth(1) - 8 });
+                        textY += 16; // 16px per line, fits perfectly in 55px row height
                     });
+                    cx += colWidth(1);
+                    
+                    // 3. Unit
+                    doc.text(row.unit, cx + 4, ry + 20, { width: colWidth(2) - 8, align: "center" });
+                    cx += colWidth(2);
+                    
+                    // 4. Quantity
+                    doc.text(`${fmtQty(row.qty)} lb`, cx + 4, ry + 20, { width: colWidth(3) - 8, align: "center" });
+                    cx += colWidth(3);
+                    
+                    // 5. Remarks (left empty)
                 });
 
-                // Totals under bottom border (grand total of the whole challan)
+                // Totals under bottom border
                 const unitX = L + colWidth(0) + colWidth(1);
                 const qtyX = unitX + colWidth(2);
                 doc.font("Helvetica-Bold").fontSize(9.5);
-                doc.text(`${allRows.length} CHT`, unitX + 4, TABLE_BOT + 4, { width: colWidth(2) - 8 });
-                doc.text(`${fmtQty(totalQty)} lb`, qtyX + 4, TABLE_BOT + 4, { width: colWidth(3) - 8 });
+                doc.text(`${allRows.length} CHT`, unitX + 4, TABLE_BOT + 6, { width: colWidth(2) - 8 });
+                doc.text(`${fmtQty(totalQty)} lb`, qtyX + 4, TABLE_BOT + 6, { width: colWidth(3) - 8 });
 
                 /* ---------- GATE OUT STAMP ---------- */
-                const sx = L + 55, sy = TABLE_BOT - 165, sw = 150, sh = 78;
+                // Safely clamped so it never overlaps the header on short pages/chunks
+                const sy = Math.max(TABLE_BOT - 165, TABLE_TOP + 20);
+                const sx = L + 55, sw = 150, sh = 78;
                 doc.strokeColor("#8b7fd6").lineWidth(1.2).roundedRect(sx, sy, sw, sh, 5).stroke();
                 doc.fillColor("#8b7fd6").font("Helvetica-Bold").fontSize(11)
                     .text("GATE OUT", sx, sy + 6, { width: sw, align: "center" });
@@ -515,11 +535,12 @@ export const downloadChallan = async (req: Request, res: Response): Promise<void
                 doc.text(`Time: ${fmtTime(dl0.createdAt)}`, sx + 12, sy + 45);
 
                 /* ---------- FOOTER + SIGNATURES ---------- */
+                const footerY = sy + sh + 15;
                 doc.fillColor("#000").font("Helvetica").fontSize(8.5)
                     .text("Received the above goods in good condition as per order",
-                        L, TABLE_BOT + 30, { width: W, align: "center" });
+                        L, footerY, { width: W, align: "center" });
 
-                const sigY = TABLE_BOT + 75;
+                const sigY = footerY + 35;
                 const qw = W / 4;
                 ["Signature of the Recipient", "Prepared by", "Store Incharge", "Authorized Signature"]
                     .forEach((lb, i) => {

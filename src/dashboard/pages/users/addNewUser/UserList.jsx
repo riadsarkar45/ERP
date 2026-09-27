@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import UseAllUsers from '../allUsers/AllUsers'
 import useAxiosPrivate from '../../../../hooks/UseAxiosPrivate'
+import { Link } from 'react-router-dom'
 
 const formatDate = (iso) => {
     if (!iso) return ''
@@ -121,7 +122,7 @@ const UserList = () => {
                                     </td>
 
                                     <td className={`${tdBase} text-center`}>
-                                        {[1, 2, 3].includes(user.id)
+                                        {[1, 2].includes(user.id)
                                             ? 'AUDITOR'
                                             : user.userRole?.toUpperCase() || ''}
                                     </td>
@@ -132,11 +133,11 @@ const UserList = () => {
 
                                     {/* Permission */}
                                     <td className={`${tdBase} text-center`}>
-                                        <input
-                                            type="checkbox"
-                                            className="w-4 h-4 cursor-pointer accent-blue-600"
-                                            aria-label={`Set permission for ${user.name}`}
-                                        />
+                                        <Link to={`/dashboard/user-permission/${user.id}/${user.name}`}>
+                                            <span className='bg-yellow-200 text-yellow-900 rounded-lg p-1 border border-yellow-600'>
+                                                Set Role
+                                            </span>
+                                        </Link>
                                     </td>
 
                                     {/* Active */}

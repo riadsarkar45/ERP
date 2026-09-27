@@ -49,6 +49,7 @@ import UserList from "../dashboard/pages/users/addNewUser/UserList";
 import UserPermission from "../dashboard/pages/users/addNewUser/UserPermission";
 import AssetSummary from "../dashboard/pages/MIS/FixedAsset/AssetSummary";
 import AssetMovement from "../dashboard/pages/MIS/FixedAsset/AssetMovement";
+import HighLossJob from "../dashboard/pages/highProccessLossJobs/HighLossJob";
 
 const routers = createBrowserRouter([
     {
@@ -241,7 +242,7 @@ const routers = createBrowserRouter([
                         element: <UserList/>
                     },
                     {
-                        path: "user-permission",
+                        path: "user-permission/:userId/:userName",
                         element: <UserPermission/>
                     },
                     {
@@ -251,6 +252,10 @@ const routers = createBrowserRouter([
                     {
                         path: "asset-movement",
                         element: <AssetMovement/>
+                    },
+                    {
+                        path: "high-loss-job",
+                        element: <HighLossJob/>
                     },
                 ]
             }

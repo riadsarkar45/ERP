@@ -4,7 +4,9 @@ import { authenticate, authorize } from "../../middleware/Authenticate.middlewar
 import { responseTimeMonitor } from "../../controllers/responseTime/responseTime";
 
 const authRouter = Router();
-authRouter.post("/auth/register", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN"), register);
+authRouter.post("/auth/register", responseTimeMonitor, authenticate,  authorize("userManagement", [
+  "addNewUser",
+]), register);
 authRouter.post("/auth/login", responseTimeMonitor, login);
 authRouter.post("/auth/logout", responseTimeMonitor, authenticate, logout);
 authRouter.post("/auth/refresh", responseTimeMonitor, refresh)

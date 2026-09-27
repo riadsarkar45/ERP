@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffe
 import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
-import useAxiosPublic from '../../../hooks/Axios';
 import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
 import ChallanEditModal from './challanEditModal/ChallanEdit';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -219,7 +219,7 @@ const Aop = () => {
     const [challanToEditData, setChallanToEditData] = useState({});
     const [isChallanDataLoading, setIsChallanDataLoading] = useState(null)
     const { fetchData, loading } = useFetchData();
-    const axiosPublic = useAxiosPublic();
+    const axiosPrivate = useAxiosPrivate();
 
     useEffect(() => {
         if (search) return;
@@ -587,7 +587,7 @@ const Aop = () => {
         if (challanIds.length === 0) { alert("Please select at least one challan to generate the bill."); return; }
         setIsBillGenerating(true);
         try {
-            const response = await axiosPublic.post("/api/generate-bill", { challanIds }, { responseType: "blob" });
+            const response = await axiosPrivate.post("/api/generate-bill", { challanIds }, { responseType: "blob" });
             const blob = new Blob([response.data], { type: "application/pdf" });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -610,7 +610,7 @@ const Aop = () => {
         setSearchLoading(true); setSearchError(null); setPage(1);
         const searchArray = search.split(/[\s,]+/).filter(Boolean);
         try {
-            const res = await axiosPublic.get("/api/aopOrder/challan/search", { params: { challans: searchArray.join(","), context: "aopOrder" } });
+            const res = await axiosPrivate.get("/api/aopOrder/challan/search", { params: { challans: searchArray.join(","), context: "aopOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;
@@ -874,7 +874,7 @@ const Aop = () => {
         setIsChallanDataLoading(true)
         setIsChallanEditing(true);
         try {
-            const res = await axiosPublic.get(`/api/detail-challan-view/aopOrder/${challanNo}/${jobNo}`)
+            const res = await axiosPrivate.get(`/api/detail-challan-view/aopOrder/${challanNo}/${jobNo}`)
             console.log(res.data, "challan data");
             setChallanToEditData(res.data);
             setIsChallanDataLoading(false)

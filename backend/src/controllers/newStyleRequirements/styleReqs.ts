@@ -61,6 +61,9 @@ export const styleRequirements = async (req: Request, res: Response) => {
 
         const { jobNo } = req.params as { jobNo: string | undefined };
         const recon = req.query.reconciliation === 'true';
+        const isProd = req.query.productionSummary === 'true';
+        const style = true;
+        console.log(isProd, "is production summary");
         const { filters: filtersParam } = req.query as { filters?: string };
 
         let filters: StyleFilters | undefined;
@@ -83,26 +86,40 @@ export const styleRequirements = async (req: Request, res: Response) => {
                 orderBy: { id: "desc" },
                 take: 40,
                 select: {
-                    salesContact: true,
-                    styleNo: true,
-                    buyerName: true,
-                    jobNo: true,
+                    ...(isProd || recon || style
+                        ? {
+                            buyerName: true,
+                            jobNo: true,
+                            poNo: true,
+                            hodDate: true,
+                        }
+                        : {}),
                     processLoss: true,
-                    poNo: true,
+                    styleNo: true,
+                    salesContact: true,
                     ...recon && {
                         dateOfReconciliation: true,
                     },
                     id: true,
                     rows: {
+                        where: isProd
+                            ? {
+                                orderQty: {
+                                    gt: 0,
+                                },
+                            }
+                            : {},
                         select: {
                             id: true,
-                            color: true,
+                            ...(isProd || recon || style ? {
+                                color: true,
+                                orderQty: true,
+                            }: {}),
                             composition: true,
                             finishDia: true,
-                            orderQty: true,
                             finishRequiredQty: true,
                             additional: true,
-                            processLoss:true,
+                            processLoss: true,
                             ...recon && {
                                 reconciliation: {
                                     select: {
@@ -132,27 +149,29 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             }
                         },
                     },
-                    workOrders: {
-                        select: {
-                            orderType: true,
-                            compositions: {
-                                select: {
-                                    color: true,
-                                    styleRequirementRowId: true,
-                                    composition: true,
-                                    workOrderQty: true,
-                                    additional: true,
-                                    id: true,
-                                    deliveries: {
-                                        select: {
-                                            deliveryType: true,
-                                            deliveryQty: true,
+                    ...(!isProd && {
+                        workOrders: {
+                            select: {
+                                orderType: true,
+                                compositions: {
+                                    select: {
+                                        color: true,
+                                        styleRequirementRowId: true,
+                                        composition: true,
+                                        workOrderQty: true,
+                                        additional: true,
+                                        id: true,
+                                        deliveries: {
+                                            select: {
+                                                deliveryType: true,
+                                                deliveryQty: true,
+                                            },
                                         },
                                     },
                                 },
                             },
                         },
-                    },
+                    }),
                 },
             }),
             prisma.styleRequirement.count({

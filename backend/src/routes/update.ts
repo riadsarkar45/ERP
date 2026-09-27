@@ -16,21 +16,25 @@ const updateRouters = express.Router();
 
 updateRouters.patch("/update-order", responseTimeMonitor, authenticate, updateJobs);
 
-updateRouters.patch("/update-audit/:auditId/:status", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateAuditStatus);
+updateRouters.patch("/update-audit/:auditId/:status", responseTimeMonitor, authenticate, updateAuditStatus);
 
-updateRouters.patch("/job-status/:status/:jobId", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateJobStatus);
+updateRouters.patch("/job-status/:status/:jobId", responseTimeMonitor, authenticate, updateJobStatus);
 
-updateRouters.patch("/update-style-req/:jobId", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateStyleReq);
+updateRouters.patch("/update-style-req/:jobId", responseTimeMonitor, authenticate, updateStyleReq);
 
-updateRouters.patch("/update-work-order/:workOrderId", responseTimeMonitor, authenticate, authorize("SUPER ADMIN", "ADMIN", "AUDITOR"), updateWorkOrder);
+updateRouters.patch("/update-work-order/:workOrderId", responseTimeMonitor, authenticate, updateWorkOrder);
 
-updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, authenticate, styleReconciliation);
+updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, authenticate, authorize("styleRequirements", [
+  "reconciliationSubmission"
+]), styleReconciliation);
 
 updateRouters.patch("/request-for-approval/:requestType/:workOrderId/:requestToId", responseTimeMonitor, authenticate, requestForApproval);
 
 updateRouters.patch("/edit-challan", responseTimeMonitor, authenticate, editChallan);
 
-updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, editStyleRequirement)
+updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, authorize("styleRequirements", [
+    "infoEdit"
+  ]), editStyleRequirement)
 
 updateRouters.patch("/update-user-activity/:userId/:status", responseTimeMonitor, authenticate, userActiveInActive)
 

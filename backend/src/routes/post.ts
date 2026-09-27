@@ -7,9 +7,11 @@ import { createNewJob } from "../controllers/orders/newWorkOrder";
 import { fileUpload } from "../controllers/uploads/uploadOrdersFile";
 import { generateBill } from "../controllers/generateBill/generatebill";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
-import { authenticate } from "../middleware/Authenticate.middleware";
+import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { submitReconciliation } from "../controllers/newStyleRequirements/submitRecon";
 import { deleteStyleData } from "../controllers/newStyleRequirements/editStyleRequirement";
+import { userRole } from "../controllers/users/userRolePermission/userRole";
+import { newProduction } from "../controllers/production/newProduction";
 
 const router = express.Router();
 
@@ -21,15 +23,22 @@ router.post("/create-job", responseTimeMonitor, authenticate, createNewJob)
 
 router.post("/create-new-audit", responseTimeMonitor, createNewAudit)
 
-router.post("/new-style-requirements", responseTimeMonitor, authenticate, createNewStyleRequirement)
+router.post("/new-style-requirements", responseTimeMonitor, authenticate,  authorize("styleRequirements", ["addJob"]), createNewStyleRequirement)
 
 router.post("/cutting-production", responseTimeMonitor, cuttingDataUpdate)
 
 router.post("/generate-bill", responseTimeMonitor, generateBill);
 
-router.post("/submit-reconciliation/:jobNo", responseTimeMonitor, authenticate, submitReconciliation);
+router.post("/submit-reconciliation/:jobNo", responseTimeMonitor, authenticate, authorize("styleRequirements", [
+  "reconciliationSubmission"
+]), submitReconciliation);
 
 router.delete("/delete-style-data/:compId/:deleteType", responseTimeMonitor, authenticate, deleteStyleData);
 
+router.post("/users/:userId/permissions", responseTimeMonitor, authenticate, authorize("userManagement", [
+  "setUserPermission",
+]), userRole)
+
+router.post("/enter-production/:colorId", responseTimeMonitor, authenticate, newProduction)
 
 export default router;

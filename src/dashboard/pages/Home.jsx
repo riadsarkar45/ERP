@@ -1,8 +1,9 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import {  useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
 import useAxiosPrivate from "../../hooks/UseAxiosPrivate";
 import { AuthContext } from "../auth/AuthContext";
 import TotalSummary from "../../components/deliveryTotalsSummary/TotalSummary";
+import UseUserRoles from "./users/allUsers/UserRoles";
 
 const AVATAR_STYLES = [
     "bg-blue-50 text-blue-700",
@@ -63,21 +64,338 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const BDT_OFFSET = 6;
 const hourOf = (iso) => (new Date(iso).getUTCHours() + BDT_OFFSET) % 24;
 const todayBST = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+
 const fmtHour = (h) => {
     const period = h < 12 ? "AM" : "PM";
     const hr = h % 12 === 0 ? 12 : h % 12;
     return `${hr} ${period}`;
 };
+
 const fmtDate = (iso) =>
     new Date(iso).toLocaleDateString(undefined, {
         weekday: "short", day: "numeric", month: "short", year: "numeric",
     });
+
 const initials = (name = "") =>
     name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
+
 const heatColor = (value, max) => {
     if (!value) return "#F1F5F9";
     const t = Math.sqrt(value / max);
     return `rgba(55, 138, 221, ${0.15 + 0.85 * t})`;
+};
+
+/* -------------------------------------------------------------------------- */
+/*  COMPONENTS                                                                */
+/* -------------------------------------------------------------------------- */
+
+const HourlyBookingBoard = ({ payload, loading }) => {
+    const rows = payload?.data ?? [];
+
+    const { users, grandTotal, peakHour, maxCell } = useMemo(() => {
+        const map = new Map();
+        const hourTotals = Array(24).fill(0);
+
+        rows.forEach((r) => {
+            const h = hourOf(r.hour);
+            const u = map.get(r.userId) ?? {
+                userId: r.userId,
+                userName: r.userName,
+                hours: Array(24).fill(0),
+                total: 0,
+                peakHour: null,
+                peakCount: 0,
+                hourBreakdown: new Map() // Tracks orderType breakdown per hour
+            };
+
+            // Safely handle both 'bookingCount' and 'workOrderCount' field names
+            const count = Number(r.bookingCount ?? r.workOrderCount ?? 0);
+
+            u.hours[h] += count;
+            u.total += count;
+            hourTotals[h] += count;
+
+            if (count > u.peakCount) {
+                u.peakCount = count;
+                u.peakHour = h;
+            }
+
+            if (!u.hourBreakdown.has(h)) {
+                u.hourBreakdown.set(h, new Map());
+            }
+            const otMap = u.hourBreakdown.get(h);
+            // Fallback to "General Booking" if orderType is an empty string or missing
+            const ot = r.orderType || "General Booking";
+            otMap.set(ot, (otMap.get(ot) || 0) + count);
+
+            map.set(r.userId, u);
+        });
+
+        const users = [...map.values()].sort((a, b) => b.total - a.total);
+        return {
+            users,
+            grandTotal: users.reduce((s, u) => s + u.total, 0),
+            peakHour: hourTotals.indexOf(Math.max(...hourTotals)),
+            maxCell: Math.max(1, ...users.flatMap((u) => u.hours)),
+        };
+    }, [rows]);
+
+    if (loading) return <div className="mt-6 h-44 rounded-xl bg-slate-100 animate-pulse" />;
+
+    if (!rows.length)
+        return (
+            <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
+                <p className="text-sm font-medium text-slate-700 mb-4">Hourly booking activity</p>
+                <div className="h-32 flex items-center justify-center text-slate-400 text-sm">No data yet</div>
+            </div>
+        );
+
+    return (
+        <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div>
+                    <p className="text-sm font-medium text-slate-700">Hourly booking activity</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                        {payload?.date ? fmtDate(payload.date) : ""} · granularity: {payload.granularity} · BST (UTC+6)
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                        Total: <b className="text-slate-800 tabular-nums">{grandTotal.toLocaleString()}</b>
+                    </span>
+                    <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                        Peak hour: <b className="text-blue-700 tabular-nums">{fmtHour(peakHour)}</b>
+                    </span>
+                    <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                        Users: <b className="text-slate-800 tabular-nums">{users.length}</b>
+                    </span>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                {users.map((u, idx) => {
+                    const getTooltip = (h) => {
+                        const breakdown = u.hourBreakdown.get(h);
+                        if (!breakdown || breakdown.size === 0) return `${u.userName} · ${fmtHour(h)} → 0 bookings`;
+
+                        let text = `${u.userName} · ${fmtHour(h)}\n`;
+                        let total = 0;
+                        breakdown.forEach((count, ot) => {
+                            const label = ORDER_LABELS[ot] || ot;
+                            text += `• ${label}: ${count.toLocaleString()}\n`;
+                            total += count;
+                        });
+                        text += `Total: ${total.toLocaleString()} bookings`;
+                        return text;
+                    };
+
+                    return (
+                        <div key={u.userId} className="flex items-center gap-4">
+                            <div className="flex w-44 shrink-0 items-center gap-3">
+                                <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${AVATAR_STYLES[idx % AVATAR_STYLES.length]}`}>
+                                    {initials(u.userName)}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-slate-700">{u.userName}</p>
+                                    <p className="text-[11px] text-slate-400">peak {u.peakHour != null ? fmtHour(u.peakHour) : "—"}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
+                                {u.hours.map((v, h) => (
+                                    <div
+                                        key={h}
+                                        title={getTooltip(h)}
+                                        className="h-8 rounded-md cursor-default transition-shadow hover:ring-2 hover:ring-blue-300"
+                                        style={{ background: heatColor(v, maxCell) }}
+                                    />
+                                ))}
+                            </div>
+
+                            <div className="w-28 shrink-0 text-right">
+                                <p className="text-sm font-semibold tabular-nums text-slate-800">{u.total.toLocaleString()}</p>
+                                <p className="text-[11px] text-slate-400 -mt-0.5">bookings</p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="mt-2 flex items-center gap-4">
+                <div className="w-44 shrink-0" />
+                <div className="grid flex-1 text-[10px] text-slate-400" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
+                    {HOURS.map((h) => (
+                        <span key={h} className={[0, 6, 12, 18, 23].includes(h) ? "whitespace-nowrap" : "opacity-0"}>
+                            {fmtHour(h)}
+                        </span>
+                    ))}
+                </div>
+                <div className="w-28 shrink-0" />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                <p className="text-[11px] text-slate-400">Hover a cell for order type breakdown</p>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    Less
+                    <span className="h-2 w-24 rounded-full bg-gradient-to-r from-slate-200 to-[#378ADD]" />
+                    More
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const HourlyWorkOrderBoard = ({ payload, loading }) => {
+    const rows = payload?.data ?? [];
+
+    const { users, grandTotal, peakHour, maxCell } = useMemo(() => {
+        const map = new Map();
+        const hourTotals = Array(24).fill(0);
+
+        rows.forEach((r) => {
+            const h = hourOf(r.hour);
+            const u = map.get(r.userId) ?? {
+                userId: r.userId,
+                userName: r.userName,
+                hours: Array(24).fill(0),
+                total: 0,
+                peakHour: null,
+                peakCount: 0,
+                hourBreakdown: new Map()
+            };
+
+            const count = Number(r.workOrderCount ?? 0);
+            u.hours[h] += count;
+            u.total += count;
+            hourTotals[h] += count;
+
+            if (count > u.peakCount) {
+                u.peakCount = count;
+                u.peakHour = h;
+            }
+
+            if (!u.hourBreakdown.has(h)) {
+                u.hourBreakdown.set(h, new Map());
+            }
+            const otMap = u.hourBreakdown.get(h);
+            const ot = r.orderType || "Unknown";
+            otMap.set(ot, (otMap.get(ot) || 0) + count);
+
+            map.set(r.userId, u);
+        });
+
+        const users = [...map.values()].sort((a, b) => b.total - a.total);
+        return {
+            users,
+            grandTotal: users.reduce((s, u) => s + u.total, 0),
+            peakHour: hourTotals.indexOf(Math.max(...hourTotals)),
+            maxCell: Math.max(1, ...users.flatMap((u) => u.hours)),
+        };
+    }, [rows]);
+
+    if (loading) return <div className="mt-6 h-44 rounded-xl bg-slate-100 animate-pulse" />;
+
+    if (!rows.length)
+        return (
+            <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
+                <p className="text-sm font-medium text-slate-700 mb-4">Hourly work order activity</p>
+                <div className="h-32 flex items-center justify-center text-slate-400 text-sm">No data yet</div>
+            </div>
+        );
+
+    return (
+        <div className="mt-6 bg-white border border-slate-100 rounded-xl p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div>
+                    <p className="text-sm font-medium text-slate-700">Hourly work order activity</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                        {payload?.date ? fmtDate(payload.date) : ""} · granularity: {payload.granularity} · BST (UTC+6)
+                    </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                        Total: <b className="text-slate-800 tabular-nums">{grandTotal.toLocaleString()}</b>
+                    </span>
+                    <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                        Peak hour: <b className="text-blue-700 tabular-nums">{fmtHour(peakHour)}</b>
+                    </span>
+                    <span className="rounded-md bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500 ring-1 ring-slate-200">
+                        Users: <b className="text-slate-800 tabular-nums">{users.length}</b>
+                    </span>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                {users.map((u, idx) => {
+                    const getTooltip = (h) => {
+                        const breakdown = u.hourBreakdown.get(h);
+                        if (!breakdown || breakdown.size === 0) return `${u.userName} · ${fmtHour(h)} → 0 work orders`;
+
+                        let text = `${u.userName} · ${fmtHour(h)}\n`;
+                        let total = 0;
+                        breakdown.forEach((count, ot) => {
+                            const label = ORDER_LABELS[ot] || ot;
+                            text += `• ${label}: ${count.toLocaleString()}\n`;
+                            total += count;
+                        });
+                        text += `Total: ${total.toLocaleString()} work orders`;
+                        return text;
+                    };
+
+                    return (
+                        <div key={u.userId} className="flex items-center gap-4">
+                            <div className="flex w-44 shrink-0 items-center gap-3">
+                                <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${AVATAR_STYLES[idx % AVATAR_STYLES.length]}`}>
+                                    {initials(u.userName)}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-slate-700">{u.userName}</p>
+                                    <p className="text-[11px] text-slate-400">peak {u.peakHour != null ? fmtHour(u.peakHour) : "—"}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid flex-1 gap-1" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
+                                {u.hours.map((v, h) => (
+                                    <div
+                                        key={h}
+                                        title={getTooltip(h)}
+                                        className="h-8 rounded-md cursor-default transition-shadow hover:ring-2 hover:ring-blue-300"
+                                        style={{ background: heatColor(v, maxCell) }}
+                                    />
+                                ))}
+                            </div>
+
+                            <div className="w-28 shrink-0 text-right">
+                                <p className="text-sm font-semibold tabular-nums text-slate-800">{u.total.toLocaleString()}</p>
+                                <p className="text-[11px] text-slate-400 -mt-0.5">work orders</p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="mt-2 flex items-center gap-4">
+                <div className="w-44 shrink-0" />
+                <div className="grid flex-1 text-[10px] text-slate-400" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
+                    {HOURS.map((h) => (
+                        <span key={h} className={[0, 6, 12, 18, 23].includes(h) ? "whitespace-nowrap" : "opacity-0"}>
+                            {fmtHour(h)}
+                        </span>
+                    ))}
+                </div>
+                <div className="w-28 shrink-0" />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                <p className="text-[11px] text-slate-400">Hover a cell for order type breakdown</p>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    Less
+                    <span className="h-2 w-24 rounded-full bg-gradient-to-r from-slate-200 to-[#378ADD]" />
+                    More
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const HourlyChallanBoard = ({ payload, loading }) => {
@@ -123,7 +441,7 @@ const HourlyChallanBoard = ({ payload, loading }) => {
                 <div>
                     <p className="text-sm font-medium text-slate-700">Hourly challan activity</p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                        {fmtDate(payload.date)} · granularity: {payload.granularity} · BST (UTC+6)
+                        {payload?.date ? fmtDate(payload.date) : ""} · granularity: {payload.granularity} · BST (UTC+6)
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -374,23 +692,59 @@ const DailyDeliveryBoard = ({ payload, loading, selectedDate, onDateChange }) =>
 
 const Home = () => {
     const axiosPrivate = useAxiosPrivate();
+    
     const [challan, setChallan] = useState(null);
     const [challanLoading, setChallanLoading] = useState(true);
+
+    const [workOrder, setWorkOrder] = useState(null);
+    const [workOrderLoading, setWorkOrderLoading] = useState(true);
+
+    const [booking, setBooking] = useState(null);
+    const [bookingLoading, setBookingLoading] = useState(true);
+
     const [delivery, setDelivery] = useState(null);
     const [deliveryLoading, setDeliveryLoading] = useState(true);
     const [deliveryDate, setDeliveryDate] = useState(todayBST);
-    const { user } = useContext(AuthContext)
+    const { sections } = UseUserRoles();
+    
+    // const { user } = useContext(AuthContext);
 
     useEffect(() => {
         const fetchChallanData = async () => {
             try {
                 const res = await axiosPrivate.get("/api/reports/hourly-challan");
                 setChallan(res.data);
+            } catch (err) {
+                console.error("Failed to fetch challan data", err);
             } finally {
                 setChallanLoading(false);
             }
         };
         fetchChallanData();
+
+        const fetchWorkOrderData = async () => {
+            try {
+                const res = await axiosPrivate.get("/api/hourly-work-order");
+                setWorkOrder(res.data);
+            } catch (err) {
+                console.error("Failed to fetch work order data", err);
+            } finally {
+                setWorkOrderLoading(false);
+            }
+        };
+        fetchWorkOrderData();
+
+        const fetchBookingData = async () => {
+            try {
+                const res = await axiosPrivate.get("/api/hourly-booking");
+                setBooking(res.data);
+            } catch (err) {
+                console.error("Failed to fetch booking data", err);
+            } finally {
+                setBookingLoading(false);
+            }
+        };
+        fetchBookingData();
     }, [axiosPrivate]);
 
     useEffect(() => {
@@ -399,6 +753,8 @@ const Home = () => {
             try {
                 const res = await axiosPrivate.get(`/api/reports/daily-delivery?date=${deliveryDate}`);
                 setDelivery(res.data);
+            } catch (err) {
+                console.error("Failed to fetch delivery data", err);
             } finally {
                 setDeliveryLoading(false);
             }
@@ -408,15 +764,31 @@ const Home = () => {
 
     return (
         <DashboardLayout title="Dashboard">
-            <div className="p-6">
-                <TotalSummary 
+            <div className="p-6 space-y-6">
+                <TotalSummary
                     bgColor={"bg-white"}
                     color={"text-black"}
                     height={""}
                 />
+
                 {
-                    user?.userRole === "SUPER ADMIN" && <HourlyChallanBoard payload={challan} loading={challanLoading} />
+                    sections?.dashboard?.hourlyChallanActivity && (
+                        <HourlyChallanBoard payload={challan} loading={challanLoading} />
+                    )
                 }
+
+                {
+                    sections?.dashboard?.hourlyWorkOrderActivity && (
+                        <HourlyWorkOrderBoard payload={workOrder} loading={workOrderLoading} />
+                    )
+                }
+
+                {
+                    sections?.dashboard?.hourlyBookingActivity && (
+                        <HourlyBookingBoard payload={booking} loading={bookingLoading} />
+                    )
+                }
+
                 <DailyDeliveryBoard
                     payload={delivery}
                     loading={deliveryLoading}

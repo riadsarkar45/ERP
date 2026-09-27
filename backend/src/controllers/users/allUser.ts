@@ -2,8 +2,13 @@ import prisma from "../../database/prismaClient/prisma"
 import type { Request, Response } from "express";
 
 export const allUsers = async (req: Request, res: Response) => {
+    const { userId } = req.params as { userId: string }
     const users = await prisma.user.findMany(
+
         {
+            where: {
+                ...(userId && { id: Number(userId) }),
+            },
             select: {
                 name: true,
                 id: true,
@@ -12,6 +17,18 @@ export const allUsers = async (req: Request, res: Response) => {
                 isActive: true,
                 workingStation: true,
                 userRole: true,
+                ...userId && {
+                    permissionSections: {
+                        select: {
+                            permittedSection: true,
+                            isPermitted: {
+                                select: {
+                                    isPermitted: true
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     )

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
 export const submitReconciliation = async (req: Request, res: Response) => {
+    console.log("route hit");
     try {
         const { notes } = req.body;
         const { jobNo } = req.params as { jobNo: string };

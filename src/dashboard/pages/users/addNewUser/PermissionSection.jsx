@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 
 const BORDER = 'border border-gray-600'
 const ITEM_WIDTH = 230 // px per permission item (two checkbox columns)
@@ -6,6 +6,7 @@ const ITEM_WIDTH = 230 // px per permission item (two checkbox columns)
 const PermissionSection = ({
     section,
     sectionState,
+    isDirty,
     onToggleSection,
     onItemChange,
 }) => {
@@ -14,7 +15,7 @@ const PermissionSection = ({
 
     return (
         <div className="flex items-stretch gap-2">
-            {/* Section on/off checkbox — every section shows the PERMISSION label */}
+            {/* Section on/off checkbox */}
             <div
                 className={`w-24 shrink-0 ${BORDER} bg-white flex flex-col items-center justify-center gap-2 py-2`}
             >
@@ -40,6 +41,11 @@ const PermissionSection = ({
                             className={`${BORDER} bg-sky-200 py-1 text-xs font-bold text-gray-900 text-center`}
                         >
                             {section.title}
+                            {isDirty && (
+                                <span className="ml-2 text-[10px] font-semibold text-amber-700">
+                                    ● MODIFIED
+                                </span>
+                            )}
                         </th>
                     </tr>
                     <tr>

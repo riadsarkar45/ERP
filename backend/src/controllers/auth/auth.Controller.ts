@@ -59,6 +59,13 @@ export async function login(req: Request, res: Response) {
             id: true,
             userRole: true,
             name: true,
+            isActive: true,
+            permissionSections: {
+                select: {
+                    permittedSection: true,
+                    isPermitted: true,
+                }
+            }
         }
     });
     if (!user) {
@@ -70,7 +77,11 @@ export async function login(req: Request, res: Response) {
         return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const accessToken = signAccessToken({ userId: String(user.id), role: String(user.userRole) });
+    if (user?.isActive === false) {
+        return res.status(400).json({ message: "User not active yet. Please contact the admin." })
+    }
+
+    const accessToken = signAccessToken({ userId: String(user.id), role: String(user.permissionSections) });
     const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
 
     await prisma.refreshToken.create({
@@ -81,7 +92,7 @@ export async function login(req: Request, res: Response) {
 
     return res.json({
         accessToken,
-        user: { id: user.id, userName: user.name, phoneNo: user.phoneNo, role: user.userRole },
+        user: { id: user.id, userName: user.name, phoneNo: user.phoneNo, role: user.permissionSections },
     });
 }
 
@@ -96,7 +107,18 @@ export async function refresh(req: Request, res: Response) {
 
     const stored = await prisma.refreshToken.findUnique({
         where: { tokenHash },
-        include: { user: true },
+        include: {
+            user: {
+                include: {
+                    permissionSections: {
+                        select: {
+                            permittedSection: true,
+                            isPermitted: true,
+                        },
+                    },
+                },
+            },
+        },
     });
 
     if (!stored || stored.revoked || stored.expiresAt < new Date()) {
@@ -127,7 +149,7 @@ export async function refresh(req: Request, res: Response) {
 
     const accessToken = signAccessToken({
         userId: String(stored.user.id),
-        role: String(stored.user.userRole),
+        role: String(stored.user.permissionSections),
     });
 
     res.cookie(REFRESH_TOKEN_COOKIE_NAME, newRawToken, REFRESH_COOKIE_OPTIONS);
@@ -158,7 +180,26 @@ export async function getMe(req: Request, res: Response) {
         return res.status(401).json({ message: "Not authenticated" });
     }
 
-    const foundUser = await prisma.user.findUnique({ where: { id: Number(userId) } });
+    const foundUser = await prisma.user.findUnique(
+        {
+            where: { id: Number(userId) },
+            select: {
+                id: true,
+                userName: true,
+                name: true,
+                permissionSections: {
+                    select: {
+                        permittedSection: true,
+                        isPermitted:{
+                            select: {
+                                isPermitted: true,
+                            }
+                        },
+                    }
+                }
+            }
+        }
+    );
 
     if (!foundUser) {
         return res.status(404).json({ message: "User not found" });
@@ -169,8 +210,6 @@ export async function getMe(req: Request, res: Response) {
         id: foundUser.id,
         userName: foundUser.userName,
         name: foundUser.name,
-        // phoneNo: foundUser.phoneNo,
-        userRole: foundUser.userRole,
-        // workStation: foundUser.workStation, // uncomment once that column exists on `user`
+        userRole: foundUser.permissionSections
     });
 }

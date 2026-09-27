@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
-import useAxiosPublic from '../../../hooks/Axios';
 import { formatToErpDate } from '../../../helpers/date/formateDate';
-import { fmtNumber } from './FormatNumber';
-import { tableScrollWrapStyle } from './TableStyle';
 import { useTableFilters } from './UseFilter';
 import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
 import ChallanEditModal from './challanEditModal/ChallanEdit';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -169,7 +167,7 @@ const Knitting = () => {
 
     // Portal refs & state for the column filter dropdown
     const filterButtonRefs = useRef({});
-    const [dropdownPos, setDropdownPos] = useState(null); 
+    const [dropdownPos, setDropdownPos] = useState(null);
 
     const [isBillGenerating, setIsBillGenerating] = useState(false);
     const [isChallanEditing, setIsChallanEditing] = useState(false);
@@ -177,8 +175,8 @@ const Knitting = () => {
     const [isChallanDataLoading, setIsChallanDataLoading] = useState(null)
 
 
-    const { fetchData, loading } = useFetchData();
-    const axiosPublic = useAxiosPublic();
+    const { fetchData, loading, error } = useFetchData();
+    const axiosPrivate = useAxiosPrivate();
 
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
@@ -397,29 +395,74 @@ const Knitting = () => {
 
     useEffect(() => {
         if (search) return;
+
         setFetchError(null);
+
         const queryParams = new URLSearchParams();
-        if (fetchAll) { queryParams.append('fetchAll', 'true'); setIsFetchingAll(true); }
+
+        if (fetchAll) {
+            queryParams.append("fetchAll", "true");
+            setIsFetchingAll(true);
+        }
+
         if (filters) {
             Object.entries(filters).forEach(([key, value]) => {
-                if (value && Array.isArray(value) && value.length > 0) queryParams.append(key, value.join(','));
-                else if (value && typeof value === 'string' && value.length > 0) queryParams.append(key, value);
+                if (value && Array.isArray(value) && value.length > 0) {
+                    queryParams.append(key, value.join(","));
+                } else if (
+                    value &&
+                    typeof value === "string" &&
+                    value.length > 0
+                ) {
+                    queryParams.append(key, value);
+                }
             });
         }
+
         const queryString = queryParams.toString();
-        const url = `/api/challan-movement/knittingOrder${queryString ? '?' + queryString : ''}`;
-        fetchData(url).then((res) => {
-            if (!res) { setFetchError("No response from server."); return; }
-            let payload = [];
-            if (Array.isArray(res)) payload = res;
-            else if (Array.isArray(res?.data)) payload = res.data;
-            else if (Array.isArray(res?.data?.data)) payload = res.data.data;
-            setMovements(payload);
-        }).catch((err) => {
-            console.error("Failed to load Knitting deliveries:", err);
-            setFetchError("Failed to load data.");
-            setPendingFilterKey(null);
-        }).finally(() => { if (fetchAll) setIsFetchingAll(false); });
+
+        const url = `/api/challan-movement/knittingOrder${queryString ? "?" + queryString : ""
+            }`;
+
+        fetchData(url)
+            .then((res) => {
+                if (!res) {
+                    setFetchError("Permission denied");
+                    return;
+                }
+
+                let payload = [];
+
+                if (Array.isArray(res)) {
+                    payload = res;
+                } else if (Array.isArray(res?.data)) {
+                    payload = res.data;
+                } else if (Array.isArray(res?.data?.data)) {
+                    payload = res.data.data;
+                }
+
+                setMovements(payload);
+            })
+            .catch((err) => {
+                console.error("Failed to load Knitting deliveries:", err);
+
+                if (err?.response?.status === 403) {
+                    setFetchError("Permission denied");
+                } else {
+                    setFetchError(
+                        err?.response?.data?.message ||
+                        err?.response?.data?.msg ||
+                        err?.message ||
+                        err?.msg ||
+                        "Failed to load Knitting deliveries"
+                    );
+                }
+
+                setPendingFilterKey(null);
+            })
+            .finally(() => {
+                if (fetchAll) setIsFetchingAll(false);
+            });
     }, [fetchData, filtersString, fetchAll, refreshKey, search]);
 
     useEffect(() => {
@@ -493,7 +536,7 @@ const Knitting = () => {
         const searchArray = search.split(/[\s,]+/).filter(Boolean);
 
         try {
-            const res = await axiosPublic.get("/api/knittingOrder/challan/search", { params: { challans: searchArray.join(","), context: "knittingOrder" } });
+            const res = await axiosPrivate.get("/api/knittingOrder/challan/search", { params: { challans: searchArray.join(","), context: "knittingOrder" } });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;
@@ -758,7 +801,7 @@ const Knitting = () => {
         setIsChallanDataLoading(true)
         setIsChallanEditing(true);
         try {
-            const res = await axiosPublic.get(`/api/detail-challan-view/knittingOrder/${challanNo}/${jobNo}`)
+            const res = await axiosPrivate.get(`/api/detail-challan-view/knittingOrder/${challanNo}/${jobNo}`)
             console.log(res.data, "challan data");
             setChallanToEditData(res.data);
             setIsChallanDataLoading(false)
@@ -1174,7 +1217,7 @@ const Knitting = () => {
                                     return (
                                         <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
                                             <div
-                                                 style={{
+                                                style={{
                                                     minHeight: '20px', textAlign: 'center',
                                                     opacity: currentValue ? 1 : 0.5,
                                                     whiteSpace: 'normal',

@@ -43,6 +43,7 @@ model WorkOrder {
   isApproved                Boolean                    @default(false)
   approvedBy                Int?                       @default(0)
   isRequested               Boolean?                   @default(false)
+  createdAt                 DateTime                   @default(now())
   workOrderApprovalRequests workOrderApprovalRequest[]
 
   @@index([yarnCount])
@@ -103,6 +104,7 @@ model StyleRequirement {
   hodDate              DateTime              @default(now())
   isReconciliationDone Boolean?              @default(false)
   dateOfReconciliation DateTime              @default(now())
+  createdAt            DateTime              @default(now())
   rows                 StyleRequirementRow[]
   sizes                sizes[]
   workOrders           WorkOrder[]
@@ -128,6 +130,7 @@ model StyleRequirementRow {
   additional         Int                 @default(0)
   compositions       Composition[]
   reconciliation     reconciliationData?
+  productionDatas    productionData[]
 
   @@index([styleRequirementId])
   @@index([color])
@@ -244,12 +247,32 @@ model user {
   requestsReceived    workOrderApprovalRequest[] @relation("RequestTo")
   requestsMade        workOrderApprovalRequest[] @relation("RequestedBy")
   reconciliationNotes reconciliationNotes[]
+  permissionSections  permissionSection[]
+  productionDatas     productionData[]
+
   @@index([userName])
   @@index([userRole])
   @@index([phoneNo])
   @@index([isActive])
   @@index([dateOfJoin])
   @@index([designation])
+}
+
+model permissionSection {
+  id               Int           @id @default(autoincrement())
+  userId           Int
+  permittedSection String
+  createdAt        DateTime      @default(now())
+  user             user          @relation(fields: [userId], references: [id])
+  isPermitted      isPermitted[]
+}
+
+model isPermitted {
+  id                  Int               @id @default(autoincrement())
+  isPermitted         String
+  permissionSectionId Int
+  createdAt           DateTime          @default(now())
+  permissionSection   permissionSection @relation(fields: [permissionSectionId], references: [id])
 }
 
 model refreshToken {
@@ -356,4 +379,19 @@ model yarnPurchasePiDetails {
   qty          Float
   price        Float          @default(0.0)
   supplierName String
+}
+
+model productionData {
+  id                    Int                 @id @default(autoincrement())
+  productionType        String
+  department            String
+  productionQty         Int
+  productionDate        DateTime
+  createdAt             DateTime            @default(now())
+  createdBy             Int
+  styleRequirementRowId Int
+  jobNumber             String
+  remarks               String
+  user                  user                @relation(fields: [createdBy], references: [id])
+  styleRowId            StyleRequirementRow @relation(fields: [styleRequirementRowId], references: [id])
 }

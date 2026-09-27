@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Input from '../../../../components/Input';
-import useAxiosPublic from '../../../../hooks/Axios';
 import useAxiosPrivate from '../../../../hooks/UseAxiosPrivate';
 // import useAxiosPrivate from '../../../../hooks/useAxiosPrivate';
 const roleOptions = ['SUPER ADMIN',
@@ -26,7 +25,6 @@ const AddNewUser = () => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-    const AXIOS = useAxiosPublic();
     const axiosPrivate = useAxiosPrivate();
     const handleChange = (field) => (e) => {
         setForm((prev) => ({ ...prev, [field]: e.target.value }));
