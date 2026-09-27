@@ -62,8 +62,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
         const { jobNo } = req.params as { jobNo: string | undefined };
         const recon = req.query.reconciliation === 'true';
         const isProd = req.query.productionSummary === 'true';
-        const style = true;
-        console.log(isProd, "is production summary");
+        const style = req.query.styleRequirement === 'true';
         const { filters: filtersParam } = req.query as { filters?: string };
 
         let filters: StyleFilters | undefined;

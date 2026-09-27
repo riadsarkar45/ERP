@@ -139,7 +139,7 @@ export default function Summary() {
     const fetchFilteredData = useCallback(async () => {
         setIsLoading(prev => ({ ...prev, refreshLoading: true }));
         try {
-            const params = { page: 1, limit: 10000, reconciliation: false };
+            const params = { page: 1, limit: 10000, reconciliation: false, styleRequirement: true };
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setRawData(res.data.data);
