@@ -3,9 +3,6 @@ import prisma from '../../database/prismaClient/prisma';
 
 export const newProduction = async (req: Request, res: Response) => {
     try {
-        // ==========================================
-        // USER VALIDATION
-        // ==========================================
         const userId = Number(req.user?.userId);
 
         if (!userId || isNaN(userId)) {
@@ -15,9 +12,6 @@ export const newProduction = async (req: Request, res: Response) => {
             });
         }
 
-        // ==========================================
-        // BODY
-        // ==========================================
         const {
             date,
             jobNo,
@@ -25,9 +19,6 @@ export const newProduction = async (req: Request, res: Response) => {
             details,
         } = req.body;
 
-        // ==========================================
-        // BASIC VALIDATION
-        // ==========================================
         if (!date) {
             return res.status(400).json({
                 success: false,
@@ -48,10 +39,6 @@ export const newProduction = async (req: Request, res: Response) => {
                 message: 'Production details are required',
             });
         }
-
-        // ==========================================
-        // SUPPORT SINGLE OBJECT + ARRAY
-        // ==========================================
         const normalizedDetails = Array.isArray(details)
             ? details
             : [details];
@@ -63,18 +50,12 @@ export const newProduction = async (req: Request, res: Response) => {
             });
         }
 
-        // ==========================================
-        // THESE FIELDS ARE NOT PRODUCTION TYPES
-        // ==========================================
         const excludedKeys = new Set([
             'colorId',
             'color',
             'remarks',
         ]);
 
-        // ==========================================
-        // BUILD DATABASE ROWS
-        // ==========================================
         const productionRows = normalizedDetails.flatMap((item: any) => {
 
             const styleRequirementRowId = Number(item.colorId);
@@ -147,16 +128,10 @@ export const newProduction = async (req: Request, res: Response) => {
             'Production rows before insert'
         );
 
-        // ==========================================
-        // INSERT ALL AT ONCE
-        // ==========================================
         const result = await prisma.productionData.createMany({
             data: productionRows,
         });
 
-        // ==========================================
-        // RESPONSE
-        // ==========================================
         return res.status(201).json({
             success: true,
             message: 'Production saved successfully',
