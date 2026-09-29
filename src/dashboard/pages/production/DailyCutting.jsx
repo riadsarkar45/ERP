@@ -1,7 +1,8 @@
 // DailyCutting.jsx
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Filter, Download, RefreshCw, X, Search } from 'lucide-react'
+import { useFetchData } from '../../../hooks/fetch'
 
 // ---------- COLUMN DEFINITIONS ----------
 const columns = [
@@ -13,43 +14,36 @@ const columns = [
     { key: 'remarks', label: 'REMARKS' },
 ]
 
-// ---------- SAMPLE DATA ----------
-// NOTE: "today" for the summary cards is derived from the most recent date
-// found in this dataset (see `referenceDate` below), so the cards line up
-// with the sample rows. Once real/live data is wired in, referenceDate can
-// simply be `new Date()`.
-const sampleData = [
-    { id: 1, date: '2026-09-01', jobNumber: 'JOB-1001', styleNumber: 'STY-A21', color: 'Navy', dailyCutting: 850, remarks: 'On track' },
-    { id: 2, date: '2026-09-01', jobNumber: 'JOB-1002', styleNumber: 'STY-B14', color: 'White', dailyCutting: 620, remarks: '' },
-    { id: 3, date: '2026-09-02', jobNumber: 'JOB-1001', styleNumber: 'STY-A21', color: 'Navy', dailyCutting: 900, remarks: 'Ahead of plan' },
-    { id: 4, date: '2026-09-02', jobNumber: 'JOB-1003', styleNumber: 'STY-C07', color: 'Black', dailyCutting: 480, remarks: 'Fabric delay' },
-    { id: 5, date: '2026-09-03', jobNumber: 'JOB-1002', styleNumber: 'STY-B14', color: 'White', dailyCutting: 710, remarks: '' },
-    { id: 6, date: '2026-09-03', jobNumber: 'JOB-1003', styleNumber: 'STY-C07', color: 'Black', dailyCutting: 390, remarks: '' },
-    { id: 7, date: '2026-09-02', jobNumber: 'JOB-0999', styleNumber: 'STY-D02', color: 'Grey', dailyCutting: 640, remarks: '' },
-    { id: 8, date: '2026-08-30', jobNumber: 'JOB-0998', styleNumber: 'STY-D02', color: 'Grey', dailyCutting: 530, remarks: 'Short shift' },
-    { id: 9, date: '2026-08-31', jobNumber: 'JOB-0999', styleNumber: 'STY-D02', color: 'Grey', dailyCutting: 610, remarks: '' },
-    { id: 10, date: '2026-08-15', jobNumber: 'JOB-0990', styleNumber: 'STY-E11', color: 'Beige', dailyCutting: 720, remarks: 'Old order' },
-]
-
 // ---------- DATE HELPERS ----------
 const toDateOnly = (d) => {
+    if (!d) return new Date(NaN)
+    const parts = String(d).split('T')[0].split('-')
+    if (parts.length === 3) {
+        return new Date(parts[0], parts[1] - 1, parts[2])
+    }
     const x = new Date(d)
     x.setHours(0, 0, 0, 0)
     return x
 }
 
-const isSameDay = (a, b) => toDateOnly(a).getTime() === toDateOnly(b).getTime()
+const isSameDay = (a, b) => {
+    const d1 = toDateOnly(a)
+    const d2 = toDateOnly(b)
+    return !isNaN(d1) && !isNaN(d2) && d1.getTime() === d2.getTime()
+}
 
 const startOfWeek = (d) => {
     const x = toDateOnly(d)
-    const day = x.getDay() // 0 = Sunday
-    const diff = (day === 0 ? 6 : day - 1) // treat Monday as start of week
+    if (isNaN(x)) return x
+    const day = x.getDay()
+    const diff = day === 0 ? 6 : day - 1
     x.setDate(x.getDate() - diff)
     return x
 }
 
 const startOfMonth = (d) => {
     const x = toDateOnly(d)
+    if (isNaN(x)) return x
     x.setDate(1)
     return x
 }
@@ -88,7 +82,7 @@ const SummaryCard = ({ label, value, accent = 'border-emerald-500' }) => (
     </div>
 )
 
-// ---------- FILTER TRIGGER (funnel icon in the header cell) ----------
+// ---------- FILTER TRIGGER ----------
 const FilterTrigger = ({ label, isActive, onOpen }) => (
     <button
         onClick={(e) => {
@@ -103,10 +97,7 @@ const FilterTrigger = ({ label, isActive, onOpen }) => (
     </button>
 )
 
-// ---------- FILTER MODAL (Excel-style: search + checkbox list, Apply / Clear) ----------
-// Rendered through a portal, fixed-positioned right under the column's own
-// filter icon (using its on-screen rect) so it always sits at that column's
-// position instead of being clipped by the table's scroll container.
+// ---------- FILTER MODAL ----------
 const PANEL_WIDTH = 240
 
 const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onClear, onClose }) => {
@@ -116,7 +107,7 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
     useEffect(() => {
         setPending(new Set(initialSelected))
         setSearch('')
-    }, [label]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [label])
 
     const filteredOptions = options.filter((opt) =>
         opt.toLowerCase().includes(search.toLowerCase())
@@ -130,14 +121,12 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
         })
     }
 
-    // Anchor under the clicked column, clamped so it never runs off-screen.
     const top = anchorRect.bottom + 4
     const maxLeft = window.innerWidth - PANEL_WIDTH - 8
     const left = Math.min(Math.max(anchorRect.left - PANEL_WIDTH + 20, 8), maxLeft)
 
     return createPortal(
         <>
-            {/* transparent click-catcher to close on outside click, no dark overlay */}
             <div className="fixed inset-0 z-[99]" onMouseDown={onClose} />
             <div
                 onMouseDown={(e) => e.stopPropagation()}
@@ -204,18 +193,80 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
 }
 
 // ---------- MAIN COMPONENT ----------
-const DailyCutting = ({ data = sampleData }) => {
-    const [filters, setFilters] = useState({})   // { colKey: Set(values) }
-    const [activeFilter, setActiveFilter] = useState(null) // { key, rect } for the open filter modal
+const DailyCutting = () => {
+    const [data, setData] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [filters, setFilters] = useState({})
+    const [activeFilter, setActiveFilter] = useState(null)
 
-    // date filter mode: 'all' | 'today' | 'yesterday' | 'date' | 'month'
     const [dateMode, setDateMode] = useState('all')
     const [customDate, setCustomDate] = useState('')
     const [customMonth, setCustomMonth] = useState('')
+    
+    const { fetchData } = useFetchData()
 
-    // "today" reference for the summary cards — most recent date in the data
+    const fetchProductionData = useCallback(async () => {
+        try {
+            setLoading(true)
+            const res = await fetchData("/api/department-production-data/cutting")
+            const rawData = res?.data || res || []
+            
+            // Group by styleRowId.id to merge identical color entries and sum their quantities
+            const grouped = {}
+            rawData.forEach((item) => {
+                const colorId = item.styleRowId?.id ?? item.id ?? `temp-${Math.random().toString(36).substr(2, 9)}`
+                const dateStr = item.productionDate 
+                    ? new Date(item.productionDate).toISOString().split('T')[0] 
+                    : 'N/A'
+                
+                if (!grouped[colorId]) {
+                    grouped[colorId] = {
+                        id: colorId,
+                        date: dateStr,
+                        jobNumber: item.jobNumber || 'N/A',
+                        styleNumber: item.styleRowId?.styleRequirement?.styleNo || 'N/A',
+                        color: item.styleRowId?.color || 'N/A',
+                        dailyCutting: 0,
+                        remarksSet: new Set(),
+                        latestDateObj: new Date(dateStr)
+                    }
+                }
+                
+                // Sum the quantities for the same color ID
+                grouped[colorId].dailyCutting += Number(item.productionQty) || 0
+                
+                // Combine remarks
+                if (item.remarks?.trim()) {
+                    grouped[colorId].remarksSet.add(item.remarks.trim())
+                }
+                
+                // Keep the most recent date if there are multiple entries
+                const currentDateObj = new Date(dateStr)
+                if (currentDateObj > grouped[colorId].latestDateObj) {
+                    grouped[colorId].latestDateObj = currentDateObj
+                    grouped[colorId].date = dateStr
+                }
+            })
+            
+            const transformed = Object.values(grouped).map(item => ({
+                ...item,
+                remarks: Array.from(item.remarksSet).join(', ') || 'N/A'
+            }))
+            
+            setData(transformed)
+        } catch (e) {
+            console.error("Failed to fetch production data:", e)
+        } finally {
+            setLoading(false)
+        }
+    }, [fetchData])
+
+    useEffect(() => {
+        fetchProductionData()
+    }, [fetchProductionData])
+
     const referenceDate = useMemo(() => {
-        const dates = data.map((r) => toDateOnly(r.date)).filter((d) => !isNaN(d))
+        const dates = data.map((r) => toDateOnly(r.date)).filter((d) => !isNaN(d.getTime()))
         if (dates.length === 0) return toDateOnly(new Date())
         return new Date(Math.max(...dates.map((d) => d.getTime())))
     }, [data])
@@ -229,7 +280,6 @@ const DailyCutting = ({ data = sampleData }) => {
     const weekStart = useMemo(() => startOfWeek(referenceDate), [referenceDate])
     const monthStart = useMemo(() => startOfMonth(referenceDate), [referenceDate])
 
-    // ---------- SUMMARY TOTALS ----------
     const summary = useMemo(() => {
         let dailyTotal = 0
         let weekTotal = 0
@@ -254,7 +304,7 @@ const DailyCutting = ({ data = sampleData }) => {
             const label = row.date ? monthLabel(row.date) : null
             if (label) set.add(label)
         })
-        return Array.from(set)
+        return Array.from(set).sort()
     }, [data])
 
     const getUniqueValues = (key) => {
@@ -281,7 +331,6 @@ const DailyCutting = ({ data = sampleData }) => {
         setActiveFilter(null)
     }
 
-    // ---------- FILTERED ROWS ----------
     const filteredData = useMemo(() => {
         return data.filter((row) => {
             const d = toDateOnly(row.date)
@@ -304,6 +353,18 @@ const DailyCutting = ({ data = sampleData }) => {
         [filteredData]
     )
 
+    // Group data by jobNumber for rowSpan display
+    const groupedData = useMemo(() => {
+        const groups = {}
+        filteredData.forEach(row => {
+            if (!groups[row.jobNumber]) {
+                groups[row.jobNumber] = []
+            }
+            groups[row.jobNumber].push(row)
+        })
+        return groups
+    }, [filteredData])
+
     const dateModes = [
         { key: 'all', label: 'All' },
         { key: 'today', label: 'Today' },
@@ -312,9 +373,17 @@ const DailyCutting = ({ data = sampleData }) => {
         { key: 'month', label: 'Month' },
     ]
 
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64 w-full">
+                <RefreshCw className="animate-spin text-blue-600" size={32} />
+                <span className="ml-2 text-slate-600 font-medium">Loading production data...</span>
+            </div>
+        )
+    }
+
     return (
         <div className="w-full space-y-3">
-            {/* ---------- SUMMARY CARDS ---------- */}
             <div className="flex flex-wrap gap-3">
                 <SummaryCard label="Daily Cutting" value={summary.dailyTotal} accent="border-emerald-500" />
                 <SummaryCard label="This Week Cutting" value={summary.weekTotal} accent="border-sky-500" />
@@ -322,9 +391,7 @@ const DailyCutting = ({ data = sampleData }) => {
                 <SummaryCard label="Total Cutting" value={summary.grandTotal} accent="border-amber-500" />
             </div>
 
-            {/* ---------- TABLE CARD ---------- */}
             <div className="w-full rounded-lg border border-gray-200 bg-white shadow-sm">
-                {/* Toolbar: date filter pills + custom inputs + export */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
                         {dateModes.map((m) => (
@@ -380,7 +447,6 @@ const DailyCutting = ({ data = sampleData }) => {
                     </button>
                 </div>
 
-                {/* Table (vertical scroll container so the total footer can stick) */}
                 <div className="max-h-[520px] overflow-auto" onScroll={() => activeFilter && setActiveFilter(null)}>
                     <table className="min-w-full border-collapse text-sm">
                         <thead className="sticky top-0 z-20">
@@ -401,28 +467,63 @@ const DailyCutting = ({ data = sampleData }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredData.length === 0 ? (
+                            {Object.keys(groupedData).length === 0 ? (
                                 <tr>
                                     <td colSpan={columns.length} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
                                         No matching records
                                     </td>
                                 </tr>
                             ) : (
-                                filteredData.map((row, i) => (
-                                    <tr key={row.id ?? i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        {columns.map((col) => (
-                                            <td key={col.key} className="border border-gray-200 px-3 py-2 text-center whitespace-nowrap">
-                                                {col.key === 'dailyCutting' ? formatNumber(row[col.key]) : row[col.key]}
+                                Object.entries(groupedData).map(([jobNumber, rows], groupIdx) => (
+                                    rows.map((row, rowIdx) => (
+                                        <tr key={`${jobNumber}-${row.id}`} className={groupIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                            {rowIdx === 0 && (
+                                                <>
+                                                    <td 
+                                                        rowSpan={rows.length}
+                                                        className="border border-gray-200 px-3 py-2 text-center align-middle font-medium"
+                                                    >
+                                                        {row.date}
+                                                    </td>
+                                                    <td 
+                                                        rowSpan={rows.length}
+                                                        className="border border-gray-200 px-3 py-2 text-center align-middle font-medium"
+                                                    >
+                                                        {row.jobNumber}
+                                                    </td>
+                                                    <td 
+                                                        rowSpan={rows.length}
+                                                        className="border border-gray-200 px-3 py-2 text-center align-middle font-medium"
+                                                    >
+                                                        {row.styleNumber}
+                                                    </td>
+                                                </>
+                                            )}
+                                            <td className="border border-gray-200 px-3 py-2 text-center">
+                                                <span className="inline-block px-2 py-1 text-xs font-semibold bg-blue-50 border border-blue-200 rounded text-blue-700">
+                                                    {row.color}
+                                                </span>
                                             </td>
-                                        ))}
-                                    </tr>
+                                            <td className="border border-gray-200 px-3 py-2 text-center font-semibold">
+                                                {formatNumber(row.dailyCutting)}
+                                            </td>
+                                            {rowIdx === 0 && (
+                                                <td 
+                                                    rowSpan={rows.length}
+                                                    className="border border-gray-200 px-3 py-2 text-center align-middle"
+                                                >
+                                                    {row.remarks || 'N/A'}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))
                                 ))
                             )}
                         </tbody>
                         <tfoot className="sticky bottom-0 z-20">
                             <tr className="bg-slate-700 font-semibold text-white">
                                 <td
-                                    colSpan={columns.findIndex((c) => c.key === 'dailyCutting')}
+                                    colSpan={4}
                                     className="border border-slate-600 px-3 py-2 text-center"
                                 >
                                     TOTAL
@@ -431,7 +532,6 @@ const DailyCutting = ({ data = sampleData }) => {
                                     {formatNumber(filteredTotal)}
                                 </td>
                                 <td
-                                    colSpan={columns.length - columns.findIndex((c) => c.key === 'dailyCutting') - 1}
                                     className="border border-slate-600 px-3 py-2 text-center"
                                 />
                             </tr>

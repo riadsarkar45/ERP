@@ -62,6 +62,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
         const { jobNo } = req.params as { jobNo: string | undefined };
         const recon = req.query.reconciliation === 'true';
         const isProd = req.query.productionSummary === 'true';
+        const style = true;
         console.log(isProd, "is production summary");
         const { filters: filtersParam } = req.query as { filters?: string };
 
@@ -85,12 +86,14 @@ export const styleRequirements = async (req: Request, res: Response) => {
                 orderBy: { id: "desc" },
                 take: 40,
                 select: {
-                    ...isProd && {
-                        buyerName: true,
-                        jobNo: true,
-                        poNo: true,
-                        hodDate: true,
-                    },
+                    ...(isProd || recon || style
+                        ? {
+                            buyerName: true,
+                            jobNo: true,
+                            poNo: true,
+                            hodDate: true,
+                        }
+                        : {}),
                     processLoss: true,
                     styleNo: true,
                     salesContact: true,
@@ -108,10 +111,10 @@ export const styleRequirements = async (req: Request, res: Response) => {
                             : {},
                         select: {
                             id: true,
-                            ...isProd && {
+                            ...(isProd || recon || style ? {
                                 color: true,
                                 orderQty: true,
-                            },
+                            }: {}),
                             composition: true,
                             finishDia: true,
                             finishRequiredQty: true,

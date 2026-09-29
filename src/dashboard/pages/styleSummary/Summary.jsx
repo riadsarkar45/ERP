@@ -143,6 +143,7 @@ export default function Summary() {
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setRawData(res.data.data);
+            //console.log(res.data, "style  data"); // style requirement log
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
@@ -381,6 +382,7 @@ export default function Summary() {
         try {
             const req = await axiosPrivate.get(`/api/styles/${jobNo}`);
             if (req.data.type === "success") {
+                console.log(req.data, "style data");
                 setStyleEditingData({ isShowStyleEditModal: true, isLoading: false, data: req?.data?.data })
             }
         } finally {

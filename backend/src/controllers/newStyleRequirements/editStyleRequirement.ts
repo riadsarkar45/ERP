@@ -49,6 +49,7 @@ interface StyleEditInput {
 
 // Plain string fields on StyleRequirement this endpoint allows editing.
 // processLoss is handled separately since it needs numeric conversion.
+// jobNo is trimmed/validated separately below.
 const STYLE_STRING_KEYS = ["salesContact", "buyerName", "jobNo", "poNo", "styleNo"] as const;
 
 const toInt = (raw: unknown): number | null => {
@@ -63,12 +64,6 @@ const toFloat = (raw: unknown): number | null => {
     return Number.isNaN(n) ? null : n;
 };
 
-// Keep your existing imports and helpers above this function, unchanged:
-// Request/Response, prisma, STYLE_STRING_KEYS, toInt, toFloat, StyleEditInput
-
-// Keep your existing imports and helpers above this function, unchanged:
-// Request/Response, prisma, STYLE_STRING_KEYS, toInt, toFloat, StyleEditInput
-
 export const editStyleRequirement = async (req: Request, res: Response) => {
     try {
         const payload = req.body as StyleEditInput[];
@@ -80,6 +75,7 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
         const results: Array<{
             id: number;
             updated: boolean;
+            jobNoChanged: boolean;
             rowsUpdated: number;
             rowsCreated: number;
             rowsDeleted: number;
@@ -96,17 +92,59 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
 
             const existingStyle = await prisma.styleRequirement.findUnique({
                 where: { id: styleId },
-                select: { id: true },
+                select: { id: true, jobNo: true, styleNo: true, buyerName: true },
             });
             if (!existingStyle) {
                 return res.status(404).json({ message: `Style requirement ${styleId} not found` });
             }
 
+            const oldJobNo = existingStyle.jobNo;
+
+            // --- Job no validation ---
+            const newJobNo =
+                styleEdit.jobNo !== undefined ? String(styleEdit.jobNo).trim() : undefined;
+
+            if (newJobNo !== undefined && newJobNo === "") {
+                return res.status(400).json({ message: "Job no cannot be empty" });
+            }
+
+            const jobNoChanged = newJobNo !== undefined && newJobNo !== oldJobNo;
+
+            if (jobNoChanged) {
+                // StyleRequirement.jobNo and jobs.jobNo are both @unique,
+                // so refuse if the new job no is already taken.
+                const [styleWithSameJobNo, jobWithSameJobNo] = await Promise.all([
+                    prisma.styleRequirement.findUnique({
+                        where: { jobNo: newJobNo as string },
+                        select: { id: true },
+                    }),
+                    prisma.jobs.findUnique({
+                        where: { jobNo: newJobNo as string },
+                        select: { id: true },
+                    }),
+                ]);
+
+                if (styleWithSameJobNo && styleWithSameJobNo.id !== styleId) {
+                    return res.status(409).json({
+                        message: `Job no "${newJobNo}" already exists on another style requirement`,
+                    });
+                }
+                if (jobWithSameJobNo) {
+                    return res.status(409).json({
+                        message: `Job no "${newJobNo}" already exists`,
+                    });
+                }
+            }
+
             // --- Build the style-level update ---
             const styleData: Record<string, string | number> = {};
             for (const key of STYLE_STRING_KEYS) {
+                if (key === "jobNo") continue; // handled separately (trimmed + validated)
                 const val = styleEdit[key];
                 if (val !== undefined) styleData[key] = String(val);
+            }
+            if (jobNoChanged) {
+                styleData.jobNo = newJobNo as string;
             }
             if (styleEdit.processLoss !== undefined) {
                 const pl = toFloat(styleEdit.processLoss);
@@ -120,6 +158,71 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
                     prisma.styleRequirement.update({
                         where: { id: styleId },
                         data: styleData,
+                    })
+                );
+            }
+
+            // ── Propagate style-level changes to every table that stores a copy ──
+            const newStyleNo =
+                typeof styleData.styleNo === "string" && styleData.styleNo !== existingStyle.styleNo
+                    ? styleData.styleNo
+                    : undefined;
+            const newBuyerName =
+                typeof styleData.buyerName === "string" && styleData.buyerName !== existingStyle.buyerName
+                    ? styleData.buyerName
+                    : undefined;
+
+            // Work orders: jobNo + styleNo
+            // NOTE: the filter uses the jobs relation (jobs.jobNo = old), so this
+            // must run BEFORE the jobs row is renamed. $transaction runs in order.
+            const workOrderData: { jobNo?: string; styleNo?: string } = {};
+            if (jobNoChanged) workOrderData.jobNo = newJobNo as string;
+            if (newStyleNo !== undefined) workOrderData.styleNo = newStyleNo;
+
+            if (Object.keys(workOrderData).length > 0) {
+                operations.push(
+                    prisma.workOrder.updateMany({
+                        where: {
+                            OR: [
+                                { styleRequirementId: styleId },
+                                { jobs: { jobNo: oldJobNo } },
+                                { jobNo: oldJobNo },
+                            ],
+                        },
+                        data: workOrderData,
+                    })
+                );
+            }
+
+            // jobs table: jobNo (WorkOrder.jobId keeps pointing at the same row)
+            if (jobNoChanged) {
+                operations.push(
+                    prisma.jobs.updateMany({
+                        where: { jobNo: oldJobNo },
+                        data: { jobNo: newJobNo as string },
+                    })
+                );
+
+                // Production data of every row under this style requirement
+                operations.push(
+                    prisma.productionData.updateMany({
+                        where: { styleRowId: { styleRequirementId: styleId } },
+                        data: { jobNumber: newJobNo as string },
+                    })
+                );
+            }
+
+            // Yarn dyed stock: jobNo + styleNo + buyer (plain text, matched by old job no)
+            const ydStockData: { jobNo?: string; styleNo?: string; buyer?: string } = {};
+            if (jobNoChanged) ydStockData.jobNo = newJobNo as string;
+            if (newStyleNo !== undefined) ydStockData.styleNo = newStyleNo;
+            if (newBuyerName !== undefined) ydStockData.buyer = newBuyerName;
+
+            if (Object.keys(ydStockData).length > 0) {
+                operations.push(
+                    prisma.ydStock.updateMany({
+                        where: { jobNo: oldJobNo },
+                        data: ydStockData,
                     })
                 );
             }
@@ -149,7 +252,7 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
             // --- Updated existing rows ---
             let rowsUpdatedCount = 0;
             if (styleEdit.updatedRows && styleEdit.updatedRows.length > 0) {
-                // Load the current color/composition of the rows being edited, so we know
+                // Load the current values of the rows being edited, so we know
                 // what changed and can find legacy compositions that have no row id yet.
                 const updatedRowIds = styleEdit.updatedRows
                     .map((r) => Number(r.id))
@@ -157,7 +260,13 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
 
                 const existingRows = await prisma.styleRequirementRow.findMany({
                     where: { id: { in: updatedRowIds }, styleRequirementId: styleId },
-                    select: { id: true, color: true, composition: true },
+                    select: {
+                        id: true,
+                        color: true,
+                        composition: true,
+                        orderQty: true,
+                        additional: true,
+                    },
                 });
                 const existingRowMap = new Map(existingRows.map((r) => [r.id, r]));
 
@@ -201,17 +310,34 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
                     );
 
                     // ── Keep work order compositions in sync with the row ──
-                    const newColor = rowData.color as string | undefined;
-                    const newComposition = rowData.composition as string | undefined;
-                    const colorChanged = newColor !== undefined && newColor !== existing.color;
-                    const compositionChanged =
-                        newComposition !== undefined && newComposition !== existing.composition;
+                    // Composition stores its own copy of color, composition, orderQty, additional.
+                    const compositionData: {
+                        color?: string;
+                        composition?: string;
+                        orderQty?: number;
+                        additional?: number;
+                    } = {};
 
-                    if (colorChanged || compositionChanged) {
-                        const compositionData: { color?: string; composition?: string } = {};
-                        if (colorChanged) compositionData.color = newColor as string;
-                        if (compositionChanged) compositionData.composition = newComposition as string;
+                    if (typeof rowData.color === "string" && rowData.color !== existing.color) {
+                        compositionData.color = rowData.color;
+                    }
+                    if (
+                        typeof rowData.composition === "string" &&
+                        rowData.composition !== existing.composition
+                    ) {
+                        compositionData.composition = rowData.composition;
+                    }
+                    if (typeof rowData.orderQty === "number" && rowData.orderQty !== existing.orderQty) {
+                        compositionData.orderQty = rowData.orderQty;
+                    }
+                    if (
+                        typeof rowData.additional === "number" &&
+                        rowData.additional !== existing.additional
+                    ) {
+                        compositionData.additional = rowData.additional;
+                    }
 
+                    if (Object.keys(compositionData).length > 0) {
                         // Primary path: compositions linked by styleRequirementRowId
                         operations.push(
                             prisma.composition.updateMany({
@@ -220,7 +346,7 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
                             })
                         );
 
-                        // Legacy compositions with no row id: match by the OLD text within this style
+                        // Legacy compositions with no row id: match by the OLD values within this style
                         operations.push(
                             prisma.composition.updateMany({
                                 where: {
@@ -228,6 +354,7 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
                                     workOrder: { styleRequirementId: styleId },
                                     composition: existing.composition,
                                     color: existing.color,
+                                    additional: existing.additional,
                                 },
                                 data: compositionData,
                             })
@@ -266,6 +393,7 @@ export const editStyleRequirement = async (req: Request, res: Response) => {
             results.push({
                 id: styleId,
                 updated: Object.keys(styleData).length > 0,
+                jobNoChanged,
                 rowsUpdated: rowsUpdatedCount,
                 rowsCreated: rowsCreatedCount,
                 rowsDeleted: deletedIds.length,

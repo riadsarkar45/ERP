@@ -1114,7 +1114,7 @@ const Reconciliation = () => {
                     });
 
                     const row = ws.getRow(ws.rowCount + 1);
-                    row.height = 22;
+                    row.height = 20;
                     for (let c = 0; c < TOTAL_COLS; c++) {
                         const cell = row.getCell(c + 1);
                         cell.value = rowValues[c];

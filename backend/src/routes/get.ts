@@ -34,6 +34,7 @@ import { hourlyWorkOrder } from "../controllers/users/hrlyNewWorkOrder";
 import { hourlyBooking } from "../controllers/users/hrlyNewBooking";
 import { deliveryClosing } from "../controllers/orders/deliveryClosings";
 import { getProductionDataController } from "../controllers/production/productiondata";
+import { departmentWiseProduction } from "../controllers/production/dept.wise.production";
 
 const getRouters = express.Router();
 
@@ -229,6 +230,8 @@ getRouters.get('/hourly-booking', authenticate, authorize("dashboard", ["hourlyB
 getRouters.get('/delivery-closed-job/:jobNo', deliveryClosing);
 
 getRouters.get('/production-data', getProductionDataController);
+
+getRouters.get('/department-production-data/:dept', departmentWiseProduction);
 
 
 
