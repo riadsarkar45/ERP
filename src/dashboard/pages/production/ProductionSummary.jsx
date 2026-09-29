@@ -375,7 +375,7 @@ const ProductionSummary = () => {
                 remarks: '',
                 id: r.colorId || r.id
             })));
-        } else if (type === 'inputTarget') {
+        } else if (type === 'sewing-production-qty') {
             setModalTargetForm({
                 numberOfMC: '',
                 lineNumber: '',
@@ -427,7 +427,7 @@ const ProductionSummary = () => {
 
         let editedDetails = [];
 
-        if (type === 'inputTarget') {
+        if (type === 'sewing-production-qty') {
             if (modalTargetForm.numberOfMC || modalTargetForm.lineNumber || modalTargetForm.targetHour || modalTargetForm.productionTarget) {
                 editedDetails = [{
                     colorId: colorId || 0,
@@ -574,7 +574,7 @@ const ProductionSummary = () => {
                                         <td className={`${tdClass} bg-[#eaf3e3] text-[#375623]`}>{row.totalCutting}</td>
                                         <td className={`${tdClass} bg-[#fdf0e6] text-[#833c00]`}>{row.dailyInput}</td>
                                         <td className={`${tdClass} bg-[#fdf0e6] text-[#833c00]`}>{row.totalInput}</td>
-                                        <td className={`${tdClass} ${clickableTdClass} bg-[#fdf0e6] text-[#833c00]`} onDoubleClick={() => openModal('inputTarget', row)}>{row.dailySewing}</td>
+                                        <td className={`${tdClass} ${clickableTdClass} bg-[#fdf0e6] text-[#833c00]`} onDoubleClick={() => openModal('sewing-production-qty', row)}>{row.dailySewing}</td>
                                         <td className={`${tdClass} bg-[#fdf0e6] text-[#833c00]`}>{row.totalSewing}</td>
                                         <td className={`${tdClass} ${clickableTdClass} bg-[#eaf3e3] text-[#375623]`} onDoubleClick={() => openModal('finishing', row)}>{row.dailyFinishingRcvd}</td>
                                         <td className={`${tdClass} bg-[#eaf3e3] text-[#375623]`}>{row.totalFinishingRcvd}</td>
@@ -609,7 +609,7 @@ const ProductionSummary = () => {
                 </DraggableModal>
             )}
 
-            {activeModal && activeModal.type === 'inputTarget' && (
+            {activeModal && activeModal.type === 'sewing-production-qty' && (
                 <DraggableModal title="Set Sewing Line & Hourly Target" onClose={closeModal}>
                     <ModalJobHeader row={activeModal.row} modalDate={modalDate} onDateChange={setModalDate} />
                     <table className="w-full border-collapse border border-gray-400 text-sm mt-2">

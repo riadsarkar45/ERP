@@ -395,3 +395,8 @@ model productionData {
   user                  user                @relation(fields: [createdBy], references: [id])
   styleRowId            StyleRequirementRow @relation(fields: [styleRequirementRowId], references: [id])
 }
+
+model productionTarget {
+  id Int @id @default(autoincrement())
+  
+}

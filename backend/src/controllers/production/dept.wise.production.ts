@@ -22,8 +22,10 @@ export const departmentWiseProduction = async (req: Request, res: Response) => {
                     select: {
                         color: true,
                         id: true,
+                        orderQty: true,
                         styleRequirement: {
                             select: {
+                                
                                 styleNo: true,
                             }
                         }
