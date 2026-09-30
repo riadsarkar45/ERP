@@ -240,6 +240,10 @@ const ProductionSummary = () => {
     const [dataForProduction, setDataForProduction] = useState([]);
     const [colorId, setColorId] = useState("");
     const [modalError, setModalError] = useState('');
+    
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const jobsPerPage = 30;
 
     const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
@@ -280,6 +284,11 @@ const ProductionSummary = () => {
         productionData();
     }, []);
 
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterValues]);
+
     const handleFilterChange = (key, value) => setFilterValues(prev => ({ ...prev, [key]: value }));
     const openFilter = (key, label, event) => { setActiveFilter({ key, label, rect: event.currentTarget.getBoundingClientRect() }); setFilterSearch(''); };
     const closeFilter = () => { setActiveFilter(null); setFilterSearch(''); };
@@ -300,10 +309,10 @@ const ProductionSummary = () => {
                     hodDate: job.hodDate,
                     dailyCutting: colorRow.today?.cuttingQty || 0,
                     totalCutting: colorRow.total?.cuttingQty || 0,
-                    dailyInput: colorRow.today?.inputQty || 0,
-                    totalInput: colorRow.total?.inputQty || 0,
-                    dailySewing: colorRow.today?.sewingQty || 0,
-                    totalSewing: colorRow.total?.sewingQty || 0,
+                    dailyInput: colorRow.today?.dailyInput || 0,
+                    totalInput: colorRow.total?.dailyInput || 0,
+                    dailySewing: colorRow.today?.dailyOutput || 0,
+                    totalSewing: colorRow.total?.dailyOutput || 0,
                     dailyFinishingRcvd: colorRow.today?.finishDeptRecvdQty || 0,
                     totalFinishingRcvd: colorRow.total?.finishDeptRecvdQty || 0,
                     dailyFinishing: colorRow.today?.finishDeptProdQty || 0,
@@ -327,19 +336,39 @@ const ProductionSummary = () => {
         return filterValues[key].some(filter => String(row[key] ?? '').toLowerCase().includes(String(filter).toLowerCase()));
     })), [flattenedData, filterValues]);
 
+    // Group filtered data by jobNumber to prevent splitting jobs across pages
+    const jobGroups = useMemo(() => {
+        const groups = new Map();
+        filteredData.forEach(row => {
+            if (!groups.has(row.jobNumber)) {
+                groups.set(row.jobNumber, []);
+            }
+            groups.get(row.jobNumber).push(row);
+        });
+        return Array.from(groups.values());
+    }, [filteredData]);
+
+    const totalPages = Math.ceil(jobGroups.length / jobsPerPage) || 1;
+
+    const paginatedData = useMemo(() => {
+        const start = (currentPage - 1) * jobsPerPage;
+        const end = start + jobsPerPage;
+        return jobGroups.slice(start, end).flat();
+    }, [jobGroups, currentPage]);
+
     const rowMeta = useMemo(() => {
-        const meta = new Array(filteredData.length);
+        const meta = new Array(paginatedData.length);
         let i = 0;
-        while (i < filteredData.length) {
+        while (i < paginatedData.length) {
             let j = i + 1;
-            while (j < filteredData.length && filteredData[j].buyer === filteredData[i].buyer && filteredData[j].jobNumber === filteredData[i].jobNumber) j++;
+            while (j < paginatedData.length && paginatedData[j].buyer === paginatedData[i].buyer && paginatedData[j].jobNumber === paginatedData[i].jobNumber) j++;
             const span = j - i;
             meta[i] = { isFirst: true, rowSpan: span };
             for (let k = i + 1; k < j; k++) meta[k] = { isFirst: false, rowSpan: 0 };
             i = j;
         }
         return meta;
-    }, [filteredData]);
+    }, [paginatedData]);
 
     const clearAllFilters = () => { setFilterValues({}); setActiveFilter(null); };
     const escapeCsvValue = (value) => { const str = String(value ?? ''); return (str.includes(',') || str.includes('"') || str.includes('\n')) ? `"${str.replace(/"/g, '""')}"` : str; };
@@ -491,7 +520,7 @@ const ProductionSummary = () => {
     const startEditingRemarks = (index, currentValue) => { setEditingRowIndex(index); setEditingRemarksValue(currentValue || ''); };
     const saveRemarks = () => {
         if (editingRowIndex !== null) {
-            const rowToUpdate = filteredData[editingRowIndex];
+            const rowToUpdate = paginatedData[editingRowIndex];
             setDataForProduction(prev => prev.map(job =>
                 (job.jobNumber === rowToUpdate.jobNumber)
                     ? { ...job, remarks: editingRemarksValue }
@@ -519,8 +548,8 @@ const ProductionSummary = () => {
                     <button className="px-4 py-2 bg-gray-100 border border-black rounded cursor-pointer text-sm hover:bg-gray-200" onClick={clearAllFilters}>Clear All Filters</button>
                 </div>
             </div>
-            <div className="flex-1 min-h-0 px-5 pb-5">
-                <div className="h-full w-full overflow-auto border border-[#7f7f7f] rounded-sm shadow-sm bg-white">
+            <div className="flex-1 min-h-0 px-5 pb-5 flex flex-col">
+                <div className="flex-1 min-h-0 overflow-auto border border-[#7f7f7f] rounded-sm shadow-sm bg-white">
                     <table className="bg-white" style={{ minWidth: '2000px', width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0, fontFamily: "Calibri, 'Segoe UI', Arial, sans-serif" }}>
                         <colgroup>
                             <col style={{ width: `${colWidths.buyer}px` }} /><col style={{ width: `${colWidths.jobNumber}px` }} /><col style={{ width: `${colWidths.color}px` }} /><col style={{ width: `${colWidths.orderQty}px` }} /><col style={{ width: `${colWidths.hod}px` }} />
@@ -551,7 +580,7 @@ const ProductionSummary = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredData.map((row, index) => {
+                            {paginatedData.map((row, index) => {
                                 const meta = rowMeta[index];
                                 const isEvenRow = index % 2 === 0;
                                 const tdClass = `border-b border-r border-[#d0d0d0] px-2 py-1.5 text-center align-middle text-[13px]`;
@@ -594,6 +623,34 @@ const ProductionSummary = () => {
                         </tbody>
                     </table>
                 </div>
+                
+                {/* Pagination Controls */}
+                {filteredData.length > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-white flex-shrink-0 mt-2 rounded-sm shadow-sm">
+                        <div className="text-sm text-gray-700">
+                            Showing <span className="font-medium">{jobGroups.length > 0 ? (currentPage - 1) * jobsPerPage + 1 : 0}</span> to <span className="font-medium">{Math.min(currentPage * jobsPerPage, jobGroups.length)}</span> of <span className="font-medium">{jobGroups.length}</span> jobs
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-sm text-gray-700 px-2">
+                                Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
             <FilterDropdown activeFilter={activeFilter} filterSearch={filterSearch} onSearchChange={setFilterSearch} filterValues={filterValues} onFilterChange={handleFilterChange} onClose={closeFilter} data={flattenedData} />
 
