@@ -30,6 +30,7 @@ const buildRowsFromStyle = (style) => {
         processLoss: row.processLoss || "",
         additional: row.additional || "",
         unitPrice: row.unitPrice || "",
+        compBreakdown: row.compBreakdown || [],
         workOrderQty: "",
         stichLength: "",
         machineDia: "",
@@ -143,6 +144,8 @@ const NewOrder = () => {
         return { totalOrderQty, totalFinishRequiredQty, processLoss, totalAdditional, compositionId };
     }, [styleData]);
 
+
+
     const totals = useMemo(() => {
         let totalWorkOrderQty = 0;
         let totalAmount = 0;
@@ -178,8 +181,9 @@ const NewOrder = () => {
         const fetchStyleData = async () => {
             if (!jobNumber) return;
             setIsLoading(true);
+            const params = { reconciliation: false, styleRequirement: true }
             try {
-                const req = await axiosPrivate.get(`/api/styles/${jobNumber}`);
+                const req = await axiosPrivate.get(`/api/styles/${jobNumber}`, { params });
                 const data = req.data.data;
                 const style = Array.isArray(data) ? data[0] : data;
 
@@ -468,6 +472,14 @@ const NewOrder = () => {
         return Number.isFinite(n) ? n : 0;
     };
 
+    const compBreakdownObj = useMemo(
+        () =>
+            Object.fromEntries(
+                (styleData?.compBreakdown ?? []).map((item) => [item.styleRequirementRowId, item])
+            ),
+        [styleData?.compBreakdown]
+    );
+
     if (isLoading) {
         return (
             <DashboardLayout title="Add New Order">
@@ -627,6 +639,12 @@ const NewOrder = () => {
                         >
                             <div className="space-y-4">
                                 {rows.map((styleRow, index) => {
+                                    const comp = compBreakdownObj[styleRow.styleRequirementRowId ?? styleRow.id];
+                                    const dyeingQty = comp?.dyeingOrder_workOrderQty ?? 0;
+                                    const knittingQty = comp?.knittingOrder_workOrderQty ?? 0;
+                                    const aopQty = comp?.aopOrder_workOrderQty ?? 0;
+                                    console.log(styleData.compBreakdown, "array");
+                                    const requireQty = (toNum(styleRow.finishRequiredQty) * (1 + toNum(styleRow.processLoss) / 100) + toNum(styleRow.additional)).toFixed(2);
                                     return (
                                         <div
                                             key={styleRow.id || index}
@@ -658,7 +676,7 @@ const NewOrder = () => {
                                                         <div className="flex flex-wrap items-center gap-1.5">
                                                             {toNum(styleRow.finishRequiredQty) > 0 && (
                                                                 <span className="inline-flex items-center text-[11px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
-                                                                    Yarn Req: {(toNum(styleRow.finishRequiredQty) * (1 + toNum(styleRow.processLoss) / 100)).toFixed(2)}
+                                                                    Yarn Req: {requireQty}
                                                                 </span>
                                                             )}
 
@@ -675,8 +693,48 @@ const NewOrder = () => {
                                                                     + {styleRow.additional}
                                                                 </span>
                                                             )}
-                                                        </div>
 
+
+                                                            {
+                                                                orderType === "aopOrder" && aopQty > 0 && (
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="inline-flex items-center text-[11px] font-semibold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md border border-rose-200">
+                                                                            AOP Work Order: {aopQty}
+                                                                        </span>
+                                                                        <span className={`inline-flex items-center text-[11px] font-semibold ${Number(aopQty) - Number(requireQty) < 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-rose-50 text-rose-700 border-rose-200"} px-2 py-0.5 rounded-md border`}>
+                                                                            Remaining Work Order: {(Number(aopQty) - Number(requireQty)).toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                            {
+                                                                orderType === "dyeingOrder" && dyeingQty > 0 && (
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="inline-flex items-center text-[11px] font-semibold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md border border-rose-200">
+                                                                            Dyeing Work Order: {dyeingQty}
+                                                                        </span>
+                                                                        <span className={`inline-flex items-center text-[11px] font-semibold ${Number(dyeingQty) - Number(requireQty) < 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-rose-50 text-rose-700 border-rose-200"} px-2 py-0.5 rounded-md border`}>
+                                                                            Remaining Work Order: {(Number(dyeingQty).toFixed(2) - Number(requireQty)).toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                            {
+                                                                orderType === "knittingOrder" && knittingQty > 0 && (
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="inline-flex items-center text-[11px] font-semibold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md border border-rose-200">
+                                                                            Knitting Work Order: {knittingQty}
+                                                                        </span>
+                                                                        <span className={`inline-flex items-center text-[11px] font-semibold ${Number(knittingQty) - Number(requireQty) < 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-rose-50 text-rose-700 border-rose-200"} px-2 py-0.5 rounded-md border`}>
+                                                                            Remaining Work Order: {(Number(knittingQty).toFixed(2) - Number(requireQty)).toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                            
+
+
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <button
