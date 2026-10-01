@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useFetchData } from '../../../hooks/fetch';
-import { formatToErpDate } from '../../../helpers/date/formateDate';
 
 import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
 import ChallanEditModal from './challanEditModal/ChallanEdit';
@@ -30,7 +29,7 @@ const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 const cellStyle = {
     padding: "12px 16px", borderBottom: `1px solid ${theme.colors.border}`,
     borderRight: `1px solid ${theme.colors.border}`, fontSize: "0.875rem",
-    color: theme.colors.textMain, verticalAlign: "middle", textAlign: "center", // FIX: was a string
+    color: theme.colors.textMain, verticalAlign: "middle", textAlign: "center",
     transition: "background-color 0.15s ease", whiteSpace: "normal",
     wordWrap: "break-word", wordBreak: "break-word", lineHeight: "1.2",
     backgroundClip: "padding-box",
@@ -116,28 +115,61 @@ const getFrozenStyle = (key, area = 'body') => {
 };
 // ===== END FROZEN COLUMNS =====
 
-const getMonthKey = (dateVal) => {
-    if (!dateVal) return "";
-    try {
-        const d = new Date(dateVal);
-        if (isNaN(d.getTime())) return "";
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    } catch (e) {
-        return "";
-    }
+// ===== DATE HELPERS =====
+// Matches ISO dates like 2025-12-06 or 2025-12-06T00:00:00.000Z
+const ISO_DATE_RE = /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?/g;
+
+// Handles clean dates AND glued strings like "2025-12-06T...Z2025-12-07T...Z"
+// If several dates are found, the earliest one is used.
+const normalizeDate = (val) => {
+    if (!val) return "";
+    if (val instanceof Date) return isNaN(val.getTime()) ? "" : val.toISOString();
+    const str = String(val);
+    const matches = str.match(ISO_DATE_RE);
+    if (!matches || matches.length === 0) return str;
+    return [...matches].sort()[0];
 };
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// "2025-12-01T00:00:00.000Z" -> "1-Dec-25"
+const formatShortDate = (val) => {
+    const normalized = normalizeDate(val);
+    if (!normalized) return "-";
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return "-";
+    return `${d.getUTCDate()}-${MONTH_SHORT[d.getUTCMonth()]}-${String(d.getUTCFullYear()).slice(-2)}`;
+};
+
+// Column filter value for the date column: "2026-01-17" (one key per day)
+const getDateFilterValue = (dateVal) => {
+    const normalized = normalizeDate(dateVal);
+    if (!normalized) return "";
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return String(normalized);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+};
+
+// What the filter dropdown shows for a stored filter value: "2026-01-17" -> "17-Jan-26"
+const getFilterDisplay = (key, val) => {
+    if (key === 'challanDate' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return formatShortDate(val);
+    return val;
+};
+
+// Month key "2026-01" used by the "All Months" dropdown
+const getMonthKey = (dateVal) => {
+    const day = getDateFilterValue(dateVal);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.slice(0, 7) : "";
+};
+
+// "2026-01" -> "Jan 2026"
 const formatMonthLabel = (key) => {
     if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
     const [y, m] = key.split('-');
-    return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
+    return `${MONTH_SHORT[Number(m) - 1]} ${y}`;
 };
-
-const formatMonthLong = (key) => {
-    if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
-    const [y, m] = key.split('-');
-    return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-};
+// ===== END DATE HELPERS =====
 
 // ===== DELIVERY MONTH PARSING (real data only) =====
 const MONTH_NUMBERS = {
@@ -147,21 +179,28 @@ const MONTH_NUMBERS = {
 const MIN_VALID_YEAR = 2000;
 const MAX_VALID_YEAR = 2100;
 
-// "August 2025" -> { value, name: "august", label: "August 2025", sortKey: "2025-08" }
-// Junk like "August 0002", "July 1984", "N/A" -> null
+// Accepts "August" or "August 2025". Junk like "August 0002", "N/A" -> null
 const parseDeliveryMonth = (raw) => {
     if (!raw || typeof raw !== 'string') return null;
-    const match = raw.trim().match(/^([A-Za-z]+)\s+(\d{4})$/);
+
+    const match = raw.trim().match(/^([A-Za-z]+)(?:\s+(\d{4}))?$/);
     if (!match) return null;
+
     const name = match[1].toLowerCase();
     const monthNumber = MONTH_NUMBERS[name];
-    const year = Number(match[2]);
-    if (!monthNumber || year < MIN_VALID_YEAR || year > MAX_VALID_YEAR) return null;
+    if (!monthNumber) return null;
+
+    const year = match[2] ? Number(match[2]) : null;
+    if (year !== null && (year < MIN_VALID_YEAR || year > MAX_VALID_YEAR)) return null;
+
+    const niceName = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
     return {
         value: raw,
         name,
-        label: `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`,
-        sortKey: `${year}-${String(monthNumber).padStart(2, '0')}`,
+        label: year ? `${niceName} ${year}` : niceName,
+        sortKey: year
+            ? `${year}-${String(monthNumber).padStart(2, '0')}`
+            : String(monthNumber).padStart(2, '0'),
     };
 };
 // ===== END DELIVERY MONTH PARSING =====
@@ -197,7 +236,7 @@ const Dyeing = () => {
 
     // ===== DELIVERY MONTHS MULTI-SELECT STATES =====
     const [isDeliveryMonthDropdownOpen, setIsDeliveryMonthDropdownOpen] = useState(false);
-    // Raw values ticked in the dropdown, e.g. ["August 2025", "September 2025"]
+    // Raw values ticked in the dropdown, e.g. ["August", "September"]
     const [selectedDeliveryMonths, setSelectedDeliveryMonths] = useState([]);
     // Month names actually searched, e.g. ["august", "september"]
     const [appliedMonthNames, setAppliedMonthNames] = useState([]);
@@ -332,7 +371,7 @@ const Dyeing = () => {
                     jobNo,
                     composition: comp || "-",
                     color: color || "-",
-                    challanDate: source?.deliveryDate || source?.challanDate || "",
+                    challanDate: normalizeDate(source?.deliveryDate || source?.challanDate),
                     toFactory: source?.toFactory || "",
                     fromFactory: source?.fromFactory || "",
                     greyDelivery: 0,
@@ -362,7 +401,7 @@ const Dyeing = () => {
             if (price && !row.unitePrice) row.unitePrice = price;
             if (!row.toFactory && dv?.toFactory) row.toFactory = dv.toFactory;
             if (!row.fromFactory && dv?.fromFactory) row.fromFactory = dv.fromFactory;
-            if (dv?.deliveryDate && !row.challanDate) row.challanDate = dv.deliveryDate;
+            if (dv?.deliveryDate && !row.challanDate) row.challanDate = normalizeDate(dv.deliveryDate);
         };
 
         const getFacets = (item) => {
@@ -417,7 +456,7 @@ const Dyeing = () => {
         });
     }, [movements]);
 
-    // ===== DELIVERY MONTH OPTIONS (valid real months only, newest first) =====
+    // ===== DELIVERY MONTH OPTIONS (valid real months only, backend order) =====
     const deliveryMonthOptions = useMemo(() => {
         if (!Array.isArray(deliveryMonths)) return [];
         const seen = new Set();
@@ -429,7 +468,7 @@ const Dyeing = () => {
             seen.add(parsed.value);
             list.push(parsed);
         });
-        return list.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+        return list;
     }, [deliveryMonths]);
 
     const allDeliveryMonthsSelected =
@@ -481,13 +520,8 @@ const Dyeing = () => {
             if (col.noFilter) return;
             const set = new Set();
             allRows.forEach((row) => {
-                if (col.key === 'challanDate') {
-                    try {
-                        const d = new Date(row.challanDate);
-                        if (!isNaN(d.getTime())) set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-                        else set.add(String(row.challanDate || ""));
-                    } catch (e) { set.add(String(row.challanDate || "")); }
-                } else set.add(String(row[col.key] ?? ""));
+                if (col.key === 'challanDate') set.add(getDateFilterValue(row.challanDate));
+                else set.add(String(row[col.key] ?? ""));
             });
             opts[col.key] = col.key === 'challanDate'
                 ? Array.from(set).sort((a, b) => b.localeCompare(a))
@@ -507,13 +541,7 @@ const Dyeing = () => {
             const selected = filters[col.key];
             if (!selected) return true;
             if (col.key === 'challanDate') {
-                let rowMonth = "";
-                try {
-                    const d = new Date(row.challanDate);
-                    if (!isNaN(d.getTime())) rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                    else rowMonth = String(row.challanDate || "");
-                } catch (e) { rowMonth = String(row.challanDate || ""); }
-                return selected.has(rowMonth);
+                return selected.has(getDateFilterValue(row.challanDate));
             }
             return selected.has(String(row[col.key] ?? ""));
         });
@@ -621,7 +649,7 @@ const Dyeing = () => {
     const handleDeliveryMonthSearch = async () => {
         if (selectedDeliveryMonths.length === 0) return;
 
-        // "August 2025" -> "august" (unique lowercase names)
+        // "August 2025" or "August" -> "august" (unique lowercase names)
         const nameByValue = new Map(deliveryMonthOptions.map((o) => [o.value, o.name]));
         const monthNames = [];
         selectedDeliveryMonths.forEach((val) => {
@@ -703,7 +731,7 @@ const Dyeing = () => {
             return tableHeader.filter(h => h.key !== 'select').map(h => {
                 let val = row[h.key];
                 if (h.key === 'challanDate' && val) {
-                    try { const d = new Date(val); if (!isNaN(d.getTime())) val = d.toISOString().split('T')[0]; } catch (e) { }
+                    val = formatShortDate(val);
                 }
                 if (val === null || val === undefined) return "";
                 let str = String(val);
@@ -769,10 +797,7 @@ const Dyeing = () => {
 
         const options = filterOptions[openFilterKey] || [];
         const visibleOptions = options.filter((val) => {
-            let displayVal = val;
-            if (openFilterKey === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                displayVal = formatMonthLong(val);
-            }
+            const displayVal = getFilterDisplay(openFilterKey, val);
             return String(displayVal).toLowerCase().includes(filterSearch.toLowerCase());
         });
 
@@ -867,10 +892,7 @@ const Dyeing = () => {
                             </div>
                         )}
                         {visibleOptions.map((val) => {
-                            let displayVal = val;
-                            if (openFilterKey === 'challanDate' && /^\d{4}-\d{2}$/.test(val)) {
-                                displayVal = formatMonthLong(val);
-                            }
+                            const displayVal = getFilterDisplay(openFilterKey, val);
                             const isChecked = draftSelected.has(val);
                             return (
                                 <label key={val} style={{
@@ -1457,7 +1479,7 @@ const Dyeing = () => {
                                         return (
                                             <td key={th.key} style={baseStyle}>
                                                 <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                                    {row.challanDate && row.challanDate !== "-" ? formatToErpDate(row.challanDate) : "-"}
+                                                    {formatShortDate(row.challanDate)}
                                                 </span>
                                             </td>
                                         );

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
     PlusCircle, RefreshCcw, ChevronLeft, ChevronRight, Filter, X, Search,
-    Save, Loader, Download, Pen, PencilOff, FileText
+    Loader, Download, Pen, FileText
 } from "lucide-react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import StyleReqModal from "../../../components/StyleReqModal";
@@ -86,13 +86,16 @@ const formatNumber = (val, fallback = "_") => {
 };
 
 // Priority: cell.processLoss > row.processLoss > 0
+// 0 / 1 / null / undefined at row level means "no real row value, use each cell"
+const shouldUseCellLoss = (row) => {
+    const v = parseFloat(row?.processLoss);
+    return !v || v === 1; // NaN and 0 are falsy
+};
+
 const getProcessLoss = (cell, row) => {
-    if (cell?.processLoss !== undefined && cell?.processLoss !== null && cell?.processLoss !== '') {
-        const val = parseFloat(cell.processLoss);
-        return isNaN(val) ? 0 : val;
-    }
-    const val = parseFloat(row?.processLoss);
-    return isNaN(val) ? 0 : val;
+    const value = shouldUseCellLoss(row) ? cell?.processLoss : row.processLoss;
+    const loss = parseFloat(value);
+    return Number.isNaN(loss) ? 0 : loss;
 };
 
 // ─ Summary Page ────────────────────────────────────────────────────────────
@@ -120,10 +123,10 @@ export default function Summary() {
     const [filterOptions, setFilterOptions] = useState([]);
     const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
 
-    const [editingCells, setEditingCells] = useState({});
-    const [isLoading, setIsLoading] = useState({ loadAfterUpdate: false, refreshLoading: false })
-    const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] })
-    const [editingStyleData, setStyleEditingData] = useState({ isShowStyleEditModal: false, isLoading: null, data: [] })
+    const [isLoading, setIsLoading] = useState({ refreshLoading: false });
+    const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] });
+    const [editingStyleData, setStyleEditingData] = useState({ isShowStyleEditModal: false, isLoading: null, data: [] });
+    
     const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
     const { sections } = UseUserRoles();
@@ -143,7 +146,7 @@ export default function Summary() {
             if (Object.keys(activeFilters).length > 0) params.filters = JSON.stringify(activeFilters);
             const res = await axiosPrivate.get('/api/styles', { params });
             if (res.data && res.data.data) setRawData(res.data.data);
-            //console.log(res.data, "style  data"); // style requirement log
+            console.log(res.data, "style  data"); // style requirement log
         } catch (err) {
             console.error("Failed to fetch filtered data:", err);
         } finally {
@@ -302,77 +305,6 @@ export default function Summary() {
         maxWidth: `${UNFROZEN_WIDTH}px`,
     });
 
-    const handleEdit = (rowId, editingField, currentValue, changedTable) => {
-        const cellKey = `${rowId}-${editingField}`;
-        setEditingCells(prev => {
-            if (prev[cellKey]) return prev;
-            return {
-                ...prev,
-                [cellKey]: {
-                    rowId,
-                    fieldName: editingField,
-                    value: currentValue !== undefined && currentValue !== null ? String(currentValue) : "",
-                    changedTable: changedTable || "",
-                    isDirty: false
-                }
-            };
-        });
-    };
-
-    const handleOnChange = (e, cellKey) => {
-        const { value } = e.target;
-        setEditingCells(prev => ({
-            ...prev,
-            [cellKey]: {
-                ...prev[cellKey],
-                value,
-                isDirty: true
-            }
-        }));
-    };
-
-    const handleSubmit = async () => {
-        setIsLoading(prev => ({ ...prev, loadAfterUpdate: true }));
-
-        const cellsToSave = Object.values(editingCells).filter(c => c.isDirty);
-
-        if (cellsToSave.length === 0) {
-            setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
-            setEditingCells({});
-            return;
-        }
-
-        try {
-            const promises = cellsToSave.map(async (cell) => {
-                const updatedData = {
-                    [cell.fieldName]: cell.value,
-                    changedTable: cell.changedTable,
-                    rowId: cell.rowId
-                };
-
-                if (cell.changedTable === "compositionAdd") {
-                    const parentRow = rawData.find(r => r.rows?.some(sub => sub.id === cell.rowId));
-                    updatedData.jobNo = parentRow?.jobNo;
-                }
-
-                return axiosPrivate.patch(`/api/update-style-req/${cell.rowId}`, updatedData);
-            });
-
-            const results = await Promise.all(promises);
-            const allSuccess = results.every(res => res.data?.type === "success");
-
-            if (allSuccess) {
-                await fetchFilteredData();
-                setEditingCells({});
-            }
-        } catch (err) {
-            console.error("Failed to save updates:", err);
-            alert(err.response?.data?.message || "Failed to save updates");
-        } finally {
-            setIsLoading(prev => ({ ...prev, loadAfterUpdate: false }));
-        }
-    };
-
     const handleRefresh = () => {
         fetchFilteredData();
     }
@@ -453,26 +385,6 @@ export default function Summary() {
                         <button onClick={() => handleRefresh()} className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
                             <RefreshCcw size={18} />
                         </button>
-                }
-
-                {
-                    Object.values(editingCells).some(c => c.isDirty) && (
-                        isLoading.loadAfterUpdate ?
-                            <button className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
-                                <Loader size={18} />
-                            </button> :
-                            <button onClick={() => handleSubmit()} className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-medium rounded-md hover:bg-primary-600 transition-colors border border-primary-600">
-                                <Save size={18} />
-                            </button>
-                    )
-                }
-
-                {
-                    Object.keys(editingCells).length > 0 && !isLoading.loadAfterUpdate && (
-                        <button onClick={() => setEditingCells({})} className="flex items-center gap-2 px-6 py-2.5 bg-red-200 text-red-700 font-medium rounded-md hover:bg-red-300 transition-colors border border-red-300">
-                            <PencilOff size={18} /> Cancel
-                        </button>
-                    )
                 }
 
                 {selectedRows.size > 0 && (
@@ -735,46 +647,21 @@ export default function Summary() {
                                         />
                                     </td>
 
-                                    <td onClick={() => handleEdit(row.id, "salesContact", row.salesContact)} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(0)}>
-                                        {editingCells[`${row.id}-salesContact`] ? (
-                                            <input
-                                                value={editingCells[`${row.id}-salesContact`].value}
-                                                onChange={(e) => handleOnChange(e, `${row.id}-salesContact`)}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                type="text"
-                                            />
-                                        ) : row.salesContact}
+                                    <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(0)}>
+                                        {row.salesContact}
                                     </td>
 
-                                    <td onClick={() => handleEdit(row.id, "buyerName", row.buyerName)} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(1)}>
-                                        {editingCells[`${row.id}-buyerName`] ? (
-                                            <input
-                                                value={editingCells[`${row.id}-buyerName`].value}
-                                                onChange={(e) => handleOnChange(e, `${row.id}-buyerName`)}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                type="text"
-                                            />
-                                        ) : row.buyerName}
+                                    <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(1)}>
+                                        {row.buyerName}
                                     </td>
 
                                     <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(2)}>
                                         <div className="flex items-center justify-center gap-2">
                                             <span
                                                 onDoubleClick={() => handleRedirect(row.jobNo)}
-                                                onClick={() => handleEdit(row.id, "jobNo", row.jobNo)}
                                                 className="cursor-pointer hover:text-teal-700 flex-1 text-center break-words"
                                             >
-                                                {editingCells[`${row.id}-jobNo`] ? (
-                                                    <input
-                                                        value={editingCells[`${row.id}-jobNo`].value}
-                                                        onChange={(e) => handleOnChange(e, `${row.id}-jobNo`)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                        type="text"
-                                                    />
-                                                ) : row.jobNo}
+                                                {row.jobNo}
                                             </span>
                                             {
                                                 sections?.styleRequirements?.infoEdit && (
@@ -794,55 +681,21 @@ export default function Summary() {
                                         </div>
                                     </td>
 
-                                    <td onClick={() => handleEdit(row.id, "styleNo", row.styleNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(3)}>
-                                        {editingCells[`${row.id}-styleNo`] ? (
-                                            <input
-                                                value={editingCells[`${row.id}-styleNo`].value}
-                                                onChange={(e) => {
-                                                    e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
-                                                    handleOnChange(e, `${row.id}-styleNo`);
-                                                }}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="border border-indigo-600 bg-indigo-100 outline-none p-2 rounded-md text-indigo-900 text-center"
-                                                type="text"
-                                                style={{ width: `${Math.max(row.styleNo?.length || 1, 5)}ch` }}
-                                            />
-                                        ) : row.styleNo}
+                                    <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(3)}>
+                                        {row.styleNo}
                                     </td>
 
-                                    <td onClick={() => handleEdit(row.id, "poNo", row.poNo, "styleRequirement")} className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(4)}>
-                                        {editingCells[`${row.id}-poNo`] ? (
-                                            <input
-                                                value={editingCells[`${row.id}-poNo`].value}
-                                                onChange={(e) => {
-                                                    e.target.style.width = `${Math.max(e.target.value.length, 5)}ch`;
-                                                    handleOnChange(e, `${row.id}-poNo`);
-                                                }}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="border border-indigo-600 bg-indigo-100 outline-none p-2 rounded-md text-indigo-900 text-center"
-                                                type="text"
-                                                style={{ width: `${Math.max(row.poNo?.length || 1, 5)}ch` }}
-                                            />
-                                        ) : row.poNo}
+                                    <td className={`px-3 py-2 align-middle group-hover:bg-teal-50/40`} style={getFrozenStyle(4)}>
+                                        {row.poNo}
                                     </td>
 
                                     <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(5)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "color", cell.color, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`}>
-                                                    {editingCells[`${cell.id}-color`] ? (
-                                                        <input
-                                                            value={editingCells[`${cell.id}-color`].value}
-                                                            onChange={(e) => handleOnChange(e, `${cell.id}-color`)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                            type="text"
-                                                        />
-                                                    ) : (
-                                                        <span className="inline-block px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-xs font-medium border border-teal-200">
-                                                            {cell.color}
-                                                        </span>
-                                                    )}
+                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
+                                                    <span className="inline-block px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-xs font-medium border border-teal-200">
+                                                        {cell.color}
+                                                    </span>
                                                 </div>
                                             ))}
                                         </div>
@@ -851,56 +704,30 @@ export default function Summary() {
                                     <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(6)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "composition", cell.composition, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`} title={cell.composition}>
-                                                    {editingCells[`${cell.id}-composition`] ? (
-                                                        <input
-                                                            value={editingCells[`${cell.id}-composition`].value}
-                                                            onChange={(e) => handleOnChange(e, `${cell.id}-composition`)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                            type="text"
-                                                        />
-                                                    ) : (
-                                                        <span className="block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                                                            {cell.composition}
-                                                        </span>
-                                                    )}
+                                                <div key={j} className={`px-3 py-2 subrow-cell`} title={cell.composition}>
+                                                    <span className="block w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                                                        {cell.composition}
+                                                    </span>
                                                 </div>
                                             ))}
                                         </div>
                                     </td>
 
-                                    <td className="p-0 align-top" style={getFrozenStyle(7)}>
+                                    <td className="p-0 align-top group-hover:bg-teal-50/40" style={getFrozenStyle(7)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "finishDia", cell.finishDia, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`}>
-                                                    {editingCells[`${cell.id}-finishDia`] ? (
-                                                        <input
-                                                            value={editingCells[`${cell.id}-finishDia`].value}
-                                                            onChange={(e) => handleOnChange(e, `${cell.id}-finishDia`)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                            type="text"
-                                                        />
-                                                    ) :(cell.finishDia, cell.finishDia)}
+                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
+                                                    {cell.finishDia}
                                                 </div>
                                             ))}
                                         </div>
                                     </td>
 
-                                    <td className="p-0 align-top" style={getCellStyle(8)}>
+                                    <td className="p-0 align-top group-hover:bg-teal-50/40" style={getCellStyle(8)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "orderQty", cell.orderQty, "styleRequirementRows")} key={j} className={`px-3 py-2 subrow-cell`}>
-                                                    {editingCells[`${cell.id}-orderQty`] ? (
-                                                        <input
-                                                            value={editingCells[`${cell.id}-orderQty`].value}
-                                                            onChange={(e) => handleOnChange(e, `${cell.id}-orderQty`)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                            type="text"
-                                                        />
-                                                    ) : (cell.orderQty !== undefined && cell.orderQty !== null && cell.orderQty !== "" ? cell.orderQty : "_")}
+                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
+                                                    {cell.orderQty !== undefined && cell.orderQty !== null && cell.orderQty !== "" ? cell.orderQty : "_"}
                                                 </div>
                                             ))}
                                         </div>
@@ -921,13 +748,23 @@ export default function Summary() {
                                             })}
                                         </div>
                                     </td>
-
                                     <td className="p-0 align-top" style={getCellStyle(10)}>
                                         <div className="divide-y divide-[#14b8a6]">
-                                            {row.rows.map((cell, j) => {
-                                                const loss = getProcessLoss(cell, row);
-                                                return <div key={j} className={`px-3 py-2 subrow-cell`}>{loss.toFixed(2)}%</div>;
-                                            })}
+                                            {shouldUseCellLoss(row) ? (
+                                                row.rows.map((cell, j) => {
+                                                    const loss = getProcessLoss(cell, row);
+
+                                                    return (
+                                                        <div key={j} className="px-3 py-2 subrow-cell">
+                                                            {loss.toFixed(2)}%
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-3 py-2 subrow-cell">
+                                                    {Number(row.processLoss || 0).toFixed(2)}%
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
 
@@ -938,25 +775,13 @@ export default function Summary() {
                                                 const additional = safeNum(cell.additional);
                                                 const lossQty = additional * (loss / 100);
                                                 const netAdditional = additional - lossQty;
+
                                                 const finishReq = safeNum(cell.finishRequiredQty);
                                                 const inCreaseFinishQty = finishReq + netAdditional;
+
                                                 return (
-                                                    <div
-                                                        key={j}
-                                                        onClick={() => handleEdit(cell.id, "finishRequiredQty", cell.finishRequiredQty, "styleRequirementRows")}
-                                                        className={`px-3 py-2 subrow-cell`}
-                                                    >
-                                                        {editingCells[`${cell.id}-finishRequiredQty`] ? (
-                                                            <input
-                                                                value={editingCells[`${cell.id}-finishRequiredQty`].value}
-                                                                onChange={(e) => handleOnChange(e, `${cell.id}-finishRequiredQty`)}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                                type="text"
-                                                            />
-                                                        ) : (
-                                                            isNaN(inCreaseFinishQty) ? "0.00" : inCreaseFinishQty.toFixed(2)
-                                                        )}
+                                                    <div key={j} className="px-3 py-2 subrow-cell">
+                                                        {Number.isNaN(inCreaseFinishQty) ? "0.00" : inCreaseFinishQty.toFixed(2)}
                                                     </div>
                                                 );
                                             })}
@@ -966,18 +791,8 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getCellStyle(12)}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => (
-                                                <div onClick={() => handleEdit(cell.id, "additional", cell.additional, "compositionAdd")} key={j} className={`px-3 py-2 subrow-cell`}>
-                                                    {editingCells[`${cell.id}-additional`] ? (
-                                                        <input
-                                                            value={editingCells[`${cell.id}-additional`].value}
-                                                            onChange={(e) => handleOnChange(e, `${cell.id}-additional`)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="border border-indigo-600 bg-indigo-100 outline-none w-full p-2 rounded-md text-indigo-900 text-center"
-                                                            type="text"
-                                                        />
-                                                    ) : (
-                                                        formatNumber(cell.additional, cell.additional || "-")
-                                                    )}
+                                                <div key={j} className={`px-3 py-2 subrow-cell`}>
+                                                    {formatNumber(cell.additional, cell.additional || "-")}
                                                 </div>
                                             ))}
                                         </div>
