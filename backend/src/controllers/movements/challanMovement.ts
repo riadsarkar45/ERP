@@ -97,7 +97,7 @@ export const challanMovementByChallanNo = async (req: Request, res: Response) =>
 
                     deliveries: {
                         where: { challanNo: Number(challanNo) },
-                        orderBy: {id: "desc"},
+                        orderBy: { id: "desc" },
                         select: {
                             id: true,
                             deliveryQty: true,
@@ -129,3 +129,81 @@ export const challanMovementByChallanNo = async (req: Request, res: Response) =>
     }
 
 }
+
+export const deliveryMonth = async (req: Request, res: Response) => {
+    try {
+        const getMonths = await prisma.deliveries.findMany({
+            select: {
+                deliveryMonth: true
+            }
+        });
+
+        if (getMonths.length === 0) {
+            return res.status(404).send({
+                message: "No months found",
+                type: "error"
+            });
+        }
+
+        const monthOrder = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December"
+        ];
+
+        const uniqueMonths = [
+            ...new Map(
+                getMonths.map(item => [item.deliveryMonth, item])
+            ).values()
+        ].sort((a, b) => {
+            // Keep N/A at the end
+            if (a.deliveryMonth === "N/A") return 1;
+            if (b.deliveryMonth === "N/A") return -1;
+
+            const [monthAValue, yearAValue] = a.deliveryMonth.split(" ");
+            const [monthBValue, yearBValue] = b.deliveryMonth.split(" ");
+
+            const monthA = monthAValue ?? "";
+            const yearA = yearAValue ?? "0";
+            const monthB = monthBValue ?? "";
+            const yearB = yearBValue ?? "0";
+
+            const yearDifference = Number(yearA) - Number(yearB);
+
+            if (yearDifference !== 0) {
+                return yearDifference;
+            }
+
+            const monthAIndex = monthOrder.indexOf(monthA);
+            const monthBIndex = monthOrder.indexOf(monthB);
+
+            if (monthAIndex === -1 && monthBIndex === -1) return 0;
+            if (monthAIndex === -1) return 1;
+            if (monthBIndex === -1) return -1;
+
+            return monthAIndex - monthBIndex;
+        });
+
+        return res.status(200).send({
+            data: uniqueMonths,
+            type: "success"
+        });
+
+    } catch (error) {
+        console.error("Error fetching delivery months:", error);
+
+        return res.status(500).send({
+            message: "Failed to fetch delivery months",
+            type: "error"
+        });
+    }
+};

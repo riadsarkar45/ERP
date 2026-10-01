@@ -6,6 +6,7 @@ import { formatToErpDate } from '../../../helpers/date/formateDate';
 import { Loader, Search, Download, Filter, X, Calendar, ChevronDown } from 'lucide-react';
 import ChallanEditModal from './challanEditModal/ChallanEdit';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+import UseDeliveryMonths from './delivery.months/UseDeliveryMonths';
 
 // --- Modern Design System & Styles ---
 const theme = {
@@ -29,7 +30,7 @@ const FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 const cellStyle = {
     padding: "12px 16px", borderBottom: `1px solid ${theme.colors.border}`,
     borderRight: `1px solid ${theme.colors.border}`, fontSize: "0.875rem",
-    color: "theme.colors.textMain", verticalAlign: "middle", textAlign: "center",
+    color: theme.colors.textMain, verticalAlign: "middle", textAlign: "center", // FIX: was a string
     transition: "background-color 0.15s ease", whiteSpace: "normal",
     wordWrap: "break-word", wordBreak: "break-word", lineHeight: "1.2",
     backgroundClip: "padding-box",
@@ -138,6 +139,33 @@ const formatMonthLong = (key) => {
     return new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 };
 
+// ===== DELIVERY MONTH PARSING (real data only) =====
+const MONTH_NUMBERS = {
+    january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+    july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
+const MIN_VALID_YEAR = 2000;
+const MAX_VALID_YEAR = 2100;
+
+// "August 2025" -> { value, name: "august", label: "August 2025", sortKey: "2025-08" }
+// Junk like "August 0002", "July 1984", "N/A" -> null
+const parseDeliveryMonth = (raw) => {
+    if (!raw || typeof raw !== 'string') return null;
+    const match = raw.trim().match(/^([A-Za-z]+)\s+(\d{4})$/);
+    if (!match) return null;
+    const name = match[1].toLowerCase();
+    const monthNumber = MONTH_NUMBERS[name];
+    const year = Number(match[2]);
+    if (!monthNumber || year < MIN_VALID_YEAR || year > MAX_VALID_YEAR) return null;
+    return {
+        value: raw,
+        name,
+        label: `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`,
+        sortKey: `${year}-${String(monthNumber).padStart(2, '0')}`,
+    };
+};
+// ===== END DELIVERY MONTH PARSING =====
+
 // Dropdown width used for portal positioning
 const FILTER_DROPDOWN_WIDTH = 270;
 
@@ -161,24 +189,38 @@ const Dyeing = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    // Excel-like challan date month filter (client-side)
     const [selectedMonths, setSelectedMonths] = useState(new Set());
     const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
     const [monthDraftSelected, setMonthDraftSelected] = useState(new Set());
     const [monthSearch, setMonthSearch] = useState("");
+
+    // ===== DELIVERY MONTHS MULTI-SELECT STATES =====
+    const [isDeliveryMonthDropdownOpen, setIsDeliveryMonthDropdownOpen] = useState(false);
+    // Raw values ticked in the dropdown, e.g. ["August 2025", "September 2025"]
+    const [selectedDeliveryMonths, setSelectedDeliveryMonths] = useState([]);
+    // Month names actually searched, e.g. ["august", "september"]
+    const [appliedMonthNames, setAppliedMonthNames] = useState([]);
+    const deliveryMonthDropdownRef = useRef(null);
+    // ===============================================
 
     const [hoveredRow, setHoveredRow] = useState(null);
 
     const [isBillGenerating, setIsBillGenerating] = useState(false);
     const [isChallanEditing, setIsChallanEditing] = useState(false);
     const [challanToEditData, setChallanToEditData] = useState({});
-    const [isChallanDataLoading, setIsChallanDataLoading] = useState(null)
-
+    const [isChallanDataLoading, setIsChallanDataLoading] = useState(false);
 
     const { fetchData, loading } = useFetchData();
+    const { deliveryMonths, isMonthLoading: deliveryMonthLoading } = UseDeliveryMonths();
     const axiosPrivate = useAxiosPrivate();
 
+    // Stable string of applied months (effect dependency + "month search active" flag)
+    const appliedMonthsKey = appliedMonthNames.join(',');
+
     useEffect(() => {
-        if (search) return;
+        // Skip paged loading while a challan search or a month search is showing
+        if (search || appliedMonthsKey) return;
         fetchData(`/api/challan-movement/dyeingOrder?page=${page}&limit=10`)
             .then(data => {
                 if (data) {
@@ -187,7 +229,7 @@ const Dyeing = () => {
                     setTotalPages(data.pagination?.totalPages || 1);
                 }
             });
-    }, [fetchData, page, refreshKey, search]);
+    }, [fetchData, page, refreshKey, search, appliedMonthsKey]);
 
     // ===== Column filter dropdown: position helper (portal) =====
     const updateDropdownPosition = useCallback(() => {
@@ -258,6 +300,18 @@ const Dyeing = () => {
         document.addEventListener("mousedown", handleClick);
         return () => document.removeEventListener("mousedown", handleClick);
     }, [monthDropdownOpen]);
+
+    // Delivery month dropdown: click outside closes it
+    useEffect(() => {
+        if (!isDeliveryMonthDropdownOpen) return;
+        const handleClick = (e) => {
+            if (deliveryMonthDropdownRef.current && !deliveryMonthDropdownRef.current.contains(e.target)) {
+                setIsDeliveryMonthDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [isDeliveryMonthDropdownOpen]);
 
     const allRows = useMemo(() => {
         if (!movements || !Array.isArray(movements)) return [];
@@ -362,6 +416,36 @@ const Dyeing = () => {
             return { ...row, billingAmount: row.greyReceive * row.unitePrice, processLoss };
         });
     }, [movements]);
+
+    // ===== DELIVERY MONTH OPTIONS (valid real months only, newest first) =====
+    const deliveryMonthOptions = useMemo(() => {
+        if (!Array.isArray(deliveryMonths)) return [];
+        const seen = new Set();
+        const list = [];
+        deliveryMonths.forEach((item) => {
+            const raw = typeof item === 'string' ? item : item?.deliveryMonth;
+            const parsed = parseDeliveryMonth(raw);
+            if (!parsed || seen.has(parsed.value)) return;
+            seen.add(parsed.value);
+            list.push(parsed);
+        });
+        return list.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+    }, [deliveryMonths]);
+
+    const allDeliveryMonthsSelected =
+        deliveryMonthOptions.length > 0 &&
+        selectedDeliveryMonths.length === deliveryMonthOptions.length;
+
+    const toggleDeliveryMonth = (value) => {
+        setSelectedDeliveryMonths((prev) =>
+            prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+        );
+    };
+
+    const toggleAllDeliveryMonths = () => {
+        setSelectedDeliveryMonths(allDeliveryMonthsSelected ? [] : deliveryMonthOptions.map((o) => o.value));
+    };
+    // ========================================================================
 
     const monthOptions = useMemo(() => {
         const set = new Set();
@@ -492,7 +576,7 @@ const Dyeing = () => {
         closeFilterDropdown();
     };
 
-    // ===== MONTH FILTER =====
+    // ===== MONTH FILTER (challan date, client-side) =====
     const openMonthFilter = () => {
         if (monthDropdownOpen) {
             setMonthDropdownOpen(false);
@@ -533,6 +617,44 @@ const Dyeing = () => {
         setMonthSearch("");
     };
 
+    // ===== SEARCH MONTH WISE HANDLER =====
+    const handleDeliveryMonthSearch = async () => {
+        if (selectedDeliveryMonths.length === 0) return;
+
+        // "August 2025" -> "august" (unique lowercase names)
+        const nameByValue = new Map(deliveryMonthOptions.map((o) => [o.value, o.name]));
+        const monthNames = [];
+        selectedDeliveryMonths.forEach((val) => {
+            const name = nameByValue.get(val);
+            if (name && !monthNames.includes(name)) monthNames.push(name);
+        });
+
+        setSearch("");
+        setPage(1);
+        setSearchLoading(true);
+        setSearchError(null);
+        setIsDeliveryMonthDropdownOpen(false);
+        setAppliedMonthNames(monthNames);
+
+        try {
+            const res = await axiosPrivate.get("/api/dyeingOrder/challan/search", {
+                params: { months: monthNames, context: "dyeingOrder" },
+            });
+            let searchData = [];
+            if (Array.isArray(res.data)) searchData = res.data;
+            else if (Array.isArray(res.data?.data)) searchData = res.data.data;
+            setMovements(searchData);
+            setTotalPages(1);
+        } catch (err) {
+            console.error("Month search failed:", err);
+            setSearchError("Failed to search by month.");
+            setMovements([]);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+    // ==============================================
+
     const handleBillPreparation = (challanId) => {
         if (challanIds.includes(challanId)) setChallanIds((prev) => prev.filter(id => id !== challanId));
         else setChallanIds((prev) => [...prev, challanId]);
@@ -560,6 +682,9 @@ const Dyeing = () => {
     const handleChallanSearch = async () => {
         if (!search.trim()) { alert("Please enter at least one challan number or job number."); return; }
         setSearchLoading(true); setSearchError(null); setPage(1);
+        // A challan search replaces any month search
+        setAppliedMonthNames([]);
+        setSelectedDeliveryMonths([]);
         const searchArray = search.split(/[\s,]+/).filter(Boolean);
         try {
             const res = await axiosPrivate.get("/api/dyeingOrder/challan/search", { params: { challans: searchArray.join(","), context: "dyeingOrder" } });
@@ -602,9 +727,13 @@ const Dyeing = () => {
     const hasActiveFilters =
         Object.keys(filters || {}).length > 0 ||
         (selectedMonths && selectedMonths.size > 0) ||
-        !!search;
+        !!search ||
+        selectedDeliveryMonths.length > 0 ||
+        appliedMonthNames.length > 0;
 
     const handleClearAllFilters = () => {
+        const hadMonthSearch = appliedMonthNames.length > 0;
+
         setFilters({});
         closeFilterDropdown();
         setDraftSelected(new Set());
@@ -614,7 +743,11 @@ const Dyeing = () => {
         setMonthDropdownOpen(false);
         setMonthSearch("");
 
-        if (search) {
+        setSelectedDeliveryMonths([]);
+        setAppliedMonthNames([]);
+        setIsDeliveryMonthDropdownOpen(false);
+
+        if (search || hadMonthSearch) {
             setSearch("");
             setSearchError(null);
             setPage(1);
@@ -808,35 +941,33 @@ const Dyeing = () => {
 
     const handlePrepareChallanEdit = async (challanNo, jobNo) => {
         if (!challanNo) return;
-        console.log(challanNo, "challan no from diff edit");
-        setIsChallanDataLoading(true)
+        setIsChallanDataLoading(true);
         setIsChallanEditing(true);
         try {
-            const res = await axiosPrivate.get(`/api/detail-challan-view/dyeingOrder/${challanNo}/${jobNo}`)
-            console.log(res.data, "challan data");
+            const res = await axiosPrivate.get(`/api/detail-challan-view/dyeingOrder/${challanNo}/${jobNo}`);
             setChallanToEditData(res.data);
-            setIsChallanDataLoading(false)
         } catch (error) {
             console.error("Error preparing challan edit:", error);
+        } finally {
+            setIsChallanDataLoading(false);
         }
-    }
+    };
 
     return (
         <div style={{ width: "100%", padding: "24px", fontFamily: FONT_STACK, color: theme.colors.textMain }}>
 
-            {
-                isChallanEditing && (
-                    <ChallanEditModal
-                        setIsChallanEditing={setIsChallanEditing}
-                        challanToEditData={challanToEditData}
-                        isChallanDataLoading={isChallanDataLoading}
-                    />
-                )
-            }
+            {isChallanEditing && (
+                <ChallanEditModal
+                    setIsChallanEditing={setIsChallanEditing}
+                    challanToEditData={challanToEditData}
+                    isChallanDataLoading={isChallanDataLoading}
+                />
+            )}
+
             {/* Toolbar */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ position: 'relative', flex: '0 1 320px' }}>
-                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.colors.white }} />
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                     <input
                         style={{
                             width: '100%', border: `1px solid ${theme.colors.border}`, padding: "10px 12px 10px 36px",
@@ -880,6 +1011,142 @@ const Dyeing = () => {
                     </button>
                 )}
 
+                {/* ===== DELIVERY MONTH MULTI-SELECT ===== */}
+                {deliveryMonthLoading ? (
+                    <span style={{ fontSize: '0.875rem', color: theme.colors.textMuted, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Loader size={14} className="animate-spin" /> Loading months...
+                    </span>
+                ) : (
+                    <div ref={deliveryMonthDropdownRef} style={{ position: 'relative' }}>
+                        <button
+                            onClick={() => setIsDeliveryMonthDropdownOpen((prev) => !prev)}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                background: isDeliveryMonthDropdownOpen || selectedDeliveryMonths.length > 0 ? theme.colors.primary : theme.colors.white,
+                                color: isDeliveryMonthDropdownOpen || selectedDeliveryMonths.length > 0 ? theme.colors.white : theme.colors.textMain,
+                                padding: "10px 16px", borderRadius: theme.radius,
+                                border: `1px solid ${theme.colors.border}`, cursor: "pointer",
+                                fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            <Calendar size={16} />
+                            {selectedDeliveryMonths.length > 0 ? `${selectedDeliveryMonths.length} Month(s) Selected` : 'Delivery Months'}
+                            <ChevronDown size={16} style={{
+                                transform: isDeliveryMonthDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.2s'
+                            }} />
+                        </button>
+
+                        {isDeliveryMonthDropdownOpen && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 6px)',
+                                    left: 0,
+                                    width: 280,
+                                    zIndex: 60,
+                                    background: theme.colors.white,
+                                    border: `1px solid ${theme.colors.borderDark}`,
+                                    borderRadius: theme.radius,
+                                    boxShadow: theme.shadows.xl,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    maxHeight: 400,
+                                    overflow: 'hidden',
+                                    fontFamily: FONT_STACK,
+                                }}
+                            >
+                                <div style={{
+                                    padding: '12px',
+                                    borderBottom: `1px solid #e2e8f0`,
+                                    background: '#657582',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                }}>
+                                    <span style={{
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em',
+                                        color: 'white',
+                                    }}>
+                                        Delivery Months
+                                    </span>
+                                    <button
+                                        onClick={() => setIsDeliveryMonthDropdownOpen(false)}
+                                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'white', display: 'flex' }}
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+                                    {deliveryMonthOptions.length === 0 ? (
+                                        <div style={{ padding: '12px 0', fontSize: '0.8rem', textAlign: 'center', opacity: 0.6 }}>
+                                            No delivery months found
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <label style={{
+                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                fontWeight: 600, marginBottom: 8, fontSize: '0.8rem', cursor: 'pointer', color: theme.colors.textMain
+                                            }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allDeliveryMonthsSelected}
+                                                    onChange={toggleAllDeliveryMonths}
+                                                    style={{ accentColor: theme.colors.primary, width: 15, height: 15 }}
+                                                />
+                                                Select All ({deliveryMonthOptions.length})
+                                            </label>
+                                            <div style={{ borderTop: `1px solid #e2e8f0`, paddingTop: 8 }}>
+                                                {deliveryMonthOptions.map((opt) => (
+                                                    <label key={opt.value} style={{
+                                                        display: 'flex', alignItems: 'center', gap: 8,
+                                                        fontSize: '0.8rem', padding: '6px 0', cursor: 'pointer',
+                                                        borderRadius: '4px', color: theme.colors.textMain
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedDeliveryMonths.includes(opt.value)}
+                                                            onChange={() => toggleDeliveryMonth(opt.value)}
+                                                            style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }}
+                                                        />
+                                                        <span>{opt.label}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Appears as soon as one or more months are selected */}
+                {selectedDeliveryMonths.length > 0 && (
+                    <button
+                        onClick={handleDeliveryMonthSearch}
+                        disabled={searchLoading}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: theme.colors.success, color: theme.colors.white,
+                            padding: "10px 20px", borderRadius: theme.radius, border: "none",
+                            cursor: searchLoading ? "not-allowed" : "pointer",
+                            opacity: searchLoading ? 0.7 : 1,
+                            fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit',
+                            boxShadow: theme.shadows.md,
+                        }}
+                    >
+                        {searchLoading ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
+                        Search Month Wise
+                    </button>
+                )}
+                {/* ===== END DELIVERY MONTH MULTI-SELECT ===== */}
+
                 {monthOptions.length > 0 && (
                     <div ref={monthDropdownRef} style={{ position: 'relative' }}>
                         <button
@@ -899,7 +1166,7 @@ const Dyeing = () => {
                                 justifyContent: 'space-between',
                                 transition: 'all 0.15s ease'
                             }}
-                            title="Filter by month"
+                            title="Filter by challan date month"
                         >
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 <Calendar size={16} />
@@ -909,10 +1176,11 @@ const Dyeing = () => {
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                 {selectedMonths.size > 0 && (
-                                    <button
+                                    <span
+                                        role="button"
                                         onClick={(e) => { e.stopPropagation(); clearMonthFilter(); }}
                                         style={{
-                                            background: 'transparent', border: 'none',
+                                            background: 'transparent',
                                             color: theme.colors.primary, cursor: 'pointer',
                                             display: 'flex', alignItems: 'center', padding: 2,
                                             borderRadius: '50%', transition: 'background 0.15s'
@@ -922,7 +1190,7 @@ const Dyeing = () => {
                                         title="Clear month filter"
                                     >
                                         <X size={14} />
-                                    </button>
+                                    </span>
                                 )}
                                 <ChevronDown
                                     size={16}
@@ -1235,7 +1503,13 @@ const Dyeing = () => {
                                     if (th.key === 'jobNo' || th.key === 'composition') {
                                         return (
                                             <td key={th.key} style={baseStyle}>
-                                                <span onClick={th.key === 'jobNo' ? () => handlePrepareChallanEdit(row.challanNo, row[th.key]) : undefined} style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}</span>
+                                                <span
+                                                    onClick={th.key === 'jobNo' ? () => handlePrepareChallanEdit(row.challanNo, row[th.key]) : undefined}
+                                                    style={{
+                                                        fontWeight: th.key === 'jobNo' ? 500 : 400,
+                                                        cursor: th.key === 'jobNo' ? 'pointer' : 'default',
+                                                        whiteSpace: 'normal', wordBreak: 'break-word'
+                                                    }}>{row[th.key]}</span>
                                             </td>
                                         );
                                     }
@@ -1246,7 +1520,6 @@ const Dyeing = () => {
                                     return (
                                         <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
                                             <div
-
                                                 style={{
                                                     minHeight: '20px', textAlign: 'center',
                                                     opacity: currentValue ? 1 : 0.5,
@@ -1257,8 +1530,6 @@ const Dyeing = () => {
                                                     ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
                                                     : (currentValue || "-")
                                                 }
-
-
                                             </div>
                                         </td>
                                     );
@@ -1305,33 +1576,31 @@ const Dyeing = () => {
                 </table>
             </div>
 
-            {
-                !search && totalPages > 1 && (
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
-                        <button
-                            style={{ ...pageButtonStyle(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                            onClick={() => goToPage(page - 1)} disabled={page === 1}
-                        >
-                            Prev
-                        </button>
-                        {pageNumbers.map((p, i) =>
-                            p === "..."
-                                ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span>
-                                : <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>{p}</button>
-                        )}
-                        <button
-                            style={{ ...pageButtonStyle(false), opacity: page === totalPages ? 0.4 : 1, cursor: page === totalPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                            onClick={() => goToPage(page + 1)} disabled={page === totalPages}
-                        >
-                            Next
-                        </button>
-                    </div>
-                )
-            }
+            {!search && appliedMonthNames.length === 0 && totalPages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
+                    <button
+                        style={{ ...pageButtonStyle(false), opacity: page === 1 ? 0.4 : 1, cursor: page === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                        onClick={() => goToPage(page - 1)} disabled={page === 1}
+                    >
+                        Prev
+                    </button>
+                    {pageNumbers.map((p, i) =>
+                        p === "..."
+                            ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span>
+                            : <button key={p} style={pageButtonStyle(p === page)} onClick={() => goToPage(p)}>{p}</button>
+                    )}
+                    <button
+                        style={{ ...pageButtonStyle(false), opacity: page === totalPages ? 0.4 : 1, cursor: page === totalPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                        onClick={() => goToPage(page + 1)} disabled={page === totalPages}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
 
             {/* PORTALED COLUMN FILTER DROPDOWN */}
             {renderColumnFilterDropdown()}
-        </div >
+        </div>
     );
 };
 

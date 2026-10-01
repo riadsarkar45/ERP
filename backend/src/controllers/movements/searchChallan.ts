@@ -1,23 +1,54 @@
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
+// ===== MONTH SEARCH SUPPORT =====
+const MONTH_NAMES = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+];
+
+// Turns "a", ["a","b"], "a,b" or undefined into a clean string[] (splits on commas only)
+const toArray = (value: unknown): string[] => {
+    if (value === undefined || value === null) return [];
+    const list = Array.isArray(value) ? value : [value];
+    return list
+        .flatMap((v) => String(v).split(","))
+        .map((s) => s.trim())
+        .filter(Boolean);
+};
+// ================================
+
 export const searchChallans = async (req: Request, res: Response) => {
-    // Accept BOTH 'challans' and 'search' to prevent 400 errors
-    const queryParam = req.query.challans || req.query.search;
+    // Accept 'challans' / 'search', including the axios array form 'challans[]' / 'search[]'
+    const rawQuery =
+        req.query.challans ??
+        req.query["challans[]"] ??
+        req.query.search ??
+        req.query["search[]"];
+    const queryParam = rawQuery === undefined ? undefined : toArray(rawQuery).join(",");
     const context = String(req.query.context || req.query.orderType || req.query.noOrderType || "");
 
-    if (!queryParam) {
-        return res.status(400).send({ msg: "challans or search query parameter is required", type: "error" });
+    // Months can come as ?months=august&months=september or months[]=august
+    const monthTerms: string[] = toArray(req.query.months ?? req.query["months[]"]).map((m) => m.toLowerCase());
+
+    if (!queryParam && monthTerms.length === 0) {
+        return res.status(400).send({ msg: "challans, search or months query parameter is required", type: "error" });
     }
 
     // Split by comma or space, filter out empty strings
-    const terms = queryParam.toString().split(/[\s,]+/).filter(Boolean);
-    
+    const terms = queryParam ? queryParam.split(/[\s,]+/).filter(Boolean) : [];
+
     const challanNos: number[] = [];
     const jobNos: string[] = [];
 
     // Separate numeric (challan) and string (job no) inputs
     terms.forEach((term) => {
+        // A bare month name (e.g. challans=august) is a month search, not a job no
+        if (MONTH_NAMES.includes(term.toLowerCase())) {
+            monthTerms.push(term.toLowerCase());
+            return;
+        }
+
         const num = Number(term);
         if (!Number.isNaN(num)) {
             challanNos.push(num);
@@ -26,8 +57,11 @@ export const searchChallans = async (req: Request, res: Response) => {
         }
     });
 
-    if (challanNos.length === 0 && jobNos.length === 0) {
-        return res.status(400).send({ msg: "No valid challan numbers or job numbers provided", type: "error" });
+    // Remove duplicate months
+    const uniqueMonths = Array.from(new Set(monthTerms));
+
+    if (challanNos.length === 0 && jobNos.length === 0 && uniqueMonths.length === 0) {
+        return res.status(400).send({ msg: "No valid challan numbers, job numbers or months provided", type: "error" });
     }
 
     const deliveryTypes: string[] = [];
@@ -60,6 +94,18 @@ export const searchChallans = async (req: Request, res: Response) => {
         return res.status(400).send({ msg: `Unknown or missing context "${context}"`, type: "error" });
     }
 
+    // ===== Month condition on deliveries.deliveryMonth (String column, e.g. "August 2025") =====
+    const monthFilter =
+        uniqueMonths.length > 0
+            ? {
+                  OR: uniqueMonths.map((m) => ({
+                      deliveryMonth: { startsWith: m, mode: "insensitive" as const },
+                  })),
+              }
+            : null;
+
+    const monthAnd = monthFilter ? { AND: [monthFilter] } : {};
+
     // Build dynamic OR conditions for Prisma
     const whereConditions: any[] = [];
 
@@ -69,6 +115,7 @@ export const searchChallans = async (req: Request, res: Response) => {
                 some: {
                     deliveryType: { in: deliveryTypes },
                     challanNo: { in: challanNos },
+                    ...monthAnd,
                 },
             },
         });
@@ -82,6 +129,19 @@ export const searchChallans = async (req: Request, res: Response) => {
             deliveries: {
                 some: {
                     deliveryType: { in: deliveryTypes },
+                    ...monthAnd,
+                },
+            },
+        });
+    }
+
+    // Months only (no challan / job no)
+    if (challanNos.length === 0 && jobNos.length === 0) {
+        whereConditions.push({
+            deliveries: {
+                some: {
+                    deliveryType: { in: deliveryTypes },
+                    ...monthAnd,
                 },
             },
         });
@@ -89,8 +149,9 @@ export const searchChallans = async (req: Request, res: Response) => {
 
     const deliverySelectWhere: any = {
         deliveryType: { in: deliveryTypes },
+        ...monthAnd,
     };
-    
+
     // If challan numbers were provided, restrict deliveries to those challans
     if (challanNos.length > 0) {
         deliverySelectWhere.challanNo = { in: challanNos };
@@ -116,6 +177,7 @@ export const searchChallans = async (req: Request, res: Response) => {
                         deliveryQty: true,
                         deliveryDate: true,
                         deliveryType: true,
+                        deliveryMonth: true,
                         id: true,
                         challanNo: true,
                         toFactory: true,

@@ -10,7 +10,7 @@ import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
-import { challanMovement, challanMovementByChallanNo } from "../controllers/movements/challanMovement";
+import { challanMovement, challanMovementByChallanNo, deliveryMonth } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 import { misDetailView, misDetailViewByJobNo } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
@@ -232,6 +232,8 @@ getRouters.get('/delivery-closed-job/:jobNo', deliveryClosing);
 getRouters.get('/production-data', getProductionDataController);
 
 getRouters.get('/department-production-data/:dept', departmentWiseProduction);
+
+getRouters.get('/delivery-month', deliveryMonth);
 
 
 
