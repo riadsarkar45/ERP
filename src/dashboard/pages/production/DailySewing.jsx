@@ -1,11 +1,21 @@
 // DailySewing.jsx
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Filter, Download, RefreshCw, X, Search } from 'lucide-react'
+import { Filter, Download, RefreshCw, X, Search, Save } from 'lucide-react'
+import { useFetchData } from '../../../hooks/fetch'
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate'
+
+// ---------- SAVE ENDPOINT (change here if your route changes) ----------
+const DEPARTMENT = 'sewing-production-qty'
+const saveUrl = (row) => `/api/enter-production/${row.colorId}`
 
 // ---------- HOUR + LEFT COLUMN DEFINITIONS ----------
-const HOUR_SLOTS = ['8-9', '9-10', '10-11', '11-12', '12-1', 'LUNCH BREACK', '2-3', '3-4', '4-5', '5-6', '6-7', '7-8', '8-9', '9-10']
-const HOUR_COLUMNS = HOUR_SLOTS.map((slot, i) => ({ key: `h${i}`, label: slot }))
+const HOUR_SLOTS = ['8-9', '9-10', '10-11', '11-12', '12-1', 'LUNCH BREAK', '2-3', '3-4', '4-5', '5-6', '6-7', '7-8', '8-9', '9-10']
+const HOUR_COLUMNS = HOUR_SLOTS.map((slot, i) => ({
+    key: `h${i}`,
+    label: slot,
+    isLunch: slot === 'LUNCH BREAK',
+}))
 
 const LEFT_COLUMNS = [
     { key: 'date', label: 'DATE' },
@@ -26,68 +36,44 @@ const ALL_COLUMNS = [...LEFT_COLUMNS, ...HOUR_COLUMNS, REMARKS_COLUMN]
 // numeric columns that get totaled in the sticky footer
 const TOTAL_KEYS = ['dailyTarget', 'dailyInput', 'dailyOutput', ...HOUR_COLUMNS.map((h) => h.key)]
 
-// ---------- SAMPLE DATA ----------
-// NOTE: "today" for the summary cards is derived from the most recent date
-// found in this dataset (see `referenceDate` below). Once real/live data is
-// wired in, referenceDate can simply be `new Date()`.
-const sampleData = [
-    {
-        id: 1, date: '2026-09-01', lineNumber: 'L-01', jobNumber: 'JOB-1001', styleNumber: 'STY-A21', color: 'Navy',
-        orderQty: 5000, targetHour: 120, dailyTarget: 960, dailyInput: 1000, dailyOutput: 920, achv: '95.8%',
-        h0: 80, h1: 85, h2: 90, h3: 88, h4: 82, h5: '-', h6: 90, h7: 95, h8: 92, h9: 88, h10: 85, h11: 80, h12: 78, h13: 75,
-        remarks: 'Line balanced',
-    },
-    {
-        id: 2, date: '2026-09-01', lineNumber: 'L-02', jobNumber: 'JOB-1002', styleNumber: 'STY-B14', color: 'White',
-        orderQty: 3000, targetHour: 100, dailyTarget: 800, dailyInput: 850, dailyOutput: 780, achv: '97.5%',
-        h0: 65, h1: 70, h2: 72, h3: 68, h4: 60, h5: '-', h6: 70, h7: 75, h8: 72, h9: 68, h10: 65, h11: 60, h12: 58, h13: 55,
-        remarks: '',
-    },
-    {
-        id: 3, date: '2026-09-02', lineNumber: 'L-01', jobNumber: 'JOB-1001', styleNumber: 'STY-A21', color: 'Navy',
-        orderQty: 5000, targetHour: 120, dailyTarget: 960, dailyInput: 1000, dailyOutput: 940, achv: '97.9%',
-        h0: 82, h1: 88, h2: 92, h3: 90, h4: 85, h5: '-', h6: 92, h7: 96, h8: 94, h9: 90, h10: 88, h11: 82, h12: 80, h13: 78,
-        remarks: 'New helper trained',
-    },
-    {
-        id: 4, date: '2026-09-03', lineNumber: 'L-02', jobNumber: 'JOB-1002', styleNumber: 'STY-B14', color: 'White',
-        orderQty: 3000, targetHour: 100, dailyTarget: 800, dailyInput: 820, dailyOutput: 800, achv: '100%',
-        h0: 68, h1: 72, h2: 74, h3: 70, h4: 62, h5: '-', h6: 72, h7: 76, h8: 74, h9: 70, h10: 66, h11: 62, h12: 60, h13: 58,
-        remarks: '',
-    },
-    {
-        id: 5, date: '2026-08-31', lineNumber: 'L-03', jobNumber: 'JOB-0999', styleNumber: 'STY-D02', color: 'Grey',
-        orderQty: 2000, targetHour: 80, dailyTarget: 640, dailyInput: 660, dailyOutput: 630, achv: '98.4%',
-        h0: 56, h1: 58, h2: 60, h3: 58, h4: 52, h5: '-', h6: 58, h7: 60, h8: 58, h9: 55, h10: 52, h11: 48, h12: 46, h13: 41,
-        remarks: '',
-    },
-    {
-        id: 6, date: '2026-08-30', lineNumber: 'L-03', jobNumber: 'JOB-0998', styleNumber: 'STY-D02', color: 'Grey',
-        orderQty: 2000, targetHour: 80, dailyTarget: 640, dailyInput: 700, dailyOutput: 610, achv: '95.3%',
-        h0: 55, h1: 58, h2: 60, h3: 58, h4: 50, h5: '-', h6: 58, h7: 60, h8: 58, h9: 55, h10: 50, h11: 48, h12: 45, h13: 40,
-        remarks: 'Machine breakdown 30 min',
-    },
-]
+// editable cells, in the left-to-right order they appear in the table (lunch is skipped)
+const EDIT_ORDER = ['dailyInput', 'dailyOutput', ...HOUR_COLUMNS.filter((h) => !h.isLunch).map((h) => h.key)]
 
 // ---------- DATE HELPERS ----------
 const toDateOnly = (d) => {
+    if (!d) return new Date(NaN)
+    const parts = String(d).split('T')[0].split('-')
+    if (parts.length === 3) {
+        return new Date(parts[0], parts[1] - 1, parts[2])
+    }
     const x = new Date(d)
     x.setHours(0, 0, 0, 0)
     return x
 }
 
-const isSameDay = (a, b) => toDateOnly(a).getTime() === toDateOnly(b).getTime()
+const todayDate = () => {
+    const n = new Date()
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate())
+}
+
+const isSameDay = (a, b) => {
+    const d1 = toDateOnly(a)
+    const d2 = toDateOnly(b)
+    return !isNaN(d1) && !isNaN(d2) && d1.getTime() === d2.getTime()
+}
 
 const startOfWeek = (d) => {
     const x = toDateOnly(d)
-    const day = x.getDay() // 0 = Sunday
-    const diff = (day === 0 ? 6 : day - 1) // treat Monday as start of week
+    if (isNaN(x)) return x
+    const day = x.getDay()
+    const diff = day === 0 ? 6 : day - 1
     x.setDate(x.getDate() - diff)
     return x
 }
 
 const startOfMonth = (d) => {
     const x = toDateOnly(d)
+    if (isNaN(x)) return x
     x.setDate(1)
     return x
 }
@@ -99,6 +85,89 @@ const monthLabel = (dateStr) => {
 }
 
 const formatNumber = (n) => Number(n || 0).toLocaleString('en-US')
+
+// ---------- DATA TRANSFORM ----------
+// One row = one color (styleRowId) on ONE day, so hourly numbers of different days never mix.
+const buildRows = (rawData) => {
+    const grouped = {}
+
+    rawData.forEach((item) => {
+        const hasObj = item.styleRowId && typeof item.styleRowId === 'object'
+        const styleRowObj = hasObj ? item.styleRowId : {}
+        const colorId = styleRowObj.id ?? (!hasObj ? item.styleRowId : null) ?? 'unknown'
+
+        const parsed = item.productionDate ? new Date(item.productionDate) : null
+        const dateStr = parsed && !isNaN(parsed) ? parsed.toISOString().split('T')[0] : 'N/A'
+
+        const rowKey = `${colorId}|${dateStr}`
+        const orderQty = Number(styleRowObj.orderQty ?? item.orderQty ?? 0) || 0
+
+        if (!grouped[rowKey]) {
+            grouped[rowKey] = {
+                id: rowKey,          // unique per color + day (used for editing state and React keys)
+                colorId,             // the real styleRowId (sent to the backend)
+                date: dateStr,
+                jobNumber: item.jobNumber || 'N/A',
+                styleNumber: styleRowObj.styleRequirement?.styleNo || 'N/A',
+                color: styleRowObj.color || 'N/A',
+                orderQty,
+                lineNumber: '',
+                targetHour: 0,
+                dailyTarget: 0,
+                dailyInput: 0,
+                dailyOutput: 0,
+                achv: '0%',
+                remarksSet: new Set(),
+            }
+            HOUR_COLUMNS.forEach((h) => {
+                grouped[rowKey][h.key] = 0
+            })
+        }
+
+        const g = grouped[rowKey]
+        if (!g.orderQty && orderQty) g.orderQty = orderQty
+
+        const qty = Number(item.productionQty) || 0
+        const pType = item.productionType
+
+        if (pType === 'lineNumber') {
+            g.lineNumber = String(qty)
+        } else if (pType === 'targetHour') {
+            g.targetHour += qty
+        } else if (pType === 'productionTarget' || pType === 'dailyTarget') {
+            g.dailyTarget += qty
+        } else if (pType === 'sewingInputQty' || pType === 'dailyInput') {
+            g.dailyInput += qty
+        } else if (pType === 'sewingOutputQty' || pType === 'dailyOutput') {
+            g.dailyOutput += qty
+        } else if (HOUR_COLUMNS.some((h) => h.key === pType)) {
+            g[pType] = (g[pType] || 0) + qty
+        }
+
+        if (item.remarks?.trim()) {
+            g.remarksSet.add(item.remarks.trim())
+        }
+    })
+
+    return Object.values(grouped)
+        .map((item) => {
+            const achv =
+                item.dailyTarget > 0
+                    ? ((item.dailyOutput / item.dailyTarget) * 100).toFixed(1) + '%'
+                    : '0%'
+            return {
+                ...item,
+                achv,
+                remarks: Array.from(item.remarksSet).join(', ') || 'N/A',
+            }
+        })
+        .sort(
+            (a, b) =>
+                b.date.localeCompare(a.date) ||
+                a.jobNumber.localeCompare(b.jobNumber) ||
+                a.color.localeCompare(b.color)
+        )
+}
 
 // ---------- CSV EXPORT HELPER ----------
 const exportToCSV = (data, cols, filename = 'daily-sewing.csv') => {
@@ -126,7 +195,7 @@ const SummaryCard = ({ label, value, accent = 'border-emerald-500' }) => (
     </div>
 )
 
-// ---------- FILTER TRIGGER (funnel icon in the header cell) ----------
+// ---------- FILTER TRIGGER ----------
 const FilterTrigger = ({ label, isActive, onOpen }) => (
     <button
         onClick={(e) => {
@@ -141,10 +210,7 @@ const FilterTrigger = ({ label, isActive, onOpen }) => (
     </button>
 )
 
-// ---------- FILTER MODAL (Excel-style: search + checkbox list, Apply / Clear) ----------
-// Rendered through a portal, fixed-positioned right under the column's own
-// filter icon (using its on-screen rect) so it always sits at that column's
-// position instead of being clipped by the table's scroll container.
+// ---------- FILTER MODAL ----------
 const PANEL_WIDTH = 240
 
 const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onClear, onClose }) => {
@@ -154,7 +220,7 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
     useEffect(() => {
         setPending(new Set(initialSelected))
         setSearch('')
-    }, [label]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [label])
 
     const filteredOptions = options.filter((opt) =>
         opt.toLowerCase().includes(search.toLowerCase())
@@ -240,20 +306,207 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
 }
 
 // ---------- MAIN COMPONENT ----------
-const DailySewing = ({ data = sampleData }) => {
+const DailySewing = () => {
+    const [data, setData] = useState([])
+    const [loading, setLoading] = useState(true)
     const [filters, setFilters] = useState({})
-    const [activeFilter, setActiveFilter] = useState(null) // { key, rect }
+    const [activeFilter, setActiveFilter] = useState(null)
 
-    // date filter mode: 'all' | 'today' | 'yesterday' | 'date' | 'month'
     const [dateMode, setDateMode] = useState('all')
     const [customDate, setCustomDate] = useState('')
     const [customMonth, setCustomMonth] = useState('')
 
-    const referenceDate = useMemo(() => {
-        const dates = data.map((r) => toDateOnly(r.date)).filter((d) => !isNaN(d))
-        if (dates.length === 0) return toDateOnly(new Date())
-        return new Date(Math.max(...dates.map((d) => d.getTime())))
-    }, [data])
+    // Inline editing state
+    const [editingCell, setEditingCell] = useState(null) // { rowId, field }
+    const [pendingEdits, setPendingEdits] = useState({}) // { rowId: { dailyInput: '12', h0: '30', ... } }
+    const [saving, setSaving] = useState(false)
+    const [saveError, setSaveError] = useState('')
+
+    const { fetchData } = useFetchData()
+    const axiosPrivate = useAxiosPrivate()
+
+    // silent = refresh after saving without replacing the table with the loading spinner
+    const fetchSewingData = useCallback(async (silent = false) => {
+        try {
+            if (!silent) setLoading(true)
+            const res = await fetchData('/api/department-production-data/sewing-production-qty')
+            const rawData = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+            setData(buildRows(rawData))
+        } catch (e) {
+            console.error('Failed to fetch sewing data:', e)
+        } finally {
+            setLoading(false)
+        }
+    }, [fetchData])
+
+    useEffect(() => {
+        fetchSewingData()
+    }, [fetchSewingData])
+
+    // ---------- INLINE EDITING HANDLERS ----------
+    const handleCellClick = (row, field) => {
+        setEditingCell({ rowId: row.id, field })
+    }
+
+    const handleInputChange = (rowId, field, value) => {
+        setPendingEdits((prev) => ({
+            ...prev,
+            [rowId]: { ...(prev[rowId] || {}), [field]: value },
+        }))
+    }
+
+    const clearPendingCell = (rowId, field) => {
+        setPendingEdits((prev) => {
+            const rowEdits = { ...(prev[rowId] || {}) }
+            delete rowEdits[field]
+            const next = { ...prev }
+            if (Object.keys(rowEdits).length === 0) delete next[rowId]
+            else next[rowId] = rowEdits
+            return next
+        })
+    }
+
+    // only close if this cell is still the one being edited (avoids clobbering a jump to the next cell)
+    const handleInputBlur = (rowId, field) => {
+        setEditingCell((cur) => (cur && cur.rowId === rowId && cur.field === field ? null : cur))
+    }
+
+    // Enter / Tab -> next editable cell in the row, Shift+Enter / Shift+Tab -> previous, Esc -> discard this cell
+    const handleKeyDown = (e, row, field) => {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault()
+            const idx = EDIT_ORDER.indexOf(field)
+            const next = EDIT_ORDER[idx + (e.shiftKey ? -1 : 1)]
+            setEditingCell(next ? { rowId: row.id, field: next } : null)
+        } else if (e.key === 'Escape') {
+            clearPendingCell(row.id, field)
+            setEditingCell(null)
+        }
+    }
+
+    const submitPendingEdits = async () => {
+        if (saving) return
+        setSaveError('')
+
+        const jobs = []
+        const skippedRowIds = []
+
+        Object.entries(pendingEdits).forEach(([rowId, fields]) => {
+            const row = data.find((r) => String(r.id) === String(rowId))
+            if (!row || row.date === 'N/A') {
+                skippedRowIds.push(rowId)
+                return
+            }
+
+            const detail = { colorId: row.colorId }
+
+            EDIT_ORDER.forEach((key) => {
+                if (fields[key] === undefined || fields[key] === '') return
+                const newVal = Number(fields[key])
+                if (isNaN(newVal)) return
+
+                // Backend inserts a new row and the table sums rows, so send only the change
+                const delta = newVal - (Number(row[key]) || 0)
+                if (delta !== 0) detail[key] = delta
+            })
+
+            // only colorId present -> nothing actually changed
+            if (Object.keys(detail).length === 1) {
+                skippedRowIds.push(rowId)
+                return
+            }
+
+            jobs.push({
+                rowId,
+                url: saveUrl(row),
+                payload: {
+                    date: row.date, // 'YYYY-MM-DD' of THIS row, not today
+                    jobNo: row.jobNumber,
+                    productionType: DEPARTMENT,
+                    details: [detail],
+                },
+            })
+        })
+
+        console.log('Payloads to be sent to server:', JSON.stringify(jobs.map((j) => j.payload), null, 2))
+
+        setSaving(true)
+        const results = await Promise.allSettled(jobs.map((j) => axiosPrivate.post(j.url, j.payload)))
+        setSaving(false)
+
+        // Drop only what was saved (or had no change). Failed rows stay pending so nothing is lost
+        // and a retry can't double-save the rows that already went through.
+        let failed = 0
+        setPendingEdits((prev) => {
+            const next = { ...prev }
+            skippedRowIds.forEach((id) => delete next[id])
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled') delete next[jobs[i].rowId]
+            })
+            return next
+        })
+        results.forEach((r) => {
+            if (r.status === 'rejected') {
+                failed += 1
+                console.error('Error saving edits:', r.reason)
+            }
+        })
+
+        if (failed > 0) {
+            setSaveError(`${failed} row(s) failed to save. They are still highlighted; press Submit again to retry.`)
+        }
+        setEditingCell(null)
+        fetchSewingData(true)
+    }
+
+    const renderEditableCell = (row, colKey) => {
+        const isEditing = editingCell?.rowId === row.id && editingCell?.field === colKey
+        const pendingVal = pendingEdits[row.id]?.[colKey]
+        const displayVal = pendingVal !== undefined ? pendingVal : row[colKey]
+        const isLunch = HOUR_COLUMNS.find((h) => h.key === colKey)?.isLunch === true
+
+        if (isLunch) {
+            return (
+                <div className="flex min-h-[28px] items-center justify-center bg-gray-100 text-gray-500" title="Lunch break">
+                    -
+                </div>
+            )
+        }
+
+        if (isEditing) {
+            return (
+                <input
+                    autoFocus
+                    type="number"
+                    min="0"
+                    value={displayVal}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => handleInputChange(row.id, colKey, e.target.value)}
+                    onBlur={() => handleInputBlur(row.id, colKey)}
+                    onKeyDown={(e) => handleKeyDown(e, row, colKey)}
+                    className="h-full w-full min-w-[56px] border-2 border-blue-500 bg-yellow-50 px-2 py-1 text-center text-[13px] font-semibold outline-none"
+                />
+            )
+        }
+
+        const hasPending = pendingVal !== undefined && pendingVal !== ''
+
+        return (
+            <div
+                onClick={() => handleCellClick(row, colKey)}
+                className={`flex min-h-[28px] cursor-pointer items-center justify-center px-2 ${
+                    hasPending ? 'bg-green-100 font-bold text-green-800 hover:bg-blue-50' : 'hover:bg-blue-50'
+                }`}
+                title="Click to edit"
+            >
+                {formatNumber(displayVal)}
+                {hasPending && <span className="ml-1 text-[10px] text-green-600">●</span>}
+            </div>
+        )
+    }
+
+    // ---------- SUMMARY / FILTERS ----------
+    const referenceDate = useMemo(() => todayDate(), [])
 
     const yesterday = useMemo(() => {
         const y = new Date(referenceDate)
@@ -264,7 +517,6 @@ const DailySewing = ({ data = sampleData }) => {
     const weekStart = useMemo(() => startOfWeek(referenceDate), [referenceDate])
     const monthStart = useMemo(() => startOfMonth(referenceDate), [referenceDate])
 
-    // ---------- SUMMARY TOTALS (based on DAILY OUTPUT) ----------
     const summary = useMemo(() => {
         let dailyTotal = 0
         let weekTotal = 0
@@ -289,7 +541,7 @@ const DailySewing = ({ data = sampleData }) => {
             const label = row.date ? monthLabel(row.date) : null
             if (label) set.add(label)
         })
-        return Array.from(set)
+        return Array.from(set).sort()
     }, [data])
 
     const getUniqueValues = (key) => {
@@ -316,7 +568,6 @@ const DailySewing = ({ data = sampleData }) => {
         setActiveFilter(null)
     }
 
-    // ---------- FILTERED ROWS ----------
     const filteredData = useMemo(() => {
         return data.filter((row) => {
             const d = toDateOnly(row.date)
@@ -334,13 +585,23 @@ const DailySewing = ({ data = sampleData }) => {
         })
     }, [data, filters, dateMode, customDate, customMonth, referenceDate, yesterday])
 
-    // totals per numeric column (dailyTarget/dailyInput/dailyOutput + every hour slot), for the sticky footer
     const footerTotals = useMemo(() => {
         const totals = {}
         TOTAL_KEYS.forEach((key) => {
             totals[key] = filteredData.reduce((sum, row) => sum + (Number(row[key]) || 0), 0)
         })
         return totals
+    }, [filteredData])
+
+    // group by job + day so the date / job / style cells span only that day's color rows
+    const groupedData = useMemo(() => {
+        const groups = {}
+        filteredData.forEach((row) => {
+            const key = `${row.jobNumber}|${row.date}`
+            if (!groups[key]) groups[key] = []
+            groups[key].push(row)
+        })
+        return groups
     }, [filteredData])
 
     const dateModes = [
@@ -351,12 +612,19 @@ const DailySewing = ({ data = sampleData }) => {
         { key: 'month', label: 'Month' },
     ]
 
-    // TOTAL label spans every left column before the first summed column (dailyTarget)
-    const labelSpan = LEFT_COLUMNS.findIndex((c) => c.key === 'dailyTarget')
+    const pendingEditsCount = Object.keys(pendingEdits).length
+
+    if (loading) {
+        return (
+            <div className="flex h-64 w-full items-center justify-center">
+                <RefreshCw className="animate-spin text-blue-600" size={32} />
+                <span className="ml-2 font-medium text-slate-600">Loading sewing data...</span>
+            </div>
+        )
+    }
 
     return (
         <div className="w-full space-y-3">
-            {/* ---------- SUMMARY CARDS ---------- */}
             <div className="flex flex-wrap gap-3">
                 <SummaryCard label="Daily Output" value={summary.dailyTotal} accent="border-emerald-500" />
                 <SummaryCard label="This Week Output" value={summary.weekTotal} accent="border-sky-500" />
@@ -364,9 +632,13 @@ const DailySewing = ({ data = sampleData }) => {
                 <SummaryCard label="Total Output" value={summary.grandTotal} accent="border-amber-500" />
             </div>
 
-            {/* ---------- TABLE CARD ---------- */}
+            {saveError && (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {saveError}
+                </div>
+            )}
+
             <div className="w-full rounded-lg border border-gray-200 bg-white shadow-sm">
-                {/* Toolbar: date filter pills + custom inputs + export */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
                         {dateModes.map((m) => (
@@ -414,21 +686,32 @@ const DailySewing = ({ data = sampleData }) => {
                         </button>
                     </div>
 
-                    <button
-                        onClick={() => exportToCSV(filteredData, ALL_COLUMNS, 'daily-sewing.csv')}
-                        className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                    >
-                        <Download size={13} /> Export
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {pendingEditsCount > 0 && (
+                            <button
+                                onClick={submitPendingEdits}
+                                disabled={saving}
+                                className="flex items-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <Save size={13} />
+                                {saving ? 'Saving...' : `Submit Changes (${pendingEditsCount})`}
+                            </button>
+                        )}
+                        <button
+                            onClick={() => exportToCSV(filteredData, ALL_COLUMNS, 'daily-sewing.csv')}
+                            className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        >
+                            <Download size={13} /> Export
+                        </button>
+                    </div>
                 </div>
 
-                {/* Table (vertical scroll container so the total footer can stick) */}
                 <div className="max-h-[560px] overflow-auto" onScroll={() => activeFilter && setActiveFilter(null)}>
                     <table className="min-w-full border-collapse text-sm">
                         <thead className="sticky top-0 z-20">
                             <tr className="bg-slate-700 text-white">
                                 {LEFT_COLUMNS.map((col) => (
-                                    <th key={col.key} rowSpan={2} className="border border-slate-600 px-3 py-2 text-center font-semibold align-middle whitespace-nowrap">
+                                    <th key={col.key} rowSpan={2} className="whitespace-nowrap border border-slate-600 px-3 py-2 text-center align-middle font-semibold">
                                         {col.label}
                                         <FilterTrigger
                                             label={col.label}
@@ -440,7 +723,7 @@ const DailySewing = ({ data = sampleData }) => {
                                 <th colSpan={HOUR_COLUMNS.length} className="border border-slate-600 px-3 py-2 text-center font-semibold">
                                     HOUR & PRODUCTION
                                 </th>
-                                <th rowSpan={2} className="border border-slate-600 px-3 py-2 text-center font-semibold align-middle whitespace-nowrap">
+                                <th rowSpan={2} className="whitespace-nowrap border border-slate-600 px-3 py-2 text-center align-middle font-semibold">
                                     {REMARKS_COLUMN.label}
                                     <FilterTrigger
                                         label={REMARKS_COLUMN.label}
@@ -451,7 +734,7 @@ const DailySewing = ({ data = sampleData }) => {
                             </tr>
                             <tr className="bg-slate-600 text-white">
                                 {HOUR_COLUMNS.map((col) => (
-                                    <th key={col.key} className="border border-slate-500 px-2 py-2 text-center font-medium whitespace-nowrap">
+                                    <th key={col.key} className="whitespace-nowrap border border-slate-500 px-2 py-2 text-center font-medium">
                                         {col.label}
                                         <FilterTrigger
                                             label={col.label}
@@ -463,39 +746,89 @@ const DailySewing = ({ data = sampleData }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredData.length === 0 ? (
+                            {Object.keys(groupedData).length === 0 ? (
                                 <tr>
-                                    <td colSpan={ALL_COLUMNS.length} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
+                                    <td colSpan={26} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
                                         No matching records
                                     </td>
                                 </tr>
                             ) : (
-                                filteredData.map((row, i) => (
-                                    <tr key={row.id ?? i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        {ALL_COLUMNS.map((col) => (
-                                            <td key={col.key} className="border border-gray-200 px-2 py-2 text-center whitespace-nowrap">
-                                                {TOTAL_KEYS.includes(col.key) && typeof row[col.key] === 'number'
-                                                    ? formatNumber(row[col.key])
-                                                    : row[col.key]}
+                                Object.entries(groupedData).map(([groupKey, rows], groupIdx) =>
+                                    rows.map((row, rowIdx) => (
+                                        <tr key={`${groupKey}-${row.id}`} className={groupIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                            {/* Day + job level: span across that day's color rows */}
+                                            {rowIdx === 0 && (
+                                                <td rowSpan={rows.length} className="border border-gray-200 px-2 py-2 text-center align-middle font-medium">
+                                                    {row.date}
+                                                </td>
+                                            )}
+
+                                            {/* Line Number: every row */}
+                                            <td className="border border-gray-200 px-2 py-2 text-center font-medium">
+                                                {row.lineNumber}
                                             </td>
-                                        ))}
-                                    </tr>
-                                ))
+
+                                            {rowIdx === 0 && (
+                                                <>
+                                                    <td rowSpan={rows.length} className="border border-gray-200 px-2 py-2 text-center align-middle font-medium">
+                                                        {row.jobNumber}
+                                                    </td>
+                                                    <td rowSpan={rows.length} className="border border-gray-200 px-2 py-2 text-center align-middle font-medium">
+                                                        {row.styleNumber}
+                                                    </td>
+                                                </>
+                                            )}
+
+                                            {/* Per-color columns */}
+                                            <td className="border border-gray-200 px-2 py-2 text-center">
+                                                <span className="inline-block rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                                                    {row.color}
+                                                </span>
+                                            </td>
+                                            <td className="border border-gray-200 px-2 py-2 text-center font-semibold">{formatNumber(row.orderQty)}</td>
+                                            <td className="border border-gray-200 px-2 py-2 text-center font-semibold">{row.targetHour}</td>
+                                            <td className="border border-gray-200 px-2 py-2 text-center font-semibold">{formatNumber(row.dailyTarget)}</td>
+
+                                            {/* EDITABLE: DAILY INPUT */}
+                                            <td className="border border-gray-200 p-0 text-center font-semibold">
+                                                {renderEditableCell(row, 'dailyInput')}
+                                            </td>
+
+                                            {/* EDITABLE: DAILY OUTPUT */}
+                                            <td className="border border-gray-200 p-0 text-center font-semibold">
+                                                {renderEditableCell(row, 'dailyOutput')}
+                                            </td>
+
+                                            <td className="border border-gray-200 px-2 py-2 text-center font-semibold">{row.achv}</td>
+
+                                            {/* EDITABLE: hourly columns (lunch is locked) */}
+                                            {HOUR_COLUMNS.map((col) => (
+                                                <td key={col.key} className="border border-gray-200 p-0 text-center">
+                                                    {renderEditableCell(row, col.key)}
+                                                </td>
+                                            ))}
+
+                                            {/* Remarks: per color row so no remark is hidden */}
+                                            <td className="border border-gray-200 px-2 py-2 text-center align-middle">
+                                                {row.remarks || 'N/A'}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )
                             )}
                         </tbody>
                         <tfoot className="sticky bottom-0 z-20">
                             <tr className="bg-slate-700 font-semibold text-white">
-                                <td colSpan={labelSpan} className="border border-slate-600 px-3 py-2 text-center">
+                                <td colSpan={7} className="border border-slate-600 px-3 py-2 text-center">
                                     TOTAL
                                 </td>
-                                {LEFT_COLUMNS.slice(labelSpan).map((col) => (
-                                    <td key={col.key} className="border border-slate-600 px-3 py-2 text-center">
-                                        {TOTAL_KEYS.includes(col.key) ? formatNumber(footerTotals[col.key]) : ''}
-                                    </td>
-                                ))}
+                                <td className="border border-slate-600 px-3 py-2 text-center">{formatNumber(footerTotals.dailyTarget)}</td>
+                                <td className="border border-slate-600 px-3 py-2 text-center">{formatNumber(footerTotals.dailyInput)}</td>
+                                <td className="border border-slate-600 px-3 py-2 text-center">{formatNumber(footerTotals.dailyOutput)}</td>
+                                <td className="border border-slate-600 px-3 py-2 text-center"></td>
                                 {HOUR_COLUMNS.map((col) => (
                                     <td key={col.key} className="border border-slate-600 px-2 py-2 text-center">
-                                        {formatNumber(footerTotals[col.key])}
+                                        {col.isLunch ? '-' : formatNumber(footerTotals[col.key] || 0)}
                                     </td>
                                 ))}
                                 <td className="border border-slate-600 px-3 py-2 text-center" />

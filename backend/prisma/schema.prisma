@@ -182,14 +182,15 @@ model Challan {
 }
 
 model deliveries {
-  id           Int      @id @default(autoincrement())
-  challanNo    Int
-  deliveryDate DateTime
-  deliveryQty  Float
-  deliveryType String
-  yarnId       Int
-  toFactory    String
-  fromFactory  String
+  id            Int      @id @default(autoincrement())
+  challanNo     Int
+  deliveryDate  DateTime
+  deliveryQty   Float
+  deliveryType  String
+  yarnId        Int
+  toFactory     String
+  fromFactory   String
+  deliveryMonth String @default("N/A")
 
   composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
   yarnCompId  Int?
@@ -394,4 +395,8 @@ model productionData {
   remarks               String
   user                  user                @relation(fields: [createdBy], references: [id])
   styleRowId            StyleRequirementRow @relation(fields: [styleRequirementRowId], references: [id])
+}
+
+model productionTarget {
+  id Int @id @default(autoincrement())
 }

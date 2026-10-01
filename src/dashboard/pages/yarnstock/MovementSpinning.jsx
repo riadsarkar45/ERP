@@ -1,20 +1,100 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
+/* ----------------------------- Icons ----------------------------- */
+const IconSearch = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-gray-400">
+    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/>
+  </svg>
+);
+
+const IconFilter = ({ active }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+    <path
+      d="M3 4.5h18l-7 8.2V19l-4 2v-8.3L3 4.5z"
+      fill={active ? '#2563EB' : 'none'}
+      stroke={active ? '#2563EB' : '#94A3B8'}
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const IconCheck = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+    <path d="M4 12.5l5.5 5.5L20 7" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+  </svg>
+);
+
+const IconSave = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconX = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+  </svg>
+);
+
+const IconPen = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+    <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+/* ----------------------------- Column definitions ----------------------------- */
 const COLUMNS = [
-  { key: 'date', label: 'DATE' },
-  { key: 'challan', label: 'CHALLAN' },
-  { key: 'piNo', label: 'PI NO' },
-  { key: 'lcNo', label: 'L/C NO' },
-  { key: 'supplierName', label: 'SUPPLIER NAME' },
-  { key: 'yarnCount', label: 'YARN COUNT' },
-  { key: 'yarnComposition', label: 'YARN COMPOSITION' },
-  { key: 'yarnReceived', label: 'YARN RECEIVED' },
-  { key: 'yarnReturned', label: 'YARN RETURNED' },
-  { key: 'remarks', label: 'REMARKS' },
+  { key: 'date', label: 'DATE', width: 130, type: 'date' },
+  { key: 'challan', label: 'CHALLAN', width: 110, type: 'text' },
+  { key: 'piNo', label: 'PI NO', width: 130, type: 'text' },
+  { key: 'lcNo', label: 'L/C NO', width: 100, type: 'text' },
+  { key: 'supplierName', label: 'SUPPLIER NAME', width: 170, type: 'text' },
+  { key: 'yarnCount', label: 'YARN COUNT', width: 110, type: 'text' },
+  { key: 'yarnComposition', label: 'YARN COMPOSITION', width: 170, type: 'text' },
+  { key: 'yarnReceived', label: 'YARN RECEIVED', width: 140, type: 'text', numeric: true },
+  { key: 'yarnReturned', label: 'YARN RETURNED', width: 140, type: 'text', numeric: true },
+  { key: 'remarks', label: 'REMARKS', width: 200, type: 'text' },
 ];
 
-const NUMERIC_COLUMNS = ['yarnReceived', 'yarnReturned'];
+const NUMERIC_COLUMNS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
+const LABEL_COL_SPAN = COLUMNS.findIndex((c) => c.numeric); // columns before the first numeric one
 const STORAGE_KEY = 'movementSpinningData_v1';
+
+/* ----------------------------- Frozen (sticky) columns -----------------------------
+   Every column from the first one up to and including FROZEN_THROUGH_KEY stays fixed
+   on the left while the table scrolls horizontally. */
+const FROZEN_THROUGH_KEY = 'supplierName';
+const FROZEN_COUNT = COLUMNS.findIndex((c) => c.key === FROZEN_THROUGH_KEY) + 1;
+const LEFT_OFFSETS = COLUMNS.map((_, i) => COLUMNS.slice(0, i).reduce((sum, c) => sum + c.width, 0));
+const TABLE_MIN_WIDTH = COLUMNS.reduce((sum, c) => sum + c.width, 0);
+const isFrozen = (i) => i < FROZEN_COUNT;
+const isLastFrozen = (i) => i === FROZEN_COUNT - 1;
+const FROZEN_EDGE_SHADOW = 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.25)]';
+const FOOTER_ROW_H = 44;
+
+/* Fields shown inside the Add / Modify Challan modal (generated column-wise) */
+const MODAL_FIELDS = [
+  { key: 'date', label: 'Date', type: 'date' },
+  { key: 'challan', label: 'Challan', type: 'text', required: true },
+  { key: 'piNo', label: 'PI No', type: 'text' },
+  { key: 'lcNo', label: 'L/C No', type: 'text' },
+  { key: 'supplierName', label: 'Supplier Name', type: 'text' },
+  { key: 'yarnCount', label: 'Yarn Count', type: 'text' },
+  { key: 'yarnComposition', label: 'Yarn Composition', type: 'text' },
+  { key: 'yarnReceived', label: 'Yarn Received', type: 'text', numeric: true },
+  { key: 'yarnReturned', label: 'Yarn Returned', type: 'text', numeric: true },
+  { key: 'remarks', label: 'Remarks', type: 'textarea', full: true },
+];
 
 const createEmptyRow = (id) => ({
   id,
@@ -41,167 +121,297 @@ const parseNumeric = (val) => {
 };
 
 const formatTotal = (n) => {
-  if (n === 0) return '0';
-  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (!n) return '0.00';
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const fmtDate = (iso) => {
+  if (!iso) return '-';
+  const d = new Date(iso + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const getTodayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 const loadSavedData = () => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
+    if (saved) return JSON.parse(saved);
   } catch (e) {
-    console.error("Failed to load data from localStorage", e);
+    console.error('Failed to load data from localStorage', e);
   }
   return [createEmptyRow(1), createEmptyRow(2), createEmptyRow(3)];
 };
 
-const MovementSpinning = () => {
-  const initialData = useMemo(() => loadSavedData(), []);
-  
-  const [committedData, setCommittedData] = useState(initialData);
-  const [draftData, setDraftData] = useState(() => deepCopy(initialData));
-  const [isDirty, setIsDirty] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [columnFilters, setColumnFilters] = useState({});
-  const [filterSearch, setFilterSearch] = useState({});
-  const [openFilter, setOpenFilter] = useState(null);
-  const [tempFilters, setTempFilters] = useState({});
-  
-  const [nextId, setNextId] = useState(() => {
-    const maxId = initialData.reduce((max, row) => Math.max(max, row.id || 0), 0);
-    return maxId + 1;
-  });
-  
-  const filterRef = useRef(null);
-  const filterButtonRefs = useRef({});
-  const searchInputRef = useRef(null);
+/* ----------------------------- Add / Modify Challan Modal ----------------------------- */
+function ChallanRecordModal({ mode, initial, onSave, onClose }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState('');
+  const initialRef = useRef(JSON.stringify(initial));
 
+  const isDirty = JSON.stringify(form) !== initialRef.current;
+
+  // ESC => discard everything & close (clear / refresh)
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (filterRef.current && !filterRef.current.contains(e.target)) {
-        setOpenFilter(null);
-      }
-    };
-    const handleKeyDown = (e) => {
+    const onKey = (e) => {
       if (e.key === 'Escape') {
-        setOpenFilter(null);
-        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
-          document.activeElement.blur();
-        }
+        e.preventDefault();
+        setForm(initial);
+        setError('');
+        onClose();
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [initial, onClose]);
 
-  useEffect(() => {
-    if (openFilter && searchInputRef.current) {
-      setTimeout(() => searchInputRef.current.focus(), 50);
-    }
-  }, [openFilter]);
-
-  const handleCellChange = (rowId, colKey, value) => {
-    setDraftData((prev) =>
-      prev.map((row) => (row.id === rowId ? { ...row, [colKey]: value } : row))
-    );
-    setIsDirty(true);
-  };
-
-  const handleAddRow = () => {
-    const newRow = createEmptyRow(nextId);
-    setDraftData((prev) => [...prev, newRow]);
-    setNextId((prev) => prev + 1);
-    setIsDirty(true);
-  };
-
-  const handleSave = () => {
-    const newData = deepCopy(draftData);
-    setCommittedData(newData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-    setIsDirty(false);
+  const setField = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (error) setError('');
   };
 
   const handleDiscard = () => {
-    setDraftData(deepCopy(committedData));
-    setIsDirty(false);
+    setForm(initial);
+    setError('');
+    onClose();
   };
 
-  const toggleFilter = (colKey, e) => {
-    e.stopPropagation();
-    if (openFilter === colKey) {
-      setOpenFilter(null);
-    } else {
-      setTempFilters({ ...columnFilters });
-      setOpenFilter(colKey);
+  const handleSaveClick = () => {
+    if (!String(form.challan || '').trim()) {
+      setError('Challan is required.');
+      return;
     }
+    onSave({ ...form });
   };
 
-  const applyColumnFilter = (colKey, selectedValues) => {
-    setTempFilters((prev) => {
-      const next = { ...prev };
-      if (selectedValues.length === 0) {
-        delete next[colKey];
+  const inputBase = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {mode === 'add' ? 'Add New Challan' : 'Modify Challan'}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {mode === 'add' ? 'Fill in the details below to add a new record.' : `Editing ${initial.challan || 'record'} — change any field and save.`}
+            </p>
+          </div>
+          <button onClick={handleDiscard} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="Close (Esc)">
+            <IconX />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {MODAL_FIELDS.map((f) => (
+              <div key={f.key} className={f.full ? 'sm:col-span-2' : ''}>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                  {f.label} {f.required && <span className="text-red-500">*</span>}
+                </label>
+                {f.type === 'textarea' ? (
+                  <textarea
+                    rows={3}
+                    value={form[f.key] ?? ''}
+                    onChange={(e) => setField(f.key, e.target.value)}
+                    className={inputBase}
+                  />
+                ) : (
+                  <input
+                    type={f.type}
+                    autoFocus={f.key === 'challan'}
+                    value={form[f.key] ?? ''}
+                    onChange={(e) => setField(f.key, e.target.value)}
+                    className={`${inputBase} ${f.numeric ? 'text-right font-mono' : ''}`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          {error && <p className="mt-4 text-sm text-red-600 font-medium">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+          <span className="text-xs text-gray-400">Press Esc to discard &amp; close</span>
+          <div className="flex items-center gap-3">
+            {isDirty && (
+              <>
+                <button
+                  onClick={handleDiscard}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  Discard
+                </button>
+                <button
+                  onClick={handleSaveClick}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  <IconSave /> Save
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- Filter Popover Component ----------------------------- */
+const POPOVER_WIDTH = 224;
+
+function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
+  const ref = useRef(null);
+  const [search, setSearch] = useState('');
+  const [draft, setDraft] = useState(activeSet ? new Set(activeSet) : new Set(values));
+
+  useEffect(() => {
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  if (!anchorRect) return null;
+
+  const spaceBelow = window.innerHeight - anchorRect.bottom;
+  const openUpward = spaceBelow < 320 && anchorRect.top > 320;
+  const left = Math.min(anchorRect.left, window.innerWidth - POPOVER_WIDTH - 8);
+  const style = openUpward
+    ? { left, bottom: window.innerHeight - anchorRect.top + 4, width: POPOVER_WIDTH }
+    : { left, top: anchorRect.bottom + 4, width: POPOVER_WIDTH };
+
+  const labelOf = (v) => (v === '' ? '(Blank)' : v);
+  const visibleValues = values.filter((v) => labelOf(v).toLowerCase().includes(search.toLowerCase()));
+  const allVisibleChecked = visibleValues.length > 0 && visibleValues.every((v) => draft.has(v));
+
+  const toggleSelectAll = () => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      if (allVisibleChecked) {
+        visibleValues.forEach((v) => next.delete(v));
       } else {
-        next[colKey] = selectedValues;
+        visibleValues.forEach((v) => next.add(v));
       }
       return next;
     });
   };
 
-  const handleApplyFilter = () => {
-    setColumnFilters(tempFilters);
-    setOpenFilter(null);
-  };
-
-  const handleCancelFilter = () => {
-    setOpenFilter(null);
-  };
-
-  const handleClearColumnFilter = () => {
-    setTempFilters((prev) => {
-      const next = { ...prev };
-      delete next[openFilter];
+  const toggleValue = (v) => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      next.has(v) ? next.delete(v) : next.add(v);
       return next;
     });
   };
 
+  return createPortal(
+    <div
+      ref={ref}
+      className="fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg text-gray-800 normal-case font-normal text-xs"
+      style={style}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="p-2">
+        <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none focus:border-blue-500" />
+      </div>
+      <div className="mx-2 mb-2 border border-gray-200 rounded max-h-56 overflow-y-auto py-1">
+        {visibleValues.length === 0 ? (
+          <div className="px-3 py-3 text-gray-400 italic">No matches</div>
+        ) : (
+          <>
+            <label className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none font-semibold border-b border-gray-100" onClick={(e) => { e.preventDefault(); toggleSelectAll(); }}>
+              <span className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${allVisibleChecked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
+                {allVisibleChecked && <IconCheck />}
+              </span>
+              <span>(Select All)</span>
+            </label>
+            {visibleValues.map((v) => {
+              const checked = draft.has(v);
+              return (
+                <label key={v === '' ? '__blank__' : v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none" onClick={(e) => { e.preventDefault(); toggleValue(v); }}>
+                  <span className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
+                    {checked && <IconCheck />}
+                  </span>
+                  <span className="truncate">{labelOf(v)}</span>
+                </label>
+              );
+            })}
+          </>
+        )}
+      </div>
+      <div className="flex justify-end gap-2 p-2 border-t border-gray-200 bg-gray-50 rounded-b-md">
+        <button onClick={onClose} className="px-2.5 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-100">Cancel</button>
+        <button onClick={() => onApply(draft)} className="px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">APPLY</button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ----------------------------- Main Component ----------------------------- */
+const MovementSpinning = () => {
+  const initialData = useMemo(() => loadSavedData(), []);
+
+  const [committedData, setCommittedData] = useState(initialData);
+  const [draftData, setDraftData] = useState(() => deepCopy(initialData));
+  const [isDirty, setIsDirty] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [filters, setFilters] = useState({});
+  const [openFilterCol, setOpenFilterCol] = useState(null);
+  const [filterAnchorRect, setFilterAnchorRect] = useState(null);
+  const tableScrollRef = useRef(null);
+
+  // Add / Modify Challan modal state: { mode: 'add' | 'edit', record }
+  const [challanModal, setChallanModal] = useState(null);
+
+  const closeFilter = () => { setOpenFilterCol(null); setFilterAnchorRect(null); };
+
+  /* ---------- Unique values per column (for the filter popover) ---------- */
   const uniqueValues = useMemo(() => {
     const map = {};
     COLUMNS.forEach((col) => {
-      const vals = new Set(committedData.map((row) => String(row[col.key] || '')));
-      map[col.key] = Array.from(vals).sort((a, b) => a.localeCompare(b));
+      const set = new Set(draftData.map((row) => String(row[col.key] ?? '')));
+      map[col.key] = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     });
     return map;
-  }, [committedData]);
+  }, [draftData]);
 
-  const hasActiveFilter = searchQuery.trim() !== '' || Object.keys(columnFilters).length > 0;
+  const hasActiveFilter = searchInput.trim() !== '' || Object.keys(filters).length > 0;
 
   const filteredData = useMemo(() => {
     let result = [...draftData];
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (searchInput.trim()) {
+      const q = searchInput.trim().toLowerCase();
       result = result.filter((row) =>
-        COLUMNS.some((col) => String(row[col.key] || '').toLowerCase().includes(q))
+        COLUMNS.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q))
       );
     }
 
-    Object.entries(columnFilters).forEach(([colKey, allowed]) => {
-      if (allowed && allowed.length > 0) {
-        result = result.filter((row) => allowed.includes(String(row[colKey] || '')));
+    Object.entries(filters).forEach(([colKey, allowed]) => {
+      if (allowed) {
+        result = result.filter((row) => allowed.has(String(row[colKey] ?? '')));
       }
     });
 
     return result;
-  }, [draftData, searchQuery, columnFilters]);
-
-  const getFilterCount = (colKey) => columnFilters[colKey]?.length || 0;
+  }, [draftData, searchInput, filters]);
 
   const grandTotals = useMemo(() => {
     const totals = {};
@@ -219,585 +429,297 @@ const MovementSpinning = () => {
     return totals;
   }, [filteredData]);
 
-  const cellRefs = useRef({});
-
-  const registerCellRef = (rowIndex, colIndex) => (el) => {
-    cellRefs.current[`${rowIndex}-${colIndex}`] = el;
+  /* ---------- Filter handlers ---------- */
+  const applyFilter = (colKey, set) => {
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (set.size === uniqueValues[colKey].length) delete next[colKey];
+      else next[colKey] = set;
+      return next;
+    });
+    closeFilter();
   };
 
-  const focusCell = (rowIndex, colIndex) => {
-    if (rowIndex < 0 || rowIndex >= filteredData.length) return;
-    if (colIndex < 0 || colIndex >= COLUMNS.length) return;
-    const el = cellRefs.current[`${rowIndex}-${colIndex}`];
-    if (el) {
-      el.focus();
-      if (el.type !== 'date') {
-        el.select();
-      }
-    }
+  const handleClear = () => { setSearchInput(''); setFilters({}); };
+
+  /* ---------- Add / Modify Challan modal handlers ---------- */
+  const openAddModal = () => {
+    closeFilter();
+    setChallanModal({ mode: 'add', record: { ...createEmptyRow(0), date: getTodayISO() } });
   };
 
-  const handleCellKeyDown = (e, rowIndex, colIndex) => {
-    const input = e.target;
-    const isDateInput = input.type === 'date';
-
-    switch (e.key) {
-      case 'Tab': {
-        e.preventDefault();
-        let nextRow = rowIndex;
-        let nextCol = colIndex + (e.shiftKey ? -1 : 1);
-        if (nextCol > COLUMNS.length - 1) {
-          nextCol = 0;
-          nextRow += 1;
-        } else if (nextCol < 0) {
-          nextCol = COLUMNS.length - 1;
-          nextRow -= 1;
-        }
-        focusCell(nextRow, nextCol);
-        break;
-      }
-      case 'ArrowRight': {
-        if (!isDateInput) {
-          const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
-          if (atEnd) {
-            e.preventDefault();
-            focusCell(rowIndex, colIndex + 1);
-          }
-        }
-        break;
-      }
-      case 'ArrowLeft': {
-        if (!isDateInput) {
-          const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
-          if (atStart) {
-            e.preventDefault();
-            focusCell(rowIndex, colIndex - 1);
-          }
-        }
-        break;
-      }
-      case 'ArrowUp': {
-        e.preventDefault();
-        focusCell(rowIndex - 1, colIndex);
-        break;
-      }
-      case 'ArrowDown': {
-        e.preventDefault();
-        focusCell(rowIndex + 1, colIndex);
-        break;
-      }
-      case 'Enter': {
-        e.preventDefault();
-        focusCell(rowIndex + 1, colIndex);
-        break;
-      }
-      default:
-        break;
-    }
+  const openEditModal = (item) => {
+    closeFilter();
+    setChallanModal({ mode: 'edit', record: { ...item } });
   };
 
-  const toggleFilterValue = (colKey, val, currentFilters) => {
-    const current = new Set(currentFilters[colKey] || []);
-    if (current.has(val)) {
-      current.delete(val);
+  const closeChallanModal = () => setChallanModal(null);
+
+  const handleModalSave = (data) => {
+    if (challanModal.mode === 'add') {
+      // Clear search/filters so the new row is visible in the table
+      setSearchInput('');
+      setFilters({});
+      setDraftData((prev) => {
+        const maxId = prev.reduce((max, row) => Math.max(max, row.id || 0), 0);
+        return [{ ...data, id: maxId + 1 }, ...prev];
+      });
+      setTimeout(() => {
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+      }, 0);
     } else {
-      current.add(val);
+      setDraftData((prev) => prev.map((row) => (row.id === data.id ? { ...row, ...data } : row)));
     }
-    applyColumnFilter(colKey, Array.from(current));
+    setIsDirty(true);
+    setChallanModal(null);
   };
 
-  const toggleSelectAll = (colKey, visibleValues, currentFilters) => {
-    const current = new Set(currentFilters[colKey] || []);
-    const allVisibleSelected = visibleValues.every((v) => current.has(v));
-    if (allVisibleSelected) {
-      visibleValues.forEach((v) => current.delete(v));
-    } else {
-      visibleValues.forEach((v) => current.add(v));
+  /* ---------- Page-level Save / Discard ---------- */
+  const handleSave = () => {
+    const newData = deepCopy(draftData);
+    setCommittedData(newData);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    } catch (e) {
+      console.error('Failed to save data to localStorage', e);
     }
-    applyColumnFilter(colKey, Array.from(current));
+    setIsDirty(false);
   };
 
-  const getFilterDropdownStyle = (colKey) => {
-    const button = filterButtonRefs.current[colKey];
-    if (!button) return { top: '0px', left: '0px' };
-    
-    const rect = button.getBoundingClientRect();
-    const dropdownWidth = 280;
-    
-    let left = rect.left;
-    if (left + dropdownWidth > window.innerWidth - 10) {
-      left = window.innerWidth - dropdownWidth - 10;
-    }
-    if (left < 10) left = 10;
-    
-    return {
-      position: 'fixed',
-      top: `${rect.bottom + 4}px`,
-      left: `${left}px`,
-      width: `${dropdownWidth}px`,
-      zIndex: 99999,
-    };
+  const handleDiscard = () => {
+    setDraftData(deepCopy(committedData));
+    setIsDirty(false);
   };
+
+  /* ---------- Footer row (frozen label cell + totals) ---------- */
+  const renderFooterRow = (label, totals, bottom, numericBg) => (
+    <tr>
+      <td
+        colSpan={FROZEN_COUNT}
+        className={`sticky z-40 px-3 text-right text-sm font-bold text-gray-800 border-t border-r border-b border-gray-400 uppercase tracking-wider bg-gray-100 ${FROZEN_EDGE_SHADOW}`}
+        style={{ left: 0, bottom, height: FOOTER_ROW_H }}
+      >
+        {label}
+      </td>
+      {LABEL_COL_SPAN - FROZEN_COUNT > 0 && (
+        <td
+          colSpan={LABEL_COL_SPAN - FROZEN_COUNT}
+          className="sticky z-30 border-t border-r border-b border-gray-400 bg-gray-100"
+          style={{ bottom, height: FOOTER_ROW_H }}
+        />
+      )}
+      {NUMERIC_COLUMNS.map((key) => (
+        <td
+          key={key}
+          className={`sticky z-30 px-3 text-right text-sm font-bold text-gray-800 border-t border-r border-b border-gray-400 whitespace-nowrap font-mono tabular-nums ${numericBg}`}
+          style={{ bottom, height: FOOTER_ROW_H }}
+        >
+          {formatTotal(totals[key])}
+        </td>
+      ))}
+      <td
+        className="sticky z-30 border-t border-r border-b border-gray-400 bg-gray-100"
+        style={{ bottom, height: FOOTER_ROW_H }}
+      />
+    </tr>
+  );
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Segoe UI, Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      <style>{`
-        .ms-container { max-width: 100%; }
-        
-        .ms-table-container {
-          max-height: 65vh;
-          overflow-y: auto;
-          overflow-x: auto;
-          border: 1px solid #d4d4d4;
-          border-radius: 4px;
-          position: relative;
-        }
-        .ms-table { 
-          border-collapse: collapse; 
-          width: 100%; 
-          background: white; 
-          font-size: 12px; 
-          table-layout: auto;
-        }
-        .ms-table th { 
-          position: sticky; 
-          top: 0; 
-          z-index: 50; 
-          background: #f8f9fa; 
-          font-weight: 600; 
-          color: #333; 
-          white-space: nowrap;
-          min-width: 120px;
-          box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
-        }
-        .ms-table td { 
-          background: #fff; 
-          position: relative; 
-          z-index: 1; 
-          white-space: nowrap;
-        }
-        .ms-table th, .ms-table td { border: 1px solid #d4d4d4; padding: 4px 6px; }
-        .ms-table tr:hover td { background-color: #f0f8ff; }
-        
-        .ms-table td input { 
-          border: 1px solid transparent; 
-          outline: none; 
-          width: 100%; 
-          min-width: 100px;
-          font-size: 12px; 
-          background: transparent; 
-          font-family: inherit; 
-          padding: 2px; 
-          box-sizing: border-box;
-        }
-        .ms-table td input:focus { border-color: #217346; background: #fff; box-shadow: inset 0 0 0 1px #217346; }
-        .ms-table td input[type="date"] { cursor: pointer; }
-        .ms-table td input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
-        
-        .ms-table tfoot td { background: #f8f9fa; font-weight: 700; color: #1e1e1e; white-space: nowrap; }
-        .ms-table tfoot tr.subtotal-row td { background: #fff6e5; color: #8a5a00; }
-        
-        .filter-btn-wrapper {
-          position: relative;
-          display: inline-flex;
-          align-items: center;
-        }
-        .filter-btn { 
-          cursor: pointer; 
-          margin-left: 4px; 
-          color: #666; 
-          font-size: 9px; 
-          display: inline-block; 
-          width: 18px; 
-          height: 18px;
-          text-align: center; 
-          border-radius: 3px;
-          line-height: 18px;
-          background: #e8e8e8;
-          transition: all 0.2s;
-          user-select: none;
-        }
-        .filter-btn:hover { 
-          background: #d0d0d0; 
-          color: #000; 
-        }
-        .filter-btn.active { 
-          color: white; 
-          font-weight: bold;
-          background: #0078d4;
-        }
-        .filter-badge {
-          position: absolute;
-          top: -6px;
-          right: -8px;
-          background: #d83b01;
-          color: white;
-          font-size: 9px;
-          font-weight: 700;
-          min-width: 16px;
-          height: 16px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 4px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
-        
-        .filter-dropdown { 
-          position: fixed;
-          background: white; 
-          border: 1px solid #d4d4d4; 
-          box-shadow: 0 8px 24px rgba(0,0,0,0.18); 
-          z-index: 99999; 
-          width: 280px; 
-          border-radius: 6px; 
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          font-family: 'Segoe UI', Arial, sans-serif;
-        }
-        
-        .filter-search-box {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 8px 12px;
-          border: none;
-          border-bottom: 1px solid #d4d4d4;
-          font-size: 13px;
-          font-family: inherit;
-          outline: none;
-        }
-        .filter-search-box:focus {
-          border-bottom-color: #217346;
-        }
-        
-        .filter-items-container {
-          padding: 4px 0;
-          max-height: 280px;
-          overflow-y: auto;
-          flex: 1;
-        }
-        
-        .filter-item { 
-          display: flex; 
-          align-items: center; 
-          padding: 5px 12px; 
-          cursor: pointer;
-        }
-        .filter-item:hover { 
-          background: #e5f3ff; 
-        }
-        .filter-item input { 
-          margin-right: 8px; 
-          cursor: pointer;
-          width: 16px;
-          height: 16px;
-          pointer-events: none;
-          flex-shrink: 0;
-        }
-        .filter-item span { 
-          font-size: 13px; 
-          color: #333; 
-          word-break: break-all;
-        }
-        
-        .filter-footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 12px;
-          border-top: 1px solid #d4d4d4;
-          background: #fafafa;
-          flex-shrink: 0;
-        }
-        
-        .btn-filter { 
-          padding: 5px 14px; 
-          border: 1px solid #d4d4d4; 
-          background: white; 
-          cursor: pointer; 
-          font-size: 12px; 
-          border-radius: 3px; 
-          font-family: inherit;
-          font-weight: 500;
-          transition: all 0.15s;
-        }
-        .btn-filter:hover { 
-          background: #f0f0f0; 
-          border-color: #bbb;
-        }
-        .btn-apply { 
-          background: #217346; 
-          color: white; 
-          border-color: #217346; 
-        }
-        .btn-apply:hover { 
-          background: #1e663d; 
-        }
-        .btn-clear {
-          background: transparent;
-          border-color: transparent;
-          color: #c00000;
-        }
-        .btn-clear:hover {
-          background: #fde7e9;
-          border-color: #ffc2c2;
-        }
-        
-        .btn { padding: 5px 14px; border: 1px solid #ccc; background: white; cursor: pointer; font-size: 12px; border-radius: 2px; font-family: inherit; }
-        .btn:hover { background: #f5f5f5; }
-        .btn-primary { background: #217346; color: white; border-color: #217346; }
-        .btn-primary:hover { background: #1e663d; }
-        .btn-danger { background: #c00000; color: white; border-color: #c00000; }
-        .btn-danger:hover { background: #a00000; }
-        .btn-add { background: #217346; color: white; border: none; padding: 7px 16px; cursor: pointer; font-size: 13px; border-radius: 3px; font-weight: 600; font-family: inherit; }
-        .btn-add:hover { background: #1e663d; }
-        .search-input { padding: 7px 12px; border: 1px solid #ccc; border-radius: 3px; width: 280px; font-size: 13px; outline: none; font-family: inherit; }
-        .search-input:focus { border-color: #217346; }
-        .dirty-badge { color: #c00000; font-weight: 600; margin-left: 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
-        
-        .control-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
-        .left-controls { display: flex; align-items: center; gap: 10px; }
-        .right-controls { display: flex; align-items: center; gap: 10px; }
-        
-        .summary-bar { display: flex; gap: 16px; align-items: stretch; background: transparent; border: none; padding: 0; margin-bottom: 16px; flex-wrap: wrap; }
-        .summary-card { display: flex; align-items: center; gap: 14px; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px 18px; flex: 1; min-width: 200px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); transition: all 0.2s ease; }
-        .summary-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); border-color: #217346; }
-        .summary-icon { font-size: 24px; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; background: #e8f5e9; border-radius: 8px; color: #217346; }
-        .summary-content { display: flex; flex-direction: column; }
-        .summary-label { color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
-        .summary-value { font-weight: 700; color: #1e1e1e; font-size: 18px; margin-top: 2px; }
-      `}</style>
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
+      {/* ADD / MODIFY CHALLAN MODAL */}
+      {challanModal && (
+        <ChallanRecordModal
+          key={`${challanModal.mode}-${challanModal.record.id}`}
+          mode={challanModal.mode}
+          initial={challanModal.record}
+          onSave={handleModalSave}
+          onClose={closeChallanModal}
+        />
+      )}
 
-      <div className="ms-container">
-        <div className="summary-bar">
-          <div className="summary-card">
-            <div className="summary-icon">📥</div>
-            <div className="summary-content">
-              <span className="summary-label">Yarn Received</span>
-              <span className="summary-value">{formatTotal(grandTotals.yarnReceived)}</span>
-            </div>
+      {/* QUICK SUMMARY */}
+      <div className="mb-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <span className="w-1 h-4 bg-blue-600 rounded-full"></span> Quick Summary
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg border-l-4 border-emerald-500 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Yarn Received</p>
+            <p className="text-2xl font-bold text-gray-900">{formatTotal(grandTotals.yarnReceived)}</p>
           </div>
-          <div className="summary-card">
-            <div className="summary-icon">🔄</div>
-            <div className="summary-content">
-              <span className="summary-label">Yarn Returned</span>
-              <span className="summary-value">{formatTotal(grandTotals.yarnReturned)}</span>
-            </div>
-          </div>
-          <div className="summary-card">
-            <div className="summary-icon">📋</div>
-            <div className="summary-content">
-              <span className="summary-label">Total Rows</span>
-              <span className="summary-value">{draftData.length}</span>
-            </div>
+          <div className="bg-white rounded-lg border-l-4 border-orange-500 p-4 shadow-sm">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Yarn Returned</p>
+            <p className="text-2xl font-bold text-gray-900">{formatTotal(grandTotals.yarnReturned)}</p>
           </div>
         </div>
+      </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: 10, flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Search across all columns..."
-            className="search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="btn" onClick={() => setSearchQuery('')} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-              <span>✕</span> Clear
+      {/* ACTION BAR */}
+      <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3 flex-1 flex-wrap">
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="text"
+              placeholder="Search across all columns..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="absolute left-3 top-2.5"><IconSearch /></div>
+          </div>
+
+          {hasActiveFilter && (
+            <button onClick={handleClear} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors border border-gray-300 flex items-center gap-1.5">
+              <IconX /> Clear
             </button>
           )}
+
+          <button
+            onClick={openAddModal}
+            title="Add a new challan"
+            className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
+          >
+            <IconPlus /> Add Challan
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
           {isDirty && (
-            <span className="dirty-badge">
-              <span style={{ width: 8, height: 8, background: '#c00000', borderRadius: '50%', display: 'inline-block' }}></span>
-              Unsaved Changes
-            </span>
+            <>
+              <span className="text-sm font-medium text-red-600 flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-red-600 rounded-full inline-block"></span> Unsaved Changes
+              </span>
+              <button
+                onClick={handleDiscard}
+                title="Discard all unsaved changes"
+                className="px-3 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-100 transition-colors flex items-center gap-1.5"
+              >
+                <IconX /> Discard
+              </button>
+              <button
+                onClick={handleSave}
+                title="Save all changes"
+                className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5 animate-pulse"
+              >
+                <IconSave /> Save
+              </button>
+            </>
           )}
         </div>
+      </div>
 
-        <div className="control-bar">
-          <div className="left-controls">
-            <button className="btn-add" onClick={handleAddRow}>+ Add Row</button>
-          </div>
-          <div className="right-controls">
-            {isDirty && (
-              <>
-                <button className="btn btn-primary" onClick={handleSave}>💾 Save</button>
-                <button className="btn btn-danger" onClick={handleDiscard}>✕ Discard</button>
-              </>
-            )}
-          </div>
-        </div>
+      {/* TABLE */}
+      <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
+        <div ref={tableScrollRef} onScroll={closeFilter} className="overflow-x-auto overflow-y-auto max-h-[600px]">
+          <table
+            className="text-sm"
+            style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: '100%', minWidth: TABLE_MIN_WIDTH }}
+          >
+            <colgroup>
+              {COLUMNS.map((col, i) => (
+                <col key={col.key} style={i === COLUMNS.length - 1 ? undefined : { width: col.width }} />
+              ))}
+            </colgroup>
 
-        <div className="ms-table-container">
-          <table className="ms-table">
             <thead>
               <tr>
-                {COLUMNS.map((col) => {
-                  const filterText = filterSearch[col.key] || '';
-                  const currentFilters = openFilter === col.key ? tempFilters : columnFilters;
-                  const visibleValues = uniqueValues[col.key].filter((val) =>
-                    val.toLowerCase().includes(filterText.toLowerCase())
-                  );
-                  const filterCount = getFilterCount(col.key);
-                  
+                {COLUMNS.map((col, i) => {
+                  const isFiltered = !!filters[col.key];
+                  const frozen = isFrozen(i);
                   return (
-                    <th key={col.key}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-                        <span>{col.label}</span>
-                        <div className="filter-btn-wrapper">
-                          <span
-                            ref={(el) => {
-                              if (el) filterButtonRefs.current[col.key] = el;
-                            }}
-                            className={`filter-btn ${filterCount > 0 ? 'active' : ''}`}
-                            onClick={(e) => toggleFilter(col.key, e)}
-                            title={filterCount > 0 ? `${filterCount} filter(s) active` : "Filter"}
-                          >
-                            ▼
-                          </span>
-                          {filterCount > 0 && (
-                            <span className="filter-badge">{filterCount}</span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {openFilter === col.key && (
-                        <div 
-                          className="filter-dropdown" 
-                          ref={filterRef}
-                          style={getFilterDropdownStyle(col.key)}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            ref={searchInputRef}
-                            type="text"
-                            className="filter-search-box"
-                            placeholder="Search items..."
-                            value={filterText}
-                            onChange={(e) =>
-                              setFilterSearch((prev) => ({ ...prev, [col.key]: e.target.value }))
+                    <th
+                      key={col.key}
+                      className={`sticky top-0 ${frozen ? 'z-40' : 'z-30'} border-b border-r border-gray-300 px-2 py-3 text-left font-bold text-gray-700 uppercase text-xs align-top bg-gray-100 ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''}`}
+                      style={frozen ? { left: LEFT_OFFSETS[i] } : undefined}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span className={`whitespace-normal break-words leading-tight ${col.numeric ? 'text-right w-full' : ''}`}>{col.label}</span>
+                        <button
+                          onClick={(e) => {
+                            if (openFilterCol === col.key) {
+                              closeFilter();
+                            } else {
+                              setFilterAnchorRect(e.currentTarget.getBoundingClientRect());
+                              setOpenFilterCol(col.key);
                             }
-                          />
-                          
-                          <div className="filter-items-container">
-                            <div 
-                              className="filter-item"
-                              onClick={() => toggleSelectAll(col.key, visibleValues, currentFilters)}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={
-                                  visibleValues.length > 0 &&
-                                  visibleValues.every((v) => (currentFilters[col.key] || []).includes(v))
-                                }
-                                readOnly
-                              />
-                              <span style={{ fontWeight: 600 }}>(Select All)</span>
-                            </div>
-                            {visibleValues.map((val) => (
-                              <div 
-                                key={val} 
-                                className="filter-item"
-                                onClick={() => toggleFilterValue(col.key, val, currentFilters)}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={(currentFilters[col.key] || []).includes(val)}
-                                  readOnly
-                                />
-                                <span>{val === '' ? '(Blank)' : val}</span>
-                              </div>
-                            ))}
-                            {visibleValues.length === 0 && (
-                              <div style={{ fontSize: 12, color: '#999', padding: '12px', textAlign: 'center' }}>No matches found</div>
-                            )}
-                          </div>
-                          
-                          <div className="filter-footer">
-                            <button 
-                              className="btn-filter btn-clear" 
-                              onClick={handleClearColumnFilter}
-                              disabled={!(currentFilters[col.key] && currentFilters[col.key].length > 0)}
-                              style={{ opacity: (currentFilters[col.key] && currentFilters[col.key].length > 0) ? 1 : 0.4 }}
-                            >
-                              Clear Filter
-                            </button>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button className="btn-filter" onClick={handleCancelFilter}>Cancel</button>
-                              <button className="btn-filter btn-apply" onClick={handleApplyFilter}>OK</button>
-                            </div>
-                          </div>
-                        </div>
+                          }}
+                          className={`shrink-0 p-1 rounded mt-0.5 ${isFiltered ? 'bg-blue-100' : 'hover:bg-gray-200'}`}
+                          title={`Filter ${col.label}`}
+                        >
+                          <IconFilter active={isFiltered} />
+                        </button>
+                      </div>
+                      {openFilterCol === col.key && (
+                        <FilterPopover
+                          values={uniqueValues[col.key]}
+                          activeSet={filters[col.key]}
+                          anchorRect={filterAnchorRect}
+                          onApply={(set) => applyFilter(col.key, set)}
+                          onClose={closeFilter}
+                        />
                       )}
                     </th>
                   );
                 })}
               </tr>
             </thead>
+
             <tbody>
-              {filteredData.length === 0 ? (
+              {filteredData.length > 0 ? (
+                filteredData.map((row, rowIndex) => {
+                  const stripe = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                  return (
+                    <tr key={row.id} className={`group ${stripe} hover:bg-yellow-50 transition-colors`}>
+                      {COLUMNS.map((col, i) => {
+                        const frozen = isFrozen(i);
+                        const isPiNo = col.key === 'piNo';
+                        const cellClass = `p-0 border-b border-r border-gray-300 ${
+                          frozen ? `sticky z-10 ${stripe} group-hover:bg-yellow-50` : ''
+                        } ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''} ${isPiNo ? 'cursor-pointer select-none' : ''}`;
+
+                        return (
+                          <td
+                            key={col.key}
+                            className={cellClass}
+                            style={frozen ? { left: LEFT_OFFSETS[i] } : undefined}
+                            onDoubleClick={isPiNo ? () => openEditModal(row) : undefined}
+                            title={isPiNo ? 'Double-click to modify this challan' : undefined}
+                          >
+                            {isPiNo ? (
+                              <div className="flex items-center justify-between gap-2 px-3 py-2">
+                                <span className="truncate text-gray-900">{row.piNo || '-'}</span>
+                                <span className="shrink-0 text-blue-600"><IconPen /></span>
+                              </div>
+                            ) : (
+                              <span className={`block px-3 py-2 text-gray-900 ${col.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
+                                {col.key === 'date' ? fmtDate(row[col.key]) : (row[col.key] || '-')}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
+              ) : (
                 <tr>
-                  <td colSpan={COLUMNS.length} style={{ textAlign: 'center', padding: 24, color: '#999' }}>
-                    No matching records found
+                  <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-500 italic bg-white">
+                    No records found matching your search or filter criteria.
                   </td>
                 </tr>
-              ) : (
-                filteredData.map((row, rowIndex) => (
-                  <tr key={row.id}>
-                    {COLUMNS.map((col, colIndex) => {
-                      const isDate = col.key === 'date';
-                      return (
-                        <td key={col.key}>
-                          <input
-                            type={isDate ? 'date' : 'text'}
-                            ref={registerCellRef(rowIndex, colIndex)}
-                            value={row[col.key] || ''}
-                            onChange={(e) => handleCellChange(row.id, col.key, e.target.value)}
-                            onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
-                            style={isDate ? { cursor: 'pointer' } : {}}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
               )}
             </tbody>
+
             <tfoot>
-              {hasActiveFilter && (
-                <tr className="subtotal-row">
-                  {COLUMNS.map((col, idx) => (
-                    <td key={col.key}>
-                      {idx === 0
-                        ? 'SUBTOTAL (Filtered)'
-                        : NUMERIC_COLUMNS.includes(col.key)
-                        ? formatTotal(subTotals[col.key])
-                        : ''}
-                    </td>
-                  ))}
-                </tr>
-              )}
-              <tr>
-                {COLUMNS.map((col, idx) => (
-                  <td key={col.key}>
-                    {idx === 0
-                      ? 'GRAND TOTAL'
-                      : NUMERIC_COLUMNS.includes(col.key)
-                      ? formatTotal(grandTotals[col.key])
-                      : ''}
-                  </td>
-                ))}
-              </tr>
+              {hasActiveFilter && renderFooterRow('Footer Sub-Total (Filtered):', subTotals, FOOTER_ROW_H, 'bg-amber-50')}
+              {renderFooterRow('Grand Total:', grandTotals, 0, 'bg-green-50')}
             </tfoot>
           </table>
         </div>
+      </div>
 
-        <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-          Showing {filteredData.length} of {draftData.length} rows
-        </div>
+      <div className="mt-3 text-right text-xs text-gray-500 font-medium">
+        Showing {filteredData.length} of {draftData.length} records
       </div>
     </div>
   );

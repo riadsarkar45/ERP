@@ -10,7 +10,7 @@ import { apiLimiter } from "../middleware/rateLimiter/apiLimiter";
 import { getDeliveryData } from "../controllers/deliveries/getDeliveryData";
 import { deleteChallanFromDelivery } from "../controllers/deliveries/deleteDelivery";
 import { GlanceReport } from "../controllers/Glance/atGlanceReport";
-import { challanMovement, challanMovementByChallanNo } from "../controllers/movements/challanMovement";
+import { challanMovement, challanMovementByChallanNo, deliveryMonth } from "../controllers/movements/challanMovement";
 import { getJobNumbers, managementReport } from "../controllers/mis/managementReport";
 import { misDetailView, misDetailViewByJobNo } from "../controllers/mis/misDetail";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
@@ -32,6 +32,9 @@ import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { getHighLossJobs } from "../controllers/newStyleRequirements/jobLossReport";
 import { hourlyWorkOrder } from "../controllers/users/hrlyNewWorkOrder";
 import { hourlyBooking } from "../controllers/users/hrlyNewBooking";
+import { deliveryClosing } from "../controllers/orders/deliveryClosings";
+import { getProductionDataController } from "../controllers/production/productiondata";
+import { departmentWiseProduction } from "../controllers/production/dept.wise.production";
 
 const getRouters = express.Router();
 
@@ -223,6 +226,15 @@ getRouters.get('/hourly-work-order', authenticate, authorize("dashboard", [
 ]), hourlyWorkOrder);
 
 getRouters.get('/hourly-booking', authenticate, authorize("dashboard", ["hourlyBookingActivity"]), hourlyBooking);
+
+getRouters.get('/delivery-closed-job/:jobNo', deliveryClosing);
+
+getRouters.get('/production-data', getProductionDataController);
+
+getRouters.get('/department-production-data/:dept', departmentWiseProduction);
+
+getRouters.get('/delivery-month', deliveryMonth);
+
 
 
 

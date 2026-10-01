@@ -97,7 +97,7 @@ export const challanMovementByChallanNo = async (req: Request, res: Response) =>
 
                     deliveries: {
                         where: { challanNo: Number(challanNo) },
-                        orderBy: {id: "desc"},
+                        orderBy: { id: "desc" },
                         select: {
                             id: true,
                             deliveryQty: true,
@@ -129,3 +129,61 @@ export const challanMovementByChallanNo = async (req: Request, res: Response) =>
     }
 
 }
+
+export const deliveryMonth = async (req: Request, res: Response) => {
+    try {
+        const getMonths = await prisma.deliveries.findMany({
+            select: {
+                deliveryMonth: true
+            }
+        });
+
+        if (getMonths.length === 0) {
+            return res.status(404).send({
+                message: "No months found",
+                type: "error"
+            });
+        }
+
+        const monthOrder = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December"
+        ];
+
+        const uniqueMonths = [
+            ...new Set(
+                getMonths
+                    .map(({ deliveryMonth }) => deliveryMonth)
+                    .filter(month => month !== "N/A")
+                    .map(month => month.split(" ")[0])
+            )
+        ].sort(
+            (a: any, b: any) => monthOrder.indexOf(a) - monthOrder.indexOf(b)
+        );
+
+        return res.status(200).send({
+            data: uniqueMonths.map(deliveryMonth => ({
+                deliveryMonth
+            })),
+            type: "success"
+        });
+
+    } catch (error) {
+        console.error("Error fetching delivery months:", error);
+
+        return res.status(500).send({
+            message: "Failed to fetch delivery months",
+            type: "error"
+        });
+    }
+};

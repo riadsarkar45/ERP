@@ -1,7 +1,8 @@
-// DailyExport.jsx (Daily Shipment table)
-import React, { useState, useEffect, useMemo } from 'react'
+// DailyExport.jsx
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Filter, Download, RefreshCw, X, Search } from 'lucide-react'
+import { useFetchData } from '../../../hooks/fetch'
 
 // ---------- COLUMN DEFINITIONS ----------
 const columns = [
@@ -13,39 +14,38 @@ const columns = [
     { key: 'remarks', label: 'REMARKS' },
 ]
 
-// ---------- SAMPLE DATA ----------
-// NOTE: "today" for the summary cards is derived from the most recent date
-// found in this dataset (see `referenceDate` below). Once real/live data is
-// wired in, referenceDate can simply be `new Date()`.
-const sampleData = [
-    { id: 1, date: '2026-09-01', jobNumber: 'JOB-1001', styleNumber: 'STY-A21', color: 'Navy', dailyShipment: 500, remarks: 'Partial shipment' },
-    { id: 2, date: '2026-09-02', jobNumber: 'JOB-1001', styleNumber: 'STY-A21', color: 'Navy', dailyShipment: 600, remarks: '' },
-    { id: 3, date: '2026-09-02', jobNumber: 'JOB-1002', styleNumber: 'STY-B14', color: 'White', dailyShipment: 400, remarks: '' },
-    { id: 4, date: '2026-09-03', jobNumber: 'JOB-1003', styleNumber: 'STY-C07', color: 'Black', dailyShipment: 200, remarks: 'Delayed truck' },
-    { id: 5, date: '2026-09-03', jobNumber: 'JOB-1002', styleNumber: 'STY-B14', color: 'White', dailyShipment: 350, remarks: '' },
-    { id: 6, date: '2026-08-31', jobNumber: 'JOB-0999', styleNumber: 'STY-D02', color: 'Grey', dailyShipment: 480, remarks: '' },
-    { id: 7, date: '2026-08-30', jobNumber: 'JOB-0998', styleNumber: 'STY-D02', color: 'Grey', dailyShipment: 350, remarks: 'Final lot' },
-]
+const TOTAL_KEYS = ['dailyShipment']
 
 // ---------- DATE HELPERS ----------
 const toDateOnly = (d) => {
+    if (!d) return new Date(NaN)
+    const parts = String(d).split('T')[0].split('-')
+    if (parts.length === 3) {
+        return new Date(parts[0], parts[1] - 1, parts[2])
+    }
     const x = new Date(d)
     x.setHours(0, 0, 0, 0)
     return x
 }
 
-const isSameDay = (a, b) => toDateOnly(a).getTime() === toDateOnly(b).getTime()
+const isSameDay = (a, b) => {
+    const d1 = toDateOnly(a)
+    const d2 = toDateOnly(b)
+    return !isNaN(d1) && !isNaN(d2) && d1.getTime() === d2.getTime()
+}
 
 const startOfWeek = (d) => {
     const x = toDateOnly(d)
-    const day = x.getDay() // 0 = Sunday
-    const diff = (day === 0 ? 6 : day - 1) // treat Monday as start of week
+    if (isNaN(x)) return x
+    const day = x.getDay()
+    const diff = day === 0 ? 6 : day - 1
     x.setDate(x.getDate() - diff)
     return x
 }
 
 const startOfMonth = (d) => {
     const x = toDateOnly(d)
+    if (isNaN(x)) return x
     x.setDate(1)
     return x
 }
@@ -84,7 +84,7 @@ const SummaryCard = ({ label, value, accent = 'border-emerald-500' }) => (
     </div>
 )
 
-// ---------- FILTER TRIGGER (funnel icon in the header cell) ----------
+// ---------- FILTER TRIGGER ----------
 const FilterTrigger = ({ label, isActive, onOpen }) => (
     <button
         onClick={(e) => {
@@ -99,10 +99,7 @@ const FilterTrigger = ({ label, isActive, onOpen }) => (
     </button>
 )
 
-// ---------- FILTER MODAL (Excel-style: search + checkbox list, Apply / Clear) ----------
-// Rendered through a portal, fixed-positioned right under the column's own
-// filter icon (using its on-screen rect) so it always sits at that column's
-// position instead of being clipped by the table's scroll container.
+// ---------- FILTER MODAL ----------
 const PANEL_WIDTH = 240
 
 const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onClear, onClose }) => {
@@ -112,7 +109,7 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
     useEffect(() => {
         setPending(new Set(initialSelected))
         setSearch('')
-    }, [label]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [label])
 
     const filteredOptions = options.filter((opt) =>
         opt.toLowerCase().includes(search.toLowerCase())
@@ -198,17 +195,84 @@ const FilterModal = ({ label, options, initialSelected, anchorRect, onApply, onC
 }
 
 // ---------- MAIN COMPONENT ----------
-const DailyExport = ({ data = sampleData }) => {
+const DailyExport = () => {
+    const [data, setData] = useState([])
+    const [loading, setLoading] = useState(true)
     const [filters, setFilters] = useState({})
-    const [activeFilter, setActiveFilter] = useState(null) // { key, rect }
+    const [activeFilter, setActiveFilter] = useState(null)
 
-    // date filter mode: 'all' | 'today' | 'yesterday' | 'date' | 'month'
     const [dateMode, setDateMode] = useState('all')
     const [customDate, setCustomDate] = useState('')
     const [customMonth, setCustomMonth] = useState('')
+    
+    const { fetchData } = useFetchData()
+
+    const fetchShipmentData = useCallback(async () => {
+        try {
+            setLoading(true)
+            const res = await fetchData("/api/department-production-data/shipment")
+            const rawData = res?.data || res || []
+            
+            // Group by styleRowId.id to merge identical color entries and sum their quantities
+            const grouped = {}
+            rawData.forEach((item) => {
+                const colorId = item.styleRowId?.id ?? item.id ?? `temp-${Math.random().toString(36).substr(2, 9)}`
+                const dateStr = item.productionDate 
+                    ? new Date(item.productionDate).toISOString().split('T')[0] 
+                    : 'N/A'
+                
+                if (!grouped[colorId]) {
+                    grouped[colorId] = {
+                        id: colorId,
+                        date: dateStr,
+                        jobNumber: item.jobNumber || 'N/A',
+                        styleNumber: item.styleRowId?.styleRequirement?.styleNo || 'N/A',
+                        color: item.styleRowId?.color || 'N/A',
+                        dailyShipment: 0,
+                        remarksSet: new Set(),
+                        latestDateObj: new Date(dateStr)
+                    }
+                }
+                
+                const qty = Number(item.productionQty) || 0
+                
+                // Check productionType to ensure we are summing the correct metric
+                if (item.productionType === 'shipmentQty' || !item.productionType) {
+                    grouped[colorId].dailyShipment += qty
+                }
+                
+                // Combine remarks
+                if (item.remarks?.trim()) {
+                    grouped[colorId].remarksSet.add(item.remarks.trim())
+                }
+                
+                // Keep the most recent date if there are multiple entries
+                const currentDateObj = new Date(dateStr)
+                if (currentDateObj > grouped[colorId].latestDateObj) {
+                    grouped[colorId].latestDateObj = currentDateObj
+                    grouped[colorId].date = dateStr
+                }
+            })
+            
+            const transformed = Object.values(grouped).map(item => ({
+                ...item,
+                remarks: Array.from(item.remarksSet).join(', ') || 'N/A'
+            }))
+            
+            setData(transformed)
+        } catch (e) {
+            console.error("Failed to fetch shipment data:", e)
+        } finally {
+            setLoading(false)
+        }
+    }, [fetchData])
+
+    useEffect(() => {
+        fetchShipmentData()
+    }, [fetchShipmentData])
 
     const referenceDate = useMemo(() => {
-        const dates = data.map((r) => toDateOnly(r.date)).filter((d) => !isNaN(d))
+        const dates = data.map((r) => toDateOnly(r.date)).filter((d) => !isNaN(d.getTime()))
         if (dates.length === 0) return toDateOnly(new Date())
         return new Date(Math.max(...dates.map((d) => d.getTime())))
     }, [data])
@@ -222,7 +286,7 @@ const DailyExport = ({ data = sampleData }) => {
     const weekStart = useMemo(() => startOfWeek(referenceDate), [referenceDate])
     const monthStart = useMemo(() => startOfMonth(referenceDate), [referenceDate])
 
-    // ---------- SUMMARY TOTALS ----------
+    // Summary totals based on DAILY SHIPMENT
     const summary = useMemo(() => {
         let dailyTotal = 0
         let weekTotal = 0
@@ -247,7 +311,7 @@ const DailyExport = ({ data = sampleData }) => {
             const label = row.date ? monthLabel(row.date) : null
             if (label) set.add(label)
         })
-        return Array.from(set)
+        return Array.from(set).sort()
     }, [data])
 
     const getUniqueValues = (key) => {
@@ -274,7 +338,6 @@ const DailyExport = ({ data = sampleData }) => {
         setActiveFilter(null)
     }
 
-    // ---------- FILTERED ROWS ----------
     const filteredData = useMemo(() => {
         return data.filter((row) => {
             const d = toDateOnly(row.date)
@@ -292,10 +355,25 @@ const DailyExport = ({ data = sampleData }) => {
         })
     }, [data, filters, dateMode, customDate, customMonth, referenceDate, yesterday])
 
-    const filteredTotal = useMemo(
-        () => filteredData.reduce((sum, row) => sum + (Number(row.dailyShipment) || 0), 0),
-        [filteredData]
-    )
+    const footerTotals = useMemo(() => {
+        const totals = {}
+        TOTAL_KEYS.forEach((key) => {
+            totals[key] = filteredData.reduce((sum, row) => sum + (Number(row[key]) || 0), 0)
+        })
+        return totals
+    }, [filteredData])
+
+    // Group data by jobNumber for rowSpan display
+    const groupedData = useMemo(() => {
+        const groups = {}
+        filteredData.forEach(row => {
+            if (!groups[row.jobNumber]) {
+                groups[row.jobNumber] = []
+            }
+            groups[row.jobNumber].push(row)
+        })
+        return groups
+    }, [filteredData])
 
     const dateModes = [
         { key: 'all', label: 'All' },
@@ -305,9 +383,20 @@ const DailyExport = ({ data = sampleData }) => {
         { key: 'month', label: 'Month' },
     ]
 
+    const firstTotalIndex = columns.findIndex((c) => TOTAL_KEYS.includes(c.key))
+    const lastTotalIndex = columns.map((c) => c.key).lastIndexOf(TOTAL_KEYS[TOTAL_KEYS.length - 1])
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64 w-full">
+                <RefreshCw className="animate-spin text-blue-600" size={32} />
+                <span className="ml-2 text-slate-600 font-medium">Loading shipment data...</span>
+            </div>
+        )
+    }
+
     return (
         <div className="w-full space-y-3">
-            {/* ---------- SUMMARY CARDS ---------- */}
             <div className="flex flex-wrap gap-3">
                 <SummaryCard label="Daily Shipment" value={summary.dailyTotal} accent="border-emerald-500" />
                 <SummaryCard label="This Week Shipment" value={summary.weekTotal} accent="border-sky-500" />
@@ -315,9 +404,7 @@ const DailyExport = ({ data = sampleData }) => {
                 <SummaryCard label="Total Shipment" value={summary.grandTotal} accent="border-amber-500" />
             </div>
 
-            {/* ---------- TABLE CARD ---------- */}
             <div className="w-full rounded-lg border border-gray-200 bg-white shadow-sm">
-                {/* Toolbar: date filter pills + custom inputs + export */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
                         {dateModes.map((m) => (
@@ -373,7 +460,6 @@ const DailyExport = ({ data = sampleData }) => {
                     </button>
                 </div>
 
-                {/* Table (vertical scroll container so the total footer can stick) */}
                 <div className="max-h-[520px] overflow-auto" onScroll={() => activeFilter && setActiveFilter(null)}>
                     <table className="min-w-full border-collapse text-sm">
                         <thead className="sticky top-0 z-20">
@@ -394,37 +480,71 @@ const DailyExport = ({ data = sampleData }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredData.length === 0 ? (
+                            {Object.keys(groupedData).length === 0 ? (
                                 <tr>
                                     <td colSpan={columns.length} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
                                         No matching records
                                     </td>
                                 </tr>
                             ) : (
-                                filteredData.map((row, i) => (
-                                    <tr key={row.id ?? i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        {columns.map((col) => (
-                                            <td key={col.key} className="border border-gray-200 px-3 py-2 text-center whitespace-nowrap">
-                                                {col.key === 'dailyShipment' ? formatNumber(row[col.key]) : row[col.key]}
+                                Object.entries(groupedData).map(([jobNumber, rows], groupIdx) => (
+                                    rows.map((row, rowIdx) => (
+                                        <tr key={`${jobNumber}-${row.id}`} className={groupIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                            {rowIdx === 0 && (
+                                                <>
+                                                    <td 
+                                                        rowSpan={rows.length}
+                                                        className="border border-gray-200 px-3 py-2 text-center align-middle font-medium"
+                                                    >
+                                                        {row.date}
+                                                    </td>
+                                                    <td 
+                                                        rowSpan={rows.length}
+                                                        className="border border-gray-200 px-3 py-2 text-center align-middle font-medium"
+                                                    >
+                                                        {row.jobNumber}
+                                                    </td>
+                                                    <td 
+                                                        rowSpan={rows.length}
+                                                        className="border border-gray-200 px-3 py-2 text-center align-middle font-medium"
+                                                    >
+                                                        {row.styleNumber}
+                                                    </td>
+                                                </>
+                                            )}
+                                            <td className="border border-gray-200 px-3 py-2 text-center">
+                                                <span className="inline-block px-2 py-1 text-xs font-semibold bg-blue-50 border border-blue-200 rounded text-blue-700">
+                                                    {row.color}
+                                                </span>
                                             </td>
-                                        ))}
-                                    </tr>
+                                            <td className="border border-gray-200 px-3 py-2 text-center font-semibold">
+                                                {formatNumber(row.dailyShipment)}
+                                            </td>
+                                            {rowIdx === 0 && (
+                                                <td 
+                                                    rowSpan={rows.length}
+                                                    className="border border-gray-200 px-3 py-2 text-center align-middle"
+                                                >
+                                                    {row.remarks || 'N/A'}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))
                                 ))
                             )}
                         </tbody>
                         <tfoot className="sticky bottom-0 z-20">
                             <tr className="bg-slate-700 font-semibold text-white">
-                                <td
-                                    colSpan={columns.findIndex((c) => c.key === 'dailyShipment')}
-                                    className="border border-slate-600 px-3 py-2 text-center"
-                                >
+                                <td colSpan={firstTotalIndex} className="border border-slate-600 px-3 py-2 text-center">
                                     TOTAL
                                 </td>
-                                <td className="border border-slate-600 px-3 py-2 text-center">
-                                    {formatNumber(filteredTotal)}
-                                </td>
+                                {TOTAL_KEYS.map((key) => (
+                                    <td key={key} className="border border-slate-600 px-3 py-2 text-center">
+                                        {formatNumber(footerTotals[key])}
+                                    </td>
+                                ))}
                                 <td
-                                    colSpan={columns.length - columns.findIndex((c) => c.key === 'dailyShipment') - 1}
+                                    colSpan={columns.length - lastTotalIndex - 1}
                                     className="border border-slate-600 px-3 py-2 text-center"
                                 />
                             </tr>

@@ -52,6 +52,13 @@ const IconX = () => (
   </svg>
 );
 
+const IconPen = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+    <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /* ----------------------------- Custom Confirm Modal ----------------------------- */
 const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
@@ -88,12 +95,12 @@ const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
 
 /* ----------------------------- Column definitions ----------------------------- */
 const COLUMNS = [
-  { key: 'authorized', label: 'STATUS', width: 160, type: 'boolean', getDisplay: (item) => (item.authorized ? 'Authorized' : 'Open') },
-  { key: 'piNo', label: 'PI NO.', width: 100, type: 'text' },
+  { key: 'authorized', label: 'STATUS', width: 130, type: 'boolean', getDisplay: (item) => (item.authorized ? 'Authorized' : 'Open') },
+  { key: 'piNo', label: 'PI NO.', width: 110, type: 'text' },
   { key: 'piDate', label: 'PI DATE', width: 110, type: 'date' },
-  { key: 'lcNo', label: 'LC NO.', width: 110, type: 'text' },
-  { key: 'po', label: 'PO', width: 110, type: 'text' },
-  { key: 'supplierName', label: 'SUPPLIER NAME', width: 180, type: 'text' },
+  { key: 'lcNo', label: 'LC NO.', width: 100, type: 'text' },
+  { key: 'po', label: 'PO', width: 100, type: 'text' },
+  { key: 'supplierName', label: 'SUPPLIER NAME', width: 170, type: 'text' },
   { key: 'yarnCount', label: 'YARN COUNT', width: 100, type: 'text' },
   { key: 'composition', label: 'COMPOSITION', width: 150, type: 'text' },
   { key: 'poQty', label: 'PO QTY', width: 110, type: 'number', numeric: true },
@@ -104,8 +111,39 @@ const COLUMNS = [
 ];
 
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
-const EDITABLE_KEYS = ['piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'yarnCount', 'composition', 'poQty', 'remarks'];
-const DATE_KEYS = ['piDate'];
+
+/* Two leading columns (authorize checkbox + actions) that come before the data columns */
+const LEADING_COLS = [
+  { key: '__auth', width: 50 },
+  { key: '__actions', width: 70 },
+];
+const ALL_COLS = [...LEADING_COLS, ...COLUMNS];
+
+/* ----------------------------- Frozen (sticky) columns -----------------------------
+   Every column from the first one up to and including FROZEN_THROUGH_KEY stays fixed
+   on the left while the table scrolls horizontally. */
+const FROZEN_THROUGH_KEY = 'supplierName';
+const FROZEN_COUNT = ALL_COLS.findIndex((c) => c.key === FROZEN_THROUGH_KEY) + 1;
+const LEFT_OFFSETS = ALL_COLS.map((_, i) => ALL_COLS.slice(0, i).reduce((sum, c) => sum + c.width, 0));
+const TABLE_MIN_WIDTH = ALL_COLS.reduce((sum, c) => sum + c.width, 0);
+const FIRST_NUMERIC_IDX = ALL_COLS.findIndex((c) => c.numeric);
+const isFrozen = (i) => i < FROZEN_COUNT;
+const isLastFrozen = (i) => i === FROZEN_COUNT - 1;
+const FROZEN_EDGE_SHADOW = 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.25)]';
+const FOOTER_ROW_H = 44;
+
+/* Fields shown inside the Add / Modify PO modal (generated column-wise) */
+const MODAL_FIELDS = [
+  { key: 'piNo', label: 'PI No.', type: 'text', required: true },
+  { key: 'piDate', label: 'PI Date', type: 'date' },
+  { key: 'lcNo', label: 'LC No.', type: 'text' },
+  { key: 'po', label: 'PO', type: 'text' },
+  { key: 'supplierName', label: 'Supplier Name', type: 'text' },
+  { key: 'yarnCount', label: 'Yarn Count', type: 'text' },
+  { key: 'composition', label: 'Composition', type: 'text' },
+  { key: 'poQty', label: 'PO Qty', type: 'number' },
+  { key: 'remarks', label: 'Remarks', type: 'textarea', full: true },
+];
 
 /* ----------------------------- Mock Data ----------------------------- */
 const BASE_DATA = [
@@ -116,6 +154,188 @@ const BASE_DATA = [
 const emptyRow = (id) => ({
   id, date: '', piNo: '', piDate: '', lcNo: '', po: '', supplierName: '', yarnCount: '', composition: '', poQty: 0, yarnReceivedFromSpinning: 0, yarnReturnedToSpinning: 0, pendingReceivedQty: 0, remarks: '', authorized: false,
 });
+
+/* ----------------------------- Helper: today's date ----------------------------- */
+const getTodayISO = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/* ----------------------------- Helper: build nested payload -----------------------------
+   Groups flat rows by PI NO. into:
+   [{ piNo, lcNo, po, piDate, data: [ { ...line item details } ] }]
+   - includeAuthorized: add the "authorized" flag to each line item
+   - includeQtyFields : add yarnReceivedFromSpinning / yarnReturnedToSpinning / pendingReceivedQty
+   The Add/Modify PO modal payload uses both = false (those fields are not in the modal). */
+const buildNestedPayload = (rows, { includeAuthorized = true, includeQtyFields = true } = {}) => {
+  const groupedMap = new Map();
+
+  rows.forEach((row) => {
+    const piNo = String(row.piNo || '');
+    const groupKey = piNo.trim() || `TEMP_PI_${row.id}`;
+
+    if (!groupedMap.has(groupKey)) {
+      groupedMap.set(groupKey, {
+        piNo: row.piNo,
+        lcNo: row.lcNo,
+        po: row.po,
+        piDate: row.piDate,
+        data: [],
+      });
+    }
+
+    const lineItem = {
+      supplierName: row.supplierName,
+      yarnCount: row.yarnCount,
+      composition: row.composition,
+      poQty: Number(row.poQty) || 0,
+    };
+    if (includeQtyFields) {
+      lineItem.yarnReceivedFromSpinning = Number(row.yarnReceivedFromSpinning) || 0;
+      lineItem.yarnReturnedToSpinning = Number(row.yarnReturnedToSpinning) || 0;
+      lineItem.pendingReceivedQty = Number(row.pendingReceivedQty) || 0;
+    }
+    lineItem.remarks = row.remarks;
+    if (includeAuthorized) lineItem.authorized = row.authorized;
+
+    groupedMap.get(groupKey).data.push(lineItem);
+  });
+
+  return Array.from(groupedMap.values());
+};
+
+/* ----------------------------- Add / Modify PO Modal ----------------------------- */
+function PORecordModal({ mode, initial, onSave, onClose }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState('');
+  const initialRef = useRef(JSON.stringify(initial));
+
+  const isDirty = JSON.stringify(form) !== initialRef.current;
+
+  // ESC => discard everything & close (clear / refresh)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setForm(initial);
+        setError('');
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [initial, onClose]);
+
+  const setField = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (error) setError('');
+  };
+
+  const handleDiscard = () => {
+    setForm(initial);
+    setError('');
+    onClose();
+  };
+
+  const handleSaveClick = () => {
+    if (!String(form.piNo || '').trim()) {
+      setError('PI No. is required.');
+      return;
+    }
+    const poQty = Number(form.poQty) || 0;
+    const received = Number(form.yarnReceivedFromSpinning) || 0;
+    const returned = Number(form.yarnReturnedToSpinning) || 0;
+
+    onSave({
+      ...form,
+      poQty,
+      yarnReceivedFromSpinning: received,
+      yarnReturnedToSpinning: returned,
+      pendingReceivedQty: poQty - received - returned,
+    });
+  };
+
+  const inputBase = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {mode === 'add' ? 'Add New PO' : 'Modify PO'}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {mode === 'add' ? 'Fill in the details below to add a new record.' : `Editing ${initial.piNo || 'record'} — change any field and save.`}
+            </p>
+          </div>
+          <button onClick={handleDiscard} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="Close (Esc)">
+            <IconX />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {MODAL_FIELDS.map((f) => (
+              <div key={f.key} className={f.full ? 'sm:col-span-2' : ''}>
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                  {f.label} {f.required && <span className="text-red-500">*</span>}
+                </label>
+                {f.type === 'textarea' ? (
+                  <textarea
+                    rows={3}
+                    value={form[f.key] ?? ''}
+                    onChange={(e) => setField(f.key, e.target.value)}
+                    className={inputBase}
+                  />
+                ) : (
+                  <input
+                    type={f.type}
+                    step={f.type === 'number' ? '0.01' : undefined}
+                    min={f.type === 'number' ? '0' : undefined}
+                    autoFocus={f.key === 'piNo'}
+                    value={form[f.key] ?? ''}
+                    onChange={(e) => setField(f.key, e.target.value)}
+                    className={`${inputBase} ${f.type === 'number' ? 'text-right font-mono' : ''}`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          {error && <p className="mt-4 text-sm text-red-600 font-medium">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+          <span className="text-xs text-gray-400">Press Esc to discard &amp; close</span>
+          <div className="flex items-center gap-3">
+            {isDirty && (
+              <>
+                <button
+                  onClick={handleDiscard}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  Discard
+                </button>
+                <button
+                  onClick={handleSaveClick}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  <IconSave /> Save
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ----------------------------- Filter Popover Component ----------------------------- */
 const POPOVER_WIDTH = 224;
@@ -212,15 +432,6 @@ function FilterPopover({ column, values, activeSet, anchorRect, onApply, onClose
   );
 }
 
-/* ----------------------------- Helper: today's date ----------------------------- */
-const getTodayISO = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 /* ----------------------------- Main Component ----------------------------- */
 const PurchaseOrderStatus = () => {
   const [allData, setAllData] = useState(BASE_DATA);
@@ -232,12 +443,11 @@ const PurchaseOrderStatus = () => {
   const tableScrollRef = useRef(null);
   const [isDirty, setIsDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-  const [editingCell, setEditingCell] = useState(null);
-  const [editingOriginal, setEditingOriginal] = useState(null);
   const [newRowIds, setNewRowIds] = useState(() => new Set());
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: null });
-  
-  const [rowsToAdd, setRowsToAdd] = useState(5);
+
+  // Add / Modify PO modal state: { mode: 'add' | 'edit', record }
+  const [poModal, setPoModal] = useState(null);
 
   const fmt = (num) => Number.isFinite(num) ? num.toFixed(2) : '0.00';
   const fmtDate = (iso) => {
@@ -321,24 +531,45 @@ const PurchaseOrderStatus = () => {
     setSavedFlash(false);
   };
 
-  const handleAddRow = () => {
-    const count = Math.max(1, rowsToAdd);
-    const newRows = [];
-    let maxId = allData.length > 0 ? Math.max(...allData.map((r) => r.id)) : 0;
-    
-    for (let i = 0; i < count; i++) {
-      maxId += 1;
-      newRows.push(emptyRow(maxId));
+  /* ---------- Add / Modify PO modal handlers ---------- */
+  const openAddModal = () => {
+    closeFilter();
+    setPoModal({ mode: 'add', record: { ...emptyRow(0), piDate: getTodayISO() } });
+  };
+
+  const openEditModal = (item) => {
+    closeFilter();
+    setPoModal({ mode: 'edit', record: { ...item } });
+  };
+
+  const closePoModal = () => setPoModal(null);
+
+  const handleModalSave = (data) => {
+    let savedRow;
+
+    if (poModal.mode === 'add') {
+      const maxId = allData.length > 0 ? Math.max(...allData.map((r) => r.id)) : 0;
+      savedRow = { ...data, id: maxId + 1, authorized: false };
+      setAllData((prev) => [savedRow, ...prev]);
+      setNewRowIds((prev) => { const next = new Set(prev); next.add(savedRow.id); return next; });
+    } else {
+      // Keep the existing authorization state (it is not editable in the modal)
+      const existing = allData.find((r) => r.id === data.id);
+      savedRow = { ...data, authorized: existing ? existing.authorized : false };
+      setAllData((prev) => prev.map((row) => (row.id === savedRow.id ? { ...row, ...savedRow } : row)));
     }
 
-    setAllData((prev) => [...newRows, ...prev]);
-    setNewRowIds((prev) => {
-      const next = new Set(prev);
-      newRows.forEach((r) => next.add(r.id));
-      return next;
-    });
+    // Build + log the payload for this save (only the fields that exist in the modal)
+    const modalPayload = buildNestedPayload([savedRow], { includeAuthorized: false, includeQtyFields: false });
+    console.log(
+      poModal.mode === 'add' ? '🚀 ADD PO PAYLOAD:' : '🚀 MODIFY PO PAYLOAD:',
+      modalPayload
+    );
+    console.log(JSON.stringify(modalPayload, null, 2));
+
     setIsDirty(true);
     setSavedFlash(false);
+    setPoModal(null);
   };
 
   const handleDeleteRow = (id) => {
@@ -350,7 +581,6 @@ const PurchaseOrderStatus = () => {
     const id = deleteConfirm.id;
     setAllData((prev) => prev.filter((row) => row.id !== id));
     setNewRowIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
-    if (editingCell && editingCell.id === id) setEditingCell(null);
     setIsDirty(true);
     setSavedFlash(false);
     setDeleteConfirm({ isOpen: false, id: null });
@@ -360,118 +590,129 @@ const PurchaseOrderStatus = () => {
     setDeleteConfirm({ isOpen: false, id: null });
   };
 
-  const startEditing = (id, key) => {
-    const row = allData.find((r) => r.id === id);
-    setEditingOriginal({ id, key, value: row ? row[key] : '' });
-
-    if (DATE_KEYS.includes(key)) {
-      if (row && !row[key]) {
-        const today = getTodayISO();
-        setAllData((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: today } : r)));
-        setIsDirty(true);
-        setSavedFlash(false);
-      }
-    }
-    setEditingCell({ id, key });
-  };
-
-  const stopEditing = () => { setEditingCell(null); setEditingOriginal(null); };
-  const isEditing = (id, key) => editingCell && editingCell.id === id && editingCell.key === key;
-
-  const cancelEditing = (id, key) => {
-    if (editingOriginal && editingOriginal.id === id && editingOriginal.key === key) {
-      setAllData((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: editingOriginal.value } : r)));
-    }
-    setEditingCell(null);
-    setEditingOriginal(null);
-  };
-
-  const handleCellKeyDown = (e, id, key) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      stopEditing();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      cancelEditing(id, key);
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const currentIndex = EDITABLE_KEYS.indexOf(key);
-      if (currentIndex === -1) return;
-      let nextIndex;
-      if (e.shiftKey) {
-        nextIndex = (currentIndex - 1 + EDITABLE_KEYS.length) % EDITABLE_KEYS.length;
-      } else {
-        nextIndex = (currentIndex + 1) % EDITABLE_KEYS.length;
-      }
-      const nextKey = EDITABLE_KEYS[nextIndex];
-      if (DATE_KEYS.includes(nextKey)) {
-        const row = allData.find((r) => r.id === id);
-        if (row && !row[nextKey]) {
-          const today = getTodayISO();
-          setAllData((prev) => prev.map((r) => (r.id === id ? { ...r, [nextKey]: today } : r)));
-          setIsDirty(true);
-          setSavedFlash(false);
-        }
-      }
-      setEditingCell({ id, key: nextKey });
-    }
-  };
-
-  // 🚀 UPDATED: Transforms flat table data into the requested nested structure on submission
+  // Submits ALL table rows as the nested structure
   const handleSave = async () => {
-    const groupedMap = new Map();
+    const submissionPayload = buildNestedPayload(allData, { includeAuthorized: true, includeQtyFields: true });
 
-    // 1. Group flat rows by PI NO. (Using piNo as the primary grouping key)
-    allData.forEach(row => {
-      const groupKey = row.piNo.trim() || `TEMP_PI_${row.id}`;
-      
-      if (!groupedMap.has(groupKey)) {
-        groupedMap.set(groupKey, {
-          piNo: row.piNo,
-          lcNo: row.lcNo,
-          po: row.po,
-          piDate: row.piDate,
-          data: []
-        });
-      }
-      
-      // 2. Push line-item details into the 'data' array
-      groupedMap.get(groupKey).data.push({
-        supplierName: row.supplierName,
-        yarnCount: row.yarnCount,
-        composition: row.composition,
-        poQty: Number(row.poQty) || 0,
-        yarnReceivedFromSpinning: Number(row.yarnReceivedFromSpinning) || 0,
-        yarnReturnedToSpinning: Number(row.yarnReturnedToSpinning) || 0,
-        pendingReceivedQty: Number(row.pendingReceivedQty) || 0,
-        remarks: row.remarks,
-        authorized: row.authorized
-      });
-    });
+    console.log('🚀 FUNCTIONAL SUBMISSION PAYLOAD (Nested Structure):', submissionPayload);
+    console.log(JSON.stringify(submissionPayload, null, 2));
 
-    // 3. Convert Map values to the final array payload
-    const submissionPayload = Array.from(groupedMap.values());
-
-    console.log("🚀 FUNCTIONAL SUBMISSION PAYLOAD (Nested Structure):", submissionPayload);
-
-    // 4. Simulate API network request
+    // Simulate API network request
     try {
       await new Promise(resolve => setTimeout(resolve, 600));
-      
+
       setIsDirty(false);
       setSavedFlash(true);
       setNewRowIds(new Set()); // Clear "new" status as they are now considered saved
-      
+
       alert(`✅ Successfully submitted ${submissionPayload.length} PI group(s) to the database!\nCheck browser console to see the exact nested JSON structure.`);
-      
+
       setTimeout(() => setSavedFlash(false), 3000);
     } catch (error) {
-      console.error("❌ Submission failed:", error);
-      alert("Failed to submit data. Please check your connection and try again.");
+      console.error('❌ Submission failed:', error);
+      alert('Failed to submit data. Please check your connection and try again.');
     }
   };
 
-  const TOTAL_COLUMN_COUNT = COLUMNS.length + 2;
+  /* ---------- Body cell renderer (keeps the same order as the header) ---------- */
+  const renderBodyCell = (col, i, item, stripe) => {
+    const frozen = isFrozen(i);
+    const base = `border-b border-r border-gray-300 ${
+      frozen ? `sticky z-10 ${stripe} group-hover:bg-yellow-50` : ''
+    } ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''}`;
+    const style = frozen ? { left: LEFT_OFFSETS[i] } : undefined;
+
+    if (col.key === '__auth') {
+      return (
+        <td key={col.key} className={`${base} px-2 py-2 text-center`} style={style}>
+          <input
+            type="checkbox"
+            checked={!!item.authorized}
+            onChange={(e) => updateField(item.id, 'authorized', e.target.checked)}
+            title={item.authorized ? 'Uncheck to revoke authorization' : 'Check to authorize this PI'}
+            className="w-4 h-4 accent-emerald-600 cursor-pointer"
+          />
+        </td>
+      );
+    }
+
+    if (col.key === '__actions') {
+      const canDelete = newRowIds.has(item.id);
+      return (
+        <td key={col.key} className={`${base} px-2 py-2 text-center`} style={style}>
+          {canDelete ? (
+            <button
+              onClick={() => handleDeleteRow(item.id)}
+              title="Remove this newly added row"
+              className="p-1.5 rounded text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+            >
+              <IconTrash />
+            </button>
+          ) : (
+            <span className="text-gray-300 select-none">—</span>
+          )}
+        </td>
+      );
+    }
+
+    if (col.key === 'authorized') {
+      return (
+        <td key={col.key} className={`${base} px-3 py-2`} style={style}>
+          <div className="flex items-center justify-center">
+            <span
+              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${item.authorized ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}
+              title={item.authorized ? 'Goods can be received against this PI.' : "Goods can't be received against this PI until it is authorized."}
+            >
+              {item.authorized ? 'Authorized' : 'Open'}
+            </span>
+          </div>
+        </td>
+      );
+    }
+
+    // PI NO. cell: double-click opens the Modify PO modal, pen icon shown
+    if (col.key === 'piNo') {
+      return (
+        <td
+          key={col.key}
+          className={`${base} p-0 cursor-pointer select-none`}
+          style={style}
+          onDoubleClick={() => openEditModal(item)}
+          title="Double-click to modify this PO"
+        >
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            <span className="truncate text-gray-900">{item.piNo || '-'}</span>
+            <span className="shrink-0 text-blue-600"><IconPen /></span>
+          </div>
+        </td>
+      );
+    }
+
+    if (col.key === 'pendingReceivedQty') {
+      return (
+        <td
+          key={col.key}
+          className={`${base} px-3 py-2 text-right whitespace-nowrap font-mono tabular-nums font-semibold ${item.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}
+          style={style}
+        >
+          {fmt(Number(item.pendingReceivedQty) || 0)}
+        </td>
+      );
+    }
+
+    return (
+      <td key={col.key} className={`${base} p-0`} style={style}>
+        <span className={`block px-3 py-2 text-gray-900 ${col.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
+          {col.key === 'piDate'
+            ? fmtDate(item[col.key])
+            : (col.numeric ? fmt(Number(item[col.key]) || 0) : (item[col.key] || '-'))}
+        </span>
+      </td>
+    );
+  };
+
+  const footerBottom = 0;
+  const footerCellStyle = { bottom: footerBottom, height: FOOTER_ROW_H };
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
@@ -481,6 +722,17 @@ const PurchaseOrderStatus = () => {
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       />
+
+      {/* ADD / MODIFY PO MODAL */}
+      {poModal && (
+        <PORecordModal
+          key={`${poModal.mode}-${poModal.record.id}`}
+          mode={poModal.mode}
+          initial={poModal.record}
+          onSave={handleModalSave}
+          onClose={closePoModal}
+        />
+      )}
 
       {/* QUICK SUMMARY */}
       <div className="mb-6">
@@ -524,24 +776,13 @@ const PurchaseOrderStatus = () => {
             </button>
           )}
 
-          <div className="flex items-center gap-2">
-            <input 
-              type="number" 
-              min="1" 
-              max="50" 
-              value={rowsToAdd} 
-              onChange={(e) => setRowsToAdd(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-16 px-2 py-2 border border-gray-300 rounded-md text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              title="Number of rows to add"
-            />
-            <button 
-              onClick={handleAddRow} 
-              title="Add multiple new rows at once" 
-              className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
-            >
-              <IconPlus /> Add Rows
-            </button>
-          </div>
+          <button
+            onClick={openAddModal}
+            title="Add a new PO"
+            className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
+          >
+            <IconPlus /> Add PO
+          </button>
 
           {isDirty && (
             <button onClick={handleSave} title="Submit all changes to database" className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5 animate-pulse">
@@ -569,19 +810,44 @@ const PurchaseOrderStatus = () => {
       {/* TABLE */}
       <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
         <div ref={tableScrollRef} onScroll={closeFilter} className="overflow-x-auto overflow-y-auto max-h-[600px]">
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-20 bg-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
+          <table
+            className="text-sm"
+            style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: '100%', minWidth: TABLE_MIN_WIDTH }}
+          >
+            <colgroup>
+              {ALL_COLS.map((col, i) => (
+                <col key={col.key} style={i === ALL_COLS.length - 1 ? undefined : { width: col.width }} />
+              ))}
+            </colgroup>
+
+            <thead>
               <tr>
-                <th className="border border-gray-300 px-2 py-3 text-center font-bold text-gray-700 uppercase text-xs align-top" style={{ minWidth: 50 }} title="Authorization">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="mx-auto text-gray-600">
-                    <path d="M4 12.5l5.5 5.5L20 7" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </th>
-                <th className="border border-gray-300 px-2 py-3 text-center font-bold text-gray-700 uppercase text-xs align-top" style={{ minWidth: 70 }}>Actions</th>
-                {COLUMNS.map((col) => {
+                {ALL_COLS.map((col, i) => {
+                  const frozen = isFrozen(i);
+                  const thBase = `sticky top-0 ${frozen ? 'z-40' : 'z-30'} border-b border-r border-gray-300 bg-gray-100 ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''}`;
+                  const thStyle = frozen ? { left: LEFT_OFFSETS[i] } : undefined;
+
+                  if (col.key === '__auth') {
+                    return (
+                      <th key={col.key} className={`${thBase} px-2 py-3 text-center font-bold text-gray-700 uppercase text-xs align-top`} style={thStyle} title="Authorization">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="mx-auto text-gray-600">
+                          <path d="M4 12.5l5.5 5.5L20 7" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </th>
+                    );
+                  }
+
+                  if (col.key === '__actions') {
+                    return (
+                      <th key={col.key} className={`${thBase} px-2 py-3 text-center font-bold text-gray-700 uppercase text-xs align-top`} style={thStyle}>
+                        Actions
+                      </th>
+                    );
+                  }
+
                   const isFiltered = !!filters[col.key];
                   return (
-                    <th key={col.key} className="relative border border-gray-300 px-2 py-3 text-left font-bold text-gray-700 uppercase text-xs align-top bg-gray-100" style={{ minWidth: col.width }}>
+                    <th key={col.key} className={`${thBase} px-2 py-3 text-left font-bold text-gray-700 uppercase text-xs align-top`} style={thStyle}>
                       <div className="flex items-start justify-between gap-1">
                         <span className={`whitespace-normal break-words leading-tight ${col.numeric ? 'text-right w-full' : ''}`}>{col.label}</span>
                         <button
@@ -611,93 +877,53 @@ const PurchaseOrderStatus = () => {
             <tbody>
               {filteredData.length > 0 ? (
                 filteredData.map((item, index) => {
-                  const canDelete = newRowIds.has(item.id);
+                  const stripe = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
                   return (
-                    <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50 transition-colors`}>
-                      <td className="px-2 py-2 border border-gray-300 text-center">
-                        <input
-                          type="checkbox"
-                          checked={!!item.authorized}
-                          onChange={(e) => updateField(item.id, 'authorized', e.target.checked)}
-                          title={item.authorized ? 'Uncheck to revoke authorization' : 'Check to authorize this PI'}
-                          className="w-4 h-4 accent-emerald-600 cursor-pointer"
-                        />
-                      </td>
-                      <td className="px-2 py-2 border border-gray-300 text-center">
-                        {canDelete ? (
-                          <button
-                            onClick={() => handleDeleteRow(item.id)}
-                            title="Remove this newly added row"
-                            className="p-1.5 rounded text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
-                          >
-                            <IconTrash />
-                          </button>
-                        ) : (
-                          <span className="text-gray-300 select-none">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 border border-gray-300">
-                        <div className="flex items-center justify-center">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap ${item.authorized ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}
-                            title={item.authorized ? 'Goods can be received against this PI.' : "Goods can't be received against this PI until it is authorized."}
-                          >
-                            {item.authorized ? 'Authorized' : 'Open'}
-                          </span>
-                        </div>
-                      </td>
-                      
-                      {['piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'yarnCount', 'composition', 'poQty', 'remarks'].map((key) => {
-                        const col = COLUMNS.find(c => c.key === key);
-                        const isEditingThis = isEditing(item.id, key);
-                        return (
-                          <td
-                            key={key}
-                            className="p-0 border border-gray-300 cursor-text"
-                            onDoubleClick={() => startEditing(item.id, key)}
-                            title="Double-click to edit"
-                          >
-                            {isEditingThis ? (
-                              <input
-                                autoFocus
-                                type={key === 'poQty' ? 'number' : key === 'piDate' ? 'date' : 'text'}
-                                step={key === 'poQty' ? '0.01' : undefined}
-                                value={item[key] || (key === 'piDate' ? getTodayISO() : '')}
-                                onChange={(e) => updateField(item.id, key, e.target.value)}
-                                onBlur={stopEditing}
-                                onKeyDown={(e) => handleCellKeyDown(e, item.id, key)}
-                                className={`w-full h-full px-3 py-2 text-gray-900 bg-blue-50 outline-none ring-1 ring-inset ring-blue-400 ${col?.numeric ? 'text-right font-mono tabular-nums' : ''}`}
-                              />
-                            ) : (
-                              <span className={`block px-3 py-2 text-gray-900 ${col?.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
-                                {key === 'piDate' ? fmtDate(item[key]) : (col?.numeric ? fmt(Number(item[key]) || 0) : (item[key] || '-'))}
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-
-                      <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReceivedFromSpinning)}</td>
-                      <td className="px-3 py-2 text-gray-900 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums">{fmt(item.yarnReturnedToSpinning)}</td>
-                      <td className={`px-3 py-2 text-right border border-gray-300 whitespace-nowrap font-mono tabular-nums font-semibold ${item.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(item.pendingReceivedQty)}</td>
+                    <tr key={item.id} className={`group ${stripe} hover:bg-yellow-50 transition-colors`}>
+                      {ALL_COLS.map((col, i) => renderBodyCell(col, i, item, stripe))}
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={TOTAL_COLUMN_COUNT} className="px-6 py-12 text-center text-gray-500 italic bg-white">No records found matching your search or filter criteria.</td>
+                  <td colSpan={ALL_COLS.length} className="px-6 py-12 text-center text-gray-500 italic bg-white">No records found matching your search or filter criteria.</td>
                 </tr>
               )}
             </tbody>
 
-            <tfoot className="sticky bottom-0 z-20 bg-gray-100 shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
-              <tr className="border-t-2 border-gray-400">
-                <td colSpan="10" className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 uppercase tracking-wider bg-gray-100">Footer Sub-Total:</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.poQty)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReceivedFromSpinning)}</td>
-                <td className="px-3 py-3 text-right text-sm font-bold text-gray-800 border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50">{fmt(filteredTotals.yarnReturnedToSpinning)}</td>
-                <td className={`px-3 py-3 text-right text-sm font-bold border border-gray-300 whitespace-nowrap font-mono tabular-nums bg-green-50 ${filteredTotals.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(filteredTotals.pendingReceivedQty)}</td>
-                <td colSpan="1" className="px-3 py-3 border border-gray-300 bg-gray-100"></td>
+            <tfoot>
+              <tr>
+                <td
+                  colSpan={FROZEN_COUNT}
+                  className={`sticky z-40 px-3 text-right text-sm font-bold text-gray-800 border-t-2 border-r border-b border-gray-400 uppercase tracking-wider bg-gray-100 ${FROZEN_EDGE_SHADOW}`}
+                  style={{ left: 0, ...footerCellStyle }}
+                >
+                  Footer Sub-Total:
+                </td>
+                {FIRST_NUMERIC_IDX - FROZEN_COUNT > 0 && (
+                  <td
+                    colSpan={FIRST_NUMERIC_IDX - FROZEN_COUNT}
+                    className="sticky z-30 border-t-2 border-r border-b border-gray-400 bg-gray-100"
+                    style={footerCellStyle}
+                  />
+                )}
+                {NUMERIC_KEYS.map((key) => (
+                  <td
+                    key={key}
+                    className={`sticky z-30 px-3 text-right text-sm font-bold border-t-2 border-r border-b border-gray-400 whitespace-nowrap font-mono tabular-nums bg-green-50 ${
+                      key === 'pendingReceivedQty'
+                        ? (filteredTotals.pendingReceivedQty > 0 ? 'text-red-600' : 'text-green-600')
+                        : 'text-gray-800'
+                    }`}
+                    style={footerCellStyle}
+                  >
+                    {fmt(filteredTotals[key])}
+                  </td>
+                ))}
+                <td
+                  className="sticky z-30 border-t-2 border-r border-b border-gray-400 bg-gray-100"
+                  style={footerCellStyle}
+                />
               </tr>
             </tfoot>
           </table>
