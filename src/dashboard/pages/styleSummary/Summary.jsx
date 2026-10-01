@@ -126,7 +126,7 @@ export default function Summary() {
     const [isLoading, setIsLoading] = useState({ refreshLoading: false });
     const [glanceReport, setGlanceReport] = useState({ isGlanceLoading: false, showGlanceModal: false, reportData: [] });
     const [editingStyleData, setStyleEditingData] = useState({ isShowStyleEditModal: false, isLoading: null, data: [] });
-    
+
     const { fetchData } = useFetchData();
     const axiosPrivate = useAxiosPrivate();
     const { sections } = UseUserRoles();
@@ -311,8 +311,10 @@ export default function Summary() {
 
     const openEditJobModal = async (jobNo) => {
         setStyleEditingData({ isShowStyleEditModal: true, isLoading: true, data: [] })
+        const params = { page: 1, limit: 10000, reconciliation: false, styleRequirement: true };
+
         try {
-            const req = await axiosPrivate.get(`/api/styles/${jobNo}`);
+            const req = await axiosPrivate.get(`/api/styles/${jobNo}`, { params });
             if (req.data.type === "success") {
                 console.log(req.data, "style data");
                 setStyleEditingData({ isShowStyleEditModal: true, isLoading: false, data: req?.data?.data })
