@@ -230,9 +230,9 @@ const Knitting = () => {
     const [searchPage, setSearchPage] = useState(1);
     const tableScrollRef = useRef(null);
 
-    // Challan search tracking (Found vs Not Found)
-    const [foundChallans, setFoundChallans] = useState([]);
-    const [notFoundChallans, setNotFoundChallans] = useState([]);
+    // Search tracking (Found vs Not Found for BOTH Challan No and Job No)
+    const [foundSearchItems, setFoundSearchItems] = useState([]);
+    const [notFoundSearchItems, setNotFoundSearchItems] = useState([]);
 
     const [isFetchingAll, setIsFetchingAll] = useState(false);
     const [pendingFilterKey, setPendingFilterKey] = useState(null);
@@ -692,10 +692,10 @@ const Knitting = () => {
         setSearchPage(1);
         
         // Reset tracking states
-        setFoundChallans([]);
-        setNotFoundChallans([]);
+        setFoundSearchItems([]);
+        setNotFoundSearchItems([]);
         
-        // A challan search replaces any month search
+        // A challan/job search replaces any month search
         setAppliedMonthNames([]);
         setSelectedDeliveryMonths([]);
         
@@ -711,16 +711,25 @@ const Knitting = () => {
             
             setMovements(searchData);
 
-            // Extract all found challan numbers from the response (normalized to lowercase for safe comparison)
-            const foundChallanSet = new Set();
+            // Extract all found Challan Nos AND Job Nos from the response
+            const foundSearchTermsSet = new Set();
             searchData.forEach(item => {
+                // 1. Check Challan No
                 if (item?.challanNo) {
-                    foundChallanSet.add(String(item.challanNo).trim().toLowerCase());
+                    foundSearchTermsSet.add(String(item.challanNo).trim().toLowerCase());
                 }
+                
+                // 2. Check Job No (using the exact same extraction logic as allRows)
+                const jobNo = item?.workOrder?.jobNo || (typeof item?.workOrder === 'string' ? item.workOrder : null);
+                if (jobNo) {
+                    foundSearchTermsSet.add(String(jobNo).trim().toLowerCase());
+                }
+
+                // 3. Check nested deliveries for Challan No
                 if (Array.isArray(item?.deliveries)) {
                     item.deliveries.forEach(dv => {
                         if (dv?.challanNo) {
-                            foundChallanSet.add(String(dv.challanNo).trim().toLowerCase());
+                            foundSearchTermsSet.add(String(dv.challanNo).trim().toLowerCase());
                         }
                     });
                 }
@@ -729,24 +738,24 @@ const Knitting = () => {
             // Categorize original search terms
             const found = [];
             const notFound = [];
-            searchArray.forEach(ch => {
-                const normalized = ch.trim().toLowerCase();
-                if (foundChallanSet.has(normalized)) {
-                    found.push(ch); // Keep original casing for display
+            searchArray.forEach(term => {
+                const normalized = term.trim().toLowerCase();
+                if (foundSearchTermsSet.has(normalized)) {
+                    found.push(term); // Keep original casing for display
                 } else {
-                    notFound.push(ch);
+                    notFound.push(term);
                 }
             });
 
-            setFoundChallans(found);
-            setNotFoundChallans(notFound);
+            setFoundSearchItems(found);
+            setNotFoundSearchItems(notFound);
 
         } catch (err) { 
             console.error("Search failed:", err);
-            setSearchError("Failed to search challans."); 
+            setSearchError("Failed to search."); 
             setMovements([]);
-            setFoundChallans([]);
-            setNotFoundChallans(searchArray); // Assume all not found on error
+            setFoundSearchItems([]);
+            setNotFoundSearchItems(searchArray); // Assume all not found on error
         } finally { 
             setSearchLoading(false); 
         }
@@ -768,8 +777,8 @@ const Knitting = () => {
         setSearchError(null);
         setIsDeliveryMonthDropdownOpen(false);
         setAppliedMonthNames(monthNames);
-        setFoundChallans([]);
-        setNotFoundChallans([]);
+        setFoundSearchItems([]);
+        setNotFoundSearchItems([]);
 
         try {
             const res = await axiosPrivate.get("/api/knittingOrder/challan/search", {
@@ -815,9 +824,9 @@ const Knitting = () => {
         setSearchActive(false);
         setSearchPage(1);
         
-        // Clear challan search tracking
-        setFoundChallans([]);
-        setNotFoundChallans([]);
+        // Clear search tracking
+        setFoundSearchItems([]);
+        setNotFoundSearchItems([]);
 
         if (hadSearchMode) setRefreshKey(prev => prev + 1);
     };
@@ -995,8 +1004,8 @@ const Knitting = () => {
                             setSearchError(null);
                             setSearchActive(false);
                             setSearchPage(1);
-                            setFoundChallans([]);
-                            setNotFoundChallans([]);
+                            setFoundSearchItems([]);
+                            setNotFoundSearchItems([]);
                             setRefreshKey(prev => prev + 1);
                         }}
                     >
@@ -1091,8 +1100,8 @@ const Knitting = () => {
                 </div>
             )}
 
-            {/* ===== FOUND / NOT FOUND CHALLAN SUMMARY BANNER ===== */}
-            {searchActive && !searchLoading && !searchError && (foundChallans.length > 0 || notFoundChallans.length > 0) && (
+            {/* ===== FOUND / NOT FOUND SEARCH SUMMARY BANNER ===== */}
+            {searchActive && !searchLoading && !searchError && (foundSearchItems.length > 0 || notFoundSearchItems.length > 0) && (
                 <div style={{
                     marginBottom: "16px", padding: "16px", background: theme.colors.white,
                     border: "1px solid #e2e8f0", borderRadius: theme.radius,
@@ -1101,34 +1110,34 @@ const Knitting = () => {
                 }}>
                     <div style={{ fontWeight: 600, marginBottom: 4, color: theme.colors.textMain }}>Search Results Summary:</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-                        {foundChallans.length > 0 && (
+                        {foundSearchItems.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: theme.colors.success, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    ✓ Found ({foundChallans.length}):
+                                    ✓ Found ({foundSearchItems.length}):
                                 </span>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                    {foundChallans.map((ch, i) => (
+                                    {foundSearchItems.map((item, i) => (
                                         <span key={`found-${i}`} style={{
                                             background: '#ecfdf5', color: '#047857',
                                             padding: '4px 10px', borderRadius: '6px',
                                             border: '1px solid #a7f3d0', fontWeight: 600, fontSize: '0.8rem'
-                                        }}>{ch}</span>
+                                        }}>{item}</span>
                                     ))}
                                 </div>
                             </div>
                         )}
-                        {notFoundChallans.length > 0 && (
+                        {notFoundSearchItems.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span style={{ color: theme.colors.danger, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    ✗ Not Found ({notFoundChallans.length}):
+                                    ✗ Not Found ({notFoundSearchItems.length}):
                                 </span>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                    {notFoundChallans.map((ch, i) => (
+                                    {notFoundSearchItems.map((item, i) => (
                                         <span key={`notfound-${i}`} style={{
                                             background: '#fef2f2', color: '#b91c1c',
                                             padding: '4px 10px', borderRadius: '6px',
                                             border: '1px solid #fecaca', fontWeight: 600, fontSize: '0.8rem'
-                                        }}>{ch}</span>
+                                        }}>{item}</span>
                                     ))}
                                 </div>
                             </div>
