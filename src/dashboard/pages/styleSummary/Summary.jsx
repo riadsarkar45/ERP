@@ -358,7 +358,8 @@ export default function Summary() {
 
     const handleGlanceReport = () => {
         setGlanceReport({ isGlanceLoading: true });
-        fetchData(`/api/styles`).then(data => {
+        const params = { page: 1, limit: 10000, reconciliation: false, styleRequirement: true };
+        fetchData(`/api/styles`, { params }).then(data => {
             if (data) setGlanceReport({ showGlanceModal: true, isGlanceLoading: false, reportData: data.data });
         });
     }
