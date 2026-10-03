@@ -4,14 +4,16 @@ import UseAllUsers from "../../dashboard/pages/users/allUsers/AllUsers";
 import GlobalChatBox from "./GlobalChatBox";
 import { AuthContext } from "../../dashboard/auth/AuthContext";
 
+// Handles the common shapes of the logged-in user object
+const getUserId = (user) => user?.id ?? user?.userId ?? user?._id ?? user?.user?.id ?? null;
+
 /**
  * Loads the employee list and renders the chat.
  * It is a separate component so the users request only happens
  * AFTER login (the login page never calls UseAllUsers).
  */
-const ChatWithUsers = () => {
+const ChatWithUsers = ({ currentUserId }) => {
     const { allUsers } = UseAllUsers();
-    const { user } = useContext(AuthContext);
 
     const chatUsers = useMemo(() => {
         const list = Array.isArray(allUsers) ? allUsers : [];
@@ -26,21 +28,31 @@ const ChatWithUsers = () => {
             }));
     }, [allUsers]);
 
-    return <GlobalChatBox currentUserId={user?.id} users={chatUsers} />;
+    return <GlobalChatBox currentUserId={currentUserId} users={chatUsers} />;
 };
 
-const ChatLauncher = ({ currentUserId: currentUserIdProp }) => {
+const ChatLauncher = () => {
     const socket = useSocket();
+    const { user } = useContext(AuthContext);
+    const currentUserId = getUserId(user);
 
-    // The logged-in user's id: the socket connects with { auth: { userId } }.
-    // You can also pass it as a prop: <ChatLauncher currentUserId={user.id} />
-    const authFromSocket = socket && typeof socket.auth === "object" ? socket.auth : null;
-    const currentUserId = currentUserIdProp ?? authFromSocket?.userId;
-
+    // Warn only if a user is logged in but we cannot find the id inside it
     useEffect(() => {
-        if (socket && !currentUserId) {
-            console.warn("Chat: logged-in user id not found. Pass it as <ChatLauncher currentUserId={...} />.");
+        if (user && !currentUserId) {
+            console.warn("Chat: the logged-in user has no id field. AuthContext user =", user);
         }
+    }, [user, currentUserId]);
+
+    // Tell the server who this socket belongs to (needed for send-message)
+    useEffect(() => {
+        if (!socket || !currentUserId) return;
+
+        const register = () => socket.emit("register-user", { userId: currentUserId });
+
+        if (socket.connected) register();
+        socket.on("connect", register); // again after every reconnect
+
+        return () => socket.off("connect", register);
     }, [socket, currentUserId]);
 
     if (!socket || !currentUserId) return null; // not logged in yet: no chat
