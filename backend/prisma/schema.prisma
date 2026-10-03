@@ -190,7 +190,7 @@ model deliveries {
   yarnId        Int
   toFactory     String
   fromFactory   String
-  deliveryMonth String @default("N/A")
+  deliveryMonth String   @default("N/A")
 
   composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
   yarnCompId  Int?
@@ -397,6 +397,26 @@ model productionData {
   styleRowId            StyleRequirementRow @relation(fields: [styleRequirementRowId], references: [id])
 }
 
-model productionTarget {
-  id Int @id @default(autoincrement())
+model yarnPoModel {
+  id           Int           @id @default(autoincrement())
+  piNo         String
+  piDate       DateTime
+  lcNo         String
+  poNo         String        @unique
+  supplierName String
+  remarks      String
+  isAuthorized Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  items        yarnPoItems[]
+}
+
+model yarnPoItems {
+  id          Int         @id @default(autoincrement())
+  yarnPoId    Int
+  yarnPo      yarnPoModel @relation(fields: [yarnPoId], references: [id], onDelete: Cascade)
+  yarnCount   String
+  composition String
+  poQty       Float
+
+  @@index([yarnPoId])
 }

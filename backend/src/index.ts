@@ -10,6 +10,7 @@ import { trackRequests } from "./middleware/rateLimiter/trackRequest";
 import authRouter from "./routes/auth/auth.Routes";
 import cookieParser from "cookie-parser";
 import { initSocketRoutes } from "./socketRoutes/socket.routes";
+import redis, { disconnectRedis } from "./redis/connect.redis";
 const app = express();
 app.use(cookieParser())
 const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app"];
@@ -37,6 +38,7 @@ process.on("SIGINT", async () => {
 
 process.on("SIGTERM", async () => {
   await disconnectDatabase();
+  await disconnectRedis();
   process.exit(0);
 });
 const PORT = 3000;
@@ -48,7 +50,10 @@ const start = async () => {
   app.use("/api", getRouters)
   app.use("/api", updateRouters)
   app.use("/api", authRouter)
-  
+
+  await redis.ping();
+  console.log("redis connected");
+
   const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });

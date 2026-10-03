@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { ChallanRecordModal } from './SpinningDeliveryModal';
+import { useFetchData } from '../../../hooks/fetch';
 
 /* ----------------------------- Icons ----------------------------- */
 const IconSearch = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/>
+    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor" />
   </svg>
 );
 
@@ -67,12 +69,10 @@ const COLUMNS = [
 ];
 
 const NUMERIC_COLUMNS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
-const LABEL_COL_SPAN = COLUMNS.findIndex((c) => c.numeric); // columns before the first numeric one
-const STORAGE_KEY = 'movementSpinningData_v1';
+const LABEL_COL_SPAN = COLUMNS.findIndex((c) => c.numeric); 
+const PI_LEVEL_KEYS = ['date', 'challan', 'piNo', 'lcNo', 'supplierName', 'remarks'];
 
-/* ----------------------------- Frozen (sticky) columns -----------------------------
-   Every column from the first one up to and including FROZEN_THROUGH_KEY stays fixed
-   on the left while the table scrolls horizontally. */
+/* ----------------------------- Frozen (sticky) columns ----------------------------- */
 const FROZEN_THROUGH_KEY = 'supplierName';
 const FROZEN_COUNT = COLUMNS.findIndex((c) => c.key === FROZEN_THROUGH_KEY) + 1;
 const LEFT_OFFSETS = COLUMNS.map((_, i) => COLUMNS.slice(0, i).reduce((sum, c) => sum + c.width, 0));
@@ -81,36 +81,6 @@ const isFrozen = (i) => i < FROZEN_COUNT;
 const isLastFrozen = (i) => i === FROZEN_COUNT - 1;
 const FROZEN_EDGE_SHADOW = 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.25)]';
 const FOOTER_ROW_H = 44;
-
-/* Fields shown inside the Add / Modify Challan modal (generated column-wise) */
-const MODAL_FIELDS = [
-  { key: 'date', label: 'Date', type: 'date' },
-  { key: 'challan', label: 'Challan', type: 'text', required: true },
-  { key: 'piNo', label: 'PI No', type: 'text' },
-  { key: 'lcNo', label: 'L/C No', type: 'text' },
-  { key: 'supplierName', label: 'Supplier Name', type: 'text' },
-  { key: 'yarnCount', label: 'Yarn Count', type: 'text' },
-  { key: 'yarnComposition', label: 'Yarn Composition', type: 'text' },
-  { key: 'yarnReceived', label: 'Yarn Received', type: 'text', numeric: true },
-  { key: 'yarnReturned', label: 'Yarn Returned', type: 'text', numeric: true },
-  { key: 'remarks', label: 'Remarks', type: 'textarea', full: true },
-];
-
-const createEmptyRow = (id) => ({
-  id,
-  date: '',
-  challan: '',
-  piNo: '',
-  lcNo: '',
-  supplierName: '',
-  yarnCount: '',
-  yarnComposition: '',
-  yarnReceived: '',
-  yarnReturned: '',
-  remarks: '',
-});
-
-const deepCopy = (obj) => JSON.parse(JSON.stringify(obj));
 
 const parseNumeric = (val) => {
   if (val === null || val === undefined) return 0;
@@ -127,150 +97,50 @@ const formatTotal = (n) => {
 
 const fmtDate = (iso) => {
   if (!iso) return '-';
-  const d = new Date(iso + 'T00:00:00');
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const getTodayISO = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
-const loadSavedData = () => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch (e) {
-    console.error('Failed to load data from localStorage', e);
-  }
-  return [createEmptyRow(1), createEmptyRow(2), createEmptyRow(3)];
-};
-
-/* ----------------------------- Add / Modify Challan Modal ----------------------------- */
-function ChallanRecordModal({ mode, initial, onSave, onClose }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState('');
-  const initialRef = useRef(JSON.stringify(initial));
-
-  const isDirty = JSON.stringify(form) !== initialRef.current;
-
-  // ESC => discard everything & close (clear / refresh)
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setForm(initial);
-        setError('');
-        onClose();
-      }
+/* ----------------------------- Flatten Nested API Data ----------------------------- */
+const flattenApiData = (apiData) => {
+  if (!Array.isArray(apiData)) return [];
+  
+  return apiData.flatMap(pi => {
+    const baseRow = {
+      piId: pi.id,
+      date: pi.piDate || '',
+      challan: pi.challan || pi.poNo || '',
+      piNo: pi.piNo || '',
+      lcNo: pi.lcNo || '',
+      supplierName: pi.supplierName || '',
+      remarks: pi.remarks || '',
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [initial, onClose]);
 
-  const setField = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    if (error) setError('');
-  };
-
-  const handleDiscard = () => {
-    setForm(initial);
-    setError('');
-    onClose();
-  };
-
-  const handleSaveClick = () => {
-    if (!String(form.challan || '').trim()) {
-      setError('Challan is required.');
-      return;
+    if (pi.items && pi.items.length > 0) {
+      return pi.items.map(item => ({
+        id: item.id,
+        ...baseRow,
+        yarnCount: item.yarnCount || '',
+        yarnComposition: item.composition || '', // Maps API 'composition' to table 'yarnComposition'
+        yarnReceived: item.yarnReceived || 0,
+        yarnReturned: item.yarnReturned || 0,
+      }));
+    } else {
+      return [{
+        id: pi.id,
+        ...baseRow,
+        yarnCount: '',
+        yarnComposition: '',
+        yarnReceived: 0,
+        yarnReturned: 0,
+      }];
     }
-    onSave({ ...form });
-  };
-
-  const inputBase = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-gray-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">
-              {mode === 'add' ? 'Add New Challan' : 'Modify Challan'}
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {mode === 'add' ? 'Fill in the details below to add a new record.' : `Editing ${initial.challan || 'record'} — change any field and save.`}
-            </p>
-          </div>
-          <button onClick={handleDiscard} className="p-1.5 rounded text-gray-500 hover:bg-gray-100" title="Close (Esc)">
-            <IconX />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 py-5 overflow-y-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {MODAL_FIELDS.map((f) => (
-              <div key={f.key} className={f.full ? 'sm:col-span-2' : ''}>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
-                  {f.label} {f.required && <span className="text-red-500">*</span>}
-                </label>
-                {f.type === 'textarea' ? (
-                  <textarea
-                    rows={3}
-                    value={form[f.key] ?? ''}
-                    onChange={(e) => setField(f.key, e.target.value)}
-                    className={inputBase}
-                  />
-                ) : (
-                  <input
-                    type={f.type}
-                    autoFocus={f.key === 'challan'}
-                    value={form[f.key] ?? ''}
-                    onChange={(e) => setField(f.key, e.target.value)}
-                    className={`${inputBase} ${f.numeric ? 'text-right font-mono' : ''}`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          {error && <p className="mt-4 text-sm text-red-600 font-medium">{error}</p>}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-          <span className="text-xs text-gray-400">Press Esc to discard &amp; close</span>
-          <div className="flex items-center gap-3">
-            {isDirty && (
-              <>
-                <button
-                  onClick={handleDiscard}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
-                >
-                  Discard
-                </button>
-                <button
-                  onClick={handleSaveClick}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1.5"
-                >
-                  <IconSave /> Save
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+  });
+};
 
 /* ----------------------------- Filter Popover Component ----------------------------- */
 const POPOVER_WIDTH = 224;
-
 function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
   const ref = useRef(null);
   const [search, setSearch] = useState('');
@@ -281,10 +151,7 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
     const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [onClose]);
 
   if (!anchorRect) return null;
@@ -292,22 +159,16 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
   const spaceBelow = window.innerHeight - anchorRect.bottom;
   const openUpward = spaceBelow < 320 && anchorRect.top > 320;
   const left = Math.min(anchorRect.left, window.innerWidth - POPOVER_WIDTH - 8);
-  const style = openUpward
-    ? { left, bottom: window.innerHeight - anchorRect.top + 4, width: POPOVER_WIDTH }
-    : { left, top: anchorRect.bottom + 4, width: POPOVER_WIDTH };
+  const style = openUpward ? { left, bottom: window.innerHeight - anchorRect.top + 4, width: POPOVER_WIDTH } : { left, top: anchorRect.bottom + 4, width: POPOVER_WIDTH };
 
-  const labelOf = (v) => (v === '' ? '(Blank)' : v);
-  const visibleValues = values.filter((v) => labelOf(v).toLowerCase().includes(search.toLowerCase()));
+  const visibleValues = values.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
   const allVisibleChecked = visibleValues.length > 0 && visibleValues.every((v) => draft.has(v));
 
   const toggleSelectAll = () => {
     setDraft((prev) => {
       const next = new Set(prev);
-      if (allVisibleChecked) {
-        visibleValues.forEach((v) => next.delete(v));
-      } else {
-        visibleValues.forEach((v) => next.add(v));
-      }
+      if (allVisibleChecked) visibleValues.forEach((v) => next.delete(v));
+      else visibleValues.forEach((v) => next.add(v));
       return next;
     });
   };
@@ -321,12 +182,7 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
   };
 
   return createPortal(
-    <div
-      ref={ref}
-      className="fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg text-gray-800 normal-case font-normal text-xs"
-      style={style}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
+    <div ref={ref} className="fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg text-gray-800 normal-case font-normal text-xs" style={style} onMouseDown={(e) => e.stopPropagation()}>
       <div className="p-2">
         <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items..." className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none focus:border-blue-500" />
       </div>
@@ -344,11 +200,11 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
             {visibleValues.map((v) => {
               const checked = draft.has(v);
               return (
-                <label key={v === '' ? '__blank__' : v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none" onClick={(e) => { e.preventDefault(); toggleValue(v); }}>
+                <label key={v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer select-none" onClick={(e) => { e.preventDefault(); toggleValue(v); }}>
                   <span className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
                     {checked && <IconCheck />}
                   </span>
-                  <span className="truncate">{labelOf(v)}</span>
+                  <span className="truncate">{v}</span>
                 </label>
               );
             })}
@@ -366,21 +222,34 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
 
 /* ----------------------------- Main Component ----------------------------- */
 const MovementSpinning = () => {
-  const initialData = useMemo(() => loadSavedData(), []);
-
-  const [committedData, setCommittedData] = useState(initialData);
-  const [draftData, setDraftData] = useState(() => deepCopy(initialData));
+  // Strictly API-driven state. No static data or localStorage.
+  const [committedData, setCommittedData] = useState([]);
+  const [draftData, setDraftData] = useState([]);
   const [isDirty, setIsDirty] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState({});
   const [openFilterCol, setOpenFilterCol] = useState(null);
   const [filterAnchorRect, setFilterAnchorRect] = useState(null);
   const tableScrollRef = useRef(null);
-
-  // Add / Modify Challan modal state: { mode: 'add' | 'edit', record }
+  const { fetchData, error, loading } = useFetchData();
+  const [piNo, setPiNo] = useState(null);
   const [challanModal, setChallanModal] = useState(null);
 
   const closeFilter = () => { setOpenFilterCol(null); setFilterAnchorRect(null); };
+
+  /* ---------- Fetch Real Data on Mount ---------- */
+  useEffect(() => {
+    fetchData('/api/yarn-purchase-data')
+      .then((res) => {
+        const dataArray = res?.data ? res.data : res;
+        const flattened = flattenApiData(dataArray);
+        setCommittedData(flattened);
+        setDraftData(flattened);
+      })
+      .catch((err) => {
+        console.error('Error fetching yarn purchase data:', err);
+      });
+  }, [fetchData]);
 
   /* ---------- Unique values per column (for the filter popover) ---------- */
   const uniqueValues = useMemo(() => {
@@ -394,6 +263,7 @@ const MovementSpinning = () => {
 
   const hasActiveFilter = searchInput.trim() !== '' || Object.keys(filters).length > 0;
 
+  /* ---------- Filtered Data (MUST BE BEFORE groupedData) ---------- */
   const filteredData = useMemo(() => {
     let result = [...draftData];
 
@@ -412,6 +282,18 @@ const MovementSpinning = () => {
 
     return result;
   }, [draftData, searchInput, filters]);
+
+  /* ---------- Group data by PI No. for rowSpan rendering ---------- */
+  const groupedData = useMemo(() => {
+    const groups = new Map();
+    filteredData.forEach(item => {
+      if (!groups.has(item.piNo)) {
+        groups.set(item.piNo, []);
+      }
+      groups.get(item.piNo).push(item);
+    });
+    return Array.from(groups.values());
+  }, [filteredData]);
 
   const grandTotals = useMemo(() => {
     const totals = {};
@@ -443,9 +325,18 @@ const MovementSpinning = () => {
   const handleClear = () => { setSearchInput(''); setFilters({}); };
 
   /* ---------- Add / Modify Challan modal handlers ---------- */
-  const openAddModal = () => {
+  const openAddModal = (piNo) => {
+    setPiNo(piNo);
     closeFilter();
-    setChallanModal({ mode: 'add', record: { ...createEmptyRow(0), date: getTodayISO() } });
+    setChallanModal({ 
+      mode: 'add', 
+      record: { 
+        id: Date.now(), 
+        date: new Date().toISOString().split('T')[0], 
+        challan: '', piNo: piNo, lcNo: '', supplierName: '', 
+        yarnCount: '', yarnComposition: '', yarnReceived: 0, yarnReturned: 0, remarks: '' 
+      } 
+    });
   };
 
   const openEditModal = (item) => {
@@ -457,7 +348,6 @@ const MovementSpinning = () => {
 
   const handleModalSave = (data) => {
     if (challanModal.mode === 'add') {
-      // Clear search/filters so the new row is visible in the table
       setSearchInput('');
       setFilters({});
       setDraftData((prev) => {
@@ -476,18 +366,12 @@ const MovementSpinning = () => {
 
   /* ---------- Page-level Save / Discard ---------- */
   const handleSave = () => {
-    const newData = deepCopy(draftData);
-    setCommittedData(newData);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-    } catch (e) {
-      console.error('Failed to save data to localStorage', e);
-    }
+    setCommittedData(draftData);
     setIsDirty(false);
   };
 
   const handleDiscard = () => {
-    setDraftData(deepCopy(committedData));
+    setDraftData(committedData);
     setIsDirty(false);
   };
 
@@ -524,9 +408,19 @@ const MovementSpinning = () => {
     </tr>
   );
 
+  if (loading && draftData.length === 0) {
+    return (
+      <div className="p-4 md:p-6 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-600 font-medium">Loading spinning movement data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
-      {/* ADD / MODIFY CHALLAN MODAL */}
       {challanModal && (
         <ChallanRecordModal
           key={`${challanModal.mode}-${challanModal.record.id}`}
@@ -534,10 +428,10 @@ const MovementSpinning = () => {
           initial={challanModal.record}
           onSave={handleModalSave}
           onClose={closeChallanModal}
+          piNo={piNo}
         />
       )}
 
-      {/* QUICK SUMMARY */}
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
           <span className="w-1 h-4 bg-blue-600 rounded-full"></span> Quick Summary
@@ -554,7 +448,6 @@ const MovementSpinning = () => {
         </div>
       </div>
 
-      {/* ACTION BAR */}
       <div className="bg-white p-4 rounded-t-lg border border-gray-200 border-b-0 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3 flex-1 flex-wrap">
           <div className="relative flex-1 max-w-md">
@@ -608,7 +501,6 @@ const MovementSpinning = () => {
         </div>
       </div>
 
-      {/* TABLE */}
       <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
         <div ref={tableScrollRef} onScroll={closeFilter} className="overflow-x-auto overflow-y-auto max-h-[600px]">
           <table
@@ -665,30 +557,42 @@ const MovementSpinning = () => {
             </thead>
 
             <tbody>
-              {filteredData.length > 0 ? (
-                filteredData.map((row, rowIndex) => {
-                  const stripe = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+              {groupedData.length > 0 ? groupedData.map((group, groupIndex) => {
+                const stripe = groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                return group.map((row, rowIndex) => {
+                  const isFirstInGroup = rowIndex === 0;
+                  const rowSpan = group.length;
+
                   return (
                     <tr key={row.id} className={`group ${stripe} hover:bg-yellow-50 transition-colors`}>
                       {COLUMNS.map((col, i) => {
                         const frozen = isFrozen(i);
+                        const isPiLevel = PI_LEVEL_KEYS.includes(col.key);
+                        
+                        if (isPiLevel && !isFirstInGroup) {
+                          return null;
+                        }
+
                         const isPiNo = col.key === 'piNo';
-                        const cellClass = `p-0 border-b border-r border-gray-300 ${
-                          frozen ? `sticky z-10 ${stripe} group-hover:bg-yellow-50` : ''
-                        } ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''} ${isPiNo ? 'cursor-pointer select-none' : ''}`;
+                        const cellClass = `p-0 border-b border-r border-gray-300 ${frozen ? `sticky z-10 ${stripe} group-hover:bg-yellow-50` : ''
+                          } ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''} ${isPiNo ? 'cursor-pointer select-none' : ''}`;
+                        
+                        const alignAttr = isPiLevel && rowSpan > 1 ? { className: `${cellClass} align-middle` } : { className: cellClass };
+                        const rowSpanAttr = (isPiLevel && rowSpan > 1) ? { rowSpan } : {};
 
                         return (
                           <td
                             key={col.key}
-                            className={cellClass}
+                            {...alignAttr}
                             style={frozen ? { left: LEFT_OFFSETS[i] } : undefined}
+                            {...rowSpanAttr}
                             onDoubleClick={isPiNo ? () => openEditModal(row) : undefined}
                             title={isPiNo ? 'Double-click to modify this challan' : undefined}
                           >
                             {isPiNo ? (
                               <div className="flex items-center justify-between gap-2 px-3 py-2">
                                 <span className="truncate text-gray-900">{row.piNo || '-'}</span>
-                                <span className="shrink-0 text-blue-600"><IconPen /></span>
+                                <span onClick={() => openAddModal(row.piNo)} className="shrink-0 text-blue-600"><IconPen /></span>
                               </div>
                             ) : (
                               <span className={`block px-3 py-2 text-gray-900 ${col.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
@@ -700,8 +604,8 @@ const MovementSpinning = () => {
                       })}
                     </tr>
                   );
-                })
-              ) : (
+                });
+              }) : (
                 <tr>
                   <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-500 italic bg-white">
                     No records found matching your search or filter criteria.
