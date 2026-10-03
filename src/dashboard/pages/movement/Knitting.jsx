@@ -130,11 +130,8 @@ const getFrozenStyle = (key, area = 'body') => {
 // ===== END FROZEN COLUMNS =====
 
 // ===== DATE HELPERS =====
-// Matches ISO dates like 2025-12-06 or 2025-12-06T00:00:00.000Z
 const ISO_DATE_RE = /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?/g;
 
-// Handles clean dates AND glued strings like "2025-12-06T...Z2025-12-07T...Z"
-// If several dates are found, the earliest one is used.
 const normalizeDate = (val) => {
     if (!val) return "";
     if (val instanceof Date) return isNaN(val.getTime()) ? "" : val.toISOString();
@@ -146,7 +143,6 @@ const normalizeDate = (val) => {
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// "2025-12-01T00:00:00.000Z" -> "1-Dec-25"
 const formatShortDate = (val) => {
     const normalized = normalizeDate(val);
     if (!normalized) return "-";
@@ -155,7 +151,6 @@ const formatShortDate = (val) => {
     return `${d.getUTCDate()}-${MONTH_SHORT[d.getUTCMonth()]}-${String(d.getUTCFullYear()).slice(-2)}`;
 };
 
-// Day key "2026-01-17"
 const getDateFilterValue = (dateVal) => {
     const normalized = normalizeDate(dateVal);
     if (!normalized) return "";
@@ -165,22 +160,17 @@ const getDateFilterValue = (dateVal) => {
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 };
 
-// Month key "2026-01" (used by the challan-date month filter)
 const getMonthKey = (dateVal) => {
     const day = getDateFilterValue(dateVal);
     return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.slice(0, 7) : "";
 };
 
-// "2026-01" -> "Jan 2026"
 const formatMonthLabel = (key) => {
     if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
     const [y, m] = key.split('-');
     return `${MONTH_SHORT[Number(m) - 1]} ${y}`;
 };
 
-// What the column filter dropdown shows for a stored value
-// "2026-01-17" -> "17-Jan-26", "2026-01" -> "Jan 2026"
-// Handles any ISO-looking value so it works with whatever UseFilter stores.
 const getFilterDisplay = (key, val) => {
     if (key !== 'challanDate' || !val) return val;
     const str = String(val);
@@ -194,7 +184,7 @@ const getFilterDisplay = (key, val) => {
 };
 // ===== END DATE HELPERS =====
 
-// ===== DELIVERY MONTH PARSING (real data only) =====
+// ===== DELIVERY MONTH PARSING =====
 const MONTH_NUMBERS = {
     january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
     july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
@@ -202,28 +192,21 @@ const MONTH_NUMBERS = {
 const MIN_VALID_YEAR = 2000;
 const MAX_VALID_YEAR = 2100;
 
-// Accepts "August" or "August 2025". Junk like "August 0002", "N/A" -> null
 const parseDeliveryMonth = (raw) => {
     if (!raw || typeof raw !== 'string') return null;
-
     const match = raw.trim().match(/^([A-Za-z]+)(?:\s+(\d{4}))?$/);
     if (!match) return null;
-
     const name = match[1].toLowerCase();
     const monthNumber = MONTH_NUMBERS[name];
     if (!monthNumber) return null;
-
     const year = match[2] ? Number(match[2]) : null;
     if (year !== null && (year < MIN_VALID_YEAR || year > MAX_VALID_YEAR)) return null;
-
     const niceName = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
     return {
         value: raw,
         name,
         label: year ? `${niceName} ${year}` : niceName,
-        sortKey: year
-            ? `${year}-${String(monthNumber).padStart(2, '0')}`
-            : String(monthNumber).padStart(2, '0'),
+        sortKey: year ? `${year}-${String(monthNumber).padStart(2, '0')}` : String(monthNumber).padStart(2, '0'),
     };
 };
 // ===== END DELIVERY MONTH PARSING =====
@@ -242,10 +225,14 @@ const Knitting = () => {
     const [searchError, setSearchError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    // Search results mode + pagination (pagination only exists in this mode)
+    // Search results mode + pagination
     const [searchActive, setSearchActive] = useState(false);
     const [searchPage, setSearchPage] = useState(1);
     const tableScrollRef = useRef(null);
+
+    // Challan search tracking (Found vs Not Found)
+    const [foundChallans, setFoundChallans] = useState([]);
+    const [notFoundChallans, setNotFoundChallans] = useState([]);
 
     const [isFetchingAll, setIsFetchingAll] = useState(false);
     const [pendingFilterKey, setPendingFilterKey] = useState(null);
@@ -259,18 +246,13 @@ const Knitting = () => {
 
     // ===== DELIVERY MONTHS MULTI-SELECT STATES =====
     const [isDeliveryMonthDropdownOpen, setIsDeliveryMonthDropdownOpen] = useState(false);
-    // Raw values ticked in the dropdown, e.g. ["August", "September"]
     const [selectedDeliveryMonths, setSelectedDeliveryMonths] = useState([]);
-    // Month names actually searched, e.g. ["august", "september"]
     const [appliedMonthNames, setAppliedMonthNames] = useState([]);
     const deliveryMonthDropdownRef = useRef(null);
     // ===============================================
 
     const [hoveredRow, setHoveredRow] = useState(null);
-
-    // ===== BILLING STATE =====
     const [isBillGenerating, setIsBillGenerating] = useState(false);
-    // =========================
 
     // Portal refs & state for the column filter dropdown
     const filterButtonRefs = useRef({});
@@ -284,7 +266,6 @@ const Knitting = () => {
     const { deliveryMonths, isMonthLoading: deliveryMonthLoading } = UseDeliveryMonths();
     const axiosPrivate = useAxiosPrivate();
 
-    // Stable string of applied months (effect dependency + "month search active" flag)
     const appliedMonthsKey = appliedMonthNames.join(',');
 
     const allRows = useMemo(() => {
@@ -395,17 +376,14 @@ const Knitting = () => {
         toggleDraftValue, toggleSelectAllDraft, applyFilter, clearFilter,
     } = useTableFilters(allRows, tableHeader);
 
-    // ===== Column filter dropdown portal positioning =====
     const updateDropdownPosition = useCallback(() => {
         if (!openFilterKey) return;
         const btn = filterButtonRefs.current[openFilterKey];
         if (!btn) return;
         const rect = btn.getBoundingClientRect();
         const width = FILTER_DROPDOWN_WIDTH;
-
         let left = rect.right - width;
         left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-
         const estimatedHeight = 360;
         let top = rect.bottom + 8;
         if (top + estimatedHeight > window.innerHeight - 8) {
@@ -426,9 +404,7 @@ const Knitting = () => {
             window.removeEventListener('resize', handler);
         };
     }, [openFilterKey, updateDropdownPosition]);
-    // ===== END portal positioning =====
 
-    // ── Challan-date month options ──
     const monthOptions = useMemo(() => {
         const set = new Set();
         allRows.forEach((row) => {
@@ -448,7 +424,6 @@ const Knitting = () => {
         }
     }, [monthOptions, selectedMonths]);
 
-    // ===== DELIVERY MONTH OPTIONS (valid real months only, backend order) =====
     const deliveryMonthOptions = useMemo(() => {
         if (!Array.isArray(deliveryMonths)) return [];
         const seen = new Set();
@@ -476,11 +451,9 @@ const Knitting = () => {
     const toggleAllDeliveryMonths = () => {
         setSelectedDeliveryMonths(allDeliveryMonthsSelected ? [] : deliveryMonthOptions.map((o) => o.value));
     };
-    // ========================================================================
 
     const filteredRows = useMemo(() => {
         let rows = hookFilteredRows;
-
         if (selectedMonths.size > 0) {
             rows = rows.filter((row) => {
                 const rowMonth = getMonthKey(row.challanDate);
@@ -493,15 +466,12 @@ const Knitting = () => {
     const filtersString = JSON.stringify(filters || {});
     const selectedMonthsKey = [...selectedMonths].sort().join(',');
 
-    // ===== SEARCH PAGINATION (30 per page, only while showing search results) =====
     const totalSearchPages = Math.max(1, Math.ceil(filteredRows.length / SEARCH_PAGE_SIZE));
 
-    // Back to page 1 whenever a column filter / challan-date month filter changes
     useEffect(() => {
         setSearchPage(1);
     }, [filtersString, selectedMonthsKey]);
 
-    // Keep the page inside range
     useEffect(() => {
         if (searchPage > totalSearchPages) setSearchPage(totalSearchPages);
     }, [searchPage, totalSearchPages]);
@@ -529,7 +499,6 @@ const Knitting = () => {
 
     const rangeStart = filteredRows.length === 0 ? 0 : (searchPage - 1) * SEARCH_PAGE_SIZE + 1;
     const rangeEnd = Math.min(searchPage * SEARCH_PAGE_SIZE, filteredRows.length);
-    // ==============================================================================
 
     const totals = useMemo(() => {
         const t = { yarnDelivery: 0, yarnReturn: 0, greyFabricReceived: 0, billingAmount: 0 };
@@ -562,9 +531,6 @@ const Knitting = () => {
         });
     };
 
-    // ===== BILLING =====
-    // Challan ids are derived from the ticked rows, so the single-row
-    // checkbox and the header "select all" checkbox both feed the bill.
     const challanIds = useMemo(() => {
         const ids = new Set();
         allRows.forEach((row) => {
@@ -596,41 +562,27 @@ const Knitting = () => {
             setIsBillGenerating(false);
         }
     };
-    // ===================
 
     useEffect(() => {
-        // Skip the normal load while a challan search or a month search is showing
         if (search || appliedMonthsKey) return;
-
-        // Back to normal (non-search) mode
         setSearchActive(false);
         setFetchError(null);
-
         const queryParams = new URLSearchParams();
-
         if (fetchAll) {
             queryParams.append("fetchAll", "true");
             setIsFetchingAll(true);
         }
-
         if (filters) {
             Object.entries(filters).forEach(([key, value]) => {
                 if (value && Array.isArray(value) && value.length > 0) {
                     queryParams.append(key, value.join(","));
-                } else if (
-                    value &&
-                    typeof value === "string" &&
-                    value.length > 0
-                ) {
+                } else if (value && typeof value === "string" && value.length > 0) {
                     queryParams.append(key, value);
                 }
             });
         }
-
         const queryString = queryParams.toString();
-
-        const url = `/api/challan-movement/knittingOrder${queryString ? "?" + queryString : ""
-            }`;
+        const url = `/api/challan-movement/knittingOrder${queryString ? "?" + queryString : ""}`;
 
         fetchData(url)
             .then((res) => {
@@ -638,34 +590,19 @@ const Knitting = () => {
                     setFetchError("Permission denied");
                     return;
                 }
-
                 let payload = [];
-
-                if (Array.isArray(res)) {
-                    payload = res;
-                } else if (Array.isArray(res?.data)) {
-                    payload = res.data;
-                } else if (Array.isArray(res?.data?.data)) {
-                    payload = res.data.data;
-                }
-
+                if (Array.isArray(res)) payload = res;
+                else if (Array.isArray(res?.data)) payload = res.data;
+                else if (Array.isArray(res?.data?.data)) payload = res.data.data;
                 setMovements(payload);
             })
             .catch((err) => {
                 console.error("Failed to load Knitting deliveries:", err);
-
                 if (err?.response?.status === 403) {
                     setFetchError("Permission denied");
                 } else {
-                    setFetchError(
-                        err?.response?.data?.message ||
-                        err?.response?.data?.msg ||
-                        err?.message ||
-                        err?.msg ||
-                        "Failed to load Knitting deliveries"
-                    );
+                    setFetchError(err?.response?.data?.message || err?.response?.data?.msg || err?.message || err?.msg || "Failed to load Knitting deliveries");
                 }
-
                 setPendingFilterKey(null);
             })
             .finally(() => {
@@ -678,7 +615,6 @@ const Knitting = () => {
         if (pendingFilterKey && fetchAll && !isFetchingAll && !fetchError) { openFilter(pendingFilterKey); setPendingFilterKey(null); }
     }, [pendingFilterKey, fetchAll, isFetchingAll, fetchError, openFilter]);
 
-    // Close challan-date month dropdown on outside click
     useEffect(() => {
         if (!monthDropdownOpen) return;
         const handleClick = (e) => {
@@ -691,7 +627,6 @@ const Knitting = () => {
         return () => document.removeEventListener("mousedown", handleClick);
     }, [monthDropdownOpen]);
 
-    // Close delivery month dropdown on outside click
     useEffect(() => {
         if (!isDeliveryMonthDropdownOpen) return;
         const handleClick = (e) => {
@@ -708,7 +643,6 @@ const Knitting = () => {
         openFilter(key);
     };
 
-    // ===== CHALLAN-DATE MONTH FILTER =====
     const openMonthFilter = () => {
         if (monthDropdownOpen) {
             setMonthDropdownOpen(false);
@@ -748,35 +682,78 @@ const Knitting = () => {
         setMonthDropdownOpen(false);
         setMonthSearch("");
     };
-    // ==============================================
 
-    // ===== CHALLAN / JOB SEARCH =====
+    // ===== CHALLAN / JOB SEARCH WITH FOUND/NOT FOUND TRACKING =====
     const handleChallanSearch = async () => {
         if (!search.trim()) { alert("Please enter at least one challan number or job number."); return; }
         setSearchLoading(true);
         setSearchError(null);
         setSearchActive(true);
         setSearchPage(1);
+        
+        // Reset tracking states
+        setFoundChallans([]);
+        setNotFoundChallans([]);
+        
         // A challan search replaces any month search
         setAppliedMonthNames([]);
         setSelectedDeliveryMonths([]);
+        
         const searchArray = search.split(/[\s,]+/).filter(Boolean);
 
         try {
-            const res = await axiosPrivate.get("/api/knittingOrder/challan/search", { params: { challans: searchArray.join(","), context: "knittingOrder" } });
+            const res = await axiosPrivate.get("/api/knittingOrder/challan/search", { 
+                params: { challans: searchArray.join(","), context: "knittingOrder" } 
+            });
             let searchData = [];
             if (Array.isArray(res.data)) searchData = res.data;
             else if (Array.isArray(res.data?.data)) searchData = res.data.data;
+            
             setMovements(searchData);
-        } catch (err) { setSearchError("Failed to search challans."); setMovements([]); }
-        finally { setSearchLoading(false); }
+
+            // Extract all found challan numbers from the response (normalized to lowercase for safe comparison)
+            const foundChallanSet = new Set();
+            searchData.forEach(item => {
+                if (item?.challanNo) {
+                    foundChallanSet.add(String(item.challanNo).trim().toLowerCase());
+                }
+                if (Array.isArray(item?.deliveries)) {
+                    item.deliveries.forEach(dv => {
+                        if (dv?.challanNo) {
+                            foundChallanSet.add(String(dv.challanNo).trim().toLowerCase());
+                        }
+                    });
+                }
+            });
+
+            // Categorize original search terms
+            const found = [];
+            const notFound = [];
+            searchArray.forEach(ch => {
+                const normalized = ch.trim().toLowerCase();
+                if (foundChallanSet.has(normalized)) {
+                    found.push(ch); // Keep original casing for display
+                } else {
+                    notFound.push(ch);
+                }
+            });
+
+            setFoundChallans(found);
+            setNotFoundChallans(notFound);
+
+        } catch (err) { 
+            console.error("Search failed:", err);
+            setSearchError("Failed to search challans."); 
+            setMovements([]);
+            setFoundChallans([]);
+            setNotFoundChallans(searchArray); // Assume all not found on error
+        } finally { 
+            setSearchLoading(false); 
+        }
     };
 
-    // ===== SEARCH MONTH WISE =====
     const handleDeliveryMonthSearch = async () => {
         if (selectedDeliveryMonths.length === 0) return;
-
-        // "August 2025" or "August" -> "august" (unique lowercase names)
         const nameByValue = new Map(deliveryMonthOptions.map((o) => [o.value, o.name]));
         const monthNames = [];
         selectedDeliveryMonths.forEach((val) => {
@@ -791,6 +768,8 @@ const Knitting = () => {
         setSearchError(null);
         setIsDeliveryMonthDropdownOpen(false);
         setAppliedMonthNames(monthNames);
+        setFoundChallans([]);
+        setNotFoundChallans([]);
 
         try {
             const res = await axiosPrivate.get("/api/knittingOrder/challan/search", {
@@ -808,9 +787,7 @@ const Knitting = () => {
             setSearchLoading(false);
         }
     };
-    // ==============================================
 
-    // ===== CLEAR-ALL FILTERS =====
     const hasActiveFilters =
         Object.keys(filters || {}).length > 0 ||
         (selectedMonths && selectedMonths.size > 0) ||
@@ -837,10 +814,13 @@ const Knitting = () => {
         setSearchError(null);
         setSearchActive(false);
         setSearchPage(1);
+        
+        // Clear challan search tracking
+        setFoundChallans([]);
+        setNotFoundChallans([]);
 
         if (hadSearchMode) setRefreshKey(prev => prev + 1);
     };
-    // =============================
 
     const getCellBaseStyle = (row, idx) => {
         const isHovered = hoveredRow === row.rowKey;
@@ -876,7 +856,6 @@ const Knitting = () => {
         URL.revokeObjectURL(url);
     };
 
-    // ===== PORTALED COLUMN FILTER DROPDOWN =====
     const renderColumnFilterDropdown = () => {
         if (!openFilterKey || !dropdownPos) return null;
         const th = tableHeader.find(h => h.key === openFilterKey);
@@ -895,152 +874,53 @@ const Knitting = () => {
             <div
                 ref={dropdownRef}
                 style={{
-                    position: 'fixed',
-                    top: dropdownPos.top,
-                    left: dropdownPos.left,
-                    width: dropdownPos.width,
-                    zIndex: 99999,
-                    background: theme.colors.white,
-                    border: `1px solid ${theme.colors.borderDark}`,
-                    borderRadius: theme.radius,
-                    boxShadow: theme.shadows.xl,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    maxHeight: availableHeight,
-                    overflow: 'hidden',
-                    fontFamily: FONT_STACK,
-                    textAlign: 'left',
-                    textTransform: 'none',
-                    letterSpacing: 'normal',
-                    fontWeight: 400,
-                    fontSize: '0.875rem',
-                    color: theme.colors.textMain,
+                    position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width,
+                    zIndex: 99999, background: theme.colors.white, border: `1px solid ${theme.colors.borderDark}`,
+                    borderRadius: theme.radius, boxShadow: theme.shadows.xl, display: 'flex', flexDirection: 'column',
+                    maxHeight: availableHeight, overflow: 'hidden', fontFamily: FONT_STACK, textAlign: 'left',
+                    textTransform: 'none', letterSpacing: 'normal', fontWeight: 400, fontSize: '0.875rem', color: theme.colors.textMain,
                 }}
             >
-                <div style={{
-                    padding: '10px 12px',
-                    borderBottom: `1px solid #e2e8f0`,
-                    background: theme.colors.bgHeader,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                }}>
-                    <span style={{
-                        fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase',
-                        letterSpacing: '0.05em', color: theme.colors.textMain,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
+                <div style={{ padding: '10px 12px', borderBottom: `1px solid #e2e8f0`, background: theme.colors.bgHeader, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: theme.colors.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         Filter: {th.header}
                     </span>
-                    <button
-                        onClick={() => openFilter(openFilterKey)}
-                        title="Close"
-                        style={{
-                            border: 'none', background: 'transparent', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            padding: 2, borderRadius: '50%', color: theme.colors.textMain, flexShrink: 0,
-                        }}
-                    >
+                    <button onClick={() => openFilter(openFilterKey)} title="Close" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 2, borderRadius: '50%', color: theme.colors.textMain, flexShrink: 0 }}>
                         <X size={14} />
                     </button>
                 </div>
-
                 <div style={{ padding: "10px 12px", borderBottom: `1px solid #e2e8f0` }}>
-                    <input
-                        type="text"
-                        value={filterSearch}
-                        onChange={(e) => setFilterSearch(e.target.value)}
-                        placeholder="Filter values..."
-                        autoFocus
-                        style={{
-                            width: "100%", padding: "8px 10px",
-                            border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px',
-                            fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box',
-                            fontFamily: FONT_STACK, color: theme.colors.textMain,
-                        }}
-                    />
+                    <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Filter values..." autoFocus style={{ width: "100%", padding: "8px 10px", border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px', fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box', fontFamily: FONT_STACK, color: theme.colors.textMain }} />
                 </div>
-
                 <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", minHeight: 0 }}>
-                    <label style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        fontWeight: 600, marginBottom: 8, fontSize: '0.8rem',
-                        color: theme.colors.textMain, cursor: 'pointer'
-                    }}>
-                        <input
-                            type="checkbox"
-                            checked={allSelected}
-                            onChange={() => toggleSelectAllDraft(options)}
-                            style={{ accentColor: theme.colors.primary, width: 15, height: 15 }}
-                        />
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, marginBottom: 8, fontSize: '0.8rem', color: theme.colors.textMain, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={allSelected} onChange={() => toggleSelectAllDraft(options)} style={{ accentColor: theme.colors.primary, width: 15, height: 15 }} />
                         Select All ({options.length})
                     </label>
                     <div style={{ borderTop: `1px solid #e2e8f0`, paddingTop: 6 }}>
                         {visibleOptions.length === 0 && (
-                            <div style={{ padding: '12px 0', fontSize: '0.8rem', color: theme.colors.textMain, textAlign: 'center', opacity: 0.6 }}>
-                                No values found
-                            </div>
+                            <div style={{ padding: '12px 0', fontSize: '0.8rem', color: theme.colors.textMain, textAlign: 'center', opacity: 0.6 }}>No values found</div>
                         )}
                         {visibleOptions.map((val) => {
                             const displayVal = getFilterDisplay(openFilterKey, val);
                             const isChecked = draftSelected.has(val);
                             return (
-                                <label key={val} style={{
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    fontSize: "0.8rem", padding: "5px 0", cursor: 'pointer',
-                                    borderRadius: '4px'
-                                }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={() => toggleDraftValue(val)}
-                                        style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }}
-                                    />
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {displayVal === "" ? "(blank)" : displayVal}
-                                    </span>
+                                <label key={val} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.8rem", padding: "5px 0", cursor: 'pointer', borderRadius: '4px' }}>
+                                    <input type="checkbox" checked={isChecked} onChange={() => toggleDraftValue(val)} style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }} />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayVal === "" ? "(blank)" : displayVal}</span>
                                 </label>
                             );
                         })}
                     </div>
                 </div>
-
-                <div style={{
-                    display: "flex", justifyContent: "space-between", gap: 8,
-                    padding: "10px 12px", borderTop: `1px solid #e2e8f0`,
-                    background: theme.colors.bgHeader,
-                }}>
-                    <button
-                        onClick={() => clearFilter(openFilterKey)}
-                        style={{
-                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                            background: theme.colors.white, color: theme.colors.textMain,
-                            border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px',
-                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500,
-                            padding: '7px 0', fontFamily: FONT_STACK,
-                        }}
-                    >
-                        Clear
-                    </button>
-                    <button
-                        onClick={() => applyFilter(openFilterKey, options)}
-                        style={{
-                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                            background: theme.colors.primary, color: theme.colors.white,
-                            border: 'none', borderRadius: '6px',
-                            cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
-                            padding: '7px 0', fontFamily: FONT_STACK,
-                        }}
-                    >
-                        Apply
-                    </button>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "10px 12px", borderTop: `1px solid #e2e8f0`, background: theme.colors.bgHeader }}>
+                    <button onClick={() => clearFilter(openFilterKey)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, background: theme.colors.white, color: theme.colors.textMain, border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, padding: '7px 0', fontFamily: FONT_STACK }}>Clear</button>
+                    <button onClick={() => applyFilter(openFilterKey, options)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, background: theme.colors.primary, color: theme.colors.white, border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, padding: '7px 0', fontFamily: FONT_STACK }}>Apply</button>
                 </div>
             </div>,
             document.body
         );
     };
-    // ===== END PORTALED FILTER DROPDOWN =====
 
     if (loading && movements.length === 0 && !searchLoading) {
         return (
@@ -1089,11 +969,7 @@ const Knitting = () => {
                 <div style={{ position: 'relative', flex: '0 1 320px' }}>
                     <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                     <input
-                        style={{
-                            width: '100%', border: `1px solid ${theme.colors.border}`, padding: "10px 12px 10px 36px",
-                            borderRadius: theme.radius, outline: "none", fontSize: '0.875rem', transition: 'border-color 0.2s',
-                            boxSizing: 'border-box', fontFamily: 'inherit'
-                        }}
+                        style={{ width: '100%', border: `1px solid ${theme.colors.border}`, padding: "10px 12px 10px 36px", borderRadius: theme.radius, outline: "none", fontSize: '0.875rem', transition: 'border-color 0.2s', boxSizing: 'border-box', fontFamily: 'inherit' }}
                         placeholder="Search Challan or Job No..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -1104,13 +980,7 @@ const Knitting = () => {
                 </div>
 
                 <button
-                    style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        background: theme.colors.primary, color: theme.colors.white,
-                        padding: "10px 20px", borderRadius: theme.radius, border: "none",
-                        cursor: searchLoading ? "not-allowed" : "pointer", fontSize: '0.875rem', fontWeight: 500,
-                        opacity: searchLoading ? 0.7 : 1, transition: 'background 0.2s', fontFamily: 'inherit'
-                    }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: theme.colors.primary, color: theme.colors.white, padding: "10px 20px", borderRadius: theme.radius, border: "none", cursor: searchLoading ? "not-allowed" : "pointer", fontSize: '0.875rem', fontWeight: 500, opacity: searchLoading ? 0.7 : 1, transition: 'background 0.2s', fontFamily: 'inherit' }}
                     onClick={handleChallanSearch} disabled={searchLoading}
                 >
                     {searchLoading ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
@@ -1119,17 +989,14 @@ const Knitting = () => {
 
                 {search && (
                     <button
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            background: theme.colors.white, color: theme.colors.textMuted,
-                            padding: "10px 20px", borderRadius: theme.radius,
-                            border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontFamily: 'inherit'
-                        }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: theme.colors.white, color: theme.colors.textMuted, padding: "10px 20px", borderRadius: theme.radius, border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontFamily: 'inherit' }}
                         onClick={() => {
                             setSearch("");
                             setSearchError(null);
                             setSearchActive(false);
                             setSearchPage(1);
+                            setFoundChallans([]);
+                            setNotFoundChallans([]);
                             setRefreshKey(prev => prev + 1);
                         }}
                     >
@@ -1152,94 +1019,35 @@ const Knitting = () => {
                                 color: isDeliveryMonthDropdownOpen || selectedDeliveryMonths.length > 0 ? theme.colors.white : theme.colors.textMain,
                                 padding: "10px 16px", borderRadius: theme.radius,
                                 border: `1px solid ${theme.colors.border}`, cursor: "pointer",
-                                fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit',
-                                transition: 'all 0.2s ease'
+                                fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit', transition: 'all 0.2s ease'
                             }}
                         >
                             <Calendar size={16} />
                             {selectedDeliveryMonths.length > 0 ? `${selectedDeliveryMonths.length} Month(s) Selected` : 'Delivery Months'}
-                            <ChevronDown size={16} style={{
-                                transform: isDeliveryMonthDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.2s'
-                            }} />
+                            <ChevronDown size={16} style={{ transform: isDeliveryMonthDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
                         </button>
 
                         {isDeliveryMonthDropdownOpen && (
-                            <div
-                                style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + 6px)',
-                                    left: 0,
-                                    width: 280,
-                                    zIndex: 60,
-                                    background: theme.colors.white,
-                                    border: `1px solid ${theme.colors.borderDark}`,
-                                    borderRadius: theme.radius,
-                                    boxShadow: theme.shadows.xl,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    maxHeight: 400,
-                                    overflow: 'hidden',
-                                    fontFamily: FONT_STACK,
-                                }}
-                            >
-                                <div style={{
-                                    padding: '12px',
-                                    borderBottom: `1px solid #e2e8f0`,
-                                    background: '#657582',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                }}>
-                                    <span style={{
-                                        fontSize: '0.75rem',
-                                        fontWeight: 700,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
-                                        color: 'white',
-                                    }}>
-                                        Delivery Months
-                                    </span>
-                                    <button
-                                        onClick={() => setIsDeliveryMonthDropdownOpen(false)}
-                                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'white', display: 'flex' }}
-                                    >
+                            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: 280, zIndex: 60, background: theme.colors.white, border: `1px solid ${theme.colors.borderDark}`, borderRadius: theme.radius, boxShadow: theme.shadows.xl, display: 'flex', flexDirection: 'column', maxHeight: 400, overflow: 'hidden', fontFamily: FONT_STACK }}>
+                                <div style={{ padding: '12px', borderBottom: `1px solid #e2e8f0`, background: '#657582', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white' }}>Delivery Months</span>
+                                    <button onClick={() => setIsDeliveryMonthDropdownOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'white', display: 'flex' }}>
                                         <X size={14} />
                                     </button>
                                 </div>
-
                                 <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
                                     {deliveryMonthOptions.length === 0 ? (
-                                        <div style={{ padding: '12px 0', fontSize: '0.8rem', textAlign: 'center', opacity: 0.6 }}>
-                                            No delivery months found
-                                        </div>
+                                        <div style={{ padding: '12px 0', fontSize: '0.8rem', textAlign: 'center', opacity: 0.6 }}>No delivery months found</div>
                                     ) : (
                                         <>
-                                            <label style={{
-                                                display: 'flex', alignItems: 'center', gap: 8,
-                                                fontWeight: 600, marginBottom: 8, fontSize: '0.8rem', cursor: 'pointer', color: theme.colors.textMain
-                                            }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={allDeliveryMonthsSelected}
-                                                    onChange={toggleAllDeliveryMonths}
-                                                    style={{ accentColor: theme.colors.primary, width: 15, height: 15 }}
-                                                />
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 8, fontSize: '0.8rem', cursor: 'pointer', color: theme.colors.textMain }}>
+                                                <input type="checkbox" checked={allDeliveryMonthsSelected} onChange={toggleAllDeliveryMonths} style={{ accentColor: theme.colors.primary, width: 15, height: 15 }} />
                                                 Select All ({deliveryMonthOptions.length})
                                             </label>
                                             <div style={{ borderTop: `1px solid #e2e8f0`, paddingTop: 8 }}>
                                                 {deliveryMonthOptions.map((opt) => (
-                                                    <label key={opt.value} style={{
-                                                        display: 'flex', alignItems: 'center', gap: 8,
-                                                        fontSize: '0.8rem', padding: '6px 0', cursor: 'pointer',
-                                                        borderRadius: '4px', color: theme.colors.textMain
-                                                    }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedDeliveryMonths.includes(opt.value)}
-                                                            onChange={() => toggleDeliveryMonth(opt.value)}
-                                                            style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }}
-                                                        />
+                                                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', padding: '6px 0', cursor: 'pointer', borderRadius: '4px', color: theme.colors.textMain }}>
+                                                        <input type="checkbox" checked={selectedDeliveryMonths.includes(opt.value)} onChange={() => toggleDeliveryMonth(opt.value)} style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }} />
                                                         <span>{opt.label}</span>
                                                     </label>
                                                 ))}
@@ -1252,38 +1060,15 @@ const Knitting = () => {
                     </div>
                 )}
 
-                {/* Appears as soon as one or more months are selected */}
                 {selectedDeliveryMonths.length > 0 && (
-                    <button
-                        onClick={handleDeliveryMonthSearch}
-                        disabled={searchLoading}
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            background: theme.colors.success, color: theme.colors.white,
-                            padding: "10px 20px", borderRadius: theme.radius, border: "none",
-                            cursor: searchLoading ? "not-allowed" : "pointer",
-                            opacity: searchLoading ? 0.7 : 1,
-                            fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit',
-                            boxShadow: theme.shadows.md,
-                        }}
-                    >
+                    <button onClick={handleDeliveryMonthSearch} disabled={searchLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: theme.colors.success, color: theme.colors.white, padding: "10px 20px", borderRadius: theme.radius, border: "none", cursor: searchLoading ? "not-allowed" : "pointer", opacity: searchLoading ? 0.7 : 1, fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit', boxShadow: theme.shadows.md }}>
                         {searchLoading ? <Loader size={16} className="animate-spin" /> : <Search size={16} />}
                         Search Month Wise
                     </button>
                 )}
-                {/* ===== END DELIVERY MONTH MULTI-SELECT ===== */}
 
                 {hasActiveFilters && (
-                    <button
-                        onClick={handleClearAllFilters}
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            background: '#fef2f2', color: '#b91c1c',
-                            padding: "10px 16px", borderRadius: theme.radius,
-                            border: '1px solid #fecaca', cursor: "pointer",
-                            fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit',
-                            transition: 'all 0.15s ease', boxShadow: theme.shadows.sm
-                        }}
+                    <button onClick={handleClearAllFilters} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef2f2', color: '#b91c1c', padding: "10px 16px", borderRadius: theme.radius, border: '1px solid #fecaca', cursor: "pointer", fontSize: '0.875rem', fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s ease', boxShadow: theme.shadows.sm }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; }}
                         title="Clear all active filters"
@@ -1294,29 +1079,64 @@ const Knitting = () => {
 
                 <div style={{ flex: 1 }} />
 
-                <button
-                    style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        background: theme.colors.white, color: theme.colors.textMain,
-                        padding: "10px 20px", borderRadius: theme.radius,
-                        border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit'
-                    }}
-                    onClick={handleExport}
-                >
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: theme.colors.white, color: theme.colors.textMain, padding: "10px 20px", borderRadius: theme.radius, border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit' }} onClick={handleExport}>
                     <Download size={16} /> Export CSV
                 </button>
             </div>
 
             {/* Error Banner */}
             {searchError && (
-                <div style={{
-                    padding: "12px 16px", color: "#991b1b", background: "#fef2f2",
-                    border: "1px solid #fecaca", borderRadius: theme.radius, marginBottom: "16px",
-                    fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit'
-                }}>
+                <div style={{ padding: "12px 16px", color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: theme.radius, marginBottom: "16px", fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}>
                     <X size={16} /> {searchError}
                 </div>
             )}
+
+            {/* ===== FOUND / NOT FOUND CHALLAN SUMMARY BANNER ===== */}
+            {searchActive && !searchLoading && !searchError && (foundChallans.length > 0 || notFoundChallans.length > 0) && (
+                <div style={{
+                    marginBottom: "16px", padding: "16px", background: theme.colors.white,
+                    border: "1px solid #e2e8f0", borderRadius: theme.radius,
+                    display: 'flex', flexDirection: 'column', gap: 12, fontFamily: 'inherit',
+                    fontSize: '0.875rem', boxShadow: theme.shadows.sm
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4, color: theme.colors.textMain }}>Search Results Summary:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                        {foundChallans.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: theme.colors.success, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    ✓ Found ({foundChallans.length}):
+                                </span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {foundChallans.map((ch, i) => (
+                                        <span key={`found-${i}`} style={{
+                                            background: '#ecfdf5', color: '#047857',
+                                            padding: '4px 10px', borderRadius: '6px',
+                                            border: '1px solid #a7f3d0', fontWeight: 600, fontSize: '0.8rem'
+                                        }}>{ch}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {notFoundChallans.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: theme.colors.danger, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    ✗ Not Found ({notFoundChallans.length}):
+                                </span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {notFoundChallans.map((ch, i) => (
+                                        <span key={`notfound-${i}`} style={{
+                                            background: '#fef2f2', color: '#b91c1c',
+                                            padding: '4px 10px', borderRadius: '6px',
+                                            border: '1px solid #fecaca', fontWeight: 600, fontSize: '0.8rem'
+                                        }}>{ch}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+            {/* ===== END SUMMARY BANNER ===== */}
 
             {/* Results count (search results only) */}
             {searchActive && !searchLoading && !searchError && (
@@ -1365,66 +1185,27 @@ const Knitting = () => {
                     </button>
                 </div>
             )}
-            {/* ===== END BILLING BAR ===== */}
 
             {/* Fetch-all loading overlay */}
             {isFetchingAll && pendingFilterKey && (
-                <div style={{
-                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-                    background: "rgba(255, 255, 255, 0.70)",
-                    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
-                }}>
-                    <div style={{
-                        background: theme.colors.white,
-                        border: `1px solid ${theme.colors.primary}`,
-                        borderRadius: theme.radius,
-                        padding: "16px 24px",
-                        color: theme.colors.primary,
-                        fontWeight: 700,
-                        boxShadow: theme.shadows.lg,
-                        fontFamily: 'inherit'
-                    }}>
+                <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(255, 255, 255, 0.70)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+                    <div style={{ background: theme.colors.white, border: `1px solid ${theme.colors.primary}`, borderRadius: theme.radius, padding: "16px 24px", color: theme.colors.primary, fontWeight: 700, boxShadow: theme.shadows.lg, fontFamily: 'inherit' }}>
                         Loading all challans for filtering...
                     </div>
                 </div>
             )}
 
-            {/* Table wrapper (relative so the search loader can cover it) */}
+            {/* Table wrapper */}
             <div style={{ position: 'relative' }}>
                 {searchLoading && (
-                    <div style={{
-                        position: 'absolute', inset: 0, zIndex: 50,
-                        background: 'rgba(255, 255, 255, 0.75)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        borderRadius: theme.radius,
-                    }}>
-                        <div style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 10,
-                            background: theme.colors.white,
-                            border: `1px solid ${theme.colors.primary}`,
-                            borderRadius: theme.radius,
-                            padding: '14px 22px',
-                            color: theme.colors.primary,
-                            fontWeight: 600,
-                            boxShadow: theme.shadows.lg,
-                            fontFamily: 'inherit',
-                        }}>
+                    <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(255, 255, 255, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: theme.colors.white, border: `1px solid ${theme.colors.primary}`, borderRadius: theme.radius, padding: '14px 22px', color: theme.colors.primary, fontWeight: 600, boxShadow: theme.shadows.lg, fontFamily: 'inherit' }}>
                             <Loader size={20} className="animate-spin" /> Searching...
                         </div>
                     </div>
                 )}
 
-                {/* Table Container */}
-                <div
-                    ref={tableScrollRef}
-                    style={{
-                        width: "100%", maxHeight: "calc(100vh - 220px)", overflow: "auto",
-                        border: `1px solid ${theme.colors.border}`, borderRadius: theme.radius,
-                        boxShadow: theme.shadows.md, background: theme.colors.white,
-                        position: 'relative',
-                        minHeight: searchLoading ? 160 : undefined,
-                    }}
-                >
+                <div ref={tableScrollRef} style={{ width: "100%", maxHeight: "calc(100vh - 220px)", overflow: "auto", border: `1px solid ${theme.colors.border}`, borderRadius: theme.radius, boxShadow: theme.shadows.md, background: theme.colors.white, position: 'relative', minHeight: searchLoading ? 160 : undefined }}>
                     <table style={{ width: "100%", minWidth: "1600px", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
                         <thead>
                             <tr>
@@ -1434,12 +1215,7 @@ const Knitting = () => {
                                         return (
                                             <th key={th.key} style={{ ...thStickyStyle, width: th.width, ...frozen }}>
                                                 {th.key === 'select' ? (
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={allVisibleSelected}
-                                                        onChange={(e) => toggleSelectAllVisible(e.target.checked)}
-                                                        style={{ accentColor: theme.colors.primary, cursor: 'pointer', width: 16, height: 16 }}
-                                                    />
+                                                    <input type="checkbox" checked={allVisibleSelected} onChange={(e) => toggleSelectAllVisible(e.target.checked)} style={{ accentColor: theme.colors.primary, cursor: 'pointer', width: 16, height: 16 }} />
                                                 ) : th.header}
                                             </th>
                                         );
@@ -1449,22 +1225,8 @@ const Knitting = () => {
                                     return (
                                         <th key={th.key} style={{ ...thStickyStyle, width: th.width, ...frozen }}>
                                             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                                                <span style={{
-                                                    whiteSpace: "normal", wordBreak: "break-word",
-                                                    textAlign: "center", flex: 1
-                                                }}>{th.header}</span>
-                                                <button
-                                                    ref={(el) => { filterButtonRefs.current[th.key] = el; }}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onClick={() => handleOpenFilter(th.key)}
-                                                    style={{
-                                                        border: "none",
-                                                        background: (isActive || isOpen) ? theme.colors.primary : "transparent",
-                                                        color: theme.colors.white,
-                                                        cursor: "pointer", padding: "2px 4px", borderRadius: '4px',
-                                                        display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0
-                                                    }}
-                                                >
+                                                <span style={{ whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", flex: 1 }}>{th.header}</span>
+                                                <button ref={(el) => { filterButtonRefs.current[th.key] = el; }} onMouseDown={(e) => e.stopPropagation()} onClick={() => handleOpenFilter(th.key)} style={{ border: "none", background: (isActive || isOpen) ? theme.colors.primary : "transparent", color: theme.colors.white, cursor: "pointer", padding: "2px 4px", borderRadius: '4px', display: 'flex', alignItems: 'center', transition: 'all 0.15s', flexShrink: 0 }}>
                                                     <Filter size={12} />
                                                 </button>
                                             </div>
@@ -1475,11 +1237,7 @@ const Knitting = () => {
                         </thead>
                         <tbody>
                             {visibleRows.map((row, idx) => (
-                                <tr
-                                    key={row.rowKey}
-                                    onMouseEnter={() => setHoveredRow(row.rowKey)}
-                                    onMouseLeave={() => setHoveredRow(null)}
-                                >
+                                <tr key={row.rowKey} onMouseEnter={() => setHoveredRow(row.rowKey)} onMouseLeave={() => setHoveredRow(null)}>
                                     {tableHeader.map((th) => {
                                         const frozen = getFrozenStyle(th.key, 'body');
                                         const baseStyle = { ...getCellBaseStyle(row, idx), ...frozen };
@@ -1487,12 +1245,7 @@ const Knitting = () => {
                                         if (th.key === 'select') {
                                             return (
                                                 <td key={th.key} style={baseStyle}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedRows.has(row.rowKey)}
-                                                        onChange={() => toggleRow(row.rowKey)}
-                                                        style={{ accentColor: theme.colors.primary, cursor: 'pointer', width: 16, height: 16 }}
-                                                    />
+                                                    <input type="checkbox" checked={selectedRows.has(row.rowKey)} onChange={() => toggleRow(row.rowKey)} style={{ accentColor: theme.colors.primary, cursor: 'pointer', width: 16, height: 16 }} />
                                                 </td>
                                             );
                                         }
@@ -1500,9 +1253,7 @@ const Knitting = () => {
                                         if (th.key === 'challanDate') {
                                             return (
                                                 <td key={th.key} style={baseStyle}>
-                                                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                                        {formatShortDate(row.challanDate)}
-                                                    </span>
+                                                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>{formatShortDate(row.challanDate)}</span>
                                                 </td>
                                             );
                                         }
@@ -1511,11 +1262,7 @@ const Knitting = () => {
                                             return (
                                                 <td key={th.key} style={baseStyle}>
                                                     {row.color && row.color !== "-" ? (
-                                                        <span style={{
-                                                            display: 'inline-block', padding: '2px 10px', borderRadius: '12px',
-                                                            background: '#f1f5f9', fontSize: '0.8rem', fontWeight: 500,
-                                                            whiteSpace: 'normal', wordBreak: 'break-word'
-                                                        }}>{row.color}</span>
+                                                        <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '12px', background: '#f1f5f9', fontSize: '0.8rem', fontWeight: 500, whiteSpace: 'normal', wordBreak: 'break-word' }}>{row.color}</span>
                                                     ) : "-"}
                                                 </td>
                                             );
@@ -1532,13 +1279,7 @@ const Knitting = () => {
                                         if (th.key === 'jobNo' || th.key === 'composition') {
                                             return (
                                                 <td key={th.key} style={baseStyle}>
-                                                    <span
-                                                        onClick={th.key === 'jobNo' ? () => handlePrepareChallanEdit(row.challanNo, row[th.key]) : undefined}
-                                                        style={{
-                                                            fontWeight: th.key === 'jobNo' ? 500 : 400,
-                                                            cursor: th.key === 'jobNo' ? 'pointer' : 'default',
-                                                            whiteSpace: 'normal', wordBreak: 'break-word'
-                                                        }}>{row[th.key]}</span>
+                                                    <span onClick={th.key === 'jobNo' ? () => handlePrepareChallanEdit(row.challanNo, row[th.key]) : undefined} style={{ fontWeight: th.key === 'jobNo' ? 500 : 400, cursor: th.key === 'jobNo' ? 'pointer' : 'default', whiteSpace: 'normal', wordBreak: 'break-word' }}>{row[th.key]}</span>
                                                 </td>
                                             );
                                         }
@@ -1548,17 +1289,8 @@ const Knitting = () => {
 
                                         return (
                                             <td key={th.key} style={{ ...baseStyle, fontVariantNumeric: isNumber ? 'tabular-nums' : 'normal' }}>
-                                                <div
-                                                    style={{
-                                                        minHeight: '20px', textAlign: 'center',
-                                                        opacity: currentValue ? 1 : 0.5,
-                                                        whiteSpace: 'normal',
-                                                        wordBreak: 'break-word',
-                                                    }}>
-                                                    {isNumber
-                                                        ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-")
-                                                        : (currentValue || "-")
-                                                    }
+                                                <div style={{ minHeight: '20px', textAlign: 'center', opacity: currentValue ? 1 : 0.5, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                                    {isNumber ? (Number(currentValue) > 0 ? Number(currentValue).toFixed(2) : "-") : (currentValue || "-")}
                                                 </div>
                                             </td>
                                         );
@@ -1568,11 +1300,7 @@ const Knitting = () => {
                             {visibleRows.length === 0 && (
                                 <tr>
                                     <td style={{ ...cellStyle, padding: 40, color: theme.colors.textMuted, whiteSpace: 'normal' }} colSpan={tableHeader.length}>
-                                        {searchLoading
-                                            ? "Searching..."
-                                            : movements.length === 0 && !loading
-                                                ? "No records found."
-                                                : "No rows match the current filters."}
+                                        {searchLoading ? "Searching..." : movements.length === 0 && !loading ? "No records found." : "No rows match the current filters."}
                                     </td>
                                 </tr>
                             )}
@@ -1601,26 +1329,14 @@ const Knitting = () => {
                 </div>
             </div>
 
-            {/* Pagination (only for search results, 30 per page) */}
+            {/* Pagination */}
             {searchActive && !searchLoading && totalSearchPages > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", alignItems: 'center', marginTop: 20, gap: 4, fontFamily: 'inherit' }}>
-                    <button
-                        style={{ ...pageButtonStyle(false), opacity: searchPage === 1 ? 0.4 : 1, cursor: searchPage === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                        onClick={() => goToSearchPage(searchPage - 1)} disabled={searchPage === 1}
-                    >
-                        Prev
-                    </button>
+                    <button style={{ ...pageButtonStyle(false), opacity: searchPage === 1 ? 0.4 : 1, cursor: searchPage === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }} onClick={() => goToSearchPage(searchPage - 1)} disabled={searchPage === 1}>Prev</button>
                     {searchPageNumbers.map((p, i) =>
-                        p === "..."
-                            ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span>
-                            : <button key={p} style={pageButtonStyle(p === searchPage)} onClick={() => goToSearchPage(p)}>{p}</button>
+                        p === "..." ? <span key={`e-${i}`} style={{ margin: "0 6px", color: theme.colors.textMuted, letterSpacing: 2 }}>...</span> : <button key={p} style={pageButtonStyle(p === searchPage)} onClick={() => goToSearchPage(p)}>{p}</button>
                     )}
-                    <button
-                        style={{ ...pageButtonStyle(false), opacity: searchPage === totalSearchPages ? 0.4 : 1, cursor: searchPage === totalSearchPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                        onClick={() => goToSearchPage(searchPage + 1)} disabled={searchPage === totalSearchPages}
-                    >
-                        Next
-                    </button>
+                    <button style={{ ...pageButtonStyle(false), opacity: searchPage === totalSearchPages ? 0.4 : 1, cursor: searchPage === totalSearchPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }} onClick={() => goToSearchPage(searchPage + 1)} disabled={searchPage === totalSearchPages}>Next</button>
                 </div>
             )}
 
