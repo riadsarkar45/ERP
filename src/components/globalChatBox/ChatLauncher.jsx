@@ -1,15 +1,17 @@
-import { useEffect, useMemo } from "react";
+import { useContext, useEffect, useMemo } from "react";
 import { useSocket } from "../../hooks/socket.io/socketContext";
 import UseAllUsers from "../../dashboard/pages/users/allUsers/AllUsers";
 import GlobalChatBox from "./GlobalChatBox";
+import { AuthContext } from "../../dashboard/auth/AuthContext";
 
 /**
  * Loads the employee list and renders the chat.
  * It is a separate component so the users request only happens
  * AFTER login (the login page never calls UseAllUsers).
  */
-const ChatWithUsers = ({ currentUserId }) => {
+const ChatWithUsers = () => {
     const { allUsers } = UseAllUsers();
+    const { user } = useContext(AuthContext);
 
     const chatUsers = useMemo(() => {
         const list = Array.isArray(allUsers) ? allUsers : [];
@@ -24,7 +26,7 @@ const ChatWithUsers = ({ currentUserId }) => {
             }));
     }, [allUsers]);
 
-    return <GlobalChatBox currentUserId={currentUserId} users={chatUsers} />;
+    return <GlobalChatBox currentUserId={user?.id} users={chatUsers} />;
 };
 
 const ChatLauncher = ({ currentUserId: currentUserIdProp }) => {
