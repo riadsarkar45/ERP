@@ -13,6 +13,7 @@ import { deleteStyleData } from "../controllers/newStyleRequirements/editStyleRe
 import { userRole } from "../controllers/users/userRolePermission/userRole";
 import { newProduction } from "../controllers/production/newProduction";
 import { insertYarnPiData } from "../controllers/yarns/yarn.pi";
+import { newYarnMovement } from "../controllers/yarns/yarn.movement";
 
 const router = express.Router();
 
@@ -43,5 +44,7 @@ router.post("/users/:userId/permissions", responseTimeMonitor, authenticate, aut
 router.post("/enter-production/:colorId", responseTimeMonitor, authenticate, newProduction)
 
 router.post("/purchase-yarn-pi", responseTimeMonitor, authenticate, insertYarnPiData)
+
+router.post("/yarn-purchase-data/challans", responseTimeMonitor, authenticate, newYarnMovement)
 
 export default router;

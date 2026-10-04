@@ -411,12 +411,24 @@ model yarnPoModel {
 }
 
 model yarnPoItems {
-  id          Int         @id @default(autoincrement())
-  yarnPoId    Int
-  yarnPo      yarnPoModel @relation(fields: [yarnPoId], references: [id], onDelete: Cascade)
-  yarnCount   String
-  composition String
-  poQty       Float
+  id               Int                    @id @default(autoincrement())
+  yarnPoId         Int
+  yarnPo           yarnPoModel            @relation(fields: [yarnPoId], references: [id], onDelete: Cascade)
+  yarnCount        String
+  composition      String
+  poQty            Float
+  spinningMovement spinningYarnMovement[]
 
   @@index([yarnPoId])
+}
+
+model spinningYarnMovement {
+  id            Int          @id @default(autoincrement())
+  movementType  String
+  movementDate  DateTime
+  movementQty   Float
+  createdAt     DateTime     @default(now())
+  challanNo     Int
+  yarnPoItems   yarnPoItems? @relation(fields: [yarnPoItemsId], references: [id])
+  yarnPoItemsId Int?
 }

@@ -38,7 +38,7 @@ process.on("SIGINT", async () => {
 
 process.on("SIGTERM", async () => {
   await disconnectDatabase();
-  await disconnectRedis();
+  // await disconnectRedis();
   process.exit(0);
 });
 const PORT = 3000;
@@ -51,7 +51,7 @@ const start = async () => {
   app.use("/api", updateRouters)
   app.use("/api", authRouter)
 
-  await redis.ping();
+  // await redis.ping();
   console.log("redis connected");
 
   const server = app.listen(PORT, () => {

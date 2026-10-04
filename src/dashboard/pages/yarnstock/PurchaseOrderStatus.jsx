@@ -2,11 +2,12 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 import { useFetchData } from "../../../hooks/fetch";
+import { ChallanRecordModal } from './SpinningDeliveryModal';
 
 /* ----------------------------- Icons ----------------------------- */
 const IconSearch = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/>
+    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor" />
   </svg>
 );
 
@@ -55,6 +56,15 @@ const IconPen = () => (
   </svg>
 );
 
+const IconFilePlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="12" y1="18" x2="12" y2="12" />
+    <line x1="9" y1="15" x2="15" y2="15" />
+  </svg>
+);
+
 /* ----------------------------- Custom Confirm Modal ----------------------------- */
 const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
@@ -64,7 +74,7 @@ const CustomConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-red-600">
-              <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-gray-900">Confirm Deletion</h3>
@@ -99,7 +109,7 @@ const COLUMNS = [
 const NUMERIC_KEYS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
 const PI_LEVEL_KEYS = ['authorized', 'piNo', 'piDate', 'lcNo', 'po', 'supplierName', 'remarks', '__auth'];
 
-const LEADING_COLS = [ { key: '__auth', width: 50 }, { key: '__actions', width: 70 } ];
+const LEADING_COLS = [{ key: '__auth', width: 50 }, { key: '__actions', width: 70 }];
 const ALL_COLS = [...LEADING_COLS, ...COLUMNS];
 
 const FROZEN_THROUGH_KEY = 'supplierName';
@@ -128,10 +138,10 @@ function PORecordModal({ mode, initial, onSave, onClose }) {
     remarks: initial.remarks || '',
     authorized: initial.authorized || false,
   });
-  
+
   const [items, setItems] = useState(initial.items || [{ yarnCount: '', composition: '', poQty: 0 }]);
   const [error, setError] = useState('');
-  
+
   const initialRef = useRef(JSON.stringify({ header, items }));
   const isDirty = JSON.stringify({ header, items }) !== initialRef.current;
 
@@ -381,6 +391,9 @@ const PurchaseOrderStatus = () => {
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, id: null });
   const axiosPrivate = useAxiosPrivate();
   const [poModal, setPoModal] = useState(null);
+  const [challanModal, setChallanModal] = useState(null);
+  const [piNo, setPiNo] = useState(null);
+
   const { fetchData, error, loading } = useFetchData();
 
   const fmt = (num) => Number.isFinite(num) ? num.toFixed(2) : '0.00';
@@ -414,6 +427,7 @@ const PurchaseOrderStatus = () => {
     return Array.from(months).sort().reverse();
   }, [allData]);
 
+  // FIXED: Updated to match the new API structure with movementTotals
   const flattenApiData = (apiData) => {
     if (!Array.isArray(apiData)) return [];
     return apiData.flatMap(pi => {
@@ -428,19 +442,23 @@ const PurchaseOrderStatus = () => {
       };
 
       if (pi.items && pi.items.length > 0) {
-        return pi.items.map(item => ({
-          id: item.id,
-          piId: pi.id,
-          ...basePi,
-          yarnCount: item.yarnCount || '',
-          composition: item.composition || '',
-          poQty: Number(item.poQty) || 0,
-          yarnReceivedFromSpinning: Number(item.yarnReceivedFromSpinning) || 0,
-          yarnReturnedToSpinning: Number(item.yarnReturnedToSpinning) || 0,
-          pendingReceivedQty: item.pendingReceivedQty !== undefined 
-            ? Number(item.pendingReceivedQty) 
-            : (Number(item.poQty) || 0),
-        }));
+        return pi.items.map(item => {
+          const received = Number(item.movementTotals?.ReceivedFromSpinning) || 0;
+          const returned = Number(item.movementTotals?.ReturnToSpinning) || 0;
+          const poQty = Number(item.poQty) || 0;
+          
+          return {
+            id: item.id,
+            piId: pi.id,
+            ...basePi,
+            yarnCount: item.yarnCount || '',
+            composition: item.composition || '',
+            poQty: poQty,
+            yarnReceivedFromSpinning: received,
+            yarnReturnedToSpinning: returned,
+            pendingReceivedQty: poQty - received - returned,
+          };
+        });
       } else {
         return [{
           id: pi.id,
@@ -485,7 +503,6 @@ const PurchaseOrderStatus = () => {
     });
   }, [allData, selectedMonth, searchInput, filters]);
 
-  // Group data by PI No. for rowSpan rendering
   const groupedData = useMemo(() => {
     const groups = new Map();
     filteredData.forEach(item => {
@@ -523,13 +540,12 @@ const PurchaseOrderStatus = () => {
   const updateField = (id, key, rawValue) => {
     const col = COLUMNS.find((c) => c.key === key);
     const value = col && col.numeric ? (rawValue === '' ? '' : Number(rawValue)) : rawValue;
-    
-    // If updating authorization, update ALL rows with the same PI No.
+
     if (key === 'authorized') {
       const targetRow = allData.find(r => r.id === id);
       if (!targetRow) return;
       const boolValue = !!value;
-      setAllData((prev) => prev.map((row) => 
+      setAllData((prev) => prev.map((row) =>
         row.piNo === targetRow.piNo ? { ...row, [key]: boolValue } : row
       ));
     } else {
@@ -549,7 +565,8 @@ const PurchaseOrderStatus = () => {
     setSavedFlash(false);
   };
 
-  const openAddModal = () => {
+  /* --- PO Modal Handlers --- */
+  const openAddPOModal = () => {
     closeFilter();
     setPoModal({ 
       mode: 'add', 
@@ -560,7 +577,7 @@ const PurchaseOrderStatus = () => {
     });
   };
 
-  const openEditModal = (item) => {
+  const openEditPOModal = (item) => {
     closeFilter();
     const allItemsForPi = allData.filter(r => r.piNo === item.piNo);
     const header = { 
@@ -573,7 +590,7 @@ const PurchaseOrderStatus = () => {
     setPoModal({ mode: 'edit', record: { id: item.id, ...header, items } });
   };
 
-  const handleModalSave = async (formData) => {
+  const handlePOModalSave = async (formData) => {
     if (poModal.mode === 'add') {
       const apiPayload = {
         piNo: String(formData.piNo || '').trim(),
@@ -697,6 +714,93 @@ const PurchaseOrderStatus = () => {
     setPoModal(null);
   };
 
+  /* --- Challan Modal Handlers --- */
+  const openAddChallanModal = (targetPiNo) => {
+    closeFilter();
+    setPiNo(targetPiNo);
+    
+    // Pre-fill data if a specific PI is targeted
+    const existingItem = targetPiNo ? allData.find(r => r.piNo === targetPiNo) : null;
+    const defaultPoQty = existingItem ? Number(existingItem.poQty) || 0 : 0;
+
+    setChallanModal({ 
+      mode: 'add', 
+      record: { 
+        id: Date.now(), 
+        date: new Date().toISOString().split('T')[0], 
+        challan: '', 
+        piNo: targetPiNo || '', 
+        lcNo: existingItem?.lcNo || '', 
+        supplierName: existingItem?.supplierName || '', 
+        yarnCount: existingItem?.yarnCount || '', 
+        yarnComposition: existingItem?.composition || '', 
+        compositionId: null, 
+        poQty: defaultPoQty,
+        yarnReceived: 0, 
+        yarnReturned: 0, 
+        remarks: '' 
+      } 
+    });
+  };
+
+  const openEditChallanModal = (item) => {
+    closeFilter();
+    setChallanModal({ 
+      mode: 'edit', 
+      record: { 
+        ...item, 
+        yarnReceived: item.yarnReceivedFromSpinning || 0,
+        yarnReturned: item.yarnReturnedToSpinning || 0
+      } 
+    });
+  };
+
+  const closeChallanModal = () => setChallanModal(null);
+
+  const handleChallanModalSave = (data) => {
+    setAllData((prev) => {
+      const existingIndex = prev.findIndex(r => r.id === data.id);
+      
+      if (existingIndex !== -1 && challanModal.mode === 'edit') {
+        return prev.map((row) => {
+          if (row.id === data.id) {
+            const received = data.yarnReceived !== undefined ? Number(data.yarnReceived) : Number(row.yarnReceivedFromSpinning);
+            const returned = data.yarnReturned !== undefined ? Number(data.yarnReturned) : Number(row.yarnReturnedToSpinning);
+            const poQty = Number(data.poQty) !== 0 ? Number(data.poQty) : Number(row.poQty);
+            
+            return {
+              ...row,
+              ...data,
+              poQty: poQty,
+              yarnReceivedFromSpinning: received,
+              yarnReturnedToSpinning: returned,
+              pendingReceivedQty: poQty - received - returned,
+            };
+          }
+          return row;
+        });
+      } else {
+        const maxId = prev.length > 0 ? Math.max(...prev.map((r) => r.id || 0)) : 0;
+        const received = Number(data.yarnReceived) || 0;
+        const returned = Number(data.yarnReturned) || 0;
+        const poQty = Number(data.poQty) || 0;
+        
+        const newRow = {
+          ...data,
+          id: maxId + 1,
+          piNo: data.piNo || piNo || '',
+          yarnReceivedFromSpinning: received,
+          yarnReturnedToSpinning: returned,
+          pendingReceivedQty: poQty - received - returned,
+        };
+        return [newRow, ...prev];
+      }
+    });
+    setIsDirty(true);
+    setSavedFlash(false);
+    setChallanModal(null);
+  };
+
   const handleDeleteRow = (id) => {
     if (!newRowIds.has(id)) return;
     setDeleteConfirm({ isOpen: true, id });
@@ -714,9 +818,9 @@ const PurchaseOrderStatus = () => {
   const buildNestedPayload = (rows) => {
     const groupedMap = new Map();
     rows.forEach((row) => {
-      const piNo = String(row.piNo || '').trim() || `TEMP_PI_${row.id}`;
-      if (!groupedMap.has(piNo)) {
-        groupedMap.set(piNo, {
+      const currentPiNo = String(row.piNo || '').trim() || `TEMP_PI_${row.id}`;
+      if (!groupedMap.has(currentPiNo)) {
+        groupedMap.set(currentPiNo, {
           id: row.piId || undefined,
           piNo: row.piNo,
           piDate: row.piDate ? new Date(row.piDate).toISOString() : new Date().toISOString(),
@@ -728,7 +832,7 @@ const PurchaseOrderStatus = () => {
           items: [],
         });
       }
-      const group = groupedMap.get(piNo);
+      const group = groupedMap.get(currentPiNo);
       group.items.push({
         id: row.id && typeof row.id === 'number' ? row.id : undefined,
         yarnCount: row.yarnCount,
@@ -754,7 +858,7 @@ const PurchaseOrderStatus = () => {
       alert(`✅ Successfully submitted ${submissionPayload.length} PI group(s) to the database!`);
       setTimeout(() => setSavedFlash(false), 3000);
       
-      const response = await fetchData('/api/purchase-orders');
+      const response = await fetchData('/api/yarn-purchase-data');
       const dataArray = response?.data ? response.data : response;
       setAllData(flattenApiData(dataArray));
     } catch (error) {
@@ -805,10 +909,25 @@ const PurchaseOrderStatus = () => {
     if (col.key === 'piNo') {
       return (
         <td key={col.key} {...alignAttr} style={style} {...rowSpanAttr}>
-          <div className="p-0 cursor-pointer select-none" onDoubleClick={() => openEditModal(item)} title="Double-click to modify this PO">
+          <div className="p-0 select-none">
             <div className="flex items-center justify-between gap-2 px-3 py-2">
               <span className="truncate text-gray-900">{item.piNo || '-'}</span>
-              <span className="shrink-0 text-blue-600"><IconPen /></span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); openAddChallanModal(item.piNo); }} 
+                  className="p-1.5 rounded text-indigo-600 hover:bg-indigo-50 transition-colors" 
+                  title="Add Challan for this PI"
+                >
+                  <IconFilePlus />
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); openEditPOModal(item); }} 
+                  className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors" 
+                  title="Modify PO"
+                >
+                  <IconPen />
+                </button>
+              </div>
             </div>
           </div>
         </td>
@@ -850,7 +969,18 @@ const PurchaseOrderStatus = () => {
       <CustomConfirmModal isOpen={deleteConfirm.isOpen} message="Are you sure you want to remove this newly added row? This action cannot be undone." onConfirm={confirmDelete} onCancel={() => setDeleteConfirm({ isOpen: false, id: null })} />
 
       {poModal && (
-        <PORecordModal key={`${poModal.mode}-${poModal.record.id}`} mode={poModal.mode} initial={poModal.record} onSave={handleModalSave} onClose={() => setPoModal(null)} />
+        <PORecordModal key={`${poModal.mode}-${poModal.record.id}`} mode={poModal.mode} initial={poModal.record} onSave={handlePOModalSave} onClose={() => setPoModal(null)} />
+      )}
+
+      {challanModal && (
+        <ChallanRecordModal
+          key={`${challanModal.mode}-${challanModal.record.id}`}
+          mode={challanModal.mode}
+          initial={challanModal.record}
+          onSave={handleChallanModalSave}
+          onClose={closeChallanModal}
+          piNo={piNo}
+        />
       )}
 
       <div className="mb-6">
@@ -884,7 +1014,9 @@ const PurchaseOrderStatus = () => {
           {searchInput.length > 0 && (
             <button onClick={handleClear} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition-colors border border-gray-300 flex items-center gap-1.5"><IconX /> Clear</button>
           )}
-          <button onClick={openAddModal} className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"><IconPlus /> Add PO</button>
+          <button onClick={openAddPOModal} className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"><IconPlus /> Add PO</button>
+          <button onClick={() => openAddChallanModal(null)} className="px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors flex items-center gap-1.5"><IconFilePlus /> Add Challan</button>
+          
           {isDirty && (
             <button onClick={handleSave} className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5 animate-pulse"><IconSave /> Save & Submit</button>
           )}
@@ -940,12 +1072,9 @@ const PurchaseOrderStatus = () => {
                     <tr key={item.id} className={`group ${stripe} hover:bg-yellow-50 transition-colors`}>
                       {ALL_COLS.map((col, i) => {
                         const isPiLevel = PI_LEVEL_KEYS.includes(col.key);
-                        
-                        // Skip rendering PI-level cells for rows after the first in the group
                         if (isPiLevel && !isFirstInGroup) {
                           return null;
                         }
-
                         return renderBodyCell(col, i, item, stripe, isFirstInGroup && isPiLevel ? rowSpan : 1);
                       })}
                     </tr>

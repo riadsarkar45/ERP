@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChallanRecordModal } from './SpinningDeliveryModal';
 import { useFetchData } from '../../../hooks/fetch';
 
 /* ----------------------------- Icons ----------------------------- */
@@ -28,12 +27,6 @@ const IconCheck = () => (
   </svg>
 );
 
-const IconPlus = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-    <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-  </svg>
-);
-
 const IconSave = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
     <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
@@ -44,13 +37,6 @@ const IconSave = () => (
 const IconX = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
     <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-  </svg>
-);
-
-const IconPen = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-    <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -69,8 +55,7 @@ const COLUMNS = [
 ];
 
 const NUMERIC_COLUMNS = COLUMNS.filter((c) => c.numeric).map((c) => c.key);
-const LABEL_COL_SPAN = COLUMNS.findIndex((c) => c.numeric); 
-const PI_LEVEL_KEYS = ['date', 'challan', 'piNo', 'lcNo', 'supplierName', 'remarks'];
+const LABEL_COL_SPAN = COLUMNS.findIndex((c) => c.numeric);
 
 /* ----------------------------- Frozen (sticky) columns ----------------------------- */
 const FROZEN_THROUGH_KEY = 'supplierName';
@@ -102,40 +87,57 @@ const fmtDate = (iso) => {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-/* ----------------------------- Flatten Nested API Data ----------------------------- */
+// Returns the first non-empty value, as a trimmed string.
+const pick = (...vals) => {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+};
+
+/* ----------------------------- Flatten API Data ----------------------------- */
 const flattenApiData = (apiData) => {
   if (!Array.isArray(apiData)) return [];
-  
-  return apiData.flatMap(pi => {
-    const baseRow = {
-      piId: pi.id,
-      date: pi.piDate || '',
-      challan: pi.challan || pi.poNo || '',
-      piNo: pi.piNo || '',
-      lcNo: pi.lcNo || '',
-      supplierName: pi.supplierName || '',
-      remarks: pi.remarks || '',
-    };
 
-    if (pi.items && pi.items.length > 0) {
-      return pi.items.map(item => ({
-        id: item.id,
-        ...baseRow,
-        yarnCount: item.yarnCount || '',
-        yarnComposition: item.composition || '', // Maps API 'composition' to table 'yarnComposition'
-        yarnReceived: item.yarnReceived || 0,
-        yarnReturned: item.yarnReturned || 0,
-      }));
+  return apiData.map((movement, index) => {
+    const item = movement.yarnPoItems || {};
+
+    // PI / LC / Supplier live under yarnPoItems.yarnPo — a few fallbacks in case the backend shape changes
+    const po = item.yarnPo || item.yarnPO || item.po || movement.yarnPo || movement.po || {};
+
+    const comp = item.composition;
+    let compositionId = item.compositionId || null;
+    let yarnComposition = '';
+    if (typeof comp === 'object' && comp !== null) {
+      compositionId = comp.id || compositionId;
+      yarnComposition = comp.name || comp.composition || '';
     } else {
-      return [{
-        id: pi.id,
-        ...baseRow,
-        yarnCount: '',
-        yarnComposition: '',
-        yarnReceived: 0,
-        yarnReturned: 0,
-      }];
+      yarnComposition = comp || '';
     }
+
+    const movementQty = Number(movement.movementQty) || 0;
+    const isReceived = movement.movementType === 'Received From Spinning';
+    const isReturned = movement.movementType === 'Return To Spinning';
+
+    return {
+      // API sends no movement id, and the same challanNo can repeat, so build a unique key
+      id: movement.id ?? `mov-${movement.challanNo ?? 'x'}-${movement.createdAt ?? ''}-${index}`,
+      movementId: movement.id,
+      date: movement.movementDate || '',
+      challan: String(movement.challanNo ?? ''),
+
+      piNo: pick(po.piNo, item.piNo, movement.piNo),
+      lcNo: pick(po.lcNo, item.lcNo, movement.lcNo),
+      supplierName: pick(po.supplierName, item.supplierName, movement.supplierName),
+      remarks: pick(po.remarks, item.remarks, movement.remarks),
+
+      yarnCount: item.yarnCount || '',
+      yarnComposition,
+      compositionId,
+      yarnReceived: isReceived ? movementQty : 0,
+      yarnReturned: isReturned ? movementQty : 0,
+      movementType: movement.movementType || '',
+    };
   });
 };
 
@@ -204,7 +206,7 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
                   <span className={`w-3.5 h-3.5 border border-gray-400 rounded-sm flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}>
                     {checked && <IconCheck />}
                   </span>
-                  <span className="truncate">{v}</span>
+                  <span className="truncate">{v === '' ? '(Blank)' : v}</span>
                 </label>
               );
             })}
@@ -222,7 +224,6 @@ function FilterPopover({ values, activeSet, anchorRect, onApply, onClose }) {
 
 /* ----------------------------- Main Component ----------------------------- */
 const MovementSpinning = () => {
-  // Strictly API-driven state. No static data or localStorage.
   const [committedData, setCommittedData] = useState([]);
   const [draftData, setDraftData] = useState([]);
   const [isDirty, setIsDirty] = useState(false);
@@ -231,27 +232,26 @@ const MovementSpinning = () => {
   const [openFilterCol, setOpenFilterCol] = useState(null);
   const [filterAnchorRect, setFilterAnchorRect] = useState(null);
   const tableScrollRef = useRef(null);
-  const { fetchData, error, loading } = useFetchData();
-  const [piNo, setPiNo] = useState(null);
-  const [challanModal, setChallanModal] = useState(null);
+  const { fetchData, loading } = useFetchData();
 
   const closeFilter = () => { setOpenFilterCol(null); setFilterAnchorRect(null); };
 
-  /* ---------- Fetch Real Data on Mount ---------- */
   useEffect(() => {
-    fetchData('/api/yarn-purchase-data')
+    fetchData('/api/spinning-movement-challan')
       .then((res) => {
         const dataArray = res?.data ? res.data : res;
+        if (Array.isArray(dataArray) && dataArray.length) {
+          console.log('First movement row from API:', dataArray[0]); // shows where piNo / lcNo / supplierName really are
+        }
         const flattened = flattenApiData(dataArray);
         setCommittedData(flattened);
         setDraftData(flattened);
       })
       .catch((err) => {
-        console.error('Error fetching yarn purchase data:', err);
+        console.error('Error fetching spinning movement data:', err);
       });
   }, [fetchData]);
 
-  /* ---------- Unique values per column (for the filter popover) ---------- */
   const uniqueValues = useMemo(() => {
     const map = {};
     COLUMNS.forEach((col) => {
@@ -263,37 +263,19 @@ const MovementSpinning = () => {
 
   const hasActiveFilter = searchInput.trim() !== '' || Object.keys(filters).length > 0;
 
-  /* ---------- Filtered Data (MUST BE BEFORE groupedData) ---------- */
   const filteredData = useMemo(() => {
     let result = [...draftData];
-
     if (searchInput.trim()) {
       const q = searchInput.trim().toLowerCase();
-      result = result.filter((row) =>
-        COLUMNS.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q))
-      );
+      result = result.filter((row) => COLUMNS.some((col) => String(row[col.key] ?? '').toLowerCase().includes(q)));
     }
-
     Object.entries(filters).forEach(([colKey, allowed]) => {
       if (allowed) {
         result = result.filter((row) => allowed.has(String(row[colKey] ?? '')));
       }
     });
-
     return result;
   }, [draftData, searchInput, filters]);
-
-  /* ---------- Group data by PI No. for rowSpan rendering ---------- */
-  const groupedData = useMemo(() => {
-    const groups = new Map();
-    filteredData.forEach(item => {
-      if (!groups.has(item.piNo)) {
-        groups.set(item.piNo, []);
-      }
-      groups.get(item.piNo).push(item);
-    });
-    return Array.from(groups.values());
-  }, [filteredData]);
 
   const grandTotals = useMemo(() => {
     const totals = {};
@@ -311,7 +293,6 @@ const MovementSpinning = () => {
     return totals;
   }, [filteredData]);
 
-  /* ---------- Filter handlers ---------- */
   const applyFilter = (colKey, set) => {
     setFilters((prev) => {
       const next = { ...prev };
@@ -324,47 +305,6 @@ const MovementSpinning = () => {
 
   const handleClear = () => { setSearchInput(''); setFilters({}); };
 
-  /* ---------- Add / Modify Challan modal handlers ---------- */
-  const openAddModal = (piNo) => {
-    setPiNo(piNo);
-    closeFilter();
-    setChallanModal({ 
-      mode: 'add', 
-      record: { 
-        id: Date.now(), 
-        date: new Date().toISOString().split('T')[0], 
-        challan: '', piNo: piNo, lcNo: '', supplierName: '', 
-        yarnCount: '', yarnComposition: '', yarnReceived: 0, yarnReturned: 0, remarks: '' 
-      } 
-    });
-  };
-
-  const openEditModal = (item) => {
-    closeFilter();
-    setChallanModal({ mode: 'edit', record: { ...item } });
-  };
-
-  const closeChallanModal = () => setChallanModal(null);
-
-  const handleModalSave = (data) => {
-    if (challanModal.mode === 'add') {
-      setSearchInput('');
-      setFilters({});
-      setDraftData((prev) => {
-        const maxId = prev.reduce((max, row) => Math.max(max, row.id || 0), 0);
-        return [{ ...data, id: maxId + 1 }, ...prev];
-      });
-      setTimeout(() => {
-        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
-      }, 0);
-    } else {
-      setDraftData((prev) => prev.map((row) => (row.id === data.id ? { ...row, ...data } : row)));
-    }
-    setIsDirty(true);
-    setChallanModal(null);
-  };
-
-  /* ---------- Page-level Save / Discard ---------- */
   const handleSave = () => {
     setCommittedData(draftData);
     setIsDirty(false);
@@ -375,7 +315,12 @@ const MovementSpinning = () => {
     setIsDirty(false);
   };
 
-  /* ---------- Footer row (frozen label cell + totals) ---------- */
+  const renderCellValue = (col, row) => {
+    if (col.key === 'date') return fmtDate(row.date);
+    if (col.numeric) return formatTotal(parseNumeric(row[col.key]));
+    return row[col.key] || '-';
+  };
+
   const renderFooterRow = (label, totals, bottom, numericBg) => (
     <tr>
       <td
@@ -421,17 +366,6 @@ const MovementSpinning = () => {
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen font-sans">
-      {challanModal && (
-        <ChallanRecordModal
-          key={`${challanModal.mode}-${challanModal.record.id}`}
-          mode={challanModal.mode}
-          initial={challanModal.record}
-          onSave={handleModalSave}
-          onClose={closeChallanModal}
-          piNo={piNo}
-        />
-      )}
-
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
           <span className="w-1 h-4 bg-blue-600 rounded-full"></span> Quick Summary
@@ -466,14 +400,6 @@ const MovementSpinning = () => {
               <IconX /> Clear
             </button>
           )}
-
-          <button
-            onClick={openAddModal}
-            title="Add a new challan"
-            className="px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
-          >
-            <IconPlus /> Add Challan
-          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -484,14 +410,12 @@ const MovementSpinning = () => {
               </span>
               <button
                 onClick={handleDiscard}
-                title="Discard all unsaved changes"
                 className="px-3 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-100 transition-colors flex items-center gap-1.5"
               >
                 <IconX /> Discard
               </button>
               <button
                 onClick={handleSave}
-                title="Save all changes"
                 className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5 animate-pulse"
               >
                 <IconSave /> Save
@@ -557,54 +481,28 @@ const MovementSpinning = () => {
             </thead>
 
             <tbody>
-              {groupedData.length > 0 ? groupedData.map((group, groupIndex) => {
-                const stripe = groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-                return group.map((row, rowIndex) => {
-                  const isFirstInGroup = rowIndex === 0;
-                  const rowSpan = group.length;
+              {filteredData.length > 0 ? filteredData.map((row, rowIndex) => {
+                const stripe = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                return (
+                  <tr key={row.id} className={`group ${stripe} hover:bg-yellow-50 transition-colors`}>
+                    {COLUMNS.map((col, i) => {
+                      const frozen = isFrozen(i);
+                      const cellClass = `p-0 border-b border-r border-gray-300 ${frozen ? `sticky z-10 ${stripe} group-hover:bg-yellow-50` : ''} ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''}`;
 
-                  return (
-                    <tr key={row.id} className={`group ${stripe} hover:bg-yellow-50 transition-colors`}>
-                      {COLUMNS.map((col, i) => {
-                        const frozen = isFrozen(i);
-                        const isPiLevel = PI_LEVEL_KEYS.includes(col.key);
-                        
-                        if (isPiLevel && !isFirstInGroup) {
-                          return null;
-                        }
-
-                        const isPiNo = col.key === 'piNo';
-                        const cellClass = `p-0 border-b border-r border-gray-300 ${frozen ? `sticky z-10 ${stripe} group-hover:bg-yellow-50` : ''
-                          } ${isLastFrozen(i) ? FROZEN_EDGE_SHADOW : ''} ${isPiNo ? 'cursor-pointer select-none' : ''}`;
-                        
-                        const alignAttr = isPiLevel && rowSpan > 1 ? { className: `${cellClass} align-middle` } : { className: cellClass };
-                        const rowSpanAttr = (isPiLevel && rowSpan > 1) ? { rowSpan } : {};
-
-                        return (
-                          <td
-                            key={col.key}
-                            {...alignAttr}
-                            style={frozen ? { left: LEFT_OFFSETS[i] } : undefined}
-                            {...rowSpanAttr}
-                            onDoubleClick={isPiNo ? () => openEditModal(row) : undefined}
-                            title={isPiNo ? 'Double-click to modify this challan' : undefined}
-                          >
-                            {isPiNo ? (
-                              <div className="flex items-center justify-between gap-2 px-3 py-2">
-                                <span className="truncate text-gray-900">{row.piNo || '-'}</span>
-                                <span onClick={() => openAddModal(row.piNo)} className="shrink-0 text-blue-600"><IconPen /></span>
-                              </div>
-                            ) : (
-                              <span className={`block px-3 py-2 text-gray-900 ${col.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
-                                {col.key === 'date' ? fmtDate(row[col.key]) : (row[col.key] || '-')}
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                });
+                      return (
+                        <td
+                          key={col.key}
+                          className={cellClass}
+                          style={frozen ? { left: LEFT_OFFSETS[i] } : undefined}
+                        >
+                          <span className={`block px-3 py-2 text-gray-900 ${col.numeric ? 'text-right font-mono tabular-nums' : 'truncate'}`}>
+                            {renderCellValue(col, row)}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
               }) : (
                 <tr>
                   <td colSpan={COLUMNS.length} className="px-6 py-12 text-center text-gray-500 italic bg-white">
