@@ -163,11 +163,18 @@ const getMonthKey = (dateVal) => {
     return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.slice(0, 7) : "";
 };
 
-// "2026-01" -> "Jan 2026"
+// "2026-01" -> "Jan 2026"  (used by the on-screen month dropdown)
 const formatMonthLabel = (key) => {
     if (!key || !/^\d{4}-\d{2}$/.test(key)) return key;
     const [y, m] = key.split('-');
     return `${MONTH_SHORT[Number(m) - 1]} ${y}`;
+};
+
+// "2026-01" -> "Jan'26"  (used by the Excel export)
+const formatMonthShort = (key) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(key)) return key || "";
+    const [y, m] = key.split('-');
+    return `${MONTH_SHORT[Number(m) - 1]}'${y.slice(-2)}`;
 };
 // ===== END DATE HELPERS =====
 
@@ -204,6 +211,138 @@ const parseDeliveryMonth = (raw) => {
     };
 };
 // ===== END DELIVERY MONTH PARSING =====
+
+// ===== EXCEL EXPORT CONFIG =====
+// The dyeing factory (party) a row belongs to.
+//  - Grey Delivery : grey fabric goes OUT to the dyeing factory -> party = toFactory
+//  - Grey Return / Grey Receive / Finish Receive : goods come BACK from the dyeing factory -> party = fromFactory
+// This way delivery + return + receive of the same factory always land in ONE sheet.
+const getPartyFactory = (row) => {
+    const to = String(row.toFactory || '').trim();
+    const from = String(row.fromFactory || '').trim();
+    const isDelivery = Number(row.greyDelivery) > 0;
+    const isBack = Number(row.greyReturn) > 0 || Number(row.greyReceive) > 0 || Number(row.finishReceive) > 0;
+    let party;
+    if (isDelivery && !isBack) party = to || from;
+    else if (isBack && !isDelivery) party = from || to;
+    else party = to || from; // mixed / no qty
+    return party || 'Unknown';
+};
+// Same factory typed with different spacing/casing is treated as one factory
+const factoryKey = (name) => String(name || 'Unknown').replace(/\s+/g, ' ').trim().toLowerCase();
+
+const XL_NUM_FMT = '#,##0.00;-#,##0.00;"-"';
+const XL_INT_FMT = '#,##0;-#,##0;"-"';
+const XL_PCT_FMT = '0.00"%";-0.00"%";"-"';
+
+const EXPORT_COLUMNS = [
+    { header: 'Date', key: 'challanDate', width: 13, type: 'date' },
+    { header: "Month'Year", key: 'monthLabel', width: 12, type: 'text' },
+    { header: 'Challan No', key: 'challanNo', width: 14, type: 'text' },
+    { header: 'Job No', key: 'jobNo', width: 18, type: 'text' },
+    { header: 'Composition', key: 'composition', width: 34, type: 'text' },
+    { header: 'Color', key: 'color', width: 22, type: 'text' },
+    { header: 'From Factory', key: 'fromFactory', width: 22, type: 'text' },
+    { header: 'To Factory', key: 'toFactory', width: 22, type: 'text' },
+    { header: 'Grey Delivery', key: 'greyDelivery', width: 15, type: 'number' },
+    { header: 'Grey Return', key: 'greyReturn', width: 15, type: 'number' },
+    { header: 'Grey Received', key: 'greyReceive', width: 16, type: 'number' },
+    { header: 'Finish Received', key: 'finishReceive', width: 16, type: 'number' },
+    { header: 'Process Loss %', key: 'processLoss', width: 15, type: 'number', fmt: XL_PCT_FMT },
+    { header: 'Price/KG', key: 'unitePrice', width: 12, type: 'number' },
+    { header: 'Billing', key: 'billingAmount', width: 16, type: 'number' },
+];
+// Columns that are summed in TOTAL rows (Process Loss % is recalculated from the sums)
+const EXPORT_TOTAL_KEYS = ['greyDelivery', 'greyReturn', 'greyReceive', 'finishReceive', 'billingAmount'];
+
+const SUMMARY_COLUMNS = [
+    { header: 'Factory', type: 'text', width: 36 },
+    { header: 'Challans', key: 'challans', type: 'number', fmt: XL_INT_FMT, width: 12 },
+    { header: 'Grey Delivery', key: 'greyDelivery', type: 'number', width: 16 },
+    { header: 'Grey Return', key: 'greyReturn', type: 'number', width: 16 },
+    { header: 'Grey Received', key: 'greyReceive', type: 'number', width: 16 },
+    { header: 'Finish Received', key: 'finishReceive', type: 'number', width: 16 },
+    { header: 'Process Loss %', key: 'processLoss', type: 'number', fmt: XL_PCT_FMT, width: 16 },
+    { header: 'Billing', key: 'billingAmount', type: 'number', width: 18 },
+];
+
+const calcProcessLoss = (receive, finish) => (receive > 0 ? ((receive - finish) / receive) * 100 : 0);
+
+const XL = {
+    title: 'FF1E293B',
+    header: 'FF657582',
+    zebra: 'FFF8FAFC',
+    total: 'FFF5D8C9',
+    line: 'FFCBD5E1',
+    white: 'FFFFFFFF',
+    text: 'FF0F172A',
+};
+const xlThin = { style: 'thin', color: { argb: XL.line } };
+const xlBorder = { top: xlThin, left: xlThin, bottom: xlThin, right: xlThin };
+const xlFill = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+
+// Excel sheet names: max 31 chars, no \ / ? * [ ] :, must be unique (case-insensitive)
+const makeSheetName = (name, used) => {
+    const base = String(name || 'Unknown').replace(/[\\/?*[\]:]/g, '-').replace(/^'+|'+$/g, '').trim().slice(0, 31) || 'Unknown';
+    let finalName = base;
+    let i = 2;
+    while (used.has(finalName.toLowerCase())) {
+        const suffix = ` (${i++})`;
+        finalName = base.slice(0, 31 - suffix.length) + suffix;
+    }
+    used.add(finalName.toLowerCase());
+    return finalName;
+};
+
+const addTitleRow = (ws, text, colCount) => {
+    ws.mergeCells(1, 1, 1, colCount);
+    const cell = ws.getCell(1, 1);
+    cell.value = text;
+    cell.font = { bold: true, size: 14, color: { argb: XL.white }, name: 'Calibri' };
+    cell.fill = xlFill(XL.title);
+    cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    ws.getRow(1).height = 30;
+    ws.getRow(2).height = 6;
+};
+
+const addHeaderRow = (ws, cols) => {
+    const row = ws.getRow(3);
+    cols.forEach((c, i) => {
+        const cell = row.getCell(i + 1);
+        cell.value = c.header;
+        cell.font = { bold: true, size: 11, color: { argb: XL.white }, name: 'Calibri' };
+        cell.fill = xlFill(XL.header);
+        cell.border = xlBorder;
+        cell.alignment = { vertical: 'middle', horizontal: c.type === 'number' ? 'right' : 'center', wrapText: true };
+    });
+    row.height = 26;
+};
+
+const styleBodyRow = (row, idx, cols) => {
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const col = cols[colNumber - 1] || {};
+        const isNum = col.type === 'number';
+        cell.border = xlBorder;
+        cell.font = { size: 10, color: { argb: XL.text }, name: 'Calibri' };
+        cell.alignment = { vertical: 'middle', horizontal: isNum ? 'right' : 'left', wrapText: !isNum };
+        if (isNum) cell.numFmt = col.fmt || XL_NUM_FMT;
+        if (idx % 2 === 1) cell.fill = xlFill(XL.zebra);
+    });
+};
+
+const styleTotalRow = (row, cols) => {
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const col = cols[colNumber - 1] || {};
+        const isNum = col.type === 'number';
+        cell.font = { bold: true, size: 11, color: { argb: XL.text }, name: 'Calibri' };
+        cell.fill = xlFill(XL.total);
+        cell.border = { top: { style: 'medium', color: { argb: XL.title } }, left: xlThin, right: xlThin, bottom: xlThin };
+        cell.alignment = { vertical: 'middle', horizontal: isNum ? 'right' : 'left' };
+        if (isNum) cell.numFmt = col.fmt || XL_NUM_FMT;
+    });
+    row.height = 24;
+};
+// ===== END EXCEL EXPORT CONFIG =====
 
 // Dropdown width used for portal positioning
 const FILTER_DROPDOWN_WIDTH = 270;
@@ -246,6 +385,7 @@ const Dyeing = () => {
     const [hoveredRow, setHoveredRow] = useState(null);
 
     const [isBillGenerating, setIsBillGenerating] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [isChallanEditing, setIsChallanEditing] = useState(false);
     const [challanToEditData, setChallanToEditData] = useState({});
     const [isChallanDataLoading, setIsChallanDataLoading] = useState(false);
@@ -451,7 +591,7 @@ const Dyeing = () => {
 
         return order.map((key) => {
             const row = rowMap.get(key);
-            const processLoss = row.greyReceive > 0 ? ((row.greyReceive - row.finishReceive) / row.greyReceive) * 100 : 0;
+            const processLoss = calcProcessLoss(row.greyReceive, row.finishReceive);
             return { ...row, billingAmount: row.greyReceive * row.unitePrice, processLoss };
         });
     }, [movements]);
@@ -556,7 +696,7 @@ const Dyeing = () => {
             t.finishReceive += Number(row.finishReceive) || 0;
             t.billingAmount += Number(row.billingAmount) || 0;
         });
-        t.processLoss = t.greyReceive > 0 ? ((t.greyReceive - t.finishReceive) / t.greyReceive) * 100 : 0;
+        t.processLoss = calcProcessLoss(t.greyReceive, t.finishReceive);
         return t;
     }, [filteredRows]);
 
@@ -724,33 +864,154 @@ const Dyeing = () => {
         finally { setSearchLoading(false); }
     };
 
-    const handleExport = () => {
+    // ===== EXCEL EXPORT: one sheet per dyeing factory + Summary sheet =====
+    const handleExport = async () => {
         if (filteredRows.length === 0) { alert("No data to export."); return; }
-        const headers = tableHeader.filter(h => h.key !== 'select').map(h => h.header);
-        const rows = filteredRows.map(row => {
-            return tableHeader.filter(h => h.key !== 'select').map(h => {
-                let val = row[h.key];
-                if (h.key === 'challanDate' && val) {
-                    val = formatShortDate(val);
-                }
-                if (val === null || val === undefined) return "";
-                let str = String(val);
-                if (str.includes('"')) str = '"' + str.replace(/"/g, '""') + '"';
-                else if (str.includes(',') || str.includes('\n')) str = '"' + str + '"';
-                return str;
+        setIsExporting(true);
+        try {
+            const mod = await import('exceljs');
+            const ExcelJS = mod.default || mod;
+
+            // Period text (Month'Year) for titles & file name
+            const sortedMonthKeys = [...selectedMonths].sort();
+            const deliveryShort = appliedMonthNames.map((n) => n.charAt(0).toUpperCase() + n.slice(1, 3));
+            const periodLabel = sortedMonthKeys.length > 0
+                ? sortedMonthKeys.map(formatMonthShort).join(', ')
+                : (deliveryShort.length > 0 ? `Delivery: ${deliveryShort.join(', ')}` : 'All Months');
+            const filePeriod = sortedMonthKeys.length > 0
+                ? sortedMonthKeys.map(formatMonthShort).join('_').replace(/'/g, '-')
+                : (deliveryShort.length > 0 ? deliveryShort.join('_') : 'AllMonths');
+
+            // Prepare rows (sorted by job, then date, then challan)
+            const exportRows = filteredRows
+                .map((r) => ({
+                    ...r,
+                    monthLabel: formatMonthShort(getMonthKey(r.challanDate)),
+                }))
+                .sort((a, b) => {
+                    const ja = String(a.jobNo ?? '');
+                    const jb = String(b.jobNo ?? '');
+                    if (ja !== jb) return ja.localeCompare(jb, undefined, { numeric: true });
+                    const da = normalizeDate(a.challanDate);
+                    const db = normalizeDate(b.challanDate);
+                    if (da !== db) return da < db ? -1 : 1;
+                    return String(a.challanNo).localeCompare(String(b.challanNo), undefined, { numeric: true });
+                });
+
+            // Group by factory: delivery / return / receive of the same factory => ONE sheet
+            const groups = new Map(); // key -> { name, rows }
+            exportRows.forEach((r) => {
+                const name = getPartyFactory(r);
+                const key = factoryKey(name);
+                if (!groups.has(key)) groups.set(key, { name, rows: [] });
+                groups.get(key).rows.push(r);
             });
-        });
-        const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `Dyeing_Report_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+            const factories = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+            const wb = new ExcelJS.Workbook();
+            wb.creator = 'Garments ERP';
+            wb.created = new Date();
+
+            const colCount = EXPORT_COLUMNS.length;
+
+            // Summary sheet is created first so it is the first tab
+            const summaryWs = wb.addWorksheet('Summary', { views: [{ state: 'frozen', ySplit: 3, showGridLines: false }] });
+            const usedNames = new Set(['summary']);
+            const summaryData = [];
+
+            factories.forEach(({ name: factory, rows }) => {
+                const ws = wb.addWorksheet(makeSheetName(factory, usedNames), {
+                    views: [{ state: 'frozen', ySplit: 3, showGridLines: false }],
+                });
+
+                addTitleRow(ws, `${factory}  |  Dyeing Delivery & Received  |  ${periodLabel}`, colCount);
+                addHeaderRow(ws, EXPORT_COLUMNS);
+
+                const sums = {};
+                EXPORT_TOTAL_KEYS.forEach((k) => { sums[k] = 0; });
+
+                rows.forEach((r, idx) => {
+                    const values = EXPORT_COLUMNS.map((c) => {
+                        const v = r[c.key];
+                        if (c.type === 'date') return v ? formatShortDate(v) : '';
+                        if (c.type === 'number') {
+                            const n = Number(v) || 0;
+                            if (EXPORT_TOTAL_KEYS.includes(c.key)) sums[c.key] += n;
+                            return n;
+                        }
+                        if (v === null || v === undefined || v === '-') return '';
+                        return v;
+                    });
+                    const row = ws.addRow(values);
+                    styleBodyRow(row, idx, EXPORT_COLUMNS);
+                });
+
+                const factoryLoss = calcProcessLoss(sums.greyReceive, sums.finishReceive);
+                const totalValues = EXPORT_COLUMNS.map((c, i) => {
+                    if (i === 0) return 'TOTAL';
+                    if (c.key === 'processLoss') return factoryLoss;
+                    if (EXPORT_TOTAL_KEYS.includes(c.key)) return sums[c.key];
+                    return '';
+                });
+                styleTotalRow(ws.addRow(totalValues), EXPORT_COLUMNS);
+
+                EXPORT_COLUMNS.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+                ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: colCount } };
+                ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+
+                summaryData.push({
+                    factory,
+                    challans: new Set(rows.map((r) => String(r.challanNo))).size,
+                    processLoss: factoryLoss,
+                    ...sums,
+                });
+            });
+
+            // ----- Summary sheet -----
+            addTitleRow(summaryWs, `Factory Wise Summary  |  Dyeing  |  ${periodLabel}`, SUMMARY_COLUMNS.length);
+            addHeaderRow(summaryWs, SUMMARY_COLUMNS);
+
+            const grand = { challans: 0, greyDelivery: 0, greyReturn: 0, greyReceive: 0, finishReceive: 0, billingAmount: 0 };
+            summaryData.forEach((s, idx) => {
+                Object.keys(grand).forEach((k) => { grand[k] += Number(s[k]) || 0; });
+                const row = summaryWs.addRow(
+                    SUMMARY_COLUMNS.map((c, i) => (i === 0 ? s.factory : Number(s[c.key]) || 0))
+                );
+                styleBodyRow(row, idx, SUMMARY_COLUMNS);
+            });
+            const grandLoss = calcProcessLoss(grand.greyReceive, grand.finishReceive);
+            const grandRow = summaryWs.addRow(
+                SUMMARY_COLUMNS.map((c, i) => {
+                    if (i === 0) return 'GRAND TOTAL';
+                    if (c.key === 'processLoss') return grandLoss;
+                    return grand[c.key];
+                })
+            );
+            styleTotalRow(grandRow, SUMMARY_COLUMNS);
+
+            SUMMARY_COLUMNS.forEach((c, i) => { summaryWs.getColumn(i + 1).width = c.width; });
+
+            // ----- Download .xlsx -----
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Dyeing_Report_${filePeriod}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Excel export failed:', err);
+            alert('Failed to export Excel file. Please try again.');
+        } finally {
+            setIsExporting(false);
+        }
     };
+    // ===== END EXCEL EXPORT =====
 
     const hasActiveFilters =
         Object.keys(filters || {}).length > 0 ||
@@ -1351,11 +1612,17 @@ const Dyeing = () => {
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         background: theme.colors.white, color: theme.colors.textMain,
                         padding: "10px 20px", borderRadius: theme.radius,
-                        border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit'
+                        border: `1px solid ${theme.colors.border}`,
+                        cursor: isExporting ? "not-allowed" : "pointer",
+                        opacity: isExporting ? 0.7 : 1,
+                        fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit'
                     }}
                     onClick={handleExport}
+                    disabled={isExporting}
+                    title="Export factory-wise Excel (one sheet per factory)"
                 >
-                    <Download size={16} /> Export CSV
+                    {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
+                    {isExporting ? "Exporting..." : "Export Excel"}
                 </button>
             </div>
 
