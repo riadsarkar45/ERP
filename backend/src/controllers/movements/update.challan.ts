@@ -7,6 +7,8 @@ interface DeliveryEdit {
   deliveryQty: number | string;
   fromFactory?: string | null;
   toFactory?: string | null;
+  deliveryMonth?: string | null;
+  deliveryDate?: Date | string | null;
 }
 
 // Number("") is 0, so blanks must be rejected explicitly
@@ -45,6 +47,8 @@ export const editChallan = async (req: Request, res: Response) => {
           data: {
             challanNo: Number(i.challanNo),
             deliveryQty: Number(i.deliveryQty),
+            ...(i.deliveryMonth != null ? { deliveryMonth: i.deliveryMonth } : {}),
+            ...(i.deliveryDate != null ? { deliveryDate: i.deliveryDate } : {}),
             // blank factory = leave unchanged
             ...(from ? { fromFactory: from } : {}),
             ...(to ? { toFactory: to } : {}),

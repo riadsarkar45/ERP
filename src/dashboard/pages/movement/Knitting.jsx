@@ -955,6 +955,7 @@ const Knitting = () => {
         setIsChallanEditing(true);
         try {
             const res = await axiosPrivate.get(`/api/detail-challan-view/knittingOrder/${challanNo}/${jobNo}`);
+            console.log(res.data, "challan movement data");
             setChallanToEditData(res.data);
         } catch (error) {
             console.error("Error preparing challan edit:", error);

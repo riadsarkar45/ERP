@@ -17,7 +17,7 @@ import {
 import useAxiosPrivate from '../../../../hooks/UseAxiosPrivate';
 
 // Fields the user can edit. A delivery counts as "edited" only if one of these differs from the original.
-const EDITABLE_FIELDS = ['challanNo', 'deliveryQty', 'fromFactory', 'toFactory'];
+const EDITABLE_FIELDS = ['challanNo', 'deliveryQty', 'fromFactory', 'toFactory', 'deliveryMonth', 'deliveryDate'];
 
 // How long the success message stays visible before the modal closes
 const CLOSE_DELAY_MS = 1200;
@@ -116,6 +116,8 @@ const ChallanEditModal = ({
         for (const d of changedDeliveries) {
             const challanNo = Number(d.challanNo);
             const deliveryQty = Number(d.deliveryQty);
+            const deliveryMonth = d.deliveryMonth
+            const deliveryDate = d.deliveryDate;
 
             if (String(d.challanNo ?? '').trim() === '' || Number.isNaN(challanNo)) {
                 setFormError('Enter a valid challan number for every edited delivery.');
@@ -130,6 +132,8 @@ const ChallanEditModal = ({
                 id: d.id,
                 challanNo,
                 deliveryQty,
+                deliveryMonth,
+                deliveryDate,
                 fromFactory: (d.fromFactory ?? '').trim(),
                 toFactory: (d.toFactory ?? '').trim(),
             });
@@ -382,6 +386,40 @@ const ChallanEditModal = ({
                                                             value={dev.toFactory || ''}
                                                             onChange={(e) =>
                                                                 handleDeliveryChange(rowIndex, devIndex, 'toFactory', e.target.value)
+                                                            }
+                                                            placeholder="Destination factory name"
+                                                            className="w-full px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all placeholder:text-slate-400"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {/* delivery dates month created at */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 mb-1">
+                                                            <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                                                            Delivery Date
+                                                        </label>
+                                                        <input
+                                                            type="date"
+                                                            value={dev.deliveryDate ? String(dev.deliveryDate).slice(0, 10) : ''}
+                                                            onChange={(e) =>
+                                                                handleDeliveryChange(rowIndex, devIndex, 'deliveryDate', e.target.value)
+                                                            }
+                                                            placeholder="Source factory name"
+                                                            className="w-full px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all placeholder:text-slate-400"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 mb-1">
+                                                            <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                                                            Delivery Month
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={dev.deliveryMonth || ''}
+                                                            onChange={(e) =>
+                                                                handleDeliveryChange(rowIndex, devIndex, 'deliveryMonth', e.target.value)
                                                             }
                                                             placeholder="Destination factory name"
                                                             className="w-full px-3 py-1.5 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all placeholder:text-slate-400"
