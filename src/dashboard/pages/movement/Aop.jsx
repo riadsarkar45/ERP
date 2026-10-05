@@ -204,6 +204,19 @@ const getFilterDisplay = (key, val) => {
     if (key === 'challanDate' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return formatShortDate(val);
     return val;
 };
+
+// "2026-09" key used for the challan-date month filter + Excel export
+const getMonthKey = (dateVal) => {
+    const day = getDateFilterValue(dateVal);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.slice(0, 7) : "";
+};
+
+// "2026-09" -> "Sep'26"
+const formatMonthLabel = (key) => {
+    if (!key || !/^\d{4}-\d{2}$/.test(key)) return key || "";
+    const [y, m] = key.split('-');
+    return `${MONTH_SHORT[Number(m) - 1]}'${y.slice(-2)}`;
+};
 // ===== END DATE HELPERS =====
 
 // ===== DELIVERY MONTH PARSING =====
@@ -240,6 +253,138 @@ const parseDeliveryMonth = (raw) => {
 };
 // ===== END DELIVERY MONTH PARSING =====
 
+// ===== EXCEL EXPORT CONFIG =====
+// The AOP factory (party) a row belongs to.
+//  - Sent For AOP : goods go OUT to the AOP factory -> party = toFactory
+//  - Return / Receive / Finish Receive : goods come BACK from the AOP factory -> party = fromFactory
+// This way sent + return + receive of the same factory always land in ONE sheet.
+const getPartyFactory = (row) => {
+    const to = String(row.toFactory || '').trim();
+    const from = String(row.fromFactory || '').trim();
+    const isDelivery = Number(row.sentForAop) > 0;
+    const isBack = Number(row.returnFromAop) > 0 || Number(row.receiveFromAop) > 0 || Number(row.finishReceiveFromAop) > 0;
+    let party;
+    if (isDelivery && !isBack) party = to || from;
+    else if (isBack && !isDelivery) party = from || to;
+    else party = to || from; // mixed / no qty
+    return party || 'Unknown';
+};
+// Same factory typed with different spacing/casing is treated as one factory
+const factoryKey = (name) => String(name || 'Unknown').replace(/\s+/g, ' ').trim().toLowerCase();
+
+const XL_NUM_FMT = '#,##0.00;-#,##0.00;"-"';
+const XL_INT_FMT = '#,##0;-#,##0;"-"';
+const XL_PCT_FMT = '0.00"%";-0.00"%";"-"';
+
+const EXPORT_COLUMNS = [
+    { header: 'Date', key: 'challanDate', width: 13, type: 'date' },
+    { header: "Month'Year", key: 'monthLabel', width: 12, type: 'text' },
+    { header: 'Challan No', key: 'challanNo', width: 14, type: 'text' },
+    { header: 'Job No', key: 'jobNo', width: 18, type: 'text' },
+    { header: 'Composition', key: 'composition', width: 34, type: 'text' },
+    { header: 'Color', key: 'color', width: 22, type: 'text' },
+    { header: 'From Factory', key: 'fromFactory', width: 22, type: 'text' },
+    { header: 'To Factory', key: 'toFactory', width: 22, type: 'text' },
+    { header: 'Sent For AOP', key: 'sentForAop', width: 15, type: 'number' },
+    { header: 'Return From AOP', key: 'returnFromAop', width: 17, type: 'number' },
+    { header: 'Receive From AOP', key: 'receiveFromAop', width: 18, type: 'number' },
+    { header: 'Finish Receive', key: 'finishReceiveFromAop', width: 16, type: 'number' },
+    { header: 'Process Loss %', key: 'processLoss', width: 15, type: 'number', fmt: XL_PCT_FMT },
+    { header: 'Price/KG', key: 'unitePrice', width: 12, type: 'number' },
+    { header: 'Billing', key: 'billingAmount', width: 16, type: 'number' },
+];
+// Columns that are summed in TOTAL rows (Process Loss % is recalculated from the sums)
+const EXPORT_TOTAL_KEYS = ['sentForAop', 'returnFromAop', 'receiveFromAop', 'finishReceiveFromAop', 'billingAmount'];
+
+const SUMMARY_COLUMNS = [
+    { header: 'Factory', type: 'text', width: 36 },
+    { header: 'Challans', key: 'challans', type: 'number', fmt: XL_INT_FMT, width: 12 },
+    { header: 'Sent For AOP', key: 'sentForAop', type: 'number', width: 16 },
+    { header: 'Return From AOP', key: 'returnFromAop', type: 'number', width: 18 },
+    { header: 'Receive From AOP', key: 'receiveFromAop', type: 'number', width: 18 },
+    { header: 'Finish Receive', key: 'finishReceiveFromAop', type: 'number', width: 16 },
+    { header: 'Process Loss %', key: 'processLoss', type: 'number', fmt: XL_PCT_FMT, width: 16 },
+    { header: 'Billing', key: 'billingAmount', type: 'number', width: 18 },
+];
+
+const calcProcessLoss = (receive, finish) => (receive > 0 ? ((receive - finish) / receive) * 100 : 0);
+
+const XL = {
+    title: 'FF1E293B',
+    header: 'FF657582',
+    zebra: 'FFF8FAFC',
+    total: 'FFF5D8C9',
+    line: 'FFCBD5E1',
+    white: 'FFFFFFFF',
+    text: 'FF0F172A',
+};
+const xlThin = { style: 'thin', color: { argb: XL.line } };
+const xlBorder = { top: xlThin, left: xlThin, bottom: xlThin, right: xlThin };
+const xlFill = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+
+// Excel sheet names: max 31 chars, no \ / ? * [ ] :, must be unique (case-insensitive)
+const makeSheetName = (name, used) => {
+    const base = String(name || 'Unknown').replace(/[\\/?*[\]:]/g, '-').replace(/^'+|'+$/g, '').trim().slice(0, 31) || 'Unknown';
+    let finalName = base;
+    let i = 2;
+    while (used.has(finalName.toLowerCase())) {
+        const suffix = ` (${i++})`;
+        finalName = base.slice(0, 31 - suffix.length) + suffix;
+    }
+    used.add(finalName.toLowerCase());
+    return finalName;
+};
+
+const addTitleRow = (ws, text, colCount) => {
+    ws.mergeCells(1, 1, 1, colCount);
+    const cell = ws.getCell(1, 1);
+    cell.value = text;
+    cell.font = { bold: true, size: 14, color: { argb: XL.white }, name: 'Calibri' };
+    cell.fill = xlFill(XL.title);
+    cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    ws.getRow(1).height = 30;
+    ws.getRow(2).height = 6;
+};
+
+const addHeaderRow = (ws, cols) => {
+    const row = ws.getRow(3);
+    cols.forEach((c, i) => {
+        const cell = row.getCell(i + 1);
+        cell.value = c.header;
+        cell.font = { bold: true, size: 11, color: { argb: XL.white }, name: 'Calibri' };
+        cell.fill = xlFill(XL.header);
+        cell.border = xlBorder;
+        cell.alignment = { vertical: 'middle', horizontal: c.type === 'number' ? 'right' : 'center', wrapText: true };
+    });
+    row.height = 26;
+};
+
+const styleBodyRow = (row, idx, cols) => {
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const col = cols[colNumber - 1] || {};
+        const isNum = col.type === 'number';
+        cell.border = xlBorder;
+        cell.font = { size: 10, color: { argb: XL.text }, name: 'Calibri' };
+        cell.alignment = { vertical: 'middle', horizontal: isNum ? 'right' : 'left', wrapText: !isNum };
+        if (isNum) cell.numFmt = col.fmt || XL_NUM_FMT;
+        if (idx % 2 === 1) cell.fill = xlFill(XL.zebra);
+    });
+};
+
+const styleTotalRow = (row, cols) => {
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const col = cols[colNumber - 1] || {};
+        const isNum = col.type === 'number';
+        cell.font = { bold: true, size: 11, color: { argb: XL.text }, name: 'Calibri' };
+        cell.fill = xlFill(XL.total);
+        cell.border = { top: { style: 'medium', color: { argb: XL.title } }, left: xlThin, right: xlThin, bottom: xlThin };
+        cell.alignment = { vertical: 'middle', horizontal: isNum ? 'right' : 'left' };
+        if (isNum) cell.numFmt = col.fmt || XL_NUM_FMT;
+    });
+    row.height = 24;
+};
+// ===== END EXCEL EXPORT CONFIG =====
+
 // Dropdown width used for portal positioning
 const FILTER_DROPDOWN_WIDTH = 270;
 
@@ -267,6 +412,13 @@ const Aop = () => {
     const [searchPage, setSearchPage] = useState(1);
     const tableScrollRef = useRef(null);
 
+    // Challan-date month filter (client-side) - labels shown as Month'Year (e.g. Sep'26)
+    const [selectedMonths, setSelectedMonths] = useState(new Set());
+    const [monthDropdownOpen, setMonthDropdownOpen] = useState(false);
+    const [monthDraftSelected, setMonthDraftSelected] = useState(new Set());
+    const [monthSearch, setMonthSearch] = useState("");
+    const monthDropdownRef = useRef(null);
+
     // ===== DELIVERY MONTHS MULTI-SELECT STATES =====
     const [isDeliveryMonthDropdownOpen, setIsDeliveryMonthDropdownOpen] = useState(false);
     // Raw values ticked in the dropdown, e.g. ["August", "September"]
@@ -278,6 +430,7 @@ const Aop = () => {
 
     const [hoveredRow, setHoveredRow] = useState(null);
     const [isBillGenerating, setIsBillGenerating] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [isChallanEditing, setIsChallanEditing] = useState(false);
     const [challanToEditData, setChallanToEditData] = useState({});
     const [isChallanDataLoading, setIsChallanDataLoading] = useState(false);
@@ -361,6 +514,19 @@ const Aop = () => {
             document.removeEventListener("keydown", handleKey);
         };
     }, [openFilterKey]);
+
+    // Challan-date month dropdown: click outside closes it
+    useEffect(() => {
+        if (!monthDropdownOpen) return;
+        const handleClick = (e) => {
+            if (monthDropdownRef.current && !monthDropdownRef.current.contains(e.target)) {
+                setMonthDropdownOpen(false);
+                setMonthSearch("");
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, [monthDropdownOpen]);
 
     // Delivery month dropdown: click outside closes it
     useEffect(() => {
@@ -472,10 +638,31 @@ const Aop = () => {
 
         return order.map((key) => {
             const row = rowMap.get(key);
-            const processLoss = row.receiveFromAop > 0 ? ((row.receiveFromAop - row.finishReceiveFromAop) / row.receiveFromAop) * 100 : 0;
+            const processLoss = calcProcessLoss(row.receiveFromAop, row.finishReceiveFromAop);
             return { ...row, billingAmount: row.receiveFromAop * row.unitePrice, processLoss };
         });
     }, [movements]);
+
+    // Month options for challan-date filter (newest first). Key = "YYYY-MM", label = Month'Year
+    const monthOptions = useMemo(() => {
+        const set = new Set();
+        allRows.forEach((row) => {
+            const key = getMonthKey(row.challanDate);
+            if (key) set.add(key);
+        });
+        return Array.from(set).sort((a, b) => b.localeCompare(a));
+    }, [allRows]);
+
+    // Drop selected months that no longer exist in the loaded data
+    useEffect(() => {
+        if (selectedMonths.size > 0) {
+            const validMonths = new Set(monthOptions);
+            const filtered = new Set([...selectedMonths].filter((m) => validMonths.has(m)));
+            if (filtered.size !== selectedMonths.size) {
+                setSelectedMonths(filtered);
+            }
+        }
+    }, [monthOptions, selectedMonths]);
 
     // ===== DELIVERY MONTH OPTIONS (valid real months only, preserving backend order) =====
     const deliveryMonthOptions = useMemo(() => {
@@ -524,6 +711,12 @@ const Aop = () => {
     }, [allRows]);
 
     const filteredRows = useMemo(() => allRows.filter((row) => {
+        // Challan-date month filter
+        if (selectedMonths.size > 0) {
+            const rowMonth = getMonthKey(row.challanDate);
+            if (!rowMonth || !selectedMonths.has(rowMonth)) return false;
+        }
+
         return tableHeader.every((col) => {
             if (col.noFilter) return true;
             const selected = filters[col.key];
@@ -533,7 +726,7 @@ const Aop = () => {
             }
             return selected.has(String(row[col.key] ?? ""));
         });
-    }), [allRows, filters]);
+    }), [allRows, filters, selectedMonths]);
 
     const totals = useMemo(() => {
         const t = { sentForAop: 0, returnFromAop: 0, receiveFromAop: 0, finishReceiveFromAop: 0, billingAmount: 0 };
@@ -544,20 +737,21 @@ const Aop = () => {
             t.finishReceiveFromAop += Number(row.finishReceiveFromAop) || 0;
             t.billingAmount += Number(row.billingAmount) || 0;
         });
-        t.processLoss = t.receiveFromAop > 0 ? ((t.receiveFromAop - t.finishReceiveFromAop) / t.receiveFromAop) * 100 : 0;
+        t.processLoss = calcProcessLoss(t.receiveFromAop, t.finishReceiveFromAop);
         return t;
     }, [filteredRows]);
 
     // ===== SEARCH PAGINATION (30 per page, only while showing search results) =====
     const totalSearchPages = Math.max(1, Math.ceil(filteredRows.length / SEARCH_PAGE_SIZE));
 
-    // Back to page 1 whenever a column filter changes
+    // Back to page 1 whenever a column filter or the month filter changes
     const filtersKey = Object.entries(filters)
         .map(([k, v]) => `${k}:${[...v].join('|')}`)
         .join(';');
+    const selectedMonthsKey = [...selectedMonths].sort().join(',');
     useEffect(() => {
         setSearchPage(1);
-    }, [filtersKey]);
+    }, [filtersKey, selectedMonthsKey]);
 
     // Keep the page inside range
     useEffect(() => {
@@ -633,6 +827,54 @@ const Aop = () => {
         setFilters((prev) => { const next = { ...prev }; delete next[key]; return next; });
         closeFilterDropdown();
     };
+
+    // ===== CHALLAN-DATE MONTH FILTER (Month'Year, client-side) =====
+    const openMonthFilter = () => {
+        if (monthDropdownOpen) {
+            setMonthDropdownOpen(false);
+            setMonthSearch("");
+            return;
+        }
+        if (selectedMonths.size > 0) {
+            setMonthDraftSelected(new Set(selectedMonths));
+        } else {
+            setMonthDraftSelected(new Set(monthOptions));
+        }
+        setMonthSearch("");
+        setMonthDropdownOpen(true);
+    };
+
+    const toggleMonthDraftValue = (val) => {
+        setMonthDraftSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(val)) next.delete(val);
+            else next.add(val);
+            return next;
+        });
+    };
+
+    const toggleSelectAllMonths = () => {
+        setMonthDraftSelected((prev) => (prev.size === monthOptions.length ? new Set() : new Set(monthOptions)));
+    };
+
+    const applyMonthFilter = () => {
+        // none or all selected == no month filter
+        if (monthDraftSelected.size === 0 || monthDraftSelected.size === monthOptions.length) {
+            setSelectedMonths(new Set());
+        } else {
+            setSelectedMonths(new Set(monthDraftSelected));
+        }
+        setMonthDropdownOpen(false);
+        setMonthSearch("");
+    };
+
+    const clearMonthFilter = () => {
+        setSelectedMonths(new Set());
+        setMonthDraftSelected(new Set(monthOptions));
+        setMonthDropdownOpen(false);
+        setMonthSearch("");
+    };
+    // ===============================================================
 
     // ===== SEARCH MONTH WISE HANDLER =====
     const handleDeliveryMonthSearch = async () => {
@@ -722,37 +964,159 @@ const Aop = () => {
         finally { setSearchLoading(false); }
     };
 
-    const handleExport = () => {
+    // ===== EXCEL EXPORT: one sheet per AOP factory + Summary sheet =====
+    const handleExport = async () => {
         if (filteredRows.length === 0) { alert("No data to export."); return; }
-        const headers = tableHeader.filter(h => h.key !== 'select').map(h => h.header);
-        const rows = filteredRows.map(row => {
-            return tableHeader.filter(h => h.key !== 'select').map(h => {
-                let val = row[h.key];
-                if (h.key === 'challanDate' && val) {
-                    val = formatShortDate(val);
-                }
-                if (val === null || val === undefined) return "";
-                let str = String(val);
-                if (str.includes('"')) str = '"' + str.replace(/"/g, '""') + '"';
-                else if (str.includes(',') || str.includes('\n')) str = '"' + str + '"';
-                return str;
+        setIsExporting(true);
+        try {
+            const mod = await import('exceljs');
+            const ExcelJS = mod.default || mod;
+
+            // Period text (Month'Year) for titles & file name
+            const sortedMonthKeys = [...selectedMonths].sort();
+            const deliveryShort = appliedMonthNames.map((n) => n.charAt(0).toUpperCase() + n.slice(1, 3));
+            const periodLabel = sortedMonthKeys.length > 0
+                ? sortedMonthKeys.map(formatMonthLabel).join(', ')
+                : (deliveryShort.length > 0 ? `Delivery: ${deliveryShort.join(', ')}` : 'All Months');
+            const filePeriod = sortedMonthKeys.length > 0
+                ? sortedMonthKeys.map(formatMonthLabel).join('_').replace(/'/g, '-')
+                : (deliveryShort.length > 0 ? deliveryShort.join('_') : 'AllMonths');
+
+            // Prepare rows (sorted by job, then date, then challan)
+            const exportRows = filteredRows
+                .map((r) => ({
+                    ...r,
+                    monthLabel: formatMonthLabel(getMonthKey(r.challanDate)),
+                }))
+                .sort((a, b) => {
+                    const ja = String(a.jobNo ?? '');
+                    const jb = String(b.jobNo ?? '');
+                    if (ja !== jb) return ja.localeCompare(jb, undefined, { numeric: true });
+                    const da = normalizeDate(a.challanDate);
+                    const db = normalizeDate(b.challanDate);
+                    if (da !== db) return da < db ? -1 : 1;
+                    return String(a.challanNo).localeCompare(String(b.challanNo), undefined, { numeric: true });
+                });
+
+            // Group by factory: sent / return / receive of the same factory => ONE sheet
+            const groups = new Map(); // key -> { name, rows }
+            exportRows.forEach((r) => {
+                const name = getPartyFactory(r);
+                const key = factoryKey(name);
+                if (!groups.has(key)) groups.set(key, { name, rows: [] });
+                groups.get(key).rows.push(r);
             });
-        });
-        const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `AOP_Report_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+            const factories = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+            const wb = new ExcelJS.Workbook();
+            wb.creator = 'Garments ERP';
+            wb.created = new Date();
+
+            const colCount = EXPORT_COLUMNS.length;
+
+            // Summary sheet is created first so it is the first tab
+            const summaryWs = wb.addWorksheet('Summary', { views: [{ state: 'frozen', ySplit: 3, showGridLines: false }] });
+            const usedNames = new Set(['summary']);
+            const summaryData = [];
+
+            factories.forEach(({ name: factory, rows }) => {
+                const ws = wb.addWorksheet(makeSheetName(factory, usedNames), {
+                    views: [{ state: 'frozen', ySplit: 3, showGridLines: false }],
+                });
+
+                addTitleRow(ws, `${factory}  |  AOP Delivery & Received  |  ${periodLabel}`, colCount);
+                addHeaderRow(ws, EXPORT_COLUMNS);
+
+                const sums = {};
+                EXPORT_TOTAL_KEYS.forEach((k) => { sums[k] = 0; });
+
+                rows.forEach((r, idx) => {
+                    const values = EXPORT_COLUMNS.map((c) => {
+                        const v = r[c.key];
+                        if (c.type === 'date') return v ? formatShortDate(v) : '';
+                        if (c.type === 'number') {
+                            const n = Number(v) || 0;
+                            if (EXPORT_TOTAL_KEYS.includes(c.key)) sums[c.key] += n;
+                            return n;
+                        }
+                        if (v === null || v === undefined || v === '-') return '';
+                        return v;
+                    });
+                    const row = ws.addRow(values);
+                    styleBodyRow(row, idx, EXPORT_COLUMNS);
+                });
+
+                const factoryLoss = calcProcessLoss(sums.receiveFromAop, sums.finishReceiveFromAop);
+                const totalValues = EXPORT_COLUMNS.map((c, i) => {
+                    if (i === 0) return 'TOTAL';
+                    if (c.key === 'processLoss') return factoryLoss;
+                    if (EXPORT_TOTAL_KEYS.includes(c.key)) return sums[c.key];
+                    return '';
+                });
+                styleTotalRow(ws.addRow(totalValues), EXPORT_COLUMNS);
+
+                EXPORT_COLUMNS.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+                ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: colCount } };
+                ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+
+                summaryData.push({
+                    factory,
+                    challans: new Set(rows.map((r) => String(r.challanNo))).size,
+                    processLoss: factoryLoss,
+                    ...sums,
+                });
+            });
+
+            // ----- Summary sheet -----
+            addTitleRow(summaryWs, `Factory Wise Summary  |  AOP  |  ${periodLabel}`, SUMMARY_COLUMNS.length);
+            addHeaderRow(summaryWs, SUMMARY_COLUMNS);
+
+            const grand = { challans: 0, sentForAop: 0, returnFromAop: 0, receiveFromAop: 0, finishReceiveFromAop: 0, billingAmount: 0 };
+            summaryData.forEach((s, idx) => {
+                Object.keys(grand).forEach((k) => { grand[k] += Number(s[k]) || 0; });
+                const row = summaryWs.addRow(
+                    SUMMARY_COLUMNS.map((c, i) => (i === 0 ? s.factory : Number(s[c.key]) || 0))
+                );
+                styleBodyRow(row, idx, SUMMARY_COLUMNS);
+            });
+            const grandLoss = calcProcessLoss(grand.receiveFromAop, grand.finishReceiveFromAop);
+            const grandRow = summaryWs.addRow(
+                SUMMARY_COLUMNS.map((c, i) => {
+                    if (i === 0) return 'GRAND TOTAL';
+                    if (c.key === 'processLoss') return grandLoss;
+                    return grand[c.key];
+                })
+            );
+            styleTotalRow(grandRow, SUMMARY_COLUMNS);
+
+            SUMMARY_COLUMNS.forEach((c, i) => { summaryWs.getColumn(i + 1).width = c.width; });
+
+            // ----- Download .xlsx -----
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `AOP_Report_${filePeriod}_${new Date().toISOString().split('T')[0]}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Excel export failed:', err);
+            alert('Failed to export Excel file. Please try again.');
+        } finally {
+            setIsExporting(false);
+        }
     };
+    // ===== END EXCEL EXPORT =====
 
     // ===== CLEAR-ALL FILTERS =====
     const hasActiveFilters =
         Object.keys(filters || {}).length > 0 ||
+        (selectedMonths && selectedMonths.size > 0) ||
         !!search ||
         selectedDeliveryMonths.length > 0 ||
         appliedMonthNames.length > 0;
@@ -763,6 +1127,11 @@ const Aop = () => {
         setFilters({});
         closeFilterDropdown();
         setDraftSelected(new Set());
+
+        setSelectedMonths(new Set());
+        setMonthDraftSelected(new Set());
+        setMonthDropdownOpen(false);
+        setMonthSearch("");
 
         setSelectedDeliveryMonths([]);
         setAppliedMonthNames([]);
@@ -968,6 +1337,11 @@ const Aop = () => {
 
     const allVisibleSelected = visibleRows.length > 0 && visibleRows.every(r => selectedRows.has(r.rowKey));
 
+    const visibleMonthOptions = monthOptions.filter((key) =>
+        formatMonthLabel(key).toLowerCase().includes(monthSearch.toLowerCase())
+    );
+    const allMonthsDraftSelected = monthOptions.length > 0 && monthDraftSelected.size === monthOptions.length;
+
     const handlePrepareChallanEdit = async (challanNo, jobNo) => {
         if (!challanNo || !jobNo) return;
         setIsChallanDataLoading(true);
@@ -1045,6 +1419,75 @@ const Aop = () => {
                         <X size={16} /> Clear
                     </button>
                 )}
+
+                {/* ===== CHALLAN DATE MONTH FILTER (Month'Year) ===== */}
+                <div ref={monthDropdownRef} style={{ position: 'relative' }}>
+                    <button
+                        onClick={openMonthFilter}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: monthDropdownOpen || selectedMonths.size > 0 ? theme.colors.primary : theme.colors.white,
+                            color: monthDropdownOpen || selectedMonths.size > 0 ? theme.colors.white : theme.colors.textMain,
+                            padding: "10px 16px", borderRadius: theme.radius,
+                            border: `1px solid ${theme.colors.border}`, cursor: "pointer",
+                            fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit', transition: 'all 0.2s ease'
+                        }}
+                    >
+                        <Calendar size={16} />
+                        {selectedMonths.size === 0
+                            ? "Month'Year"
+                            : selectedMonths.size === 1
+                                ? formatMonthLabel([...selectedMonths][0])
+                                : `${selectedMonths.size} Months Selected`}
+                        <ChevronDown size={16} style={{ transform: monthDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                    </button>
+
+                    {monthDropdownOpen && (
+                        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: 260, zIndex: 60, background: theme.colors.white, border: `1px solid ${theme.colors.borderDark}`, borderRadius: theme.radius, boxShadow: theme.shadows.xl, display: 'flex', flexDirection: 'column', maxHeight: 400, overflow: 'hidden', fontFamily: FONT_STACK }}>
+                            <div style={{ padding: '12px', borderBottom: `1px solid #e2e8f0`, background: '#657582', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'white' }}>Filter by Month'Year</span>
+                                <button onClick={() => { setMonthDropdownOpen(false); setMonthSearch(""); }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'white', display: 'flex' }}>
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <div style={{ padding: '10px 12px', borderBottom: `1px solid #e2e8f0` }}>
+                                <input
+                                    type="text" value={monthSearch} onChange={(e) => setMonthSearch(e.target.value)}
+                                    placeholder="Search month..." autoFocus
+                                    style={{ width: '100%', padding: '8px 10px', border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px', fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box', fontFamily: FONT_STACK, color: theme.colors.textMain }}
+                                />
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', minHeight: 0 }}>
+                                {monthOptions.length === 0 ? (
+                                    <div style={{ padding: '12px 0', fontSize: '0.8rem', textAlign: 'center', opacity: 0.6 }}>No dates found</div>
+                                ) : (
+                                    <>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 8, fontSize: '0.8rem', cursor: 'pointer', color: theme.colors.textMain }}>
+                                            <input type="checkbox" checked={allMonthsDraftSelected} onChange={toggleSelectAllMonths} style={{ accentColor: theme.colors.primary, width: 15, height: 15 }} />
+                                            Select All ({monthOptions.length})
+                                        </label>
+                                        <div style={{ borderTop: `1px solid #e2e8f0`, paddingTop: 8 }}>
+                                            {visibleMonthOptions.length === 0 && (
+                                                <div style={{ padding: '8px 0', fontSize: '0.8rem', textAlign: 'center', opacity: 0.6 }}>No months match</div>
+                                            )}
+                                            {visibleMonthOptions.map((key) => (
+                                                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', padding: '6px 0', cursor: 'pointer', color: theme.colors.textMain }}>
+                                                    <input type="checkbox" checked={monthDraftSelected.has(key)} onChange={() => toggleMonthDraftValue(key)} style={{ accentColor: theme.colors.primary, width: 15, height: 15, flexShrink: 0 }} />
+                                                    <span>{formatMonthLabel(key)}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '10px 12px', borderTop: `1px solid #e2e8f0`, background: '#f5d8c9' }}>
+                                <button onClick={clearMonthFilter} style={{ flex: 1, background: theme.colors.white, color: theme.colors.textMain, border: `1px solid ${theme.colors.borderDark}`, borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, padding: '7px 0', fontFamily: FONT_STACK }}>Clear</button>
+                                <button onClick={applyMonthFilter} style={{ flex: 1, background: theme.colors.primary, color: theme.colors.white, border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, padding: '7px 0', fontFamily: FONT_STACK }}>Apply</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {/* ===== END CHALLAN DATE MONTH FILTER ===== */}
 
                 {/* ===== DELIVERY MONTH MULTI-SELECT ===== */}
                 {deliveryMonthLoading ? (
@@ -1218,11 +1661,17 @@ const Aop = () => {
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         background: theme.colors.white, color: theme.colors.textMain,
                         padding: "10px 20px", borderRadius: theme.radius,
-                        border: `1px solid ${theme.colors.border}`, cursor: "pointer", fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit'
+                        border: `1px solid ${theme.colors.border}`,
+                        cursor: isExporting ? "not-allowed" : "pointer",
+                        opacity: isExporting ? 0.7 : 1,
+                        fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit'
                     }}
                     onClick={handleExport}
+                    disabled={isExporting}
+                    title="Export factory-wise Excel (one sheet per factory)"
                 >
-                    <Download size={16} /> Export CSV
+                    {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />}
+                    {isExporting ? "Exporting..." : "Export Excel"}
                 </button>
             </div>
 
