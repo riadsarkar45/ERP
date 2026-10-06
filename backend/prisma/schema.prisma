@@ -181,38 +181,38 @@ model Challan {
   @@index([fromFactory])
 }
 
-model deliveries {
-  id            Int      @id @default(autoincrement())
-  challanNo     Int
-  deliveryDate  DateTime
-  deliveryQty   Float
-  deliveryType  String
-  yarnId        Int
-  toFactory     String
-  fromFactory   String
-  deliveryMonth String   @default("N/A")
+    model deliveries {
+      id            Int      @id @default(autoincrement())
+      challanNo     Int
+      deliveryDate  DateTime
+      deliveryQty   Float
+      deliveryType  String
+      yarnId        Int
+      toFactory     String
+      fromFactory   String
+      deliveryMonth String   @default("N/A")
 
-  composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
-  yarnCompId  Int?
+      composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
+      yarnCompId  Int?
 
-  challan   Challan? @relation(fields: [challanId], references: [id])
-  challanId Int?
-  createdBy Int      @default(1)
-  userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+      challan   Challan? @relation(fields: [challanId], references: [id])
+      challanId Int?
+      createdBy Int      @default(1)
+      userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+      createdAt DateTime @default(now())
 
-  @@index([yarnCompId])
-  @@index([createdBy])
-  @@index([deliveryDate])
-  @@index([challanNo])
-  @@index([challanId])
-  @@index([yarnId])
-  @@index([id])
-  @@index([deliveryType])
-  @@index([toFactory])
-  @@index([fromFactory])
-  @@index([createdAt])
-}
+      @@index([yarnCompId])
+      @@index([createdBy])
+      @@index([deliveryDate])
+      @@index([challanNo])
+      @@index([challanId])
+      @@index([yarnId])
+      @@index([id])
+      @@index([deliveryType])
+      @@index([toFactory])
+      @@index([fromFactory])
+      @@index([createdAt])
+    }
 
 model audit {
   id             Int      @id @default(autoincrement())

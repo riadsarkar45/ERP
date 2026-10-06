@@ -51,6 +51,7 @@ import AssetSummary from "../dashboard/pages/MIS/FixedAsset/AssetSummary";
 import AssetMovement from "../dashboard/pages/MIS/FixedAsset/AssetMovement";
 import HighLossJob from "../dashboard/pages/highProccessLossJobs/HighLossJob";
 import DeliveryClosedJobs from "../components/deliveryClosedJobs/DeliveryClosedJobs";
+import FactoryComparison from "../dashboard/pages/factory-stock-comparison/FactoryComparison";
 
 const routers = createBrowserRouter([
     {
@@ -203,64 +204,68 @@ const routers = createBrowserRouter([
 
                     {
                         path: "requested-work-orders",
-                        element: <RequestedOrders/>
+                        element: <RequestedOrders />
                     },
 
                     {
                         path: "balance-sheet",
-                        element: <BalanceSheet/>
+                        element: <BalanceSheet />
                     },
                     {
                         path: "spinning-yarn-movement",
-                        element: <MovementSpinning/>
+                        element: <MovementSpinning />
                     },
                     {
                         path: "productionsummary",
-                        element: <ProductionSummary/>
+                        element: <ProductionSummary />
                     },
                     {
                         path: "daily-production",
-                        element: <DailyProduction/>
+                        element: <DailyProduction />
                     },
                     {
                         path: "daily-production/cutting",
-                        element: <DailyCutting/>
+                        element: <DailyCutting />
                     },
                     {
                         path: "daily-production/sewing",
-                        element: <DailySewing/>
+                        element: <DailySewing />
                     },
                     {
                         path: "daily-production/finishing",
-                        element: <DailyFinishing/>
+                        element: <DailyFinishing />
                     },
                     {
                         path: "daily-production/export",
-                        element: <DailyExport/>
+                        element: <DailyExport />
                     },
                     {
                         path: "user-list",
-                        element: <UserList/>
+                        element: <UserList />
                     },
                     {
                         path: "user-permission/:userId/:userName",
-                        element: <UserPermission/>
+                        element: <UserPermission />
                     },
                     {
                         path: "asset-summary",
-                        element: <AssetSummary/>
+                        element: <AssetSummary />
                     },
                     {
                         path: "asset-movement",
-                        element: <AssetMovement/>
+                        element: <AssetMovement />
                     },
                     {
                         path: "high-loss-job",
-                        element: <HighLossJob/>
+                        element: <HighLossJob />
                     },
                     {
                         path: "closed-delivery-jobs",
-                        element: <DeliveryClosedJobs/>
+                        element: <DeliveryClosedJobs />
+                    },
+                    {
+                        path: "factory-balance-comparison",
+                        element: <FactoryComparison />
                     },
                 ]
             }

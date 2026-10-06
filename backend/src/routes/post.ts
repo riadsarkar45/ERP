@@ -14,6 +14,7 @@ import { userRole } from "../controllers/users/userRolePermission/userRole";
 import { newProduction } from "../controllers/production/newProduction";
 import { insertYarnPiData } from "../controllers/yarns/yarn.pi";
 import { newYarnMovement } from "../controllers/yarns/yarn.movement";
+import { factoryStockComparison } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
 
 const router = express.Router();
 
@@ -46,5 +47,13 @@ router.post("/enter-production/:colorId", responseTimeMonitor, authenticate, new
 router.post("/purchase-yarn-pi", responseTimeMonitor, authenticate, insertYarnPiData)
 
 router.post("/yarn-purchase-data/challans", responseTimeMonitor, authenticate, newYarnMovement)
+
+router.post(
+  "/upload-for-balance-comparison",
+  responseTimeMonitor,
+  authenticate,
+  upload.single("file"),
+  factoryStockComparison as any
+);
 
 export default router;
