@@ -41,7 +41,7 @@ interface DbDelivery {
     toFactory: string | null;
     deliveryQty: unknown;
     deliveryType: string | null;
-    deliveryMonth: string | null; // Added deliveryMonth
+    deliveryMonth: string | null;
 }
 
 interface Group {
@@ -156,17 +156,20 @@ const parseExcel = async (filePath: string) => {
 
             if (!headerRow) {
                 const rowText = values.map((v: ExcelJS.CellValue) => cellToText(v).toLowerCase()).join(" ");
-                if (rowText.includes("challan") && (rowText.includes("delivery") || rowText.includes("fabric"))) {
+                if (rowText.includes("challan") && (rowText.includes("delivery") || rowText.includes("fabric") || rowText.includes("return"))) {
                     headerRow = row;
                     
                     values.forEach((v: ExcelJS.CellValue, idx: number) => {
                         if (idx === 0) return;
                         const text = normalizeHeader(cellToText(v));
                         
+                        // Detect all relevant columns
                         if (text.includes("yarndeliverychallanno") || text === "yarndeliverychallan") {
                             colIndices.yarnDeliveryChallan = idx;
                         } else if (text.includes("yarndeliveryqty")) {
                             colIndices.yarnDeliveryQty = idx;
+                        } else if (text.includes("yarnreturnqty") || text === "yarnreturn") {
+                            colIndices.yarnReturnQty = idx; // FIX: Detect Yarn Return column
                         } else if (text.includes("fabricreceivedchallan")) {
                             colIndices.greyReceivedChallan = idx;
                         } else if (text.includes("greyfabricreceived")) {
@@ -185,6 +188,7 @@ const parseExcel = async (filePath: string) => {
             
             const yarnChallanIdx = colIndices.yarnDeliveryChallan;
             const yarnQtyIdx = colIndices.yarnDeliveryQty;
+            const yarnReturnQtyIdx = colIndices.yarnReturnQty; // FIX: Added index
             const knittingFactoryIdx = colIndices.knittingFactory;
             const dateIdx = colIndices.date;
             const greyChallanIdx = colIndices.greyReceivedChallan;
@@ -193,39 +197,61 @@ const parseExcel = async (filePath: string) => {
             const factoryName = knittingFactoryIdx ? cellToText(values[knittingFactoryIdx]) : "";
             const month = dateIdx ? toMonthText(values[dateIdx]) : "";
 
+            // Process Yarn Delivery & Return
             if (yarnChallanIdx && yarnQtyIdx && factoryName) {
                 const yarnChallanNo = cellToText(values[yarnChallanIdx]);
                 const yarnQty = yarnQtyIdx ? toQty(values[yarnQtyIdx]) : 0;
+                const yarnReturnQtyFromCol = yarnReturnQtyIdx ? Math.abs(toQty(values[yarnReturnQtyIdx])) : 0;
                 
-                if (yarnChallanNo && /\d/.test(yarnChallanNo) && yarnQty > 0) {
-                    if (!/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
-                        rows.push({
-                            rowNumber: row.number,
-                            challanNo: yarnChallanNo,
-                            factoryName,
-                            month,
-                            qty: { yarnDelivery: yarnQty, yarnReturn: 0, greyReceived: 0 },
-                            bucket: "yarnDelivery",
-                        });
-                    }
+                // 1. If there is a specific Yarn Return Qty column value > 0
+                if (yarnChallanNo && yarnReturnQtyFromCol > 0 && !/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
+                    rows.push({
+                        rowNumber: row.number,
+                        challanNo: yarnChallanNo,
+                        factoryName,
+                        month,
+                        qty: { yarnDelivery: 0, yarnReturn: yarnReturnQtyFromCol, greyReceived: 0 },
+                        bucket: "yarnReturn",
+                    });
+                } 
+                // 2. If Yarn Delivery Qty is negative, treat it as a return
+                else if (yarnChallanNo && yarnQty < 0 && !/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
+                    rows.push({
+                        rowNumber: row.number,
+                        challanNo: yarnChallanNo,
+                        factoryName,
+                        month,
+                        qty: { yarnDelivery: 0, yarnReturn: Math.abs(yarnQty), greyReceived: 0 },
+                        bucket: "yarnReturn",
+                    });
+                }
+                // 3. Normal positive delivery
+                else if (yarnChallanNo && yarnQty > 0 && !/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
+                    rows.push({
+                        rowNumber: row.number,
+                        challanNo: yarnChallanNo,
+                        factoryName,
+                        month,
+                        qty: { yarnDelivery: yarnQty, yarnReturn: 0, greyReceived: 0 },
+                        bucket: "yarnDelivery",
+                    });
                 }
             }
 
+            // Process Grey Fabric Received
             if (greyChallanIdx && greyQtyIdx && factoryName) {
                 const greyChallanNo = cellToText(values[greyChallanIdx]);
                 const greyQty = greyQtyIdx ? toQty(values[greyQtyIdx]) : 0;
                 
-                if (greyChallanNo && /\d/.test(greyChallanNo) && greyQty > 0) {
-                    if (!/^total|sum|up to date|sgs/i.test(greyChallanNo)) {
-                        rows.push({
-                            rowNumber: row.number,
-                            challanNo: greyChallanNo,
-                            factoryName,
-                            month,
-                            qty: { yarnDelivery: 0, yarnReturn: 0, greyReceived: greyQty },
-                            bucket: "greyReceived",
-                        });
-                    }
+                if (greyChallanNo && greyQty > 0 && !/^total|sum|up to date|sgs/i.test(greyChallanNo)) {
+                    rows.push({
+                        rowNumber: row.number,
+                        challanNo: greyChallanNo,
+                        factoryName,
+                        month,
+                        qty: { yarnDelivery: 0, yarnReturn: 0, greyReceived: greyQty },
+                        bucket: "greyReceived",
+                    });
                 }
             }
 
@@ -291,24 +317,14 @@ export const factoryStockComparison = async (req: Request, res: Response) => {
             g.repeatedCount += 1;
         }
 
-        const rawNumbers = Array.from(
-            new Set(
-                Array.from(groups.values())
-                    .map((g) => Number(g.challanNo.trim()))
-                    .filter((n) => !Number.isNaN(n) && n > 0)
-            )
-        );
+        const allChallanKeys = Array.from(new Set(Array.from(groups.values()).map(g => g.challanNo.trim())));
+        const numericChallans = allChallanKeys.map(n => Number(n)).filter(n => !Number.isNaN(n) && n > 0);
 
-        // Fetch deliveries filtered by knittingOrder and select deliveryMonth
-        const dbDeliveries = rawNumbers.length > 0 
+        const dbDeliveries = numericChallans.length > 0 
             ? await prisma.deliveries.findMany({
                 where: { 
-                    challanNo: { in: rawNumbers },
-                    composition: {
-                        workOrder: {
-                            orderType: "knittingOrder"
-                        }
-                    }
+                    challanNo: { in: numericChallans },
+                    composition: { workOrder: { orderType: "knittingOrder" } }
                 },
                 select: {
                     challanNo: true,
@@ -316,7 +332,7 @@ export const factoryStockComparison = async (req: Request, res: Response) => {
                     toFactory: true,
                     deliveryQty: true,
                     deliveryType: true,
-                    deliveryMonth: true, // Fetching deliveryMonth from DB
+                    deliveryMonth: true,
                 },
               })
             : [];
@@ -324,20 +340,16 @@ export const factoryStockComparison = async (req: Request, res: Response) => {
         const dbMap = new Map<number, DbDelivery[]>();
         for (const d of dbDeliveries) {
             let list = dbMap.get(d.challanNo);
-            if (!list) {
-                list = [];
-                dbMap.set(d.challanNo, list);
-            }
+            if (!list) { list = []; dbMap.set(d.challanNo, list); }
             list.push(d);
         }
 
         const results = Array.from(groups.values()).map((g) => {
             const challanNum = Number(g.challanNo.trim());
-            const allDbDeliveries = Number.isNaN(challanNum) ? [] : (dbMap.get(challanNum) || []);
+            const isNumeric = !Number.isNaN(challanNum) && challanNum > 0;
+            const allDbDeliveries = isNumeric ? (dbMap.get(challanNum) || []) : [];
             
-            const factorySpecificDeliveries = allDbDeliveries.filter(d => {
-                return factoryMatches(g.factoryKey, d.fromFactory, d.toFactory);
-            });
+            const factorySpecificDeliveries = allDbDeliveries.filter(d => factoryMatches(g.factoryKey, d.fromFactory, d.toFactory));
 
             const excelQty: Qty = {
                 yarnDelivery: round2(g.qty.yarnDelivery),
@@ -352,17 +364,13 @@ export const factoryStockComparison = async (req: Request, res: Response) => {
             let factoryMismatch = false;
 
             if (factorySpecificDeliveries.length === 0) {
-                if (allDbDeliveries.length > 0) {
-                    factoryMismatch = true;
-                }
+                if (allDbDeliveries.length > 0) factoryMismatch = true;
                 status = "MISSING_IN_SYSTEM";
             } else {
                 const sys = emptyQty();
                 for (const d of factorySpecificDeliveries) {
                     const bucket = DELIVERY_TYPE_TO_BUCKET[normalizeHeader(d.deliveryType || "")];
-                    if (bucket) {
-                        sys[bucket] += Number(d.deliveryQty || 0);
-                    }
+                    if (bucket) sys[bucket] += Number(d.deliveryQty || 0);
                 }
                 
                 systemQty = {
@@ -378,33 +386,24 @@ export const factoryStockComparison = async (req: Request, res: Response) => {
                 };
                 
                 BUCKETS.forEach((b) => {
-                    if (Math.abs(diff![b]) > QTY_TOLERANCE) {
-                        mismatchFields.push(b);
-                    }
+                    if (Math.abs(diff![b]) > QTY_TOLERANCE) mismatchFields.push(b);
                 });
                 
                 status = mismatchFields.length ? "QTY_MISMATCH" : "MATCHED";
             }
 
             const firstDelivery = factorySpecificDeliveries[0] || allDbDeliveries[0];
-
-            // EXTRACT MONTH FROM DB deliveryMonth
             const dbMonths = new Set<string>();
             factorySpecificDeliveries.forEach(d => {
-                if (d.deliveryMonth && d.deliveryMonth !== "N/A") {
-                    dbMonths.add(d.deliveryMonth);
-                }
+                if (d.deliveryMonth && d.deliveryMonth !== "N/A") dbMonths.add(d.deliveryMonth);
             });
             
-            // Use DB month if available, otherwise fallback to Excel month
-            const finalMonth = dbMonths.size > 0 
-                ? Array.from(dbMonths).join(", ") 
-                : (Array.from(g.months).join(", ") || "N/A");
+            const finalMonth = dbMonths.size > 0 ? Array.from(dbMonths).join(", ") : (Array.from(g.months).join(", ") || "N/A");
 
             return {
                 challanNo: g.challanNo,
                 factoryName: g.factoryName || "N/A",
-                month: finalMonth, // Using the DB deliveryMonth here
+                month: finalMonth,
                 fromFactory: firstDelivery?.fromFactory || "N/A",
                 toFactory: firstDelivery?.toFactory || "N/A",
                 excelRow: g.firstRow,
