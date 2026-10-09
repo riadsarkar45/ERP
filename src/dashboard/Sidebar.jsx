@@ -111,6 +111,7 @@ const Sidebar = () => {
     const topNavItems = [
         sections.styleRequirements?.bookingView && { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
         sections.styleRequirements?.bookingView && { path: "/dashboard/factory-balance-comparison", label: "Compare Factory Stock", icon: PlusCircle },
+        sections.styleRequirements?.bookingView && { path: "/dashboard/report-studio", label: "Report Studio", icon: PlusCircle },
     ].filter(Boolean);
 
     // Bottom standalone items (Work Order Requests removed and converted to dropdown above)

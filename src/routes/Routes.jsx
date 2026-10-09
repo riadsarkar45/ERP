@@ -52,6 +52,7 @@ import AssetMovement from "../dashboard/pages/MIS/FixedAsset/AssetMovement";
 import HighLossJob from "../dashboard/pages/highProccessLossJobs/HighLossJob";
 import DeliveryClosedJobs from "../components/deliveryClosedJobs/DeliveryClosedJobs";
 import FactoryComparison from "../dashboard/pages/factory-stock-comparison/FactoryComparison";
+import ReportStudio from "../dashboard/pages/reportStudio/ReportStudio";
 
 const routers = createBrowserRouter([
     {
@@ -266,6 +267,10 @@ const routers = createBrowserRouter([
                     {
                         path: "factory-balance-comparison",
                         element: <FactoryComparison />
+                    },
+                    {
+                        path: "report-studio",
+                        element: <ReportStudio />
                     },
                 ]
             }
