@@ -24,20 +24,28 @@ const ShortExcess = ({ value }) => {
     );
 };
 
-const STICKY_COL_WIDTHS = [50, 140, 120, 150, 220, 300, 100, 100, 150];
+// STYLE column added after JOB NO (index 4) -> 10 sticky columns
+const STICKY_COL_WIDTHS = [50, 140, 120, 150, 150, 220, 300, 100, 100, 150];
 const STICKY_LEFT_OFFSETS = STICKY_COL_WIDTHS.reduce((acc, w, i) => {
     acc.push(i === 0 ? 0 : acc[i - 1] + STICKY_COL_WIDTHS[i - 1]);
     return acc;
 }, []);
 const LAST_STICKY_INDEX = STICKY_COL_WIDTHS.length - 1;
 
-const FIXED_COLUMN_COUNT = 28;
+const FIXED_COLUMN_COUNT = 29;
 
 const normalizeFilterVal = (v) => {
     if (v === null || v === undefined) return "";
     const s = String(v).trim();
     if (s.toUpperCase() === "NULL") return "";
     return s.toLowerCase();
+};
+
+// Style value (adjust the field names here if your API uses a different key)
+const getStyleValue = (job, com) => {
+    const v = com?.styleName ?? com?.style ?? com?.styleNo ?? job?.styleName ?? job?.style ?? job?.styleNo;
+    if (v === null || v === undefined || v === "" || String(v).toUpperCase() === "NULL") return "";
+    return String(v);
 };
 
 const formatDateDisplay = (value) => {
@@ -95,32 +103,62 @@ const loadExcelJS = () => {
     return excelJsPromise;
 };
 
+// ---------- Excel styling (matches ERP table design) ----------
+const XL_LINE = "FF47637A";
+const XL_GRAY = "FF6B7280";
 const XL_BORDER = {
-    top: { style: "thin", color: { argb: "FF312817" } },
-    left: { style: "thin", color: { argb: "FF312817" } },
-    bottom: { style: "thin", color: { argb: "FF312817" } },
-    right: { style: "thin", color: { argb: "FF312817" } },
+    top: { style: "thin", color: { argb: XL_LINE } },
+    left: { style: "thin", color: { argb: XL_LINE } },
+    bottom: { style: "thin", color: { argb: XL_LINE } },
+    right: { style: "thin", color: { argb: XL_LINE } },
 };
 const XL_BORDER_HEADER = {
-    top: { style: "thin", color: { argb: "FF312817" } },
-    left: { style: "thin", color: { argb: "FF312817" } },
-    bottom: { style: "medium", color: { argb: "FF312817" } },
-    right: { style: "thin", color: { argb: "FF312817" } },
+    top: { style: "thin", color: { argb: XL_LINE } },
+    left: { style: "thin", color: { argb: XL_LINE } },
+    bottom: { style: "medium", color: { argb: XL_LINE } },
+    right: { style: "thin", color: { argb: XL_LINE } },
 };
 const XL_BORDER_SUBTOTAL = {
-    top: { style: "medium", color: { argb: "FF312817" } },
-    left: { style: "thin", color: { argb: "FF312817" } },
-    bottom: { style: "medium", color: { argb: "FF312817" } },
-    right: { style: "thin", color: { argb: "FF312817" } },
+    top: { style: "medium", color: { argb: XL_LINE } },
+    left: { style: "thin", color: { argb: XL_LINE } },
+    bottom: { style: "medium", color: { argb: XL_LINE } },
+    right: { style: "thin", color: { argb: XL_LINE } },
 };
 
 const NUMFMT_NUMBER = '0.00';
-const NUMFMT_SHORT_EXCESS = '[Green]+0.00;[Red]-0.00;0.00';
+const NUMFMT_SHORT_EXCESS = '+0.00;-0.00;0.00';
 const NUMFMT_PCT_1 = '0.0"%"';
 const NUMFMT_PCT_2 = '0.00"%"';
 
-const SHORT_EXCESS_FIXED_COLS = new Set([12, 15, 21, 27]);
-const PERCENT_FIXED_COLS_1DP = new Set([20, 26]);
+// Fixed column indexes (after STYLE column insertion)
+const SHORT_EXCESS_FIXED_COLS = new Set([13, 16, 22, 28]);
+const PERCENT_FIXED_COLS_1DP = new Set([21, 27]);
+
+const solidFill = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+
+// Same look as the <ShortExcess /> badge in the table
+const styleShortExcessCell = (cell, val, onDark = false) => {
+    const r = Math.round(Number(val) * 100) / 100;
+    if (!Number.isFinite(r) || r === 0) {
+        cell.font = { bold: onDark, size: 10, color: { argb: onDark ? "FFE5E7EB" : "FF94A3B8" } };
+        return;
+    }
+    if (r > 0) {
+        cell.font = { bold: true, size: 10, color: { argb: "FF047857" } };
+        cell.fill = solidFill("FFECFDF5");
+    } else {
+        cell.font = { bold: true, size: 10, color: { argb: "FFBE123C" } };
+        cell.fill = solidFill("FFFFF1F2");
+    }
+};
+
+// Shows "-" like the table when value is empty / zero
+const toNumOrDash = (v) => (v && !isNaN(Number(v)) ? Number(v) : "-");
+const rawNumOrDash = (v) => {
+    if (v === null || v === undefined || v === "") return "-";
+    const n = Number(v);
+    return isNaN(n) ? String(v) : n;
+};
 
 const FILTER_DROPDOWN_WIDTH = 220;
 
@@ -181,7 +219,7 @@ const Reconciliation = () => {
     });
 
     const YARN_TABLE_HEADERS = [
-        "", "DATE OF RECONCILIATION", "BUYER NAME", "JOB NO", "COLOR", "COMPOSITION", "ORDER QTY", "ADDITIONAL QTY", "MANUFACTURING UNIT",
+        "", "DATE OF RECONCILIATION", "BUYER NAME", "JOB NO", "STYLE", "COLOR", "COMPOSITION", "ORDER QTY", "ADDITIONAL QTY", "MANUFACTURING UNIT",
         "FINISH REQUIRE QTY", "YARN REQUIRE QTY", "YARN DELIVERY",
         "SHORT & EXCESS",
         "YARN RETURN", "GREY RECEIVED",
@@ -199,9 +237,9 @@ const Reconciliation = () => {
     const FILTERABLE_COLS = {
         1: { key: "dateOfReconciliation", label: "DATE OF RECONCILIATION" },
         3: { key: "jobNo", label: "JOB NO" },
-        4: { key: "color", label: "COLOR" },
-        5: { key: "composition", label: "COMPOSITION" },
-        8: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" }, // Fixed index from 7 to 8
+        5: { key: "color", label: "COLOR" },
+        6: { key: "composition", label: "COMPOSITION" },
+        9: { key: "manufacturingUnite", label: "MANUFACTURING UNIT" },
     };
 
     const JOB_LEVEL_FILTER_KEYS = new Set(["dateOfReconciliation"]);
@@ -924,12 +962,12 @@ const Reconciliation = () => {
                 const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
                 const addi = Number(com?.additional) || 0;
                 const dyeGreyReturn = Number(comp?.dyeingOrder_Grey_Return) || 0;
-                const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
+                const dyeShortExcess = dyeGreyReceived + dyeGreyReturn - dyeGreyDelivery;
                 const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
                 const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop) || 0;
-                const aopSent = Number(comp?.aopOrder_Sent_for_AOP) || 0;
+                const aopSent = Number(comp?.aopOrder_Sent_For_Aop) || 0;
                 const aopReceived = Number(comp?.aopOrder_Return_From_Aop) || 0;
-                const aopShortExcess = aopReceived - aopSent;
+                const aopShortExcess = aopGreyReceived + aopReceived - aopSent;
 
                 totals.orderQty += Number(com?.orderQty) || 0;
                 totals.finishRequiredQty += finishQty;
@@ -968,6 +1006,7 @@ const Reconciliation = () => {
         return totals;
     }, [processedReportData, editValues, TRAILING_FIELDS, calculateFormula]);
 
+    // ======================= EXCEL EXPORT (matches ERP table) =======================
     const exportExcel = async () => {
         if (isExporting) return;
         if (processedReportData.length === 0) {
@@ -982,7 +1021,7 @@ const Reconciliation = () => {
             wb.created = new Date();
 
             const ws = wb.addWorksheet("Reconciliation", {
-                views: [{ state: "frozen", xSplit: 4, ySplit: 1, activeCell: "E2" }],
+                views: [{ state: "frozen", xSplit: 5, ySplit: 1, activeCell: "F2" }],
                 pageSetup: {
                     orientation: "landscape",
                     fitToPage: true,
@@ -993,88 +1032,119 @@ const Reconciliation = () => {
                 }
             });
 
-            const COL_WIDTHS = [5, 16, 16, 18, 14, 20, 12, 16];
-            for (let i = 8; i < TOTAL_COLS; i++) COL_WIDTHS.push(13);
+            // SL, Date, Buyer, Job, Style, Color, Composition, Order, Additional, Manu Unit
+            const COL_WIDTHS = [6, 15, 16, 16, 16, 14, 26, 11, 12, 16];
+            while (COL_WIDTHS.length < TOTAL_COLS) COL_WIDTHS.push(13);
+            COL_WIDTHS[TOTAL_COLS - 1] = 30; // remarks
             for (let i = 0; i < TOTAL_COLS; i++) {
                 ws.getColumn(i + 1).width = COL_WIDTHS[i];
             }
 
+            // Column groups used for formatting / totals
+            const percentCols = new Set(PERCENT_FIXED_COLS_1DP);
+            const seCols = new Set(SHORT_EXCESS_FIXED_COLS);
+            const formulaCols = new Set();
+            TRAILING_FIELDS.forEach((field, idx) => {
+                const colIdx = FIXED_COLUMN_COUNT + idx;
+                const fk = field.key.toLowerCase();
+                const isPercent = fk.includes("percent");
+                if (isPercent) percentCols.add(colIdx);
+                if (field.type === "FORMULA") {
+                    formulaCols.add(colIdx);
+                    if (!isPercent && (fk.includes("short") || fk.includes("excess"))) seCols.add(colIdx);
+                }
+            });
+
+            // ---------- Header ----------
             const headerRow = ws.getRow(1);
             headerRow.height = 48;
             for (let c = 0; c < TOTAL_COLS; c++) {
                 const cell = headerRow.getCell(c + 1);
                 cell.value = c === 0 ? "SL" : (YARN_TABLE_HEADERS[c] ?? "");
-                cell.font = { bold: true, size: 9, color: { argb: "FF0F172A" } };
+                cell.font = { bold: true, size: 9, color: { argb: "FFFFFFFF" } };
                 cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+                cell.fill = solidFill(XL_GRAY);
                 cell.border = XL_BORDER_HEADER;
             }
             headerRow.commit();
 
-            processedReportData.forEach((job) => {
+            const colTotals = new Array(TOTAL_COLS).fill(null);
+
+            // ---------- Body ----------
+            processedReportData.forEach((job, jobIdx) => {
                 const jobNo = job.jobNo;
                 const comps = job?.rows || [];
                 const compBreakDown = job.compBreakdown || [];
                 const subRowCount = getSubRowCount(job);
                 const isEditingThisJob = editingJobNo === jobNo;
                 const jobStartRow = ws.rowCount + 1;
+                const processLoss = Number(job.processLoss) || 0;
 
                 for (let i = 0; i < subRowCount; i++) {
                     const com = comps[i];
                     const comp = compBreakDown[i];
                     const isFirstRow = i === 0;
 
-                    const finishQty = Number(com?.finishRequiredQty) || 0;
-                    const processLoss = Number(job.processLoss) || 0;
-                    const yarnRequiredQty = finishQty * (1 + processLoss / 100);
+                    // ---- same calculations as the table ----
+                    const finishNum = Number(com?.finishRequiredQty) || 0;
+                    const additionalNum = Number(com?.additional) || 0;
+                    const yarnBase = finishNum * (1 + processLoss / 100);
+                    const increaseFinishQty = finishNum + (additionalNum - additionalNum * (processLoss / 100));
+                    const yarnRequireDisplayed = yarnBase + additionalNum;
+
                     const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) || 0;
                     const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
                     const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return) || 0;
-                    const yarnShortExcessReq = knitYarnDelivery - yarnRequiredQty;
+                    const yarnShortExcessReq = knitYarnDelivery - yarnBase;
                     const knitShortExcess = knitYarnReturn + knitGreyReceived - knitYarnDelivery;
+
                     const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
                     const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
-                    const dyeProcessLoss = dyeGreyReceived > 0 ? ((dyeGreyReceived - dyeFinishReceived) / dyeGreyReceived) * 100 : 0;
                     const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
-                    const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
-                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
+                    const dyeProcessLoss = dyeGreyReceived > 0 ? ((dyeGreyReceived - dyeFinishReceived) / dyeGreyReceived) * 100 : 0;
+                    const dyeGreyReturn = Number(comp?.dyeingOrder_Grey_Return) || 0;
+                    const dyeShortExcess = dyeGreyReceived + dyeGreyReturn - dyeGreyDelivery;
+
+                    const aopSentRaw = comp?.aopOrder_Sent_For_Aop ?? comp?.aopOrder_Sent_For_Aop;
+                    const aopSent = Number(aopSentRaw) || 0;
+                    const aopReturn = Number(comp?.aopOrder_Return_From_Aop) || 0;
                     const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop) || 0;
+                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
                     const aopProcessLoss = aopGreyReceived > 0 ? ((aopGreyReceived - aopFinishReceived) / aopGreyReceived) * 100 : 0;
-                    const aopSent = Number(comp?.aopOrder_Sent_for_AOP) || 0;
-                    const aopReceived = Number(comp?.aopOrder_Return_From_Aop) || 0;
-                    const aopShortExcess = aopSent - aopReceived;
+                    const aopShortExcess = aopGreyReceived + aopReturn - aopSent;
 
                     const manuUnitDisplay = getEffectiveManuUnit(jobNo, com, i);
                     const rowValues = new Array(TOTAL_COLS).fill("");
 
-                    rowValues[0] = "";
+                    rowValues[0] = isFirstRow ? jobIdx + 1 : "";
                     rowValues[1] = isFirstRow ? formatDateDisplay(getEffectiveDateRaw(jobNo, job)) : "";
-                    rowValues[2] = isFirstRow ? (com?.buyerName || job?.buyerName || "") : "";
-                    rowValues[3] = isFirstRow ? (jobNo ?? "") : "";
-                    rowValues[4] = com?.color ?? "";
-                    rowValues[5] = com?.composition ?? "";
-                    rowValues[6] = com?.orderQty != null ? Number(com.orderQty) : "";
-                    rowValues[7] = com?.additional != null ? Number(com.additional) : "";
-                    rowValues[8] = manuUnitDisplay;
-                    rowValues[9] = com?.finishRequiredQty != null ? Number(com.finishRequiredQty) : "";
-                    rowValues[10] = com ? yarnRequiredQty : "";
-                    rowValues[11] = comp?.knittingOrder_Yarn_Delivery != null && !isNaN(Number(comp.knittingOrder_Yarn_Delivery)) ? Number(comp.knittingOrder_Yarn_Delivery) : "";
-                    rowValues[12] = comp ? yarnShortExcessReq : "";
-                    rowValues[13] = comp?.knittingOrder_Yarn_Return != null && !isNaN(Number(comp.knittingOrder_Yarn_Return)) ? Number(comp.knittingOrder_Yarn_Return) : "";
-                    rowValues[14] = comp?.knittingOrder_Grey_Fabric_Received != null && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received)) ? Number(comp.knittingOrder_Grey_Fabric_Received) : "";
-                    rowValues[15] = comp ? knitShortExcess : "";
-                    rowValues[16] = comp?.dyeingOrder_Grey_Delivery != null && !isNaN(Number(comp.dyeingOrder_Grey_Delivery)) ? Number(comp.dyeingOrder_Grey_Delivery) : "";
-                    rowValues[17] = comp?.dyeingOrder_Grey_Return != null && !isNaN(Number(comp.dyeingOrder_Grey_Return)) ? Number(comp.dyeingOrder_Grey_Return) : "";
-                    rowValues[18] = comp?.dyeingOrder_Grey_Received != null && !isNaN(Number(comp.dyeingOrder_Grey_Received)) ? Number(comp.dyeingOrder_Grey_Received) : "";
-                    rowValues[19] = comp?.dyeingOrder_Finish_Received != null && !isNaN(Number(comp.dyeingOrder_Finish_Received)) ? Number(comp.dyeingOrder_Finish_Received) : "";
-                    rowValues[20] = comp ? dyeProcessLoss : "";
-                    rowValues[21] = comp ? dyeShortExcess : "";
-                    rowValues[22] = comp?.aopOrder_Sent_for_AOP != null && !isNaN(Number(comp.aopOrder_Sent_for_AOP)) ? Number(comp.aopOrder_Sent_for_AOP) : "";
-                    rowValues[23] = comp?.aopOrder_Return_From_Aop != null && !isNaN(Number(comp.aopOrder_Return_From_Aop)) ? Number(comp.aopOrder_Return_From_Aop) : "";
-                    rowValues[24] = comp?.aopOrder_Received_From_Aop != null && !isNaN(Number(comp.aopOrder_Received_From_Aop)) ? Number(comp.aopOrder_Received_From_Aop) : "";
-                    rowValues[25] = comp?.aopOrder_AOP_Finish_Fabric_Rcvd != null && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd)) ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd) : "";
-                    rowValues[26] = comp ? aopProcessLoss : "";
-                    rowValues[27] = comp ? aopShortExcess : "";
+                    rowValues[2] = isFirstRow ? (com?.buyerName || job?.buyerName || "-") : "";
+                    rowValues[3] = isFirstRow ? (jobNo || "-") : "";
+                    rowValues[4] = getStyleValue(job, com) || "-";
+                    rowValues[5] = com?.color || "-";
+                    rowValues[6] = com?.composition || "-";
+                    rowValues[7] = rawNumOrDash(com?.orderQty);
+                    rowValues[8] = rawNumOrDash(com?.additional);
+                    rowValues[9] = manuUnitDisplay && manuUnitDisplay !== "" ? manuUnitDisplay : "-";
+                    rowValues[10] = com ? increaseFinishQty : "-";
+                    rowValues[11] = com ? yarnRequireDisplayed : "-";
+                    rowValues[12] = toNumOrDash(comp?.knittingOrder_Yarn_Delivery);
+                    rowValues[13] = comp ? yarnShortExcessReq : "-";
+                    rowValues[14] = toNumOrDash(comp?.knittingOrder_Yarn_Return);
+                    rowValues[15] = toNumOrDash(comp?.knittingOrder_Grey_Fabric_Received);
+                    rowValues[16] = comp ? knitShortExcess : "-";
+                    rowValues[17] = toNumOrDash(comp?.dyeingOrder_Grey_Delivery);
+                    rowValues[18] = toNumOrDash(comp?.dyeingOrder_Grey_Return);
+                    rowValues[19] = toNumOrDash(comp?.dyeingOrder_Grey_Received);
+                    rowValues[20] = toNumOrDash(comp?.dyeingOrder_Finish_Received);
+                    rowValues[21] = comp ? dyeProcessLoss : "-";
+                    rowValues[22] = comp ? dyeShortExcess : "-";
+                    rowValues[23] = toNumOrDash(aopSentRaw);
+                    rowValues[24] = toNumOrDash(comp?.aopOrder_Return_From_Aop);
+                    rowValues[25] = toNumOrDash(comp?.aopOrder_Received_From_Aop);
+                    rowValues[26] = toNumOrDash(comp?.aopOrder_AOP_Finish_Fabric_Rcvd);
+                    rowValues[27] = comp ? aopProcessLoss : "-";
+                    rowValues[28] = comp ? aopShortExcess : "-";
 
                     TRAILING_FIELDS.forEach((field, idx) => {
                         const colIdx = FIXED_COLUMN_COUNT + idx;
@@ -1090,7 +1160,7 @@ const Reconciliation = () => {
                                 const saved = com?.reconciliation?.[field.key];
                                 if (saved != null && saved !== "NULL" && saved !== "") valStr = saved;
                             }
-                            rowValues[colIdx] = valStr || "";
+                            rowValues[colIdx] = valStr ? String(valStr) : "-";
                         } else if (isFormula) {
                             const val = calculateFormula(jobNo, i, field.key, job);
                             rowValues[colIdx] = Number.isFinite(val) ? val : 0;
@@ -1105,144 +1175,107 @@ const Reconciliation = () => {
                                 if (saved != null && saved !== "NULL" && saved !== "") valStr = saved;
                             }
                             if (valStr === null || valStr === undefined || valStr === "") {
-                                rowValues[colIdx] = "";
+                                rowValues[colIdx] = "-";
                             } else {
                                 const n = Number(valStr);
-                                rowValues[colIdx] = isNaN(n) ? "" : n;
+                                rowValues[colIdx] = isNaN(n) ? "-" : n;
                             }
                         }
                     });
+
+                    // accumulate totals from exactly what is exported
+                    for (let c = 7; c < TOTAL_COLS; c++) {
+                        if (percentCols.has(c)) continue;
+                        if (typeof rowValues[c] === "number" && Number.isFinite(rowValues[c])) {
+                            colTotals[c] = (colTotals[c] ?? 0) + rowValues[c];
+                        }
+                    }
 
                     const row = ws.getRow(ws.rowCount + 1);
                     row.height = 20;
                     for (let c = 0; c < TOTAL_COLS; c++) {
                         const cell = row.getCell(c + 1);
-                        cell.value = rowValues[c];
+                        const v = rowValues[c];
+                        cell.value = v;
                         cell.border = XL_BORDER;
                         cell.alignment = { horizontal: "center", vertical: "middle", wrapText: false };
                         cell.font = { size: 10, color: { argb: "FF1E293B" } };
 
-                        if (isEditingThisJob) {
-                            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2FF" } };
-                        }
+                        if (isEditingThisJob) cell.fill = solidFill("FFEEF2FF");
+                        if (formulaCols.has(c) && !isEditingThisJob) cell.fill = solidFill("FFF3F8FE");
 
-                        if (PERCENT_FIXED_COLS_1DP.has(c)) {
-                            cell.numFmt = NUMFMT_PCT_1;
-                        } else if (SHORT_EXCESS_FIXED_COLS.has(c)) {
-                            cell.numFmt = NUMFMT_SHORT_EXCESS;
-                        } else if (typeof rowValues[c] === "number") {
-                            cell.numFmt = NUMFMT_NUMBER;
+                        const isNum = typeof v === "number";
+
+                        if (c < FIXED_COLUMN_COUNT) {
+                            if (c === 5 && com?.color) {
+                                // colour pill
+                                cell.font = { size: 10, bold: true, color: { argb: "FF1E3A8A" } };
+                                cell.fill = solidFill("FFDBEAFE");
+                            }
+                            if (c === 8 && additionalNum > 0) {
+                                cell.font = { size: 10, color: { argb: "FF713F12" } };
+                                cell.fill = solidFill("FFFEF9C3");
+                            }
+                            if (isNum) {
+                                if (PERCENT_FIXED_COLS_1DP.has(c)) cell.numFmt = NUMFMT_PCT_1;
+                                else if (SHORT_EXCESS_FIXED_COLS.has(c)) {
+                                    cell.numFmt = NUMFMT_SHORT_EXCESS;
+                                    styleShortExcessCell(cell, v);
+                                } else if (c >= 10) cell.numFmt = NUMFMT_NUMBER;
+                            }
+                        } else {
+                            const field = TRAILING_FIELDS[c - FIXED_COLUMN_COUNT];
+                            if (field.key === "remarks") {
+                                cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true, indent: 1 };
+                            } else if (isNum) {
+                                if (percentCols.has(c)) cell.numFmt = NUMFMT_PCT_2;
+                                else if (seCols.has(c)) {
+                                    cell.numFmt = NUMFMT_SHORT_EXCESS;
+                                    styleShortExcessCell(cell, v);
+                                } else if (field.type === "FORMULA") cell.numFmt = NUMFMT_NUMBER;
+                            }
                         }
                     }
-
-                    TRAILING_FIELDS.forEach((field, idx) => {
-                        const colIdx = FIXED_COLUMN_COUNT + idx;
-                        if (field.key === "remarks") {
-                            const cell = row.getCell(colIdx + 1);
-                            cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-                            return;
-                        }
-                        const cell = row.getCell(colIdx + 1);
-                        const fk = field.key.toLowerCase();
-                        const isPercent = fk.includes("percent");
-                        const isShortExcess = fk.includes("short") || fk.includes("excess");
-
-                        if (isPercent) {
-                            cell.numFmt = NUMFMT_PCT_2;
-                        } else if (isShortExcess && field.type === "FORMULA") {
-                            cell.numFmt = NUMFMT_SHORT_EXCESS;
-                        } else if (typeof rowValues[colIdx] === "number") {
-                            cell.numFmt = NUMFMT_NUMBER;
-                        }
-                    });
                     row.commit();
                 }
 
+                // merge job-level columns (SL, Date, Buyer, Job No)
                 const jobEndRow = ws.rowCount;
                 if (jobEndRow > jobStartRow) {
-                    ws.mergeCells(jobStartRow, 2, jobEndRow, 2);
-                    ws.mergeCells(jobStartRow, 4, jobEndRow, 4);
+                    [1, 2, 3, 4].forEach((col) => ws.mergeCells(jobStartRow, col, jobEndRow, col));
                 }
-
-                const dateCell = ws.getCell(jobStartRow, 2);
-                dateCell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-                dateCell.font = { size: 10, color: { argb: "FF1E293B" } };
-
-                const jobCell = ws.getCell(jobStartRow, 4);
-                jobCell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-                jobCell.font = { bold: true, size: 11, color: { argb: "FF0F172A" } };
+                [1, 2, 3, 4].forEach((col) => {
+                    const mc = ws.getCell(jobStartRow, col);
+                    mc.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+                    mc.font = { size: 10, color: { argb: "FF1E293B" } };
+                });
+                ws.getCell(jobStartRow, 4).font = { bold: true, size: 11, color: { argb: "FF0F172A" } };
             });
 
-            const subtotalValues = new Array(TOTAL_COLS).fill("");
-            subtotalValues[3] = "SUB-TOTAL";
-            subtotalValues[6] = footerTotals.orderQty;
-            subtotalValues[7] = footerTotals.additionalQty;
-            subtotalValues[9] = footerTotals.finishRequiredQty;
-            subtotalValues[10] = footerTotals.yarnRequiredQty;
-            subtotalValues[11] = footerTotals.knitYarnDelivery;
-            subtotalValues[12] = footerTotals.yarnShortExcessReq;
-            subtotalValues[13] = footerTotals.knitYarnReturn;
-            subtotalValues[14] = footerTotals.knitGreyReceived;
-            subtotalValues[15] = footerTotals.knitShortExcess;
-            subtotalValues[16] = footerTotals.dyeGreyDelivery;
-            subtotalValues[17] = footerTotals.dyeGreyReturn;
-            subtotalValues[18] = footerTotals.dyeGreyReceived;
-            subtotalValues[19] = footerTotals.dyeFinishReceived;
-            subtotalValues[20] = "";
-            subtotalValues[21] = footerTotals.dyeShortExcess;
-            subtotalValues[22] = footerTotals.aopSent;
-            subtotalValues[23] = footerTotals.aopReceived;
-            subtotalValues[24] = footerTotals.aopGreyReceived;
-            subtotalValues[25] = footerTotals.aopFinishReceived;
-            subtotalValues[26] = "";
-            subtotalValues[27] = footerTotals.aopShortExcess;
-
-            TRAILING_FIELDS.forEach((field, idx) => {
-                const colIdx = FIXED_COLUMN_COUNT + idx;
-                if (field.key === "remarks") {
-                    subtotalValues[colIdx] = "";
-                } else {
-                    subtotalValues[colIdx] = footerTotals[field.key] ?? "";
-                }
-            });
-
+            // ---------- Total row ----------
             const subtotalRow = ws.getRow(ws.rowCount + 1);
             subtotalRow.height = 26;
             for (let c = 0; c < TOTAL_COLS; c++) {
                 const cell = subtotalRow.getCell(c + 1);
-                cell.value = subtotalValues[c];
+                let v = "";
+                if (c === 3) v = "Total";
+                else if (c >= 7 && !percentCols.has(c) && colTotals[c] !== null) v = colTotals[c];
+
+                cell.value = v;
                 cell.font = { bold: true, size: 10, color: { argb: "FFFFFFFF" } };
-                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+                cell.fill = solidFill(XL_GRAY);
                 cell.border = XL_BORDER_SUBTOTAL;
                 cell.alignment = { horizontal: "center", vertical: "middle" };
 
-                if (PERCENT_FIXED_COLS_1DP.has(c)) {
-                    cell.numFmt = NUMFMT_PCT_1;
-                } else if (SHORT_EXCESS_FIXED_COLS.has(c)) {
-                    cell.numFmt = NUMFMT_SHORT_EXCESS;
-                } else if (typeof subtotalValues[c] === "number") {
-                    cell.numFmt = NUMFMT_NUMBER;
+                if (typeof v === "number") {
+                    if (seCols.has(c)) {
+                        cell.numFmt = NUMFMT_SHORT_EXCESS;
+                        styleShortExcessCell(cell, v, true);
+                    } else {
+                        cell.numFmt = NUMFMT_NUMBER;
+                    }
                 }
             }
-            TRAILING_FIELDS.forEach((field, idx) => {
-                const colIdx = FIXED_COLUMN_COUNT + idx;
-                if (field.key === "remarks") {
-                    const cell = subtotalRow.getCell(colIdx + 1);
-                    cell.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-                    return;
-                }
-                const cell = subtotalRow.getCell(colIdx + 1);
-                const fk = field.key.toLowerCase();
-                const isPercent = fk.includes("percent");
-                const isShortExcess = fk.includes("short") || fk.includes("excess");
-                if (isPercent) {
-                    cell.numFmt = NUMFMT_PCT_2;
-                } else if (isShortExcess && field.type === "FORMULA") {
-                    cell.numFmt = NUMFMT_SHORT_EXCESS;
-                } else if (typeof subtotalValues[colIdx] === "number") {
-                    cell.numFmt = NUMFMT_NUMBER;
-                }
-            });
             subtotalRow.commit();
 
             const buffer = await wb.xlsx.writeBuffer();
@@ -1570,16 +1603,17 @@ const Reconciliation = () => {
                                     const knitShortExcess = knitYarnReturn + knitGreyReceived - knitYarnDelivery || 0;
                                     const convertKnitShortExcessToNumber = knitShortExcess.toFixed(2);
                                     const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received).toFixed(2) || 0;
-                                    const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received).toFixed(2) || 0;
+                                    const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
                                     const dyeProcessLoss = dyeGreyReceived > 0 ? ((dyeGreyReceived - dyeFinishReceived) / dyeGreyReceived) * 100 : 0;
-                                    const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery).toFixed(2) || 0;
-                                    const dyeShortExcess = dyeGreyReceived - dyeGreyDelivery;
-                                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) || 0;
-                                    const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop).toFixed(2) || 0;
+                                    const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
+                                    const dyeGreyReturn = Number(comp?.dyeingOrder_Grey_Return) || 0;
+                                    const dyeShortExcess = dyeGreyReceived + dyeGreyReturn - dyeGreyDelivery;
+                                    const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
+                                    const aopGreyReceived = Number(comp?.aopOrder_Received_From_Aop) || 0;
                                     const aopProcessLoss = aopGreyReceived > 0 ? ((aopGreyReceived - aopFinishReceived) / aopGreyReceived) * 100 : 0;
-                                    const aopSent = Number(comp?.aopOrder_Sent_for_AOP).toFixed(2) || 0;
-                                    const aopReceived = Number(comp?.aopOrder_Return_From_Aop).toFixed(2) || 0;
-                                    const aopShortExcess = aopSent - aopReceived;
+                                    const aopSent = Number(comp?.aopOrder_Sent_For_Aop) || 0;
+                                    const aopReceived = Number(comp?.aopOrder_Return_From_Aop) || 0;
+                                    const aopShortExcess = aopGreyReceived + aopReceived - aopSent;
 
                                     const stickyBodyClass = (colIdx) => [
                                         "sticky z-10 px-3 py-2.5 text-sm text-slate-800 border-b border-[#47637a] text-center align-middle",
@@ -1683,23 +1717,30 @@ const Reconciliation = () => {
                                                 </td>
                                             )}
 
+                                            {/* STYLE (new) */}
                                             <td className={`${stickyBodyClass(4)} ${selectedCellClass(rowFlatIndex, 4)}`} style={stickyCellStyle(4, stickyBg)} {...cellProps(rowFlatIndex, 4)}>
+                                                <div className="flex items-center justify-center h-full text-sm font-medium text-slate-700">
+                                                    {getStyleValue(job, com) || "-"}
+                                                </div>
+                                            </td>
+
+                                            <td className={`${stickyBodyClass(5)} ${selectedCellClass(rowFlatIndex, 5)}`} style={stickyCellStyle(5, stickyBg)} {...cellProps(rowFlatIndex, 5)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     <span className="px-2 py-1 text-xs font-medium text-blue-900 bg-blue-100 rounded-full">
                                                         {com?.color || "-"}
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className={`${stickyBodyClass(5)} ${selectedCellClass(rowFlatIndex, 5)}`} style={stickyCellStyle(5, stickyBg)} {...cellProps(rowFlatIndex, 5)}>
+                                            <td className={`${stickyBodyClass(6)} ${selectedCellClass(rowFlatIndex, 6)}`} style={stickyCellStyle(6, stickyBg)} {...cellProps(rowFlatIndex, 6)}>
                                                 <div className="flex items-center justify-center h-full">{com?.composition || "-"}</div>
                                             </td>
-                                            <td className={`${stickyBodyClass(6)} ${selectedCellClass(rowFlatIndex, 6)}`} style={stickyCellStyle(6, stickyBg)} {...cellProps(rowFlatIndex, 6)}>
+                                            <td className={`${stickyBodyClass(7)} ${selectedCellClass(rowFlatIndex, 7)}`} style={stickyCellStyle(7, stickyBg)} {...cellProps(rowFlatIndex, 7)}>
                                                 <div className="flex items-center justify-center h-full font-mono text-sm">{com?.orderQty ?? "-"}</div>
                                             </td>
-                                            <td className={`${stickyBodyClass(7)} ${selectedCellClass(rowFlatIndex, 7)}`} style={stickyCellStyle(7, stickyBg)} {...cellProps(rowFlatIndex, 7)}>
+                                            <td className={`${stickyBodyClass(8)} ${selectedCellClass(rowFlatIndex, 8)}`} style={stickyCellStyle(8, stickyBg)} {...cellProps(rowFlatIndex, 8)}>
                                                 <div className={`flex items-center ${com?.additional && "bg-yellow-100 text-yellow-900 rounded-lg border-yellow-300 border"} justify-center h-full font-mono text-sm`}>{com?.additional ?? "-"}</div>
                                             </td>
-                                            <td className={`${stickyBodyClass(8)} ${selectedCellClass(rowFlatIndex, 8)}`} style={stickyCellStyle(8, stickyBg, true)} {...cellProps(rowFlatIndex, 8)}>
+                                            <td className={`${stickyBodyClass(9)} ${selectedCellClass(rowFlatIndex, 9)}`} style={stickyCellStyle(9, stickyBg, true)} {...cellProps(rowFlatIndex, 9)}>
                                                 <div className="flex items-center justify-center h-full">
                                                     {isEditingThisJob && sections?.styleRequirements?.reconciliationSubmission ? (
                                                         <input
@@ -1716,7 +1757,7 @@ const Reconciliation = () => {
                                                 </div>
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 9)}`} style={cellStyle} {...cellProps(rowFlatIndex, 9)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>
                                                 {(() => {
                                                     if (!com) return "-";
                                                     const additional = Number(com.additional) || 0;
@@ -1725,66 +1766,67 @@ const Reconciliation = () => {
                                                     const increaseFinishQty = (Number(com.finishRequiredQty) || 0) + netAdditional;
                                                     return increaseFinishQty.toFixed(2);
                                                 })()}
-                                            </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>
-                                                {(Number(com.finishRequiredQty) * (1 + Number(job.processLoss) / 100) + Number(com.additional)).toFixed(2)}
+                                                
                                             </td>
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 11)}`} style={cellStyle} {...cellProps(rowFlatIndex, 11)}>
+                                                {(Number(com.finishRequiredQty) * (1 + Number(job.processLoss) / 100) + Number(com.additional)).toFixed(2)}
+                                            </td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>
                                                 {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
                                                     ? Number(comp.knittingOrder_Yarn_Delivery).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 13)}`} style={cellStyle} {...cellProps(rowFlatIndex, 13)}>{comp ? <ShortExcess value={yarnShortExcessReq} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 13)}`} style={cellStyle} {...cellProps(rowFlatIndex, 13)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 14)}`} style={cellStyle} {...cellProps(rowFlatIndex, 14)}>
                                                 {comp?.knittingOrder_Yarn_Return && !isNaN(Number(comp.knittingOrder_Yarn_Return))
                                                     ? Number(comp.knittingOrder_Yarn_Return).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 14)}`} style={cellStyle} {...cellProps(rowFlatIndex, 14)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 15)}`} style={cellStyle} {...cellProps(rowFlatIndex, 15)}>
                                                 {comp?.knittingOrder_Grey_Fabric_Received && !isNaN(Number(comp.knittingOrder_Grey_Fabric_Received))
                                                     ? Number(comp.knittingOrder_Grey_Fabric_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 15)}`} style={cellStyle} {...cellProps(rowFlatIndex, 15)}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 16)}`} style={cellStyle} {...cellProps(rowFlatIndex, 16)}>{comp ? <ShortExcess value={convertKnitShortExcessToNumber} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 16)}`} style={cellStyle} {...cellProps(rowFlatIndex, 16)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 17)}`} style={cellStyle} {...cellProps(rowFlatIndex, 17)}>
                                                 {comp?.dyeingOrder_Grey_Delivery && !isNaN(Number(comp.dyeingOrder_Grey_Delivery))
                                                     ? Number(comp.dyeingOrder_Grey_Delivery).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 17)}`} style={cellStyle} {...cellProps(rowFlatIndex, 17)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 18)}`} style={cellStyle} {...cellProps(rowFlatIndex, 18)}>
                                                 {comp?.dyeingOrder_Grey_Return && !isNaN(Number(comp.dyeingOrder_Grey_Return))
                                                     ? Number(comp.dyeingOrder_Grey_Return).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 18)}`} style={cellStyle} {...cellProps(rowFlatIndex, 18)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 19)}`} style={cellStyle} {...cellProps(rowFlatIndex, 19)}>
                                                 {comp?.dyeingOrder_Grey_Received && !isNaN(Number(comp.dyeingOrder_Grey_Received))
                                                     ? Number(comp.dyeingOrder_Grey_Received).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 19)}`} style={cellStyle} {...cellProps(rowFlatIndex, 19)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>
                                                 {comp?.dyeingOrder_Finish_Received && !isNaN(Number(comp.dyeingOrder_Finish_Received))
                                                     ? Number(comp.dyeingOrder_Finish_Received).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 20)}`} style={cellStyle} {...cellProps(rowFlatIndex, 20)}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 21)}`} style={cellStyle} {...cellProps(rowFlatIndex, 21)}>{comp ? `${dyeProcessLoss.toFixed(1)}%` : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>{comp ? <ShortExcess value={dyeShortExcess} /> : "-"}</td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 22)}`} style={cellStyle} {...cellProps(rowFlatIndex, 22)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 23)}`} style={cellStyle} {...cellProps(rowFlatIndex, 23)}>
                                                 {comp?.aopOrder_Sent_For_Aop && !isNaN(Number(comp.aopOrder_Sent_For_Aop))
                                                     ? Number(comp.aopOrder_Sent_For_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 23)}`} style={cellStyle} {...cellProps(rowFlatIndex, 23)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 24)}`} style={cellStyle} {...cellProps(rowFlatIndex, 24)}>
                                                 {comp?.aopOrder_Return_From_Aop && !isNaN(Number(comp.aopOrder_Return_From_Aop))
                                                     ? Number(comp.aopOrder_Return_From_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 24)}`} style={cellStyle} {...cellProps(rowFlatIndex, 24)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 25)}`} style={cellStyle} {...cellProps(rowFlatIndex, 25)}>
                                                 {comp?.aopOrder_Received_From_Aop && !isNaN(Number(comp.aopOrder_Received_From_Aop))
                                                     ? Number(comp.aopOrder_Received_From_Aop).toFixed(2) : "-"}
                                             </td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 25)}`} style={cellStyle} {...cellProps(rowFlatIndex, 25)}>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 26)}`} style={cellStyle} {...cellProps(rowFlatIndex, 26)}>
                                                 {comp?.aopOrder_AOP_Finish_Fabric_Rcvd && !isNaN(Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd))
                                                     ? Number(comp.aopOrder_AOP_Finish_Fabric_Rcvd).toFixed(2) : "-"}
                                             </td>
 
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 26)}`} style={cellStyle} {...cellProps(rowFlatIndex, 26)}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
-                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 27)}`} style={cellStyle} {...cellProps(rowFlatIndex, 27)}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 27)}`} style={cellStyle} {...cellProps(rowFlatIndex, 27)}>{comp ? `${aopProcessLoss.toFixed(1)}%` : "-"}</td>
+                                            <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 28)}`} style={cellStyle} {...cellProps(rowFlatIndex, 28)}>{comp ? <ShortExcess value={aopShortExcess} /> : "-"}</td>
 
                                             {TRAILING_FIELDS.map((field, idx) => {
                                                 const colIndex = FIXED_COLUMN_COUNT + idx;
@@ -1868,17 +1910,19 @@ const Reconciliation = () => {
                                     <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle text-xs font-extrabold uppercase tracking-wider text-white" style={stickyCellStyle(3, "#6b7280", true)}>
                                         Total
                                     </td>
+                                    {/* STYLE footer cell (new) */}
                                     <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(4, "#6b7280")} />
                                     <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(5, "#6b7280")} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(6, "#6b7280")} />
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(6, "#6b7280", false), borderTop: "2px solid #47637a" }}>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(7, "#6b7280", false), borderTop: "2px solid #47637a" }}>
                                         {footerTotals.orderQty.toFixed(2)}
                                     </td>
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(7, "#6b7280", false), borderTop: "2px solid #47637a" }}>
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...stickyCellStyle(8, "#6b7280", false), borderTop: "2px solid #47637a" }}>
                                         {footerTotals.additionalQty.toFixed(2)}
                                     </td>
 
-                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(8, "#6b7280", true)} />
+                                    <td className="sticky bottom-0 z-30 px-3 py-3 border-t-2 border-[#47637a]" style={stickyCellStyle(9, "#6b7280", true)} />
 
                                     <td className="sticky bottom-0 z-20 px-3 py-2.5 text-sm border-t-2 border-[#47637a] text-center align-middle font-mono font-bold text-white" style={{ ...cellStyle, backgroundColor: "#6b7280", borderTop: "2px solid #47637a" }}>
                                         {footerTotals.finishRequiredQty.toFixed(2)}
