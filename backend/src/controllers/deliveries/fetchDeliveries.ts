@@ -22,12 +22,8 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                     workOrderQty: true,
                     styleRequirementRow:{
                         select: {
-                            id: true,
                             styleRequirement: {
-                                select: {
-                                    jobNo: true,
-                                    buyerName: true,
-                                }
+                                
                             }
                         }
                     },

@@ -38,6 +38,7 @@ import { departmentWiseProduction } from "../controllers/production/dept.wise.pr
 import { getYarnPurchaseData } from "../controllers/yarns/get.yarn.purchase.data";
 import { movementChallans } from "../controllers/yarns/movement.challans";
 import { getDataSetsObjectKeys, getSelectedRowsData } from "../controllers/report.studio/report.studio";
+import { joinDeliveries } from "../controllers/deliveries/joinDeliveries";
 
 const getRouters = express.Router();
 
@@ -247,6 +248,8 @@ getRouters.get('/spinning-movement-challan', movementChallans);
 getRouters.get('/objects-report-studio', getDataSetsObjectKeys);
 
 getRouters.get('/selected-fields-data', getSelectedRowsData);
+
+getRouters.get('/get-join-deliveries/:jobNo', joinDeliveries)
 
 
 

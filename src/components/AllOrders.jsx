@@ -307,6 +307,7 @@ const AllOrders = ({ orderType }) => {
             .then(res => {
                 if (res) {
                     setOrders(res.data ?? []);
+                    console.log(res.data, "work order log");
                     if (res.pagination) setPagination(res.pagination);
                 }
             })
@@ -515,18 +516,81 @@ const AllOrders = ({ orderType }) => {
         setIsLoading(true);
         setChallanIssue([]);
         setDeliveryIssue([]);
-        const payload = overridePayload || changedField[yarnId] || {};
+
+        const rawPayload = overridePayload || changedField[yarnId] || {};
+        // `linkedDeliveries` is for the frontend only -> never send it inside the main payload
+        const { linkedDeliveries, ...mainPayload } = rawPayload;
         const singleWorkOrderId = Array.isArray(workOrderId) ? workOrderId[0] : workOrderId;
 
-        try {
-            const update = await axiosPrivate.patch(
-                `/api/update-order`,
-                payload,
-                { params: { yarnId, workOrderId: singleWorkOrderId } }
-            );
+        // Linked deliveries (e.g. Grey Delivery for the dyeing composition) go FIRST,
+        // so if they fail nothing is saved and the user can fix it.
+        const linkedSteps = Array.isArray(linkedDeliveries)
+            ? linkedDeliveries.map((l) => ({
+                yarnId: l.yarnId,
+                workOrderId: Array.isArray(l.workOrderId) ? l.workOrderId[0] : l.workOrderId,
+                payload: l.payload,
+                label: l.payload?.deliveryType || "Linked delivery",
+                isMain: false,
+            }))
+            : [];
 
-            if (update.status === 200) {
-                setChallanIssue([{ message: "Delivery Added", type: "success" }]);
+        const steps = [
+            ...linkedSteps,
+            {
+                yarnId,
+                workOrderId: singleWorkOrderId,
+                payload: mainPayload,
+                label: mainPayload.deliveryType || "Delivery",
+                isMain: true,
+            },
+        ];
+
+        const completed = [];
+        let failure = null;
+
+        try {
+            for (const step of steps) {
+                try {
+                    await axiosPrivate.patch(
+                        `/api/update-order`,
+                        step.payload,
+                        { params: { yarnId: step.yarnId, workOrderId: step.workOrderId } }
+                    );
+                    completed.push(step);
+                } catch (e) {
+                    console.log(`${step.label} failed:`, e.response?.data ?? e.message ?? e);
+                    const errorPayload = e.response?.data;
+                    const issues = Array.isArray(errorPayload)
+                        ? errorPayload
+                        : [{
+                            message: errorPayload?.message ?? "Something went wrong. Please try again.",
+                            type: "error",
+                        }];
+
+                    failure = {
+                        step,
+                        issues: steps.length > 1
+                            ? issues.map((i) => ({
+                                ...i,
+                                title: i.title
+                                    ? `${step.label} (ID ${step.yarnId}): ${i.title}`
+                                    : `${step.label} (ID ${step.yarnId}) failed`,
+                            }))
+                            : issues,
+                    };
+                    break; // stop at the first failure
+                }
+            }
+
+            if (completed.length > 0) {
+                setChallanIssue(
+                    completed.map((s) => ({
+                        message: s.isMain
+                            ? "Delivery Added"
+                            : `${s.label} added for composition ID ${s.yarnId}`,
+                        type: "success",
+                    }))
+                );
 
                 await Promise.all([
                     fetchData(`/api/work-order/${orderType}`, {
@@ -536,7 +600,9 @@ const AllOrders = ({ orderType }) => {
                             if (res) {
                                 setOrders(res.data ?? []);
                                 if (res.pagination) setPagination(res.pagination);
-                                setIsEditing(false);
+                                // close the modal only when everything succeeded,
+                                // so any error stays visible
+                                if (!failure) setIsEditing(false);
                             }
                         })
                         .catch((err) => {
@@ -562,23 +628,19 @@ const AllOrders = ({ orderType }) => {
                         }),
                 ]);
 
-                setChangedField(prev => {
-                    const next = { ...prev };
-                    delete next[yarnId];
-                    return next;
-                });
+                // main delivery saved -> clear this row's inputs
+                if (completed.some((s) => s.isMain)) {
+                    setChangedField(prev => {
+                        const next = { ...prev };
+                        delete next[yarnId];
+                        return next;
+                    });
+                }
             }
-        } catch (e) {
-            console.log(e.response?.data ?? e.message ?? e);
-            const errorPayload = e.response?.data;
-            setDeliveryIssue(
-                Array.isArray(errorPayload)
-                    ? errorPayload
-                    : [{
-                        message: errorPayload?.message ?? "Something went wrong. Please try again.",
-                        type: "error"
-                    }]
-            );
+
+            if (failure) {
+                setDeliveryIssue(failure.issues);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -622,18 +684,6 @@ const AllOrders = ({ orderType }) => {
         }
     };
 
-    const handleSearchInputChange = (e) => setSearchTerm(e.target.value);
-    const handleSearchKeyDown = (e) => {
-        if (e.key === 'Enter') setAppliedSearchTerm(searchTerm);
-        if (e.key === 'Escape') {
-            setSearchTerm("");
-            setAppliedSearchTerm("");
-        }
-    };
-    const handleClearSearch = () => {
-        setSearchTerm("");
-        setAppliedSearchTerm("");
-    };
 
     const filterHeaderStyle = {
         display: "flex",

@@ -28,7 +28,8 @@ export const updateJobs = async (req: Request, res: Response) => {
     const requestStart = process.hrtime.bigint();
 
     try {
-        const { yarnId, workOrderId } = req.query as { yarnId: string; workOrderId: string };
+        // workOrderId is optional in the query now — it is resolved from the composition (yarnId)
+        const { yarnId, workOrderId: queryWorkOrderId } = req.query as { yarnId: string; workOrderId?: string };
         const { toFactory, fromFactory, date, challanNo, deliveries } = req.body as UpdateJobsBody;
 
         if (!toFactory || !fromFactory || !date || !challanNo || !deliveries?.length) {
@@ -38,10 +39,6 @@ export const updateJobs = async (req: Request, res: Response) => {
         const yarnIdNum = Number(yarnId);
         if (!yarnId || Number.isNaN(yarnIdNum)) {
             return res.status(400).json({ type: "error", message: "Invalid or missing yarnId" });
-        }
-
-        if (!workOrderId) {
-            return res.status(400).json({ type: "error", message: "Missing workOrderId" });
         }
 
         const challanNoNum = Number(challanNo);
@@ -59,13 +56,23 @@ export const updateJobs = async (req: Request, res: Response) => {
             return res.status(401).json({ type: "error", message: "Unauthorized" });
         }
 
+        // Fetch the composition AND the work order it belongs to
         const checkYarnIfExist = await prisma.composition.findUnique({
             where: { id: yarnIdNum },
-            select: { id: true },
+            select: { id: true, workOrderId: true },
         });
 
         if (!checkYarnIfExist) {
             return res.status(404).json({ type: "error", message: "Yarn not found" });
+        }
+
+        // Source of truth = the composition's own work order.
+        // Fall back to the query value only if the composition has none.
+        const resolvedWorkOrderId =
+            checkYarnIfExist.workOrderId ?? (queryWorkOrderId ? Number(queryWorkOrderId) : null);
+
+        if (resolvedWorkOrderId === null || resolvedWorkOrderId === undefined || Number.isNaN(Number(resolvedWorkOrderId))) {
+            return res.status(400).json({ type: "error", message: "Work order not found for this yarn" });
         }
 
         const delivers = deliveries.filter(
@@ -104,7 +111,7 @@ export const updateJobs = async (req: Request, res: Response) => {
             delivers.map(async (delivery) => {
                 const result = await challanValidation(
                     challanNoNum,
-                    workOrderId,
+                    String(resolvedWorkOrderId),
                     toFactory,
                     fromFactory,
                     checkYarnIfExist.id,
@@ -146,22 +153,14 @@ export const updateJobs = async (req: Request, res: Response) => {
                     yarnCompId: checkYarnIfExist.id,
                     createdBy: userId,
                 };
-                return prisma.deliveries.create(
-                    {
-                        data,
-
-                        select: {
-                            id: true,
-                        }
+                return prisma.deliveries.create({
+                    data,
+                    select: {
+                        id: true,
                     },
-
-                );
+                });
             })
         );
-
-        const lastInsertedId = Number(insert[insert.length - 1]?.id) ?? null;
-        const generateChallan = generatePdfChallan(checkYarnIfExist?.id, lastInsertedId, userId)
-        console.log(generateChallan);
 
         const dbWriteEnd = process.hrtime.bigint();
         const dbWriteMs = Number(dbWriteEnd - dbWriteStart) / 1_000_000;
@@ -170,10 +169,17 @@ export const updateJobs = async (req: Request, res: Response) => {
             return res.status(500).json({ type: "error", message: "Failed to create deliveries" });
         }
 
+        const lastInsertedId = Number(insert[insert.length - 1]?.id);
+
+        // Fire-and-forget PDF generation: catch errors so a failure can't crash the process
+        Promise.resolve(generatePdfChallan(checkYarnIfExist.id, lastInsertedId, userId)).catch((pdfErr: unknown) =>
+            console.error("generatePdfChallan failed:", pdfErr)
+        );
+
         try {
             emitProgress("delivery:created", {
                 challanId,
-                workOrderId,
+                workOrderId: resolvedWorkOrderId,
                 yarnId: yarnIdNum,
                 count: insert.length,
                 deliveries: insert,

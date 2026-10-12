@@ -14,6 +14,8 @@ type YarnColorInput = {
 };
 
 type CompositionInput = {
+    // Optional: send this from the frontend if you already know the exact row
+    styleRequirementRowId?: string | number;
     composition: string;
     color: string;
     orderQty?: string | number;
@@ -68,6 +70,10 @@ const toValidNumber = (v: unknown): number | null => {
     const n = Number(evaluated);
     return Number.isNaN(n) ? null : n;
 };
+
+const normalize = (v: unknown): string => String(v ?? "").trim().toLowerCase();
+const rowKey = (composition: unknown, color: unknown): string =>
+    `${normalize(composition)}||${normalize(color)}`;
 
 export const createNewJob = async (req: Request, res: Response) => {
     const {
@@ -129,7 +135,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                 if (yarnColors.length === 0) {
                     return res.status(400).send({ message: `Composition ${i + 1}: at least one yarn color is required`, type: "error" });
                 }
-                
+
                 let rowQty = 0;
                 let rowAmount = 0;
                 for (let j = 0; j < yarnColors.length; j++) {
@@ -158,9 +164,71 @@ export const createNewJob = async (req: Request, res: Response) => {
             }
         }
 
-        const findStyleRequirement = await prisma.styleRequirement.findUnique({ where: { jobNo } });
+        // ── Fetch ALL rows of the style requirement with the fields needed for matching ──
+        const findStyleRequirement = await prisma.styleRequirement.findUnique({
+            where: { jobNo },
+            select: {
+                jobNo: true,
+                id: true,
+                rows: {
+                    select: { id: true, composition: true, color: true },
+                    orderBy: { id: "asc" },
+                },
+            },
+        });
         if (!findStyleRequirement) {
             return res.status(404).send({ message: "Style requirement not found for this job number", type: "error" });
+        }
+        if (findStyleRequirement.rows.length === 0) {
+            return res.status(404).send({ message: "Style requirement row not found for this job number", type: "error" });
+        }
+
+        // ── FIX: resolve the correct styleRequirementRowId for EACH composition ──
+        const rows = findStyleRequirement.rows;
+        const validRowIds = new Set<number>(rows.map((r) => r.id));
+        const rowIdByKey = new Map<string, number>();
+        for (const r of rows) {
+            const key = rowKey(r.composition, r.color);
+            // keep the first row if duplicates exist (rows are ordered by id asc)
+            if (!rowIdByKey.has(key)) rowIdByKey.set(key, r.id);
+        }
+
+        const styleRequirementRowIdByIndex: number[] = [];
+        for (let i = 0; i < compositions.length; i++) {
+            const comp = compositions[i] as CompositionInput;
+            let resolvedId: number | undefined;
+
+            // 1) explicit id from the client (must belong to this job's style requirement)
+            if (!isInvalid(comp.styleRequirementRowId)) {
+                const explicitId = Number(comp.styleRequirementRowId);
+                if (Number.isNaN(explicitId) || !validRowIds.has(explicitId)) {
+                    return res.status(400).send({
+                        message: `Composition ${i + 1}: styleRequirementRowId does not belong to this job's style requirement`,
+                        type: "error",
+                    });
+                }
+                resolvedId = explicitId;
+            }
+
+            // 2) match by composition + color
+            if (resolvedId === undefined) {
+                resolvedId = rowIdByKey.get(rowKey(comp.composition, comp.color));
+            }
+
+            // 3) only one row exists -> it can only be that one
+            if (resolvedId === undefined && rows.length === 1) {
+                resolvedId = rows[0]!.id;
+            }
+
+            // 4) ambiguous -> fail loudly instead of linking the wrong row
+            if (resolvedId === undefined) {
+                return res.status(400).send({
+                    message: `Composition ${i + 1}: no matching style requirement row found for "${comp.composition}" / "${comp.color}"`,
+                    type: "error",
+                });
+            }
+
+            styleRequirementRowIdByIndex.push(resolvedId);
         }
 
         const jobRecord = await checkDataExist(jobNo);
@@ -168,7 +236,6 @@ export const createNewJob = async (req: Request, res: Response) => {
             return res.status(404).send({ message: "Job record not found", type: "error" });
         }
 
-        // ── FIX: Added explicit timeout config to prevent P2028 transaction drop errors ──
         const workOrder = await prisma.$transaction(
             async (tx) => {
                 return await tx.workOrder.create({
@@ -195,6 +262,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                                     orderQty: 0,
                                     workOrderQty: resolvedQtyByIndex[i] ?? 0,
                                     unitePrice: resolvedPriceByIndex[i] ?? 0,
+                                    styleRequirementRowId: styleRequirementRowIdByIndex[i],
                                     orderType,
                                 };
 
@@ -220,7 +288,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                 });
             },
             {
-                timeout: 15000, // 15 seconds (prevents P2028 timeout drops)
+                timeout: 15000,
                 maxWait: 20000,
             }
         );
@@ -237,7 +305,7 @@ export const createNewJob = async (req: Request, res: Response) => {
     } catch (e) {
         console.error("Error creating work order:", e);
         const code = (e as { code?: string })?.code;
-        
+
         if (code === "P2002") {
             return res.status(409).send({ message: "A work order with this number already exists", type: "error" });
         }

@@ -1,28 +1,56 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Input from "./Input";
 import { Check, Loader2, X } from "lucide-react";
+import { useFetchData } from "../hooks/fetch";
 
 const formatKg = (num) => {
   if (!num && num !== 0) return "—";
   return `${Number(num).toLocaleString()} kg`;
 };
 
-// Delivery types where THIS work order's factory is the SOURCE of the
-// movement (fromFactory) — i.e. it's receiving something back or returning
-// something, so the goods are coming FROM elsewhere INTO this factory, or
-// FROM this factory back OUT. Match is on the words "Received"/"Return"
-// appearing in the type name, per business rule: receive/return types ->
-// this factory goes in "From". All other (sending) types -> this factory
-// goes in "To".
+// "dyeingOrder" -> "Dyeing Order"
+const prettyOrderType = (t) => {
+  if (!t) return "N/A";
+  const spaced = String(t).replace(/([a-z])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
+const norm = (v) => String(v ?? "").trim().toLowerCase();
+
+const GREY_FABRIC_RECEIVED = "Grey Fabric Received";
+const GREY_DELIVERY = "Grey Delivery";
+
+// Delivery types available per order type.
+const DELIVERY_TYPES_BY_ORDER = {
+  knittingOrder: ["Yarn Delivery", "Yarn Return", GREY_FABRIC_RECEIVED],
+  dyeingOrder: [
+    "Grey Delivery",
+    "Grey Received",
+    "Grey Return",
+    "Received From Compacting",
+    "Received From Reprocess",
+    "Received From HEAT Set",
+    "Received From Trumble",
+  ],
+  aopOrder: ["Sent For Aop", "Return From Aop", "Received From Aop"],
+  yarnDyeingOrder: [
+    "Yarn Delivery For Yarn Dye",
+    "Yarn Return From Yarn Dye",
+    "Yarn Received From Yarn Dye",
+    "Finish Received",
+    "Finish Return",
+  ],
+};
+
+// Receive/return types -> this factory goes in "From".
+// All other (sending) types -> this factory goes in "To".
 const isReceiveOrReturnType = (deliveryType) => {
   if (!deliveryType) return false;
   const t = deliveryType.toLowerCase();
   return t.includes("received") || t.includes("return");
 };
 
-// These delivery types are internal processing steps (compacting,
-// reprocess, heat set) rather than movements to/from another factory —
-// toFactory and fromFactory are not required for them.
+// Internal processing steps — toFactory/fromFactory not required.
 const FACTORY_OPTIONAL_DELIVERY_TYPES = new Set([
   "Received From Compacting",
   "Received From Reprocess",
@@ -32,11 +60,6 @@ const FACTORY_OPTIONAL_DELIVERY_TYPES = new Set([
 const isFactoryOptional = (deliveryType) =>
   FACTORY_OPTIONAL_DELIVERY_TYPES.has(deliveryType);
 
-// Single source of truth for what the To/From factory fields should
-// default to, given the current delivery type direction and the work
-// order's factory name. Used identically for what's DISPLAYED in the
-// inputs and what's SUBMITTED — so there's no way for the two to drift
-// apart, and no effect/timing dance needed to keep them in sync.
 const getDefaultFactories = (isReturnOrReceive, factoryName) => ({
   toFactory: !isReturnOrReceive ? (factoryName || "") : "",
   fromFactory: isReturnOrReceive ? (factoryName || "") : "",
@@ -44,11 +67,12 @@ const getDefaultFactories = (isReturnOrReceive, factoryName) => ({
 
 const flattenDeliveries = (workOrders) => {
   return (workOrders || []).flatMap((wo) =>
-    (wo.compositions || []).map((comp) => {
+    (wo.compositions || []).map((comp, compIndex) => {
       const styleReq = comp.styleRequirementRow?.styleRequirement || {};
       return {
         id: `${wo.id}-${comp.id}`,
         yarnId: comp.id,
+        compIndex, // position of this composition inside its work order
         workOrderId: wo.id,
         orderType: wo.orderType,
         factoryName: wo.factoryName,
@@ -56,16 +80,136 @@ const flattenDeliveries = (workOrders) => {
         color: comp.color || "—",
         workOrderQty: comp.workOrderQty || 0,
         deliveries: comp.deliveries || [],
-        // buyerName/processLoss follow the same fallback pattern Modal.jsx
-        // already uses successfully for jobNo: try the deeply nested path
-        // first (styleRequirementRow -> styleRequirement), then fall back
-        // to a flatter field directly on the composition or its row, in
-        // case that's actually where the API puts it for this record.
         buyerName: styleReq.buyerName || comp.buyerName || comp.styleRequirementRow?.buyerName,
         jobNo: styleReq.jobNo || comp.jobNo,
         processLoss: styleReq.processLoss ?? comp.processLoss ?? comp.styleRequirementRow?.processLoss,
       };
     })
+  );
+};
+
+// Normalises whatever useFetchData returns:
+//  - plain body:      { workOrders: [...] }
+//  - axios response:  { data: { workOrders: [...] } }
+// and flattens every composition of every returned work order.
+const extractLinkedCompositions = (res) => {
+  const body = res?.data?.workOrders ? res.data : res;
+  const workOrders = Array.isArray(body?.workOrders) ? body.workOrders : [];
+  return workOrders.flatMap((wo) =>
+    (wo.compositions || []).map((c, compIndex) => ({
+      ...c,
+      compIndex,
+      factoryName: wo.factoryName,
+      workOrderOrderType: wo.orderType,
+      // optional: only present if the API returns it
+      workOrderId: wo.id ?? wo.workOrderId ?? c.workOrderId,
+    }))
+  );
+};
+
+// Picks ONLY the compositions that belong to this row:
+//  1) match by composition + color (when the API returns them)
+//  2) fallback: same position (compIndex) as this row
+const pickMatchingCompositions = (items, row) => {
+  const byName = items.filter(
+    (it) =>
+      it.composition !== undefined &&
+      it.color !== undefined &&
+      norm(it.composition) === norm(row.composition) &&
+      norm(it.color) === norm(row.color)
+  );
+  if (byName.length > 0) return byName;
+
+  const hasNames = items.some((it) => it.composition !== undefined || it.color !== undefined);
+  if (hasNames) return []; // API sent names but none matched -> show nothing wrong
+
+  const byIndex = items[row.compIndex];
+  return byIndex ? [byIndex] : [];
+};
+
+const hasFactory = (item) => norm(item?.factoryName) !== "";
+
+const InfoPill = ({ label, value }) => (
+  <span className="inline-flex items-center gap-1.5 bg-white border border-blue-100 rounded-full px-2.5 py-1 text-[11px]">
+    <span className="text-gray-400">{label}</span>
+    <span className="font-semibold text-gray-800">{value}</span>
+  </span>
+);
+
+// Compact strip under the row chips. The factory pill is clickable:
+// clicking selects that linked composition (and its factory).
+const LinkedCompositionStrip = ({ details, selectedId, knittingFactory, onSelect }) => {
+  if (!details) return null;
+
+  const items = details.items || [];
+  const canSelect = !details.loading && !details.error && items.length > 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+      <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-blue-700 mr-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+        Linked Composition
+      </span>
+
+      {details.loading ? (
+        <span className="flex items-center gap-1.5 text-[11px] text-blue-700">
+          <Loader2 className="animate-spin w-3.5 h-3.5" />
+          Loading...
+        </span>
+      ) : details.error ? (
+        <span className="text-[11px] text-red-600">{details.error}</span>
+      ) : items.length === 0 ? (
+        <span className="text-[11px] text-gray-500">No linked composition found</span>
+      ) : (
+        items.map((item) => {
+          const isSelected = selectedId === item.id;
+          const selectable = hasFactory(item);
+
+          return (
+            <div key={item.id} className="flex flex-wrap items-center gap-1.5">
+              <InfoPill label="ID" value={item.id} />
+              <InfoPill label="Order Type" value={prettyOrderType(item.orderType || item.workOrderOrderType)} />
+
+              <button
+                type="button"
+                disabled={!selectable}
+                onClick={() => onSelect(item)}
+                title={selectable ? "Click to select this factory" : "No factory name on record"}
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] border transition-colors ${
+                  isSelected
+                    ? "bg-indigo-500 border-indigo-500 text-white"
+                    : selectable
+                      ? "bg-white border-blue-200 text-gray-800 hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+                      : "bg-white border-blue-100 text-gray-400 cursor-not-allowed"
+                }`}
+              >
+                {isSelected && <Check className="w-3 h-3" />}
+                <span className={isSelected ? "text-indigo-100" : "text-gray-400"}>Factory</span>
+                <span className="font-semibold">{hasFactory(item) ? item.factoryName : "N/A"}</span>
+              </button>
+
+              {item.composition && <InfoPill label="Composition" value={item.composition} />}
+              {item.color && <InfoPill label="Color" value={item.color} />}
+              {item.workOrderQty !== undefined && item.workOrderQty !== null && (
+                <InfoPill label="Qty" value={formatKg(item.workOrderQty)} />
+              )}
+            </div>
+          );
+        })
+      )}
+
+      {canSelect && !selectedId && (
+        <span className="text-[10px] text-blue-600 w-full">
+          Click the factory to also send this delivery as “Grey Delivery” to that composition.
+        </span>
+      )}
+      {canSelect && selectedId && (
+        <span className="text-[10px] text-green-700 w-full">
+          Grey Delivery for ID {selectedId} will also be submitted — same challan &amp; qty,
+          from {knittingFactory || "knitting factory"} to the selected factory.
+        </span>
+      )}
+    </div>
   );
 };
 
@@ -77,14 +221,11 @@ const DeliveryRowInputs = ({
   orderType,
   deliveryTypes,
   handleEditOnChange,
+  handleTypeChange,
   handleRemove,
 }) => {
   const defaults = getDefaultFactories(isReturnOrReceive, group.factoryName);
 
-  // Displayed value: whatever the user has typed (rowChangedField), or the
-  // computed default if they haven't touched the field yet. No state
-  // writes happen just from rendering — only real user input calls
-  // handleEditOnChange.
   const toFactoryValue = rowChangedField.toFactory ?? defaults.toFactory;
   const fromFactoryValue = rowChangedField.fromFactory ?? defaults.fromFactory;
 
@@ -141,15 +282,6 @@ const DeliveryRowInputs = ({
         />
       </div>
 
-      {/* Receive/return types -> this factory is the SOURCE, so it belongs
-          in "From". Sending types -> it's the DESTINATION, so it belongs
-          in "To". Value is user input if present, else the computed
-          default — same computation used at submit time in
-          handleGlobalSubmit, so display and payload can never disagree.
-          When the delivery type is one of the factory-optional internal
-          process types, the labels are dimmed and marked "(optional)" so
-          the UI doesn't imply these are required — matching the relaxed
-          validation in handleGlobalSubmit. */}
       <div className="flex flex-col gap-1">
         <span className={`text-[9px] uppercase tracking-wider ${factoryOptional ? "text-gray-300" : "text-gray-400"}`}>
           {orderType === "aopOrder" && "Aop Factory"}
@@ -185,7 +317,7 @@ const DeliveryRowInputs = ({
         <span className="text-[9px] uppercase tracking-wider text-gray-400">Type</span>
         <Input
           className="w-full"
-          onChange={(e) => handleEditOnChange(row.yarnId, e)}
+          onChange={(e) => handleTypeChange(row, e)}
           name="deliveryType"
           type="select"
           value={rowChangedField.deliveryType ?? ""}
@@ -206,12 +338,23 @@ const DeliveryRowInputs = ({
 const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, changedField, handleEditOnChange, handleSubmit, isLoading }) => {
   const [openYarnIds, setOpenYarnIds] = useState(new Set());
 
+  // Linked composition(s) per row (keyed by the row's yarnId):
+  // { loading: boolean, items: [...matched compositions only], error?: string }
+  const [compositionDetails, setCompositionDetails] = useState({});
+
+  // The linked composition the user picked (by clicking its factory), keyed by the row's yarnId.
+  // Only a selected linked composition receives the extra "Grey Delivery".
+  const [selectedLinked, setSelectedLinked] = useState({});
+
   const baseRows = flattenDeliveries(deliveries);
   const styleReq = baseRows.find((r) => r.buyerName || r.processLoss) || {};
   const totalWorkOrderQty = baseRows.reduce((sum, r) => sum + (r.workOrderQty || 0), 0);
 
   const [removedIds, setRemovedIds] = useState(new Set());
+  const [selectedDeliveryTypes, setDeliveryTypes] = useState([]);
   const visibleRows = baseRows.filter((r) => !removedIds.has(r.id));
+
+  const { fetchData } = useFetchData();
 
   const groupedRows = visibleRows.reduce((groups, row) => {
     const key = row.workOrderId;
@@ -223,6 +366,19 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
   }, {});
   const groupList = Object.values(groupedRows);
 
+  const clearLinkedForRow = (yarnId) => {
+    setCompositionDetails((prev) => {
+      const next = { ...prev };
+      delete next[yarnId];
+      return next;
+    });
+    setSelectedLinked((prev) => {
+      const next = { ...prev };
+      delete next[yarnId];
+      return next;
+    });
+  };
+
   const handleRemove = (id, yarnId) => {
     setRemovedIds((prev) => new Set([...prev, id]));
     setOpenYarnIds((prev) => {
@@ -230,13 +386,116 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
       next.delete(yarnId);
       return next;
     });
+    clearLinkedForRow(yarnId);
   };
 
-  const deliveryTypes = [];
-  if (orderType === "knittingOrder") deliveryTypes.push("Yarn Delivery", "Yarn Return", "Grey Fabric Received");
-  if (orderType === "dyeingOrder") deliveryTypes.push("Grey Delivery", "Grey Received", "Grey Return", "Received From Compacting", "Received From Reprocess", "Received From HEAT Set", "Received From Trumble");
-  if (orderType === "aopOrder") deliveryTypes.push("Sent For Aop", "Return From Aop", "Received From Aop");
-  if (orderType === "yarnDyeingOrder") deliveryTypes.push("Yarn Delivery For Yarn Dye", "Yarn Return From Yarn Dye", "Yarn Received From Yarn Dye", "Finish Received", "Finish Return");
+  const deliveryTypes = useMemo(
+    () => DELIVERY_TYPES_BY_ORDER[orderType] ?? [],
+    [orderType]
+  );
+
+  // Writes a value into the row's changedField through the parent's normal handler.
+  const setRowField = (yarnId, name, value) => {
+    handleEditOnChange(yarnId, { target: { name, value, type: "text" } });
+  };
+
+  // The knitting factory = the modal's delivery factory = this row's work order factory.
+  const getKnittingFactory = (row) =>
+    groupedRows[row.workOrderId]?.factoryName || row.factoryName || "";
+
+  // User clicked a linked composition's factory.
+  //  - To Factory   = the clicked (dyeing) factory
+  //  - From Factory = the knitting factory (the modal's delivery factory)
+  //  - clicking again deselects and clears both (only if they still hold those values)
+  const handleSelectLinked = (row, item) => {
+    if (!item || !hasFactory(item)) return; // nothing to select -> nothing happens
+
+    const knittingFactory = getKnittingFactory(row);
+    const currentlySelected = selectedLinked[row.yarnId];
+    const rowChangedField = changedField?.[row.yarnId] || {};
+
+    if (currentlySelected?.id === item.id) {
+      setSelectedLinked((prev) => {
+        const next = { ...prev };
+        delete next[row.yarnId];
+        return next;
+      });
+      if (rowChangedField.toFactory === item.factoryName) {
+        setRowField(row.yarnId, "toFactory", "");
+      }
+      if (knittingFactory && rowChangedField.fromFactory === knittingFactory) {
+        setRowField(row.yarnId, "fromFactory", "");
+      }
+      return;
+    }
+
+    setSelectedLinked((prev) => ({ ...prev, [row.yarnId]: item }));
+    setRowField(row.yarnId, "toFactory", item.factoryName);
+    if (knittingFactory) {
+      setRowField(row.yarnId, "fromFactory", knittingFactory);
+    }
+  };
+
+  const handleTypeChange = async (row, e) => {
+    handleEditOnChange(row.yarnId, e);
+
+    const selectedType = e?.target?.value;
+
+    const next =
+      selectedType === GREY_FABRIC_RECEIVED
+        ? selectedDeliveryTypes.includes(row.yarnId)
+          ? selectedDeliveryTypes
+          : [...selectedDeliveryTypes, row.yarnId]
+        : selectedDeliveryTypes.filter((id) => id !== row.yarnId);
+
+    setDeliveryTypes(next);
+
+    if (selectedType === GREY_FABRIC_RECEIVED) {
+      const jobNo = row.jobNo || groupedRows[row.workOrderId]?.jobNo;
+
+      // a fresh selection of the type starts with nothing selected
+      setSelectedLinked((prev) => {
+        const n = { ...prev };
+        delete n[row.yarnId];
+        return n;
+      });
+
+      if (!jobNo) {
+        setCompositionDetails((prev) => ({
+          ...prev,
+          [row.yarnId]: { loading: false, items: [], error: "Job No not found for this row" },
+        }));
+        return;
+      }
+
+      setCompositionDetails((prev) => ({
+        ...prev,
+        [row.yarnId]: { loading: true, items: [] },
+      }));
+
+      try {
+        const res = await fetchData(`/api/get-join-deliveries/${jobNo}`);
+        const allItems = extractLinkedCompositions(res);
+
+        // keep ONLY the composition(s) that belong to this row
+        const items = pickMatchingCompositions(allItems, row);
+
+        setCompositionDetails((prev) => ({
+          ...prev,
+          [row.yarnId]: { loading: false, items },
+        }));
+      } catch (err) {
+        console.error(err);
+        setCompositionDetails((prev) => ({
+          ...prev,
+          [row.yarnId]: { loading: false, items: [], error: "Failed to load composition details" },
+        }));
+      }
+    } else {
+      // switched to a different type -> drop linked data and selection
+      clearLinkedForRow(row.yarnId);
+    }
+  };
 
   const aggregateDeliveries = (deliveriesArr) => {
     const map = {};
@@ -256,10 +515,11 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
     });
   };
 
-  // Builds the submit payload for a single row. Returns { error } if the
-  // row is invalid, or { payload } if it's ready to submit. Pure — does
-  // not call handleSubmit and does not short-circuit the caller's loop,
-  // so the caller can validate every row before submitting any of them.
+  // Returns { error } or { payload }.
+  // When a linked composition is selected (Grey Fabric Received only), the extra
+  // "Grey Delivery" travels INSIDE the payload as `linkedDeliveries`. The parent's
+  // handleSubmit sends it first (and strips it from the main payload).
+  // Only the linked yarn id is required — workOrderId is sent only if the API gave it.
   const buildRowPayload = (row) => {
     const rowChangedField = changedField?.[row.yarnId] || {};
     const group = groupedRows[row.workOrderId];
@@ -285,35 +545,48 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
         { deliveryType: rowChangedField.deliveryType, qty: parsedQty },
         ...(parsedFinishQty > 0
           ? [{
-              deliveryType: rowChangedField.deliveryType === "Aop Grey Received" ? "Finish Received From Aop" : "Finish Received",
-              qty: parsedFinishQty,
-            }]
+            deliveryType: rowChangedField.deliveryType === "Aop Grey Received" ? "Finish Received From Aop" : "Finish Received",
+            qty: parsedFinishQty,
+          }]
           : []),
       ];
     }
 
-    // Same computation as getDefaultFactories/DeliveryRowInputs — kept as
-    // one function so display and submit can never disagree.
     const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
-    const groupFactoryName = group?.factoryName || row.factoryName || "";
+    const groupFactoryName = group?.factoryName || row.factoryName || ""; // knitting factory
     const defaults = getDefaultFactories(isReturnOrReceive, groupFactoryName);
+
+    const date = rowChangedField.date || new Date().toISOString().split("T")[0];
+    const challanNo = rowChangedField.challanNo || "";
+
+    // Selected linked composition (only meaningful for Grey Fabric Received)
+    const linkedItem =
+      rowChangedField.deliveryType === GREY_FABRIC_RECEIVED && selectedLinked[row.yarnId]?.id
+        ? selectedLinked[row.yarnId]
+        : null;
+
+    // With a linked factory selected:
+    //   To   = the selected (dyeing) factory
+    //   From = the knitting factory (this modal's delivery factory)
+    const resolvedToFactory = linkedItem && hasFactory(linkedItem)
+      ? linkedItem.factoryName
+      : (rowChangedField.toFactory ?? defaults.toFactory);
+    const resolvedFromFactory = linkedItem && groupFactoryName
+      ? groupFactoryName
+      : (rowChangedField.fromFactory ?? defaults.fromFactory);
 
     const fullPayload = {
       ...rowChangedField,
-      toFactory: rowChangedField.toFactory ?? defaults.toFactory,
-      fromFactory: rowChangedField.fromFactory ?? defaults.fromFactory,
-      date: rowChangedField.date || new Date().toISOString().split("T")[0],
-      challanNo: rowChangedField.challanNo || "",
+      toFactory: resolvedToFactory,
+      fromFactory: resolvedFromFactory,
+      date,
+      challanNo,
       deliveryType: rowChangedField.deliveryType,
       deliveryQty: parsedQty,
       finishReceivedQty: parsedFinishQty,
       deliveries: finalDeliveries,
     };
 
-    // Compacting/Reprocess/HEAT Set are internal process steps, not
-    // factory-to-factory movements — skip the required-field checks
-    // below for these types. The fields are still sent (possibly as
-    // empty strings from `defaults`), just no longer block submit.
     const factoryOptional = isFactoryOptional(rowChangedField.deliveryType);
 
     if (!factoryOptional && !fullPayload.toFactory) {
@@ -331,19 +604,34 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
       };
     }
 
+    // ── Linked "Grey Delivery" for the selected dyeing composition (by yarn id) ──
+    // No linked data / nothing selected -> nothing extra is sent.
+    if (linkedItem) {
+      fullPayload.linkedDeliveries = [
+        {
+          yarnId: linkedItem.id,
+          workOrderId: linkedItem.workOrderId, // may be undefined -> simply not sent
+          payload: {
+            deliveryType: GREY_DELIVERY,
+            deliveryQty: parsedQty,
+            finishReceivedQty: 0,
+            challanNo,
+            date,
+            fromFactory: fullPayload.fromFactory, // knitting factory
+            toFactory: fullPayload.toFactory,     // selected dyeing factory
+            factoryOptional: false,
+            deliveries: [{ deliveryType: GREY_DELIVERY, qty: parsedQty }],
+          },
+        },
+      ];
+    }
+
     return { payload: fullPayload };
   };
 
-  // FIXED: previously this looped rows and called `return` on the first
-  // invalid row, which aborted the ENTIRE function — any row after the
-  // first bad one (including already-valid ones) never got submitted at
-  // all. That's why submitting multiple compositions only ever produced
-  // one delivery: only the first row (if valid) made it to handleSubmit.
-  //
-  // Now: validate every selected row first (pass 1), collect every error.
-  // If anything is invalid, submit NOTHING and show every problem at once
-  // so the user can fix them all in one pass. Only once every row is
-  // valid do we actually submit (pass 2), one composition at a time.
+  // Validate every selected row first, collect every error.
+  // If anything is invalid, submit NOTHING. Otherwise one handleSubmit per row
+  // (the parent also sends the row's linked Grey Delivery, if any).
   const handleGlobalSubmit = async () => {
     const rowsToSubmit = visibleRows.filter((r) => openYarnIds.has(r.yarnId));
 
@@ -445,6 +733,8 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                 const isOpen = openYarnIds.has(row.yarnId);
                 const rowChangedField = changedField?.[row.yarnId] || {};
                 const isReturnOrReceive = isReceiveOrReturnType(rowChangedField.deliveryType);
+                const details = compositionDetails[row.yarnId];
+                const selectedItem = selectedLinked[row.yarnId];
 
                 return (
                   <div key={row.id} className={`${isOpen && "bg-green-300 bg-opacity-30 p-2"} flex flex-col px-5 py-4 gap-3`}>
@@ -474,8 +764,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                         </span>
                       )}
 
-
-
                       {!group.factoryName && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200">
                           ⚠ No factory set on this work order
@@ -495,16 +783,27 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                     )}
 
                     {isOpen && (
-                      <DeliveryRowInputs
-                        row={row}
-                        group={group}
-                        rowChangedField={rowChangedField}
-                        isReturnOrReceive={isReturnOrReceive}
-                        orderType={orderType}
-                        deliveryTypes={deliveryTypes}
-                        handleEditOnChange={handleEditOnChange}
-                        handleRemove={handleRemove}
-                      />
+                      <>
+                        {/* Only THIS row's linked composition; click its factory to select */}
+                        <LinkedCompositionStrip
+                          details={details}
+                          selectedId={selectedItem?.id}
+                          knittingFactory={getKnittingFactory(row)}
+                          onSelect={(item) => handleSelectLinked(row, item)}
+                        />
+
+                        <DeliveryRowInputs
+                          row={row}
+                          group={group}
+                          rowChangedField={rowChangedField}
+                          isReturnOrReceive={isReturnOrReceive}
+                          orderType={orderType}
+                          deliveryTypes={deliveryTypes}
+                          handleEditOnChange={handleEditOnChange}
+                          handleTypeChange={handleTypeChange}
+                          handleRemove={handleRemove}
+                        />
+                      </>
                     )}
 
                   </div>
