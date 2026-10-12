@@ -65,14 +65,40 @@ const getDefaultFactories = (isReturnOrReceive, factoryName) => ({
   fromFactory: isReturnOrReceive ? (factoryName || "") : "",
 });
 
+// Totals for a list of deliveries (same rules as the row's "remaining" chip).
+//  - greyDeliveryQty : sum of "Grey Delivery" only
+//  - totalDelivery   : every type containing "delivery" or "sent"
+//  - totalReturn     : every type containing "return"
+//  - remaining       : workOrderQty + totalReturn - totalDelivery
+const computeDeliveryTotals = (deliveriesArr, workOrderQty) => {
+  let totalDelivery = 0;
+  let totalReturn = 0;
+  let greyDeliveryQty = 0;
+
+  for (const d of deliveriesArr || []) {
+    const type = String(d.deliveryType || "");
+    const lower = type.toLowerCase();
+    const qty = Number(d.deliveryQty ?? d.qty ?? 0) || 0;
+
+    if (type === GREY_DELIVERY) greyDeliveryQty += qty;
+
+    if (lower.includes("return")) totalReturn += qty;
+    else if (lower.includes("delivery") || lower.includes("sent")) totalDelivery += qty;
+  }
+
+  const remaining = (Number(workOrderQty) || 0) + totalReturn - totalDelivery;
+  return { greyDeliveryQty, totalDelivery, totalReturn, remaining };
+};
+
 const flattenDeliveries = (workOrders) => {
   return (workOrders || []).flatMap((wo) =>
     (wo.compositions || []).map((comp, compIndex) => {
       const styleReq = comp.styleRequirementRow?.styleRequirement || {};
+      const compId = comp.id ?? comp.compositionId ?? comp.yarnId;
       return {
-        id: `${wo.id}-${comp.id}`,
-        yarnId: comp.id,
-        compIndex, // position of this composition inside its work order
+        id: `${wo.id}-${compId}`,
+        yarnId: compId,
+        compIndex,
         workOrderId: wo.id,
         orderType: wo.orderType,
         factoryName: wo.factoryName,
@@ -91,19 +117,24 @@ const flattenDeliveries = (workOrders) => {
 // Normalises whatever useFetchData returns:
 //  - plain body:      { workOrders: [...] }
 //  - axios response:  { data: { workOrders: [...] } }
-// and flattens every composition of every returned work order.
+// Flattens every composition and adds the delivery totals for each one.
 const extractLinkedCompositions = (res) => {
   const body = res?.data?.workOrders ? res.data : res;
   const workOrders = Array.isArray(body?.workOrders) ? body.workOrders : [];
   return workOrders.flatMap((wo) =>
-    (wo.compositions || []).map((c, compIndex) => ({
-      ...c,
-      compIndex,
-      factoryName: wo.factoryName,
-      workOrderOrderType: wo.orderType,
-      // optional: only present if the API returns it
-      workOrderId: wo.id ?? wo.workOrderId ?? c.workOrderId,
-    }))
+    (wo.compositions || []).map((c, compIndex) => {
+      const totals = computeDeliveryTotals(c.deliveries, c.workOrderQty);
+      return {
+        ...c,
+        id: c.id ?? c.compositionId ?? c.yarnId,
+        compIndex,
+        factoryName: wo.factoryName,
+        workOrderOrderType: wo.orderType,
+        workOrderId: wo.id ?? wo.workOrderId ?? c.workOrderId,
+        greyDeliveryQty: totals.greyDeliveryQty,
+        remainingQty: totals.remaining,
+      };
+    })
   );
 };
 
@@ -129,8 +160,16 @@ const pickMatchingCompositions = (items, row) => {
 
 const hasFactory = (item) => norm(item?.factoryName) !== "";
 
-const InfoPill = ({ label, value }) => (
-  <span className="inline-flex items-center gap-1.5 bg-white border border-blue-100 rounded-full px-2.5 py-1 text-[11px]">
+// tone: "default" | "blue" | "red" | "green"
+const PILL_TONES = {
+  default: "bg-white border-blue-100",
+  blue: "bg-blue-50 border-blue-200",
+  red: "bg-red-50 border-red-200",
+  green: "bg-green-50 border-green-200",
+};
+
+const InfoPill = ({ label, value, tone = "default" }) => (
+  <span className={`inline-flex items-center gap-1.5 border rounded-full px-2.5 py-1 text-[11px] ${PILL_TONES[tone] || PILL_TONES.default}`}>
     <span className="text-gray-400">{label}</span>
     <span className="font-semibold text-gray-800">{value}</span>
   </span>
@@ -138,11 +177,15 @@ const InfoPill = ({ label, value }) => (
 
 // Compact strip under the row chips. The factory pill is clickable:
 // clicking selects that linked composition (and its factory).
-const LinkedCompositionStrip = ({ details, selectedId, knittingFactory, onSelect }) => {
+const LinkedCompositionStrip = ({ details, selectedId, knittingFactory, pendingQty, onSelect }) => {
   if (!details) return null;
 
   const items = details.items || [];
   const canSelect = !details.loading && !details.error && items.length > 0;
+  const selectedItem = items.find((it) => !!selectedId && it.id === selectedId);
+
+  const pending = Number(pendingQty) || 0;
+  const remainingAfter = selectedItem ? (Number(selectedItem.remainingQty) || 0) - pending : 0;
 
   return (
     <div className="flex flex-wrap items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
@@ -162,12 +205,16 @@ const LinkedCompositionStrip = ({ details, selectedId, knittingFactory, onSelect
         <span className="text-[11px] text-gray-500">No linked composition found</span>
       ) : (
         items.map((item) => {
-          const isSelected = selectedId === item.id;
+          const isSelected = !!selectedId && selectedId === item.id;
           const selectable = hasFactory(item);
+          const remaining = Number(item.remainingQty) || 0;
+          const remainingTone = remaining > 0 ? "blue" : remaining < 0 ? "red" : "green";
+          const remainingLabel =
+            remaining > 0 ? "Remaining" : remaining < 0 ? "Excess" : "Fulfilled";
 
           return (
-            <div key={item.id} className="flex flex-wrap items-center gap-1.5">
-              <InfoPill label="ID" value={item.id} />
+            <div key={`${item.workOrderId ?? "wo"}-${item.id}`} className="flex flex-wrap items-center gap-1.5">
+              <InfoPill label="ID" value={item.id ?? "N/A"} />
               <InfoPill label="Order Type" value={prettyOrderType(item.orderType || item.workOrderOrderType)} />
 
               <button
@@ -191,7 +238,19 @@ const LinkedCompositionStrip = ({ details, selectedId, knittingFactory, onSelect
               {item.composition && <InfoPill label="Composition" value={item.composition} />}
               {item.color && <InfoPill label="Color" value={item.color} />}
               {item.workOrderQty !== undefined && item.workOrderQty !== null && (
-                <InfoPill label="Qty" value={formatKg(item.workOrderQty)} />
+                <InfoPill label="WO Qty" value={formatKg(item.workOrderQty)} />
+              )}
+
+              {/* Grey Delivery qty already sent to this dyeing composition */}
+              <InfoPill label="Grey Delivery" value={formatKg(item.greyDeliveryQty ?? 0)} />
+
+              {/* Remaining delivery qty for this dyeing composition */}
+              {Number(item.workOrderQty) > 0 && (
+                <InfoPill
+                  label={remainingLabel}
+                  value={formatKg(Math.abs(remaining))}
+                  tone={remainingTone}
+                />
               )}
             </div>
           );
@@ -207,6 +266,18 @@ const LinkedCompositionStrip = ({ details, selectedId, knittingFactory, onSelect
         <span className="text-[10px] text-green-700 w-full">
           Grey Delivery for ID {selectedId} will also be submitted — same challan &amp; qty,
           from {knittingFactory || "knitting factory"} to the selected factory.
+          {selectedItem && pending > 0 && (
+            <>
+              {" "}
+              {remainingAfter >= 0 ? (
+                <>Remaining after this delivery: <b>{formatKg(remainingAfter)}</b>.</>
+              ) : (
+                <span className="text-red-600 font-semibold">
+                  This exceeds the remaining qty by {formatKg(Math.abs(remainingAfter))}.
+                </span>
+              )}
+            </>
+          )}
         </span>
       )}
     </div>
@@ -519,7 +590,6 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
   // When a linked composition is selected (Grey Fabric Received only), the extra
   // "Grey Delivery" travels INSIDE the payload as `linkedDeliveries`. The parent's
   // handleSubmit sends it first (and strips it from the main payload).
-  // Only the linked yarn id is required — workOrderId is sent only if the API gave it.
   const buildRowPayload = (row) => {
     const rowChangedField = changedField?.[row.yarnId] || {};
     const group = groupedRows[row.workOrderId];
@@ -720,15 +790,10 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
 
               {group.rows.map((row) => {
                 const aggregated = aggregateDeliveries(row.deliveries);
-
-                let totalDelivery = 0;
-                let totalReturn = 0;
-                Object.entries(aggregated).forEach(([type, qty]) => {
-                  const lowerType = type.toLowerCase();
-                  if (lowerType.includes("return")) totalReturn += Number(qty);
-                  else if (lowerType.includes("delivery") || lowerType.includes("sent")) totalDelivery += Number(qty);
-                });
-                const remainingDelivery = (Number(row.workOrderQty) || 0) + totalReturn - totalDelivery;
+                const { remaining: remainingDelivery } = computeDeliveryTotals(
+                  row.deliveries,
+                  row.workOrderQty
+                );
 
                 const isOpen = openYarnIds.has(row.yarnId);
                 const rowChangedField = changedField?.[row.yarnId] || {};
@@ -744,7 +809,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                         onClick={() => handleShowDeliveryInputs(row.yarnId)}
                         className="inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-800 cursor-pointer"
                       >
-                        {row.composition}
+                        {row.composition} ID: {row.yarnId}
                       </span>
                       <span
                         className="inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-800 cursor-pointer"
@@ -789,6 +854,7 @@ const Deliveries = ({ deliveries, deliveryIssue, challanIssue, orderType, change
                           details={details}
                           selectedId={selectedItem?.id}
                           knittingFactory={getKnittingFactory(row)}
+                          pendingQty={rowChangedField.deliveryQty}
                           onSelect={(item) => handleSelectLinked(row, item)}
                         />
 
