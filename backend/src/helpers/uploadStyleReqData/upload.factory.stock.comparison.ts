@@ -8,24 +8,29 @@ import prisma from "../../database/prismaClient/prisma";
 /* ------------------------------------------------------------------ */
 const QTY_TOLERANCE = 0.01;
 const MAX_ROWS = 50000;
-const HEADER_SCAN_LIMIT = 10;
+const HEADER_SCAN_LIMIT = 50;
 
 const DELIVERY_TYPE_TO_BUCKET: Record<string, "yarnDelivery" | "yarnReturn" | "greyReceived"> = {
+    "YARN DELIVERY": "yarnDelivery",
+    "GREY FABRIC RECEIVED": "greyReceived",
+    "YARN RETURN": "yarnReturn",
+    "GREY RECEIVED": "greyReceived",
     yarndelivery: "yarnDelivery",
     greyfabricreceived: "greyReceived",
     yarnreturn: "yarnReturn",
     greyreceived: "greyReceived",
 };
 
+type Bucket = "yarnDelivery" | "yarnReturn" | "greyReceived";
+type Qty = Record<Bucket, number>;
+type Status = "MATCHED" | "QTY_MISMATCH" | "MISSING_IN_SYSTEM" | "MISSING_IN_EXCEL" | "FACTORY_MISMATCH";
+
+const BUCKETS: Bucket[] = ["yarnDelivery", "yarnReturn", "greyReceived"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
-type Bucket = "yarnDelivery" | "yarnReturn" | "greyReceived";
-type Qty = Record<Bucket, number>;
-type Status = "MATCHED" | "QTY_MISMATCH" | "MISSING_IN_SYSTEM";
-
-const BUCKETS: Bucket[] = ["yarnDelivery", "yarnReturn", "greyReceived"];
-
 interface ExcelRow {
     rowNumber: number;
     challanNo: string;
@@ -42,33 +47,41 @@ interface DbDelivery {
     deliveryQty: unknown;
     deliveryType: string | null;
     deliveryMonth: string | null;
+    deliveryDate: Date | null;
 }
 
 interface Group {
     challanKey: string;
     factoryKey: string;
+    monthKey: string; // Added for multi-month accuracy
     challanNo: string;
     factoryName: string;
-    months: Set<string>;
+    month: string;
     qty: Qty;
     firstRow: number;
+    repeatedCount: number;
+}
+
+interface ReconciliationEntry {
+    challanNo: string;
+    factoryName: string;
+    month: string;
+    fromFactory: string;
+    toFactory: string;
+    status: Status;
+    excelQty: Qty | null;
+    dbQty: Qty | null;
+    diff: Qty | null;
+    mismatchFields: Bucket[];
     repeatedCount: number;
 }
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
-const normalizeHeader = (s: string): string => 
-    s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-const normalizeChallan = (v: unknown): string =>
-    String(v ?? "").trim().toUpperCase().replace(/\s+/g, "").replace(/^0+(?=\d)/, "");
-
-const normalizeFactory = (s: string): string =>
-    s.toLowerCase().trim().replace(/\s+/g, " ");
-
+const normalizeHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const normalizeFactory = (s: string): string => s.toLowerCase().trim().replace(/\s+/g, " ");
 const round2 = (n: number): number => Math.round(n * 100) / 100;
-
 const emptyQty = (): Qty => ({ yarnDelivery: 0, yarnReturn: 0, greyReceived: 0 });
 
 const cellToPrimitive = (v: ExcelJS.CellValue): string | number | Date | null => {
@@ -102,27 +115,74 @@ const toQty = (v: ExcelJS.CellValue): number => {
     return 0;
 };
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 const toMonthText = (v: ExcelJS.CellValue): string => {
     const p = cellToPrimitive(v);
-    if (p instanceof Date) {
-        return `${MONTH_NAMES[p.getUTCMonth()]} ${p.getUTCFullYear()}`;
-    }
+    if (p instanceof Date) return `${MONTH_NAMES[p.getUTCMonth()]} ${p.getUTCFullYear()}`;
     if (p === null) return "";
     const str = String(p).trim();
-    const dateMatch = str.match(/(\d{1,2})[-/](\w{3})[-/](\d{2,4})/);
-    if (dateMatch) {
-        const day = parseInt(dateMatch[1]!);
-        const monthStr = dateMatch[2]!;
-        const year = parseInt(dateMatch[3]!);
+
+    let m = str.match(/(\d{1,2})[-/.](\w{3,9}|\d{1,2})[-/.](\d{2,4})/);
+    if (m) {
+        const part2 = m[2]!;
+        const year = parseInt(m[3]!);
         const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
-        const monthIdx = MONTH_NAMES.findIndex(m => m.toLowerCase() === monthStr.toLowerCase());
-        if (monthIdx !== -1) {
-            return `${MONTH_NAMES[monthIdx]} ${fullYear}`;
+        const monthIdx = MONTH_NAMES.findIndex(x => x.toLowerCase() === part2.toLowerCase().substring(0, 3));
+        if (monthIdx !== -1) return `${MONTH_NAMES[monthIdx]} ${fullYear}`;
+        const numMonth = parseInt(part2);
+        if (!isNaN(numMonth) && numMonth >= 1 && numMonth <= 12) return `${MONTH_NAMES[numMonth - 1]} ${fullYear}`;
+    }
+
+    m = str.match(/(\w{3,9}|\d{1,2})[-/. ](\d{2,4})/);
+    if (m) {
+        const part1 = m[1]!;
+        const year = parseInt(m[2]!);
+        const fullYear = year < 100 ? (year < 50 ? 2000 + year : 1900 + year) : year;
+        const monthIdx = MONTH_NAMES.findIndex(x => x.toLowerCase() === part1.toLowerCase().substring(0, 3));
+        if (monthIdx !== -1) return `${MONTH_NAMES[monthIdx]} ${fullYear}`;
+    }
+
+    for (let i = 0; i < MONTH_NAMES.length; i++) {
+        if (str.toLowerCase().includes(MONTH_NAMES[i]!.toLowerCase())) {
+            const yearMatch = str.match(/(\d{4})/);
+            const year = yearMatch ? parseInt(yearMatch[1]!) : new Date().getFullYear();
+            return `${MONTH_NAMES[i]} ${year}`;
         }
     }
-    return str;
+    return "";
+};
+
+const standardizeMonth = (monthStr: string, defaultYear?: number): string | null => {
+    if (!monthStr) return null;
+    const str = String(monthStr).trim();
+
+    let year = defaultYear || new Date().getFullYear();
+    const year4Match = str.match(/\b(19|20)\d{2}\b/);
+    if (year4Match) year = parseInt(year4Match[0]);
+    else {
+        const endYearMatch = str.match(/[-/. ](\d{2})$/);
+        if (endYearMatch) {
+            const y = parseInt(endYearMatch[1]!);
+            year = y < 50 ? 2000 + y : 1900 + y;
+        }
+    }
+
+    let monthIndex = -1;
+    for (let i = 0; i < MONTH_NAMES.length; i++) {
+        if (str.toLowerCase().includes(MONTH_NAMES[i]!.toLowerCase())) {
+            monthIndex = i;
+            break;
+        }
+    }
+    if (monthIndex !== -1) return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+
+    const numericMonthMatch = str.match(/^(0?[1-9]|1[0-2])[-/.](\d{2,4})$/);
+    if (numericMonthMatch) {
+        const m = parseInt(numericMonthMatch[1]!);
+        const y = parseInt(numericMonthMatch[2]!);
+        const fullYear = y < 100 ? (y < 50 ? 2000 + y : 1900 + y) : y;
+        return `${fullYear}-${String(m).padStart(2, '0')}`;
+    }
+    return null;
 };
 
 const factoryMatches = (excelFactoryKey: string, fromFactory: string | null, toFactory: string | null): boolean => {
@@ -131,6 +191,25 @@ const factoryMatches = (excelFactoryKey: string, fromFactory: string | null, toF
     const dbFromFactory = normalizeFactory(fromFactory || "");
     const dbToFactory = normalizeFactory(toFactory || "");
     return dbFromFactory === excelKey || dbToFactory === excelKey;
+};
+
+const isValidFactoryName = (name: string): boolean => {
+    if (!name || name.length < 3) return false;
+    const upper = name.toUpperCase();
+    if (/^[A-Z]+[-/]\d+[-/]\d+$/i.test(name)) return false;
+    if (/^[A-Z]+[-/]\d+$/i.test(name)) return false;
+    if (upper.includes("KNIT") || upper.includes("WEAR") || upper.includes("SOURCING") ||
+        upper.includes("NIPA") || upper.includes("ONE PLUS") || upper.includes("SM ") ||
+        upper.includes("ASR") || upper.includes("FABRIC") || upper.includes("SAKIB")) {
+        return true;
+    }
+    return !/[-/]/.test(name);
+};
+
+const getBucket = (deliveryType: string | null): Bucket | undefined => {
+    if (!deliveryType) return undefined;
+    if (DELIVERY_TYPE_TO_BUCKET[deliveryType]) return DELIVERY_TYPE_TO_BUCKET[deliveryType];
+    return DELIVERY_TYPE_TO_BUCKET[normalizeHeader(deliveryType)];
 };
 
 /* ------------------------------------------------------------------ */
@@ -153,31 +232,28 @@ const parseExcel = async (filePath: string) => {
 
         for await (const row of sheet) {
             const values = row.values as ExcelJS.CellValue[];
+            const firstCellText = cellToText(values[1] || values[0]).toUpperCase();
+            if (firstCellText.startsWith("B/L") || firstCellText.startsWith("BALANCE") ||
+                firstCellText.startsWith("SUM OF") || firstCellText.startsWith("GRAND TOTAL")) {
+                break;
+            }
 
             if (!headerRow) {
                 const rowText = values.map((v: ExcelJS.CellValue) => cellToText(v).toLowerCase()).join(" ");
-                if (rowText.includes("challan") && (rowText.includes("delivery") || rowText.includes("fabric") || rowText.includes("return"))) {
+                if (rowText.includes("challan") && (rowText.includes("delivery") || rowText.includes("fabric"))) {
                     headerRow = row;
-                    
                     values.forEach((v: ExcelJS.CellValue, idx: number) => {
                         if (idx === 0) return;
                         const text = normalizeHeader(cellToText(v));
-                        
-                        // Detect all relevant columns
-                        if (text.includes("yarndeliverychallanno") || text === "yarndeliverychallan") {
-                            colIndices.yarnDeliveryChallan = idx;
-                        } else if (text.includes("yarndeliveryqty")) {
-                            colIndices.yarnDeliveryQty = idx;
-                        } else if (text.includes("yarnreturnqty") || text === "yarnreturn") {
-                            colIndices.yarnReturnQty = idx; // FIX: Detect Yarn Return column
-                        } else if (text.includes("fabricreceivedchallan")) {
-                            colIndices.greyReceivedChallan = idx;
-                        } else if (text.includes("greyfabricreceived")) {
-                            colIndices.greyReceivedQty = idx;
-                        } else if (text === "knittingfactory") {
-                            colIndices.knittingFactory = idx;
-                        } else if (text === "date" && !colIndices.date) {
-                            colIndices.date = idx;
+                        if (text.includes("yarndeliverychallanno") || text === "yarndeliverychallan") colIndices.yarnDeliveryChallan = idx;
+                        else if (text.includes("yarndeliveryqty")) colIndices.yarnDeliveryQty = idx;
+                        else if (text.includes("yarnreturnqty") || text === "yarnreturn") colIndices.yarnReturnQty = idx;
+                        else if (text.includes("fabricreceivedchallan")) colIndices.greyReceivedChallan = idx;
+                        else if (text.includes("greyfabricreceived")) colIndices.greyReceivedQty = idx;
+                        else if (text === "knittingfactory" || text === "smchallan") colIndices.factory = idx;
+                        else if (text === "date") {
+                            if (!colIndices.yarnDate) colIndices.yarnDate = idx;
+                            else if (!colIndices.greyDate) colIndices.greyDate = idx;
                         }
                     });
                 }
@@ -185,85 +261,71 @@ const parseExcel = async (filePath: string) => {
             }
 
             if (!headerRow || Object.keys(colIndices).length === 0) continue;
-            
+
             const yarnChallanIdx = colIndices.yarnDeliveryChallan;
             const yarnQtyIdx = colIndices.yarnDeliveryQty;
-            const yarnReturnQtyIdx = colIndices.yarnReturnQty; // FIX: Added index
-            const knittingFactoryIdx = colIndices.knittingFactory;
-            const dateIdx = colIndices.date;
+            const yarnReturnQtyIdx = colIndices.yarnReturnQty;
+            const factoryIdx = colIndices.factory;
+            const yarnDateIdx = colIndices.yarnDate;
+            const greyDateIdx = colIndices.greyDate;
             const greyChallanIdx = colIndices.greyReceivedChallan;
             const greyQtyIdx = colIndices.greyReceivedQty;
 
-            const factoryName = knittingFactoryIdx ? cellToText(values[knittingFactoryIdx]) : "";
-            const month = dateIdx ? toMonthText(values[dateIdx]) : "";
+            const rawFactoryName = factoryIdx ? cellToText(values[factoryIdx]) : "";
+            if (!isValidFactoryName(rawFactoryName)) continue;
 
-            // Process Yarn Delivery & Return
-            if (yarnChallanIdx && yarnQtyIdx && factoryName) {
+            const factoryName = rawFactoryName;
+            const yarnMonth = yarnDateIdx ? toMonthText(values[yarnDateIdx]) : "";
+            const greyMonth = greyDateIdx ? toMonthText(values[greyDateIdx]) : "";
+
+            if (yarnChallanIdx && yarnQtyIdx) {
                 const yarnChallanNo = cellToText(values[yarnChallanIdx]);
                 const yarnQty = yarnQtyIdx ? toQty(values[yarnQtyIdx]) : 0;
                 const yarnReturnQtyFromCol = yarnReturnQtyIdx ? Math.abs(toQty(values[yarnReturnQtyIdx])) : 0;
-                
-                // 1. If there is a specific Yarn Return Qty column value > 0
-                if (yarnChallanNo && yarnReturnQtyFromCol > 0 && !/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
-                    rows.push({
-                        rowNumber: row.number,
-                        challanNo: yarnChallanNo,
-                        factoryName,
-                        month,
-                        qty: { yarnDelivery: 0, yarnReturn: yarnReturnQtyFromCol, greyReceived: 0 },
-                        bucket: "yarnReturn",
-                    });
-                } 
-                // 2. If Yarn Delivery Qty is negative, treat it as a return
-                else if (yarnChallanNo && yarnQty < 0 && !/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
-                    rows.push({
-                        rowNumber: row.number,
-                        challanNo: yarnChallanNo,
-                        factoryName,
-                        month,
-                        qty: { yarnDelivery: 0, yarnReturn: Math.abs(yarnQty), greyReceived: 0 },
-                        bucket: "yarnReturn",
-                    });
-                }
-                // 3. Normal positive delivery
-                else if (yarnChallanNo && yarnQty > 0 && !/^total|sum|up to date|sgs/i.test(yarnChallanNo)) {
-                    rows.push({
-                        rowNumber: row.number,
-                        challanNo: yarnChallanNo,
-                        factoryName,
-                        month,
-                        qty: { yarnDelivery: yarnQty, yarnReturn: 0, greyReceived: 0 },
-                        bucket: "yarnDelivery",
-                    });
+
+                if (yarnChallanNo && yarnReturnQtyFromCol > 0 && !/^total|sum|up to date|sgs|b\/l/i.test(yarnChallanNo)) {
+                    rows.push({ rowNumber: row.number, challanNo: yarnChallanNo, factoryName, month: yarnMonth, qty: { yarnDelivery: 0, yarnReturn: yarnReturnQtyFromCol, greyReceived: 0 }, bucket: "yarnReturn" });
+                } else if (yarnChallanNo && yarnQty < 0 && !/^total|sum|up to date|sgs|b\/l/i.test(yarnChallanNo)) {
+                    rows.push({ rowNumber: row.number, challanNo: yarnChallanNo, factoryName, month: yarnMonth, qty: { yarnDelivery: 0, yarnReturn: Math.abs(yarnQty), greyReceived: 0 }, bucket: "yarnReturn" });
+                } else if (yarnChallanNo && yarnQty > 0 && !/^total|sum|up to date|sgs|b\/l/i.test(yarnChallanNo)) {
+                    rows.push({ rowNumber: row.number, challanNo: yarnChallanNo, factoryName, month: yarnMonth, qty: { yarnDelivery: yarnQty, yarnReturn: 0, greyReceived: 0 }, bucket: "yarnDelivery" });
                 }
             }
 
-            // Process Grey Fabric Received
-            if (greyChallanIdx && greyQtyIdx && factoryName) {
+            if (greyChallanIdx && greyQtyIdx) {
                 const greyChallanNo = cellToText(values[greyChallanIdx]);
                 const greyQty = greyQtyIdx ? toQty(values[greyQtyIdx]) : 0;
-                
-                if (greyChallanNo && greyQty > 0 && !/^total|sum|up to date|sgs/i.test(greyChallanNo)) {
-                    rows.push({
-                        rowNumber: row.number,
-                        challanNo: greyChallanNo,
-                        factoryName,
-                        month,
-                        qty: { yarnDelivery: 0, yarnReturn: 0, greyReceived: greyQty },
-                        bucket: "greyReceived",
-                    });
+                if (greyChallanNo && greyQty > 0 && !/^total|sum|up to date|sgs|b\/l/i.test(greyChallanNo)) {
+                    rows.push({ rowNumber: row.number, challanNo: greyChallanNo, factoryName, month: greyMonth, qty: { yarnDelivery: 0, yarnReturn: 0, greyReceived: greyQty }, bucket: "greyReceived" });
                 }
             }
 
-            if (rows.length > MAX_ROWS) {
-                throw new Error(`File has more than ${MAX_ROWS} rows.`);
-            }
+            if (rows.length > MAX_ROWS) throw new Error(`File has more than ${MAX_ROWS} rows.`);
         }
-
         if (headerRow) sheetsRead++;
     }
-
     return { rows, sheetsRead };
+};
+
+/* ------------------------------------------------------------------ */
+/* Get Available Months                                                */
+/* ------------------------------------------------------------------ */
+export const getAvailableMonths = async (_req: Request, res: Response) => {
+    try {
+        const months = await prisma.deliveries.findMany({
+            where: {
+                composition: { workOrder: { orderType: "knittingOrder" } },
+                deliveryMonth: { not: "N/A" }
+            },
+            select: { deliveryMonth: true },
+            distinct: ["deliveryMonth"],
+        });
+        const sorted = months.map(m => m.deliveryMonth).filter((m): m is string => !!m).sort();
+        return res.status(200).json({ success: true, months: sorted });
+    } catch (error) {
+        console.error("getAvailableMonths error:", error);
+        return res.status(500).json({ success: false, message: "Failed to fetch months." });
+    }
 };
 
 /* ------------------------------------------------------------------ */
@@ -273,166 +335,203 @@ export const factoryStockComparison = async (req: Request, res: Response) => {
     const filePath = req.file?.path;
 
     try {
-        if (!filePath) {
-            return res.status(400).json({ success: false, message: "Please upload an Excel (.xlsx) file." });
+        if (!filePath) return res.status(400).json({ success: false, message: "Please upload an Excel file." });
+
+        // FIX: Safely parse months array from Multer text field
+        const rawMonths = req.body?.months as string | undefined;
+        let selectedMonths: string[] = [];
+        try {
+            selectedMonths = rawMonths ? JSON.parse(rawMonths) : [];
+        } catch {
+            selectedMonths = [];
+        }
+
+        if (!Array.isArray(selectedMonths) || selectedMonths.length === 0) {
+            return res.status(400).json({ success: false, message: "Please select at least one month to compare." });
         }
 
         const { rows, sheetsRead } = await parseExcel(filePath);
+        if (sheetsRead === 0) return res.status(422).json({ success: false, message: "Could not find the header row." });
+        if (rows.length === 0) return res.status(422).json({ success: false, message: "No challan rows found in the file." });
 
-        if (sheetsRead === 0) {
-            return res.status(422).json({ success: false, message: "Could not find the header row." });
+        // Infer year from Excel
+        const excelYears = new Set<number>();
+        rows.forEach(r => {
+            const key = standardizeMonth(r.month);
+            if (key) excelYears.add(parseInt(key.split('-')[0]!));
+        });
+        const fileYear = excelYears.size === 1 ? Array.from(excelYears)[0] : new Date().getFullYear();
+
+        // Standardize selected months
+        const targetMonthKeys = selectedMonths
+            .map(m => standardizeMonth(m, fileYear))
+            .filter((m): m is string => m !== null);
+
+        if (targetMonthKeys.length === 0) {
+            return res.status(422).json({ success: false, message: "Invalid month format selected." });
         }
-        if (rows.length === 0) {
-            return res.status(422).json({ success: false, message: "No challan rows found in the file." });
+
+        // Filter Excel rows
+        const filteredExcelRows = rows.filter(r => {
+            const rowMonthKey = standardizeMonth(r.month, fileYear);
+            return rowMonthKey !== null && targetMonthKeys.includes(rowMonthKey);
+        });
+
+        if (filteredExcelRows.length === 0) {
+            const availableMonths = [...new Set(rows.map(r => r.month).filter(Boolean))].join(", ");
+            return res.status(422).json({
+                success: false,
+                message: `No data found in Excel for selected months. Available months in file: ${availableMonths || "none"}`,
+            });
         }
 
-        const excelFactories = Array.from(new Set(rows.map(r => normalizeFactory(r.factoryName))));
+        const excelFactories = Array.from(new Set(filteredExcelRows.map(r => normalizeFactory(r.factoryName))));
 
-        const groups = new Map<string, Group>();
-        for (const r of rows) {
-            const challanKey = normalizeChallan(r.challanNo);
+        // Group Excel Data (FIX: Added monthKey to prevent merging same challans across different months)
+        const excelGroups = new Map<string, Group>();
+        for (const r of filteredExcelRows) {
+            const challanKey = String(r.challanNo).trim().toUpperCase().replace(/\s+/g, "").replace(/^0+(?=\d)/, "");
             const factoryKey = normalizeFactory(r.factoryName);
-            const gKey = `${challanKey}|${factoryKey}`;
+            const monthKey = standardizeMonth(r.month, fileYear) || "UNKNOWN";
+            const gKey = `${challanKey}|${factoryKey}|${monthKey}`;
             
-            let g = groups.get(gKey);
+            let g = excelGroups.get(gKey);
             if (!g) {
-                g = {
-                    challanKey,
-                    factoryKey,
-                    challanNo: r.challanNo,
-                    factoryName: r.factoryName,
-                    months: new Set<string>(),
-                    qty: emptyQty(),
-                    firstRow: r.rowNumber,
-                    repeatedCount: 0,
-                };
-                groups.set(gKey, g);
+                g = { challanKey, factoryKey, monthKey, challanNo: r.challanNo, factoryName: r.factoryName, month: r.month, qty: emptyQty(), firstRow: r.rowNumber, repeatedCount: 0 };
+                excelGroups.set(gKey, g);
             }
-            
             if (r.bucket === "yarnDelivery") g.qty.yarnDelivery += r.qty.yarnDelivery;
             else if (r.bucket === "yarnReturn") g.qty.yarnReturn += r.qty.yarnReturn;
             else if (r.bucket === "greyReceived") g.qty.greyReceived += r.qty.greyReceived;
-            
-            if (r.month) g.months.add(r.month);
             g.repeatedCount += 1;
         }
 
-        const allChallanKeys = Array.from(new Set(Array.from(groups.values()).map(g => g.challanNo.trim())));
-        const numericChallans = allChallanKeys.map(n => Number(n)).filter(n => !Number.isNaN(n) && n > 0);
-
-        const dbDeliveries = numericChallans.length > 0 
-            ? await prisma.deliveries.findMany({
-                where: { 
-                    challanNo: { in: numericChallans },
-                    composition: { workOrder: { orderType: "knittingOrder" } }
-                },
-                select: {
-                    challanNo: true,
-                    fromFactory: true,
-                    toFactory: true,
-                    deliveryQty: true,
-                    deliveryType: true,
-                    deliveryMonth: true,
-                },
-              })
-            : [];
-
-        const dbMap = new Map<number, DbDelivery[]>();
-        for (const d of dbDeliveries) {
-            let list = dbMap.get(d.challanNo);
-            if (!list) { list = []; dbMap.set(d.challanNo, list); }
-            list.push(d);
-        }
-
-        const results = Array.from(groups.values()).map((g) => {
-            const challanNum = Number(g.challanNo.trim());
-            const isNumeric = !Number.isNaN(challanNum) && challanNum > 0;
-            const allDbDeliveries = isNumeric ? (dbMap.get(challanNum) || []) : [];
-            
-            const factorySpecificDeliveries = allDbDeliveries.filter(d => factoryMatches(g.factoryKey, d.fromFactory, d.toFactory));
-
-            const excelQty: Qty = {
-                yarnDelivery: round2(g.qty.yarnDelivery),
-                yarnReturn: round2(g.qty.yarnReturn),
-                greyReceived: round2(g.qty.greyReceived),
-            };
-
-            let status: Status;
-            let systemQty: Qty | null = null;
-            let diff: Qty | null = null;
-            const mismatchFields: Bucket[] = [];
-            let factoryMismatch = false;
-
-            if (factorySpecificDeliveries.length === 0) {
-                if (allDbDeliveries.length > 0) factoryMismatch = true;
-                status = "MISSING_IN_SYSTEM";
-            } else {
-                const sys = emptyQty();
-                for (const d of factorySpecificDeliveries) {
-                    const bucket = DELIVERY_TYPE_TO_BUCKET[normalizeHeader(d.deliveryType || "")];
-                    if (bucket) sys[bucket] += Number(d.deliveryQty || 0);
-                }
-                
-                systemQty = {
-                    yarnDelivery: round2(sys.yarnDelivery),
-                    yarnReturn: round2(sys.yarnReturn),
-                    greyReceived: round2(sys.greyReceived),
-                };
-                
-                diff = {
-                    yarnDelivery: round2(excelQty.yarnDelivery - systemQty.yarnDelivery),
-                    yarnReturn: round2(excelQty.yarnReturn - systemQty.yarnReturn),
-                    greyReceived: round2(excelQty.greyReceived - systemQty.greyReceived),
-                };
-                
-                BUCKETS.forEach((b) => {
-                    if (Math.abs(diff![b]) > QTY_TOLERANCE) mismatchFields.push(b);
-                });
-                
-                status = mismatchFields.length ? "QTY_MISMATCH" : "MATCHED";
-            }
-
-            const firstDelivery = factorySpecificDeliveries[0] || allDbDeliveries[0];
-            const dbMonths = new Set<string>();
-            factorySpecificDeliveries.forEach(d => {
-                if (d.deliveryMonth && d.deliveryMonth !== "N/A") dbMonths.add(d.deliveryMonth);
-            });
-            
-            const finalMonth = dbMonths.size > 0 ? Array.from(dbMonths).join(", ") : (Array.from(g.months).join(", ") || "N/A");
-
-            return {
-                challanNo: g.challanNo,
-                factoryName: g.factoryName || "N/A",
-                month: finalMonth,
-                fromFactory: firstDelivery?.fromFactory || "N/A",
-                toFactory: firstDelivery?.toFactory || "N/A",
-                excelRow: g.firstRow,
-                repeatedCount: g.repeatedCount,
-                status,
-                factoryMismatch,
-                excelQty,
-                systemQty,
-                diff,
-                mismatchFields,
-            };
+        // Fetch DB Deliveries for ALL selected months
+        const dbDeliveries = await prisma.deliveries.findMany({
+            where: {
+                composition: { workOrder: { orderType: "knittingOrder" } },
+                deliveryMonth: { in: selectedMonths },
+            },
+            select: {
+                challanNo: true, fromFactory: true, toFactory: true,
+                deliveryQty: true, deliveryType: true, deliveryMonth: true,
+            },
         });
 
-        const order: Record<Status, number> = { MISSING_IN_SYSTEM: 0, QTY_MISMATCH: 1, MATCHED: 2 };
-        results.sort((a, b) => order[a.status] - order[b.status] || a.challanNo.localeCompare(b.challanNo));
+        const dbChallanIndex = new Map<number, typeof dbDeliveries>();
+        for (const d of dbDeliveries) {
+            const cNo = Number(d.challanNo);
+            if (!Number.isNaN(cNo)) {
+                if (!dbChallanIndex.has(cNo)) dbChallanIndex.set(cNo, []);
+                dbChallanIndex.get(cNo)!.push(d);
+            }
+        }
+
+        // Group DB Data
+        const dbGroups = new Map<string, Group>();
+        for (const d of dbDeliveries) {
+            const matchingFactory = excelFactories.find(f => factoryMatches(f, d.fromFactory, d.toFactory));
+            if (!matchingFactory) continue;
+
+            const challanKey = String(d.challanNo).trim().toUpperCase().replace(/\s+/g, "").replace(/^0+(?=\d)/, "");
+            const factoryKey = normalizeFactory(matchingFactory);
+            const monthKey = standardizeMonth(d.deliveryMonth || "", fileYear) || "UNKNOWN";
+            const gKey = `${challanKey}|${factoryKey}|${monthKey}`;
+
+            let g = dbGroups.get(gKey);
+            if (!g) {
+                g = { challanKey, factoryKey, monthKey, challanNo: String(d.challanNo), factoryName: matchingFactory, month: d.deliveryMonth || "", qty: emptyQty(), firstRow: 0, repeatedCount: 0 };
+                dbGroups.set(gKey, g);
+            }
+            const bucket = getBucket(d.deliveryType);
+            if (bucket) g.qty[bucket] += Number(d.deliveryQty || 0);
+            g.repeatedCount += 1;
+        }
+
+        // Full Outer Join Reconciliation
+        const results: ReconciliationEntry[] = [];
+        const processedKeys = new Set<string>();
+
+        for (const [key, group] of excelGroups.entries()) {
+            processedKeys.add(key);
+            const challanNum = Number(String(group.challanNo).trim());
+            const dbRecordsForChallan = (!Number.isNaN(challanNum)) ? dbChallanIndex.get(challanNum) : null;
+
+            let isFactoryMismatch = false;
+            if (dbRecordsForChallan && dbRecordsForChallan.length > 0) {
+                const hasOtherFactory = dbRecordsForChallan.some(d => {
+                    const match = excelFactories.find(f => factoryMatches(f, d.fromFactory, d.toFactory));
+                    return !match;
+                });
+                if (hasOtherFactory) isFactoryMismatch = true;
+            }
+
+            const excelQty: Qty = {
+                yarnDelivery: round2(group.qty.yarnDelivery),
+                yarnReturn: round2(group.qty.yarnReturn),
+                greyReceived: round2(group.qty.greyReceived),
+            };
+
+            const dbGroup = dbGroups.get(key);
+            let dbQty: Qty | null = null;
+            let diff: Qty | null = null;
+            let status: Status;
+            const mismatchFields: Bucket[] = [];
+
+            if (dbGroup) {
+                dbQty = {
+                    yarnDelivery: round2(dbGroup.qty.yarnDelivery),
+                    yarnReturn: round2(dbGroup.qty.yarnReturn),
+                    greyReceived: round2(dbGroup.qty.greyReceived),
+                };
+                diff = {
+                    yarnDelivery: round2(excelQty.yarnDelivery - dbQty.yarnDelivery),
+                    yarnReturn: round2(excelQty.yarnReturn - dbQty.yarnReturn),
+                    greyReceived: round2(excelQty.greyReceived - dbQty.greyReceived),
+                };
+                BUCKETS.forEach(b => { if (Math.abs(diff![b]) > QTY_TOLERANCE) mismatchFields.push(b); });
+                status = mismatchFields.length ? "QTY_MISMATCH" : "MATCHED";
+            } else {
+                status = isFactoryMismatch ? "FACTORY_MISMATCH" : "MISSING_IN_SYSTEM";
+            }
+
+            results.push({
+                challanNo: group.challanNo, factoryName: group.factoryName, month: group.month,
+                fromFactory: "N/A", toFactory: "N/A",
+                excelQty, dbQty, diff, status, mismatchFields, repeatedCount: group.repeatedCount,
+            });
+        }
+
+        for (const [key, group] of dbGroups.entries()) {
+            if (processedKeys.has(key)) continue;
+            const dbQty: Qty = {
+                yarnDelivery: round2(group.qty.yarnDelivery),
+                yarnReturn: round2(group.qty.yarnReturn),
+                greyReceived: round2(group.qty.greyReceived),
+            };
+            results.push({
+                challanNo: group.challanNo, factoryName: group.factoryName, month: group.month,
+                fromFactory: group.factoryName, toFactory: group.factoryName,
+                excelQty: null, dbQty, diff: null, status: "MISSING_IN_EXCEL",
+                mismatchFields: [], repeatedCount: group.repeatedCount,
+            });
+        }
+
+        const order: Record<Status, number> = { MISSING_IN_SYSTEM: 0, FACTORY_MISMATCH: 1, MISSING_IN_EXCEL: 2, QTY_MISMATCH: 3, MATCHED: 4 };
+        results.sort((a, b) => order[a.status] - order[b.status] || a.month.localeCompare(b.month) || a.factoryName.localeCompare(b.factoryName) || String(a.challanNo).localeCompare(String(b.challanNo)));
 
         const summary = {
-            excelRowsRead: rows.length,
-            totalChallans: results.length,
-            matched: results.filter((r) => r.status === "MATCHED").length,
-            qtyMismatch: results.filter((r) => r.status === "QTY_MISMATCH").length,
-            missingInSystem: results.filter((r) => r.status === "MISSING_IN_SYSTEM").length,
-            factoryMismatch: results.filter((r) => r.factoryMismatch).length,
-            sheetsRead,
-            factories: excelFactories.join(", "),
+            excelRowsRead: filteredExcelRows.length, totalChallans: results.length,
+            matched: results.filter(r => r.status === "MATCHED").length,
+            qtyMismatch: results.filter(r => r.status === "QTY_MISMATCH").length,
+            missingInSystem: results.filter(r => r.status === "MISSING_IN_SYSTEM").length,
+            factoryMismatch: results.filter(r => r.status === "FACTORY_MISMATCH").length,
+            missingInExcel: results.filter(r => r.status === "MISSING_IN_EXCEL").length,
+            sheetsRead, selectedMonths: selectedMonths.join(", "), factories: excelFactories.join(", "),
         };
 
         return res.status(200).json({ success: true, summary, results });
-        
+
     } catch (error) {
         console.error("factoryStockComparison error:", error);
         const message = error instanceof Error ? error.message : "Failed to compare the file.";
