@@ -11,9 +11,11 @@ import authRouter from "./routes/auth/auth.Routes";
 import cookieParser from "cookie-parser";
 import { initSocketRoutes } from "./socketRoutes/socket.routes";
 import redis, { disconnectRedis } from "./redis/connect.redis";
+import getMobileRouters from "./routes/mobileRoutes/get";
 const app = express();
 app.use(cookieParser())
-const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app"];
+// http://localhost:8081/ @this is mobile api cors access
+const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app", "http://localhost:8081"];
 app.set('trust proxy', 1); // Trust the first proxy (if behind a reverse proxy)
 app.use(cors(
   {
@@ -50,6 +52,7 @@ const start = async () => {
   app.use("/api", getRouters)
   app.use("/api", updateRouters)
   app.use("/api", authRouter)
+  app.use("/api/mobile", getMobileRouters)
 
   // await redis.ping();
   console.log("redis connected");
