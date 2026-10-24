@@ -6,6 +6,7 @@ export const getDeliveryTotals = async (req: Request, res: Response) => {
 
     const compositions = await prisma.composition.findMany({
         where: { orderType },
+        orderBy: {id: "desc"},
         select: {
             orderType: true,
             workOrderQty: true,

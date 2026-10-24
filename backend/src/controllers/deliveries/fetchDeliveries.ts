@@ -10,6 +10,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
             id: Number(workOrderIds) as number,
             orderType: orderType as string
         },
+        orderBy: { id: "desc" },
         select: {
             id: true,
             orderType: true,
@@ -20,10 +21,10 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                     composition: true,
                     color: true,
                     workOrderQty: true,
-                    styleRequirementRow:{
+                    styleRequirementRow: {
                         select: {
                             styleRequirement: {
-                                
+
                             }
                         }
                     },
@@ -36,7 +37,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                     }
                 }
 
-                
+
             }
         }
     })
