@@ -143,7 +143,7 @@ export const updateJobs = async (req: Request, res: Response) => {
             delivers.map((delivery) => {
                 const data: Prisma.deliveriesUncheckedCreateInput = {
                     deliveryDate,
-                    deliveryMonth: String(deliveryDate.getMonth() + 1),
+                    deliveryMonth: deliveryDate.toLocaleString("en-US", { month: "long" }),
                     challanNo: challanNoNum,
                     challanId,
                     deliveryQty: Number(delivery.qty),
