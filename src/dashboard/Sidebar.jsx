@@ -20,6 +20,7 @@ import {
     Folder,
     ClipboardList,
     ArrowLeftRight,
+    Factory,
 } from "lucide-react";
 import { AuthContext } from "./auth/AuthContext";
 import UseUserRoles from "./pages/users/allUsers/UserRoles";
@@ -94,6 +95,13 @@ const Sidebar = () => {
         { path: "/dashboard/asset-movement", label: "Asset Movement", icon: ArrowLeftRight },
     ];
 
+    // Contract Manufacturing Sub-Items (NEW dropdown, add more pages here later)
+    const contractSubItems = [
+        { path: "/dashboard/contract-billing", label: "Contract Manu. Bill", icon: Factory },
+        { path: "/dashboard/sewing-contract", label: "Partial Process Control", icon: Factory },
+        // { path: "/dashboard/external-manufacturing", label: "Contract Manufacturing", icon: Factory },
+    ];
+
     // User Management Sub-Items
     const userSubItems = [
         { path: "/dashboard/new-user", label: "Add New User", icon: UserRoundPlus, permission: "addNewUser" },
@@ -104,7 +112,7 @@ const Sidebar = () => {
     const workOrderSubItems = [
         { path: "/dashboard/pending-work-orders", label: "My work Orders", icon: FileText, permission: "seeMyWorkOrders" },
         { path: "/dashboard/requested-work-orders", label: "Requested Orders", icon: ClipboardList, permission: "seeRequestedWorkOrders" },
-     { path: "/dashboard/high-loss-job", label: "Work Order Analysis", icon: FileText, permission: "workOrderAnalysis" }
+        { path: "/dashboard/high-loss-job", label: "Work Order Analysis", icon: FileText, permission: "workOrderAnalysis" }
     ];
 
     // Split standalone nav items to place Daily Production dropdown in the correct order
@@ -128,6 +136,9 @@ const Sidebar = () => {
     const [isDailyProductionOpen, setIsDailyProductionOpen] = useState(() => dailyProductionSubItems.some(item => item.path === location.pathname));
     const [isUserOpen, setIsUserOpen] = useState(() => userSubItems.some(item => item.path === location.pathname));
     const [isAssetOpen, setIsAssetOpen] = useState(() => assetSubItems.some(item => item.path === location.pathname));
+
+    // NEW: Contract Manufacturing dropdown open state
+    const [isContractOpen, setIsContractOpen] = useState(() => contractSubItems.some(item => item.path === location.pathname));
 
     // NEW: Work Orders dropdown open state
     const [isWorkOrdersOpen, setIsWorkOrdersOpen] = useState(() => workOrderSubItems.some(item => item.path === location.pathname));
@@ -188,6 +199,7 @@ const Sidebar = () => {
     const isDailyProductionActive = dailyProductionSubItems.some(item => isActive(item.path));
     const isUserActive = userSubItems.some(item => isActive(item.path));
     const isAssetActive = assetSubItems.some(item => isActive(item.path));
+    const isContractActive = contractSubItems.some(item => isActive(item.path)); // NEW
     const isWorkOrdersActive = workOrderSubItems.some(item => isActive(item.path)); // NEW
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -207,6 +219,8 @@ const Sidebar = () => {
         if (path.includes('user-permission')) return { title: 'User Permission', subtitle: 'Manage user access and permissions' };
         if (path.includes('asset-summary')) return { title: 'Asset Summary', subtitle: 'Overview of all assets' };
         if (path.includes('asset-movement')) return { title: 'Asset Movement', subtitle: 'Track asset movement' };
+        // CHANGED: renamed title/subtitle (route path unchanged)
+        if (path.includes('external-manufacturing')) return { title: 'Contract Manufacturing', subtitle: 'Manage contract-based sewing and outsourced production' };
         if (path.includes('party-wise-view')) return { title: 'Manage Party Wise View' };
         if (path.includes('management-view')) return { title: 'Manage Management View' };
 
@@ -277,7 +291,7 @@ const Sidebar = () => {
 
             <aside className={`
                 fixed lg:static inset-y-0 left-0 z-40
-                ${isCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64
+                ${isCollapsed ? 'lg:w-20' : 'lg:w-72'} w-72
                 shrink-0 bg-primary-500 flex flex-col border-r border-gray-300
                 transform transition-all duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -511,6 +525,44 @@ const Sidebar = () => {
                             )}
                         </li>
 
+                        {/* NEW: Contract Manufacturing Dropdown (same style as Fixed Asset Info.) */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsContractOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isContractActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'Contract Manufacturing' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Factory size={20} className="shrink-0" />
+                                    {!isCollapsed && <span className="font-medium text-sm">Contract Manufacturing</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    isContractOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {isContractOpen && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {contractSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </li>
+
                         {/* User Management Dropdown */}
 
                         {
@@ -577,22 +629,22 @@ const Sidebar = () => {
                             {isWorkOrdersOpen && !isCollapsed && (
                                 <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
                                     {
-                                    workOrderSubItems.filter(item => sections?.workOrders?.[item.permission] === true)
-                                    .map(item => (
-                                        <li key={item.path}>
-                                            <Link
-                                                to={item.path}
-                                                onClick={() => setIsMobileMenuOpen(false)}
-                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
-                                                    ? 'bg-primary-400 text-white font-medium'
-                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
-                                                    }`}
-                                            >
-                                                <item.icon size={16} className="shrink-0" />
-                                                {item.label}
-                                            </Link>
-                                        </li>
-                                    ))}
+                                        workOrderSubItems.filter(item => sections?.workOrders?.[item.permission] === true)
+                                            .map(item => (
+                                                <li key={item.path}>
+                                                    <Link
+                                                        to={item.path}
+                                                        onClick={() => setIsMobileMenuOpen(false)}
+                                                        className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                            ? 'bg-primary-400 text-white font-medium'
+                                                            : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                            }`}
+                                                    >
+                                                        <item.icon size={16} className="shrink-0" />
+                                                        {item.label}
+                                                    </Link>
+                                                </li>
+                                            ))}
                                 </ul>
                             )}
                         </li>
@@ -696,7 +748,6 @@ const Sidebar = () => {
                             )
                         }
 
-                        {/* MIS Dropdown */}
                         {/* MIS Dropdown */}
                         {sections?.mis && (
                             <li>

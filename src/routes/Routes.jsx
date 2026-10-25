@@ -53,6 +53,9 @@ import HighLossJob from "../dashboard/pages/highProccessLossJobs/HighLossJob";
 import DeliveryClosedJobs from "../components/deliveryClosedJobs/DeliveryClosedJobs";
 import FactoryComparison from "../dashboard/pages/factory-stock-comparison/FactoryComparison";
 import ReportStudio from "../dashboard/pages/reportStudio/ReportStudio";
+import SewingContract from "../dashboard/pages/swingContract/SweingContract";
+import ContractBilling from "../dashboard/pages/swingContract/ContractBilling";
+import ProductionPlanning from "../dashboard/pages/planning/productionPlanning";
 
 const routers = createBrowserRouter([
     {
@@ -271,6 +274,18 @@ const routers = createBrowserRouter([
                     {
                         path: "report-studio",
                         element: <ReportStudio />
+                    },
+                    {
+                        path: "sewing-contract",
+                        element: <SewingContract />
+                    },
+                    {
+                        path: "contract-billing",
+                        element: <ContractBilling />
+                    },
+                    {
+                        path: "planning",
+                        element: <ProductionPlanning />
                     },
                 ]
             }
