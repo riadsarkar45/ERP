@@ -1,97 +1,130 @@
+const safeNum = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
+};
 
-export const footerTotals = ({FROZEN_COUNT, filteredData, COLUMNS, getBreakdownValue}) => {
-        const totals = {};
-        for (let idx = FROZEN_COUNT; idx < COLUMNS.length; idx++) {
-            totals[idx] = 0;
-        }
+// Same logic as Summary.jsx: 0 / 1 / empty at row level => use each cell's own process loss
+const shouldUseCellLoss = (row) => {
+    const v = parseFloat(row?.processLoss);
+    return !v || v === 1;
+};
 
-        filteredData.forEach(row => {
-            const compBreakdown = row.compBreakdown || (row.rows || []).map(() => ({}));
-            const numSubRows = (row.rows || []).length;
+const getProcessLoss = (cell, row) => {
+    const value = shouldUseCellLoss(row) ? cell?.processLoss : row?.processLoss;
+    const loss = parseFloat(value);
+    return Number.isNaN(loss) ? 0 : loss;
+};
 
-            for (let j = 0; j < numSubRows; j++) {
-                const cell = row.rows[j] || {};
-                const cb = compBreakdown[j] || {};
+export const footerTotals = ({ FROZEN_COUNT, filteredData, COLUMNS, getBreakdownValue }) => {
+    const totals = {};
+    for (let idx = FROZEN_COUNT; idx < COLUMNS.length; idx++) {
+        totals[idx] = 0;
+    }
 
-                totals[8] += Number(cell.orderQty) || 0;
+    filteredData.forEach(row => {
+        const compBreakdown = row.compBreakdown || (row.rows || []).map(() => ({}));
+        const numSubRows = (row.rows || []).length;
+        const useCellLoss = shouldUseCellLoss(row);
 
-                const firstBooking = (Number(cell.finishRequiredQty) * (1 + Number(row.processLoss) / 100) + Number(cell.additional)) || 0;
-                totals[9] += firstBooking;
-                totals[13] += firstBooking;
+        for (let j = 0; j < numSubRows; j++) {
+            const cell = row.rows[j] || {};
+            const cb = compBreakdown[j] || {};
 
-                totals[10] += Number(row.processLoss) || 0;
+            const loss = getProcessLoss(cell, row);
+            const finishReq = safeNum(cell.finishRequiredQty);
+            const additional = safeNum(cell.additional);
 
-                const lossQty = Number(cell.additional) * (Number(row.processLoss) / 100);
-                const netAdditional = Number(cell.additional) - lossQty;
-                const finishReqAdj = Number(cell.finishRequiredQty) + netAdditional;
-                totals[11] += Number.isFinite(finishReqAdj) ? finishReqAdj : 0;
+            // ORDER QTY
+            totals[8] += safeNum(cell.orderQty);
 
-                totals[12] += Number(cell.additional) || 0;
+            // 1st BOOKING = finishReq * (1 + loss%) + additional  (same as table)
+            const firstBooking = finishReq * (1 + loss / 100) + additional;
+            totals[9] += firstBooking;
 
-                if (cb?.status) continue;
+            // PROCESS LOSS % (table: per sub-row if cell loss, otherwise row value shown once)
+            // if (useCellLoss) {
+            //     totals[10] += loss;
+            // } else if (j === 0) {
+            //     totals[10] += safeNum(row.processLoss);
+            // }
 
-                const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                totals[14] += workOrderQty;
-                totals[15] += firstBooking - workOrderQty;
+            // FINISH REQUIRED QTY = finishReq + additional  (same as table)
+            totals[11] += finishReq + additional;
 
-                const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
-                totals[16] += yarnDelivery;
-                totals[17] += workOrderQty - yarnDelivery;
+            // ADDITIONAL BOOKING
+            totals[12] += additional;
 
-                totals[18] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye');
-                totals[19] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye');
+            // REQUIRED YARN QTY = (finishReq + additional) * (1 + loss%)
+            const requiredYarn = (finishReq + additional) * (1 + loss / 100);
+            totals[13] += requiredYarn;
 
-                const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
-                totals[21] += greyReceived;
+            if (cb?.status) continue;
 
-                const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
-                totals[22] += yarnReturn;
-                totals[23] += (greyReceived + yarnReturn) - yarnDelivery;
+            const workOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
+            totals[14] += workOrderQty;
 
-                const greyDelivery = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
-                totals[24] += greyDelivery;
-                totals[25] += getBreakdownValue(cb, 'dyeingOrder_Grey_Return');
+            // SHORT & EXCESS = required yarn - knitting work order qty
+            totals[15] += workOrderQty - requiredYarn;
 
-                const greyReceivedDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received');
-                totals[26] += greyReceivedDyeing;
-                totals[27] += getBreakdownValue(cb, 'dyeingOrder_Finish_Received');
+            const yarnDelivery = getBreakdownValue(cb, 'knittingOrder_Yarn_Delivery');
+            totals[16] += yarnDelivery;
+            totals[17] += yarnDelivery - workOrderQty;
 
-                const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
-                const greyReceivedFromDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing');
-                const hasGreyData = greyReturnRcvd || greyReceivedFromDyeing || greyDelivery;
-                if (hasGreyData) {
-                    totals[28] += greyDelivery - greyReceivedDyeing - greyReturnRcvd;
-                }
+            totals[18] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Delivery_For_Yarn_Dye');
+            totals[19] += getBreakdownValue(cb, 'yarnDyeingOrder_Yarn_Received_From_Yarn_Dye');
 
-                const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
-                totals[29] += aopSent;
-                totals[30] += getBreakdownValue(cb, 'aopOrder_Fabric_Return');
-                totals[31] += getBreakdownValue(cb, 'aopOrder_After_Aop_Fabric_Rcvd');
+            const greyReceived = getBreakdownValue(cb, 'knittingOrder_Grey_Fabric_Received');
+            totals[21] += greyReceived;
 
-                const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
-                totals[32] += aopReceived;
-                totals[33] += aopReceived - aopSent;
+            const yarnReturn = getBreakdownValue(cb, 'knittingOrder_Yarn_Return');
+            totals[22] += yarnReturn;
+            totals[23] += (greyReceived + yarnReturn) - yarnDelivery;
 
-                if (aopSent > 0) {
-                    totals[34] += ((aopSent - aopReceived) / aopSent) * 100;
-                }
+            const greyDelivery = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
+            totals[24] += greyDelivery;
+            totals[25] += getBreakdownValue(cb, 'dyeingOrder_Grey_Return');
 
-                const rpSent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
-                totals[35] += rpSent;
-                totals[36] += getBreakdownValue(cb, 'reProcessOrder_Return_Received');
+            const greyReceivedDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received');
+            totals[26] += greyReceivedDyeing;
+            totals[27] += getBreakdownValue(cb, 'dyeingOrder_Finish_Received');
 
-                const rpGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
-                totals[37] += rpGrey;
-
-                const rpFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
-                totals[38] += rpFinish;
-                totals[39] += (rpGrey + rpFinish) - rpSent;
-
-                if (rpSent > 0) {
-                    totals[40] += ((rpSent - (rpGrey + rpFinish)) / rpSent) * 100;
-                }
+            const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
+            const greyReceivedFromDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing');
+            const hasGreyData = greyReturnRcvd || greyReceivedFromDyeing || greyDelivery;
+            if (hasGreyData) {
+                totals[28] += (greyReceivedDyeing + greyReturnRcvd) - greyDelivery;
             }
-        });
 
-        return totals;
-    };
+            const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
+            totals[29] += aopSent;
+            totals[30] += getBreakdownValue(cb, 'aopOrder_Fabric_Return');
+            totals[31] += getBreakdownValue(cb, 'aopOrder_After_Aop_Fabric_Rcvd');
+
+            const aopReceived = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
+            totals[32] += aopReceived;
+            totals[33] += aopReceived - aopSent;
+
+            if (aopSent > 0) {
+                totals[34] += ((aopSent - aopReceived) / aopSent) * 100;
+            }
+
+            const rpSent = getBreakdownValue(cb, 'reProcessOrder_Sent_for_Re_Process');
+            totals[35] += rpSent;
+            totals[36] += getBreakdownValue(cb, 'reProcessOrder_Return_Received');
+
+            const rpGrey = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Grey');
+            totals[37] += rpGrey;
+
+            const rpFinish = getBreakdownValue(cb, 'reProcessOrder_Received_After_Re_Process_Finish');
+            totals[38] += rpFinish;
+            totals[39] += (rpGrey + rpFinish) - rpSent;
+
+            if (rpSent > 0) {
+                totals[40] += ((rpSent - (rpGrey + rpFinish)) / rpSent) * 100;
+            }
+        }
+    });
+
+    return totals;
+};

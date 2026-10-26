@@ -777,7 +777,7 @@ export default function Summary() {
                                                 const loss = getProcessLoss(cell, row);
                                                 const additional = safeNum(cell.additional);
                                                 const lossQty = additional * (loss / 100);
-                                                const netAdditional = additional - lossQty;
+                                                const netAdditional = additional ;
 
                                                 const finishReq = safeNum(cell.finishRequiredQty);
                                                 const inCreaseFinishQty = finishReq + netAdditional;
@@ -785,6 +785,7 @@ export default function Summary() {
                                                 return (
                                                     <div key={j} className="px-3 py-2 subrow-cell">
                                                         {Number.isNaN(inCreaseFinishQty) ? "0.00" : inCreaseFinishQty.toFixed(2)}
+                                                        
                                                     </div>
                                                 );
                                             })}
@@ -801,16 +802,18 @@ export default function Summary() {
                                         </div>
                                     </td>
 
+                                    {/* REQUIRED YARN QTY = (Finish Required + Additional) × (1 + Process Loss %) */}
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {row.rows.map((cell, j) => {
                                                 const loss = getProcessLoss(cell, row);
                                                 const finishReq = safeNum(cell.finishRequiredQty);
                                                 const additional = safeNum(cell.additional);
-                                                const val = (finishReq * (1 + loss / 100) + additional);
+                                                const yarnReqQty = (finishReq + additional) * (1 + loss / 100);
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell`}>
-                                                        {isNaN(val) ? "0.00" : val.toFixed(2)}
+                                                        {isNaN(yarnReqQty) ? "0.00" : yarnReqQty.toFixed(2)}
+                                                        
                                                     </div>
                                                 );
                                             })}
@@ -827,12 +830,14 @@ export default function Summary() {
                                                 const loss = getProcessLoss(cell, row);
                                                 const finishRequiredQty = safeNum(cell.finishRequiredQty);
                                                 const additional = safeNum(cell.additional);
+                                                 const yarnReqQty = (finishRequiredQty + additional) * (1 + loss / 100);
                                                 const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                                                const diff0 = (finishRequiredQty * (1 + loss / 100) + additional) - knittingWorkOrderQty;
+                                                const diff0 =  yarnReqQty - knittingWorkOrderQty;
                                                 const isExceeded0 = diff0 > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
                                                         {isNaN(diff0) ? "0.00" : (isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2))}
+                                                    
                                                     </div>
                                                 );
                                             })}
