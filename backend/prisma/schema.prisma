@@ -131,6 +131,7 @@ model StyleRequirementRow {
   compositions       Composition[]
   reconciliation     reconciliationData?
   productionDatas    productionData[]
+  contractualJobs    contractualJobs[]
 
   @@index([styleRequirementId])
   @@index([color])
@@ -181,38 +182,38 @@ model Challan {
   @@index([fromFactory])
 }
 
-    model deliveries {
-      id            Int      @id @default(autoincrement())
-      challanNo     Int
-      deliveryDate  DateTime
-      deliveryQty   Float
-      deliveryType  String
-      yarnId        Int
-      toFactory     String
-      fromFactory   String
-      deliveryMonth String   @default("N/A")
+model deliveries {
+  id            Int      @id @default(autoincrement())
+  challanNo     Int
+  deliveryDate  DateTime
+  deliveryQty   Float
+  deliveryType  String
+  yarnId        Int
+  toFactory     String
+  fromFactory   String
+  deliveryMonth String   @default("N/A")
 
-      composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
-      yarnCompId  Int?
+  composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
+  yarnCompId  Int?
 
-      challan   Challan? @relation(fields: [challanId], references: [id])
-      challanId Int?
-      createdBy Int      @default(1)
-      userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
-      createdAt DateTime @default(now())
+  challan   Challan? @relation(fields: [challanId], references: [id])
+  challanId Int?
+  createdBy Int      @default(1)
+  userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
-      @@index([yarnCompId])
-      @@index([createdBy])
-      @@index([deliveryDate])
-      @@index([challanNo])
-      @@index([challanId])
-      @@index([yarnId])
-      @@index([id])
-      @@index([deliveryType])
-      @@index([toFactory])
-      @@index([fromFactory])
-      @@index([createdAt])
-    }
+  @@index([yarnCompId])
+  @@index([createdBy])
+  @@index([deliveryDate])
+  @@index([challanNo])
+  @@index([challanId])
+  @@index([yarnId])
+  @@index([id])
+  @@index([deliveryType])
+  @@index([toFactory])
+  @@index([fromFactory])
+  @@index([createdAt])
+}
 
 model audit {
   id             Int      @id @default(autoincrement())
@@ -224,10 +225,11 @@ model audit {
 }
 
 model jobs {
-  id         Int         @id @default(autoincrement())
-  jobNo      String      @unique
-  createdAt  DateTime    @default(now())
-  workOrders WorkOrder[]
+  id              Int               @id @default(autoincrement())
+  jobNo           String            @unique
+  createdAt       DateTime          @default(now())
+  workOrders      WorkOrder[]
+  contractualJobs contractualJobs[]
 }
 
 model user {
@@ -431,4 +433,17 @@ model spinningYarnMovement {
   challanNo     Int
   yarnPoItems   yarnPoItems? @relation(fields: [yarnPoItemsId], references: [id])
   yarnPoItemsId Int?
+}
+
+model contractualJobs {
+  id                    Int                  @id @default(autoincrement())
+  jobId                 Int
+  date                  DateTime
+  processType           String
+  input                 String
+  output                String
+  lineNo                String
+  styleRequirementRowId Int
+  styleReqRows          StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
+  jobs                  jobs?                @relation(fields: [jobId], references: [id])
 }

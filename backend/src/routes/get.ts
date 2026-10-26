@@ -40,6 +40,8 @@ import { movementChallans } from "../controllers/yarns/movement.challans";
 import { getDataSetsObjectKeys, getSelectedRowsData } from "../controllers/report.studio/report.studio";
 import { joinDeliveries } from "../controllers/deliveries/joinDeliveries";
 import { getAvailableMonths } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
+import { getContractJob } from "../controllers/contractualJob/searchContractJob";
+import { getContractualJobs } from "../controllers/contractualJob/getContractJob";
 
 const getRouters = express.Router();
 
@@ -253,6 +255,11 @@ getRouters.get('/selected-fields-data', getSelectedRowsData);
 getRouters.get('/get-join-deliveries/:jobNo', joinDeliveries)
 
 getRouters.get("/get-available-months", authenticate, getAvailableMonths);
+
+
+getRouters.get("/get-contractual-job", getContractJob);
+
+getRouters.get("/get-contractual-job-summary", getContractualJobs);
 
 
 export default getRouters;

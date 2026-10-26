@@ -15,6 +15,7 @@ import { newProduction } from "../controllers/production/newProduction";
 import { insertYarnPiData } from "../controllers/yarns/yarn.pi";
 import { newYarnMovement } from "../controllers/yarns/yarn.movement";
 import { factoryStockComparison } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
+import { addNewContractualJob } from "../controllers/contractualJob/addNewContractualJob";
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ router.post("/create-job", responseTimeMonitor, authenticate, createNewJob)
 
 router.post("/create-new-audit", responseTimeMonitor, createNewAudit)
 
-router.post("/new-style-requirements", responseTimeMonitor, authenticate,  authorize("styleRequirements", ["addJob"]), createNewStyleRequirement)
+router.post("/new-style-requirements", responseTimeMonitor, authenticate, authorize("styleRequirements", ["addJob"]), createNewStyleRequirement)
 
 router.post("/cutting-production", responseTimeMonitor, cuttingDataUpdate)
 
@@ -55,5 +56,8 @@ router.post(
   upload.single("file"),
   factoryStockComparison as any
 );
+
+router.post("/add-contractual-job", responseTimeMonitor, addNewContractualJob)
+
 
 export default router;
