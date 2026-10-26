@@ -16,6 +16,7 @@ import { insertYarnPiData } from "../controllers/yarns/yarn.pi";
 import { newYarnMovement } from "../controllers/yarns/yarn.movement";
 import { factoryStockComparison } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
 import { addNewContractualJob } from "../controllers/contractualJob/addNewContractualJob";
+import { addProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 
 const router = express.Router();
 
@@ -58,6 +59,8 @@ router.post(
 );
 
 router.post("/add-contractual-job", responseTimeMonitor, addNewContractualJob)
+
+router.post("/add-process-types", responseTimeMonitor, authenticate, addProcessTypes)
 
 
 export default router;

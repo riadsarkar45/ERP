@@ -447,3 +447,11 @@ model contractualJobs {
   styleReqRows          StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   jobs                  jobs?                @relation(fields: [jobId], references: [id])
 }
+
+model processTypes {
+  id          Int      @id @default(autoincrement())
+  processType String
+  processRate String
+  createdAt   DateTime @default(now())
+  createdBy   String
+}
