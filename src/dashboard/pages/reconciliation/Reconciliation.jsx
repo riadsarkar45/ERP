@@ -34,6 +34,34 @@ const LAST_STICKY_INDEX = STICKY_COL_WIDTHS.length - 1;
 
 const FIXED_COLUMN_COUNT = 29;
 
+// ── Shared calculation helpers (same logic as Summary.jsx) ───────────────────
+const safeNum = (val) => {
+    if (val === undefined || val === null || val === '') return 0;
+    const n = parseFloat(val);
+    return isNaN(n) ? 0 : n;
+};
+
+// 0 / 1 / null / undefined at row level means "no real row value, use each cell"
+const shouldUseCellLoss = (row) => {
+    const v = parseFloat(row?.processLoss);
+    return !v || v === 1;
+};
+
+const getProcessLoss = (cell, row) => {
+    const value = shouldUseCellLoss(row) ? cell?.processLoss : row?.processLoss;
+    const loss = parseFloat(value);
+    return Number.isNaN(loss) ? 0 : loss;
+};
+
+// Finish required + additional booking
+const getFinishWithAdditional = (cell) =>
+    safeNum(cell?.finishRequiredQty) + safeNum(cell?.additional);
+
+// YARN REQUIRED = (Finish Required + Additional) x (1 + Process Loss %)
+// e.g. (90 + 10) x 1.10 = 110 ; if no additional => finishReq x (1 + loss)
+const getYarnRequiredQty = (cell, row) =>
+    getFinishWithAdditional(cell) * (1 + getProcessLoss(cell, row) / 100);
+
 const normalizeFilterVal = (v) => {
     if (v === null || v === undefined) return "";
     const s = String(v).trim();
@@ -926,6 +954,7 @@ const Reconciliation = () => {
     const activeFilterEntries = Object.entries(activeFilters);
     const hasAnyFilters = activeFilterEntries.length > 0 || monthFilter !== "ALL";
 
+    // ======================= FOOTER TOTALS (always = currently filtered table rows) =======================
     const footerTotals = useMemo(() => {
         const totals = {
             orderQty: 0, finishRequiredQty: 0, yarnRequiredQty: 0, knitYarnDelivery: 0,
@@ -948,9 +977,12 @@ const Reconciliation = () => {
                 const comp = compBreakDown[i];
                 if (!com && !comp) continue;
 
-                const finishQty = Number(com?.finishRequiredQty) || 0;
-                const processLoss = Number(job.processLoss) || 0;
-                const yarnRequiredQty = finishQty * (1 + processLoss / 100);
+                const addi = safeNum(com?.additional);
+                // FINISH REQUIRE QTY column = finish + additional
+                const finishWithAdditional = com ? getFinishWithAdditional(com) : 0;
+                // YARN REQUIRE QTY column = (finish + additional) x (1 + loss%)
+                const yarnRequiredQty = com ? getYarnRequiredQty(com, job) : 0;
+
                 const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) || 0;
                 const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
                 const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return) || 0;
@@ -960,7 +992,6 @@ const Reconciliation = () => {
                 const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
                 const dyeGreyReceived = Number(comp?.dyeingOrder_Grey_Received) || 0;
                 const dyeGreyDelivery = Number(comp?.dyeingOrder_Grey_Delivery) || 0;
-                const addi = Number(com?.additional) || 0;
                 const dyeGreyReturn = Number(comp?.dyeingOrder_Grey_Return) || 0;
                 const dyeShortExcess = dyeGreyReceived + dyeGreyReturn - dyeGreyDelivery;
                 const aopFinishReceived = Number(comp?.aopOrder_AOP_Finish_Fabric_Rcvd) || 0;
@@ -970,25 +1001,30 @@ const Reconciliation = () => {
                 const aopShortExcess = aopGreyReceived + aopReceived - aopSent;
 
                 totals.orderQty += Number(com?.orderQty) || 0;
-                totals.finishRequiredQty += finishQty;
+                totals.finishRequiredQty += finishWithAdditional;
                 totals.yarnRequiredQty += yarnRequiredQty;
                 totals.knitYarnDelivery += knitYarnDelivery;
-                totals.yarnShortExcessReq += yarnShortExcessReq;
-                totals.yarnShortExcessReturn += yarnShortExcessReturn;
                 totals.knitYarnReturn += knitYarnReturn;
                 totals.knitGreyReceived += knitGreyReceived;
-                totals.knitShortExcess += knitShortExcess;
                 totals.dyeGreyDelivery += dyeGreyDelivery;
                 totals.dyeGreyReturn += dyeGreyReturn;
                 totals.dyeGreyReceived += dyeGreyReceived;
                 totals.dyeFinishReceived += dyeFinishReceived;
-                totals.dyeShortExcess += dyeShortExcess;
                 totals.aopSent += aopSent;
                 totals.aopReceived += aopReceived;
                 totals.aopGreyReceived += aopGreyReceived;
                 totals.aopFinishReceived += aopFinishReceived;
-                totals.aopShortExcess += aopShortExcess;
                 totals.additionalQty += addi;
+
+                // Short & Excess cells show "-" in the table when there is no breakdown row,
+                // so they are only counted when the breakdown exists (footer = visible table data)
+                if (comp) {
+                    totals.yarnShortExcessReq += yarnShortExcessReq;
+                    totals.yarnShortExcessReturn += yarnShortExcessReturn;
+                    totals.knitShortExcess += knitShortExcess;
+                    totals.dyeShortExcess += dyeShortExcess;
+                    totals.aopShortExcess += aopShortExcess;
+                }
 
                 TRAILING_FIELDS.forEach(field => {
                     if (field.key === "remarks") return;
@@ -1078,7 +1114,6 @@ const Reconciliation = () => {
                 const subRowCount = getSubRowCount(job);
                 const isEditingThisJob = editingJobNo === jobNo;
                 const jobStartRow = ws.rowCount + 1;
-                const processLoss = Number(job.processLoss) || 0;
 
                 for (let i = 0; i < subRowCount; i++) {
                     const com = comps[i];
@@ -1086,16 +1121,16 @@ const Reconciliation = () => {
                     const isFirstRow = i === 0;
 
                     // ---- same calculations as the table ----
-                    const finishNum = Number(com?.finishRequiredQty) || 0;
-                    const additionalNum = Number(com?.additional) || 0;
-                    const yarnBase = finishNum * (1 + processLoss / 100);
-                    const increaseFinishQty = finishNum + (additionalNum - additionalNum * (processLoss / 100));
-                    const yarnRequireDisplayed = yarnBase + additionalNum;
+                    const additionalNum = safeNum(com?.additional);
+                    // FINISH REQUIRE QTY = finish + additional
+                    const increaseFinishQty = com ? getFinishWithAdditional(com) : 0;
+                    // YARN REQUIRE QTY = (finish + additional) x (1 + loss%)
+                    const yarnRequireDisplayed = com ? getYarnRequiredQty(com, job) : 0;
 
                     const knitYarnDelivery = Number(comp?.knittingOrder_Yarn_Delivery) || 0;
                     const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
                     const knitYarnReturn = Number(comp?.knittingOrder_Yarn_Return) || 0;
-                    const yarnShortExcessReq = knitYarnDelivery - yarnBase;
+                    const yarnShortExcessReq = knitYarnDelivery - yarnRequireDisplayed;
                     const knitShortExcess = knitYarnReturn + knitGreyReceived - knitYarnDelivery;
 
                     const dyeFinishReceived = Number(comp?.dyeingOrder_Finish_Received) || 0;
@@ -1593,9 +1628,8 @@ const Reconciliation = () => {
                                     const rowFlatIndex = rowIndexMap.get(`${jobNo}-${i}`);
                                     const rowKey = getRowKey(com, i);
 
-                                    const finishQty = Number(com?.finishRequiredQty).toFixed(2) || 0;
-                                    const processLoss = Number(job.processLoss) || 0;
-                                    const yarnRequiredQty = finishQty * (1 + processLoss / 100);
+                                    // YARN REQUIRED = (Finish Required + Additional) x (1 + Process Loss %)
+                                    const yarnRequiredQty = com ? getYarnRequiredQty(com, job) : 0;
                                     const knitYarnDelivery = comp?.knittingOrder_Yarn_Delivery || 0;
                                     const knitGreyReceived = Number(comp?.knittingOrder_Grey_Fabric_Received) || 0;
                                     const knitYarnReturn = comp?.knittingOrder_Yarn_Return || 0;
@@ -1757,19 +1791,14 @@ const Reconciliation = () => {
                                                 </div>
                                             </td>
 
+                                            {/* FINISH REQUIRE QTY = finish required + additional */}
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 10)}`} style={cellStyle} {...cellProps(rowFlatIndex, 10)}>
-                                                {(() => {
-                                                    if (!com) return "-";
-                                                    const additional = Number(com.additional) || 0;
-                                                    const lossQty = additional * ((Number(job.processLoss) || 0) / 100);
-                                                    const netAdditional = additional - lossQty;
-                                                    const increaseFinishQty = (Number(com.finishRequiredQty) || 0) + netAdditional;
-                                                    return increaseFinishQty.toFixed(2);
-                                                })()}
-                                                
+                                                {com ? getFinishWithAdditional(com).toFixed(2) : "-"}
                                             </td>
+
+                                            {/* YARN REQUIRE QTY = (finish required + additional) x (1 + process loss %) */}
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 11)}`} style={cellStyle} {...cellProps(rowFlatIndex, 11)}>
-                                                {(Number(com.finishRequiredQty) * (1 + Number(job.processLoss) / 100) + Number(com.additional)).toFixed(2)}
+                                                {com ? yarnRequiredQty.toFixed(2) : "-"}
                                             </td>
                                             <td className={`${cellClass} ${selectedCellClass(rowFlatIndex, 12)}`} style={cellStyle} {...cellProps(rowFlatIndex, 12)}>
                                                 {comp?.knittingOrder_Yarn_Delivery && !isNaN(Number(comp.knittingOrder_Yarn_Delivery))
