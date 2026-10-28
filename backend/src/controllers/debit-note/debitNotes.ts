@@ -35,10 +35,14 @@ const parseId = (req: Request): number | null => {
 
 const isApprover = (a: Actor) => APPROVER_ROLES.includes(a.role);
 
-type NoteLike = { status: string; createdBy: number };
+type NoteLike = {
+    status: string;
+    createdBy?: number | null;
+    userId?: number | null;
+};
 
 const permissionsFor = (note: NoteLike, a: Actor) => {
-    const isOwner = note.createdBy === a.id;
+    const isOwner = (note.createdBy ?? note.userId) === a.id;
     const editable = EDITABLE.includes(note.status);
     return {
         canEdit: isOwner && editable,
@@ -49,7 +53,8 @@ const permissionsFor = (note: NoteLike, a: Actor) => {
     };
 };
 
-const canView = (note: NoteLike, a: Actor) => note.createdBy === a.id || isApprover(a);
+const canView = (note: NoteLike, a: Actor) =>
+    (note.createdBy ?? note.userId) === a.id || isApprover(a);
 
 // The stored HTML is later rendered in other people's browsers, so only allow
 // what the editor can actually produce.
@@ -113,7 +118,7 @@ export const createDebitNote = async (req: Request, res: Response) => {
         if ("error" in input) return fail(res, 400, input.error);
 
         const row = await prisma.debitNote.create({
-            data: { title: input.title, content: input.content, createdBy: actor.id },
+            data: { title: input.title, content: input.content, userId: actor.id },
         });
 
         const noteNo = `DN-${new Date().getFullYear()}-${String(row.id).padStart(6, "0")}`;
@@ -122,7 +127,7 @@ export const createDebitNote = async (req: Request, res: Response) => {
             data: { noteNo },
         });
 
-        return res.status(201).send(serialize(created, actor));
+        return res.status(201).send(serialize({ ...created, createdBy: actor.id }, actor));
     } catch (err) {
         console.error("createDebitNote failed:", err);
         return fail(res, 500, "Failed to create debit note");
@@ -142,7 +147,7 @@ export const listDebitNotes = async (req: Request, res: Response) => {
 
         const where: Prisma.debitNoteWhereInput = {
             // approvers see everything, everyone else sees only their own notes
-            ...(isApprover(actor) ? {} : { createdBy: actor.id }),
+            ...(isApprover(actor) ? {} : { userId: actor.id }),
             ...((STATUSES as readonly string[]).includes(status) ? { status } : {}),
             ...(q
                 ? {
@@ -214,7 +219,7 @@ export const updateDebitNote = async (req: Request, res: Response) => {
 
         const note = await prisma.debitNote.findUnique({
             where: { id },
-            select: { createdBy: true, status: true },
+            select: { status: true },
         });
         if (!note) return fail(res, 404, "Debit note not found");
         if (!permissionsFor(note, actor).canEdit) {
@@ -223,7 +228,7 @@ export const updateDebitNote = async (req: Request, res: Response) => {
 
         // the status check is repeated in the WHERE so a concurrent submit can't be overwritten
         const result = await prisma.debitNote.updateMany({
-            where: { id, createdBy: actor.id, status: { in: EDITABLE } },
+            where: { id, status: { in: EDITABLE } },
             data: { title: input.title, content: input.content },
         });
         if (result.count === 0) {
@@ -348,7 +353,7 @@ export const deleteDebitNote = async (req: Request, res: Response) => {
 
         const note = await prisma.debitNote.findUnique({
             where: { id },
-            select: { createdBy: true, status: true },
+            select: { status: true },
         });
         if (!note) return fail(res, 404, "Debit note not found");
         if (!permissionsFor(note, actor).canDelete) {

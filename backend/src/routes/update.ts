@@ -7,7 +7,7 @@ import { updateWorkOrder } from "../controllers/orders/update/updateWorkOrder";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
-import { requestForApproval } from "../controllers/orders/requestForApproval";
+import { requestForApproval, requestForDebitNoteApproval } from "../controllers/orders/requestForApproval";
 import { editChallan } from "../controllers/movements/update.challan";
 import { editStyleRequirement } from "../controllers/newStyleRequirements/editStyleRequirement";
 import { userActiveInActive } from "../controllers/users/allUser";
@@ -30,11 +30,17 @@ updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, authen
 
 updateRouters.patch("/request-for-approval/:requestType/:workOrderId/:requestToId", responseTimeMonitor, authenticate, requestForApproval);
 
+updateRouters.patch(
+  "/request-for-debit-note-approval/:requestType/:debitNoteId/:requestToId",
+  responseTimeMonitor,
+  authenticate,
+  requestForDebitNoteApproval
+);
 updateRouters.patch("/edit-challan", responseTimeMonitor, authenticate, editChallan);
 
 updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, authorize("styleRequirements", [
-    "infoEdit"
-  ]), editStyleRequirement)
+  "infoEdit"
+]), editStyleRequirement)
 
 updateRouters.patch("/update-user-activity/:userId/:status", responseTimeMonitor, authenticate, userActiveInActive)
 

@@ -23,8 +23,8 @@ import { getDeliveryTotals } from "../controllers/deliveries/allDeliveryTotals";
 import { yarnStock, ydStock } from "../controllers/yarnStock/yarnStock";
 import { pendingWorkOrders } from "../controllers/orders/pendingWorkOrder";
 import { generateKnittingPdfWorkOrder } from "../controllers/orders/pdfWorkOrder";
-import { allUsers } from "../controllers/users/allUser";
-import { requestedData } from "../controllers/orders/requestedData";
+import { allUsers, getResponsibleUsers } from "../controllers/users/allUser";
+import { requestedData, requestedDebitNotes } from "../controllers/orders/requestedData";
 import { downloadChallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
 import { balanceGlanceReport } from "../controllers/Glance/balanceGlanceReport";
 import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
@@ -262,10 +262,20 @@ getRouters.get("/get-contractual-job", getContractJob);
 
 getRouters.get("/get-contractual-job-summary", getContractualJobs);
 
+getRouters.get("/all-responsible-users/:section/:responsibleType", getResponsibleUsers);
+
 // getRouters.get("/debit-notes", listDebitNotes);
 getRouters.get("/debit-notes/:id", authenticate, getDebitNote);
 getRouters.delete("/debit-notes/:id", authenticate, deleteDebitNote);
 getRouters.post("/debit-notes", authenticate, createDebitNote);
+getRouters.get("/debit-notes", authenticate, listDebitNotes);
+
+getRouters.get(
+  "/requested-debit-notes",
+  responseTimeMonitor,
+  authenticate,
+  requestedDebitNotes
+);
 
 
 export default getRouters;

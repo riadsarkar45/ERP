@@ -45,6 +45,14 @@ const PERMISSION_SECTIONS = [
         ],
     },
     {
+        key: 'debitNote',
+        title: "Debit Note",
+        items: [
+            yes('responsibleForMakingDebitNote', "Responsible For Making Debit Note"),
+            yes('responsibleForApprovalDebitNote', "Responsible For Approval Debit Note"),
+        ],
+    },
+    {
         key: 'workOrders',
         title: "WORK ORDER'S",
         items: [

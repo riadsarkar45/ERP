@@ -57,6 +57,10 @@ import SewingContract from "../dashboard/pages/swingContract/SweingContract";
 import ContractBilling from "../dashboard/pages/swingContract/ContractBilling";
 import ProductionPlanning from "../dashboard/pages/planning/productionPlanning";
 import DebitNote from "../dashboard/pages/debit-notes/DebitNote";
+import DebitNoteLists from "../dashboard/pages/debit-notes/DebitNoteLists";
+import ViewDebitNote from "../dashboard/pages/debit-notes/ViewDebitNote";
+import EditDebitNote from "../dashboard/pages/debit-notes/EditDebitNote";
+import ApprovalRequestReceived from "../dashboard/pages/debit-notes/ApprovalRequest";
 
 const routers = createBrowserRouter([
     {
@@ -291,6 +295,22 @@ const routers = createBrowserRouter([
                     {
                         path: "debit-note",
                         element: <DebitNote />
+                    },
+                    {
+                        path: "debit-note/list",
+                        element: <DebitNoteLists />
+                    },
+                    {
+                        path: "debit-notes/:id",
+                        element: <ViewDebitNote />
+                    },
+                    {
+                        path: "edit-debit-notes/:id",
+                        element: <EditDebitNote />
+                    },
+                    {
+                        path: "debit-note/requested",
+                        element: <ApprovalRequestReceived />
                     },
                 ]
             }

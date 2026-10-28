@@ -233,26 +233,28 @@ model jobs {
 }
 
 model user {
-  id                  Int                        @id @default(autoincrement())
-  userName            String?                    @default("NULL")
-  name                String
-  phoneNo             String                     @unique
-  password            String
-  userRole            String
-  workingStation      String?                    @default("NULL")
-  designation         String                     @default("Auditor")
-  dateOfJoin          DateTime                   @default(now())
-  isActive            Boolean                    @default(false)
-  refreshTokens       refreshToken[]
-  deliveries          deliveries[]
-  workOrders          WorkOrder[]                @relation("WorkOrderCreatedBy")
-  styleRequirements   StyleRequirement[]
-  requestsReceived    workOrderApprovalRequest[] @relation("RequestTo")
-  requestsMade        workOrderApprovalRequest[] @relation("RequestedBy")
-  reconciliationNotes reconciliationNotes[]
-  permissionSections  permissionSection[]
-  productionDatas     productionData[]
-  debitNotes          debitNote[]
+  id                        Int                        @id @default(autoincrement())
+  userName                  String?                    @default("NULL")
+  name                      String
+  phoneNo                   String                     @unique
+  password                  String
+  userRole                  String
+  workingStation            String?                    @default("NULL")
+  designation               String                     @default("Auditor")
+  dateOfJoin                DateTime                   @default(now())
+  isActive                  Boolean                    @default(false)
+  refreshTokens             refreshToken[]
+  deliveries                deliveries[]
+  workOrders                WorkOrder[]                @relation("WorkOrderCreatedBy")
+  styleRequirements         StyleRequirement[]
+  requestsReceived          workOrderApprovalRequest[] @relation("RequestTo")
+  requestsMade              workOrderApprovalRequest[] @relation("RequestedBy")
+  debitNoteRequestsReceived debitNoteApprovalRequest[] @relation("DebitNoteRequestTo")
+  debitNoteRequestsMade     debitNoteApprovalRequest[] @relation("DebitNoteRequestedBy")
+  reconciliationNotes       reconciliationNotes[]
+  permissionSections        permissionSection[]
+  productionDatas           productionData[]
+  debitNotes                debitNote[]
 
   @@index([userName])
   @@index([userRole])
@@ -364,6 +366,20 @@ model workOrderApprovalRequest {
   byUser      user       @relation("RequestedBy", fields: [requestedBy], references: [id])
 }
 
+model debitNoteApprovalRequest {
+  id          Int      @id @default(autoincrement())
+  requestTo   Int
+  requestedBy Int
+  requestAt   DateTime @default(now())
+  requestType String
+  debitNoteId Int?
+
+  debitNote debitNote? @relation(fields: [debitNoteId], references: [id])
+
+  toUser user @relation("DebitNoteRequestTo", fields: [requestTo], references: [id])
+  byUser user @relation("DebitNoteRequestedBy", fields: [requestedBy], references: [id])
+}
+
 model yarnPurchasePi {
   id                    Int                     @id @default(autoincrement())
   piNo                  String                  @unique
@@ -458,20 +474,19 @@ model processTypes {
 }
 
 model debitNote {
-  id           Int       @id @default(autoincrement())
-  noteNo       String?   @unique
-  title        String
-  content      String
-  status       String    @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED
-  createdBy    Int
-  submittedAt  DateTime?
-  reviewRemark String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  user         user?     @relation(fields: [id], references: [id])
-  userId       Int?
+  id                        Int                        @id @default(autoincrement())
+  noteNo                    String?                    @unique
+  title                     String
+  content                   String
+  status                    String                     @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED
+  submittedAt               DateTime?
+  reviewRemark              String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  user                      user?                      @relation(fields: [userId], references: [id])
+  userId                    Int?
+  debitNoteApprovalRequests debitNoteApprovalRequest[]
 
   @@index([status])
-  @@index([createdBy])
   @@index([createdAt])
 }

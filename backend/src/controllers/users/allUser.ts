@@ -80,3 +80,39 @@ export const userActiveInActive = async (req: Request, res: Response) => {
         res.status(400).send({ message: "Update Failed", type: "error" })
     }
 }
+
+export const getResponsibleUsers = async (req: Request, res: Response) => {
+    const { section, responsibleType } = req.params;
+
+    if (!responsibleType || !section) {
+        return res.status(400).send({ message: "Required fields are missing", type: "error" })
+    }
+
+    const getResUser = await prisma.permissionSection.findMany(
+        {
+            where: { 
+                permittedSection: String(section),
+                isPermitted: {
+                    some: {
+                        isPermitted: String(responsibleType)
+                    }
+                }
+            
+            },
+            select: {
+                user: {
+                    select: {
+                        name: true,
+                        id: true,
+                    }
+                }
+            }
+        }
+    )
+
+    if (!getResUser) {
+        return res.status(400).send({ message: "No user found", type: "error" })
+    }
+
+    return res.status(200).send(getResUser)
+}

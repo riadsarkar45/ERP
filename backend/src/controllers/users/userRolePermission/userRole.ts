@@ -13,6 +13,7 @@ const MASTER_PERMISSIONS: Record<string, string[]> = {
     movementBilling: ['qtyEdit', 'billingMake', 'billApproved', 'challanInfoExport', 'priceChange', 'billInfoSee', 'aopOrder', 'dyeingOrder', 'knittingOrder'],
     userManagement: ['addNewUser', 'setUserPermission', 'deleteExistingUser'],
     dashboard: ['hourlyChallanActivity', 'hourlyWorkOrderActivity', 'hourlyBookingActivity'],
+    debitNote: ['responsibleForMakingDebitNote', 'responsibleForApprovalDebitNote'],
 };
 
 type SectionPayload = {
