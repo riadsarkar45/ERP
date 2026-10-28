@@ -1,25 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
-import { Loader } from "lucide-react";
+import {
+  Loader, X, Plus, Trash2, Calendar, Hash, Layers,
+  TrendingUp, AlertCircle, Search, CheckCircle2, Filter,
+  ChevronRight, ChevronDown as ChevronDownIcon
+} from "lucide-react";
 
-const processLists = [
-  "Body Hem",
-  "Neck Joint",
-  "Shoulder to Shoulder",
-  "Sleeve Hem",
-  "Sleeve Join",
-  "Cuff Join",
-  "Side Seam",
+// --- Constants & Helpers ---
+const PROCESS_TYPES = [
+  "Body Hem", "Neck Joint", "Shoulder to Shoulder",
+  "Sleeve Hem", "Sleeve Join", "Cuff Join", "Side Seam"
 ];
 
-// Works whether the API sends composition as a string or as an object
 const getCompositionLabel = (c) => {
   if (!c) return "—";
   if (typeof c === "string") return c;
   return c.name || c.title || c.label || c.composition || "—";
 };
 
-// Convert one record from /api/get-contractual-job-summary into a table row
 const mapSummaryRow = (r) => ({
   id: r.id,
   date: r.date ? String(r.date).split("T")[0] : "",
@@ -27,49 +25,598 @@ const mapSummaryRow = (r) => ({
   styleNo: r.jobs?.styleNo || "",
   lineNo: r.lineNo || "",
   compositionId: r.styleReqRows?.id ?? r.styleReqRowsId ?? null,
-  compositionLabel: r.styleReqRows?.composition
-    ? getCompositionLabel(r.styleReqRows.composition)
-    : "—",
+  compositionLabel: r.styleReqRows?.composition ? getCompositionLabel(r.styleReqRows.composition) : "—",
   orderQty: Number(r.styleReqRows?.orderQty) || 0,
   processType: r.processType || "",
   todayInput: Number(r.input) || 0,
   todayOutput: Number(r.output) || 0,
 });
 
-export default function SewingContract() {
-  // Master Contract Info
-  const [headerData, setHeaderData] = useState({
+// ============================================================
+// DATE FILTER DROPDOWN (Excel-style Year > Month tree)
+// ============================================================
+function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorRef }) {
+  const dropdownRef = useRef(null);
+  const [search, setSearch] = useState("");
+
+  // Build year > month > [dates] tree
+  const dateTree = useMemo(() => {
+    const tree = {};
+    const sorted = [...allDates].sort();
+    sorted.forEach(d => {
+      if (!d) return;
+      const [year, month] = d.split("-");
+      const monthNames = ["","January","February","March","April","May","June",
+                          "July","August","September","October","November","December"];
+      const monthLabel = `${monthNames[parseInt(month)]} ${year}`;
+      if (!tree[year]) tree[year] = {};
+      if (!tree[year][monthLabel]) tree[year][monthLabel] = [];
+      tree[year][monthLabel].push(d);
+    });
+    return tree;
+  }, [allDates]);
+
+  // All flat dates
+  const allFlat = allDates.filter(Boolean);
+
+  // Local selected state
+  const [localSelected, setLocalSelected] = useState(
+    selectedDates && selectedDates.length > 0 ? [...selectedDates] : [...allFlat]
+  );
+
+  // Expanded years/months
+  const [expandedYears, setExpandedYears] = useState({});
+  const [expandedMonths, setExpandedMonths] = useState({});
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+          anchorRef.current && !anchorRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose, anchorRef]);
+
+  const toggleDate = (d) => {
+    setLocalSelected(prev => prev.includes(d) ? prev.filter(v => v !== d) : [...prev, d]);
+  };
+
+  const toggleYear = (year) => {
+    setExpandedYears(prev => ({ ...prev, [year]: !prev[year] }));
+  };
+
+  const toggleMonth = (key) => {
+    setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Get all dates under a year
+  const getDatesInYear = (year) => {
+    const months = dateTree[year] || {};
+    return Object.values(months).flat();
+  };
+
+  // Get all dates under a month
+  const getDatesInMonth = (year, monthLabel) => {
+    return dateTree[year]?.[monthLabel] || [];
+  };
+
+  const toggleAllInYear = (year) => {
+    const datesInYear = getDatesInYear(year);
+    const allSelected = datesInYear.every(d => localSelected.includes(d));
+    if (allSelected) {
+      setLocalSelected(prev => prev.filter(d => !datesInYear.includes(d)));
+    } else {
+      setLocalSelected(prev => [...new Set([...prev, ...datesInYear])]);
+    }
+  };
+
+  const toggleAllInMonth = (year, monthLabel) => {
+    const datesInMonth = getDatesInMonth(year, monthLabel);
+    const allSelected = datesInMonth.every(d => localSelected.includes(d));
+    if (allSelected) {
+      setLocalSelected(prev => prev.filter(d => !datesInMonth.includes(d)));
+    } else {
+      setLocalSelected(prev => [...new Set([...prev, ...datesInMonth])]);
+    }
+  };
+
+  const selectAll = () => setLocalSelected([...allFlat]);
+  const clearAll = () => setLocalSelected([]);
+
+  const isAllSelected = allFlat.length > 0 && localSelected.length === allFlat.length;
+  const isSomeSelected = localSelected.length > 0 && localSelected.length < allFlat.length;
+
+  const handleApply = () => {
+    onApply(localSelected);
+    onClose();
+  };
+
+  const years = Object.keys(dateTree).sort().reverse();
+
+  // Filter years/months by search
+  const matchesSearch = (str) => str.toLowerCase().includes(search.toLowerCase());
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-2xl w-64 overflow-hidden"
+      style={{ minWidth: "240px" }}
+    >
+      {/* Search Box */}
+      <div className="p-2 border-b border-slate-200">
+        <input
+          type="text"
+          placeholder="Search items..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          autoFocus
+        />
+      </div>
+
+      {/* Select All */}
+      <div className="border-b border-slate-100">
+        <label className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isAllSelected}
+            ref={el => { if (el) el.indeterminate = isSomeSelected; }}
+            onChange={() => isAllSelected ? clearAll() : selectAll()}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-slate-700 font-medium">(Select All)</span>
+        </label>
+      </div>
+
+      {/* Date Tree */}
+      <div className="max-h-52 overflow-y-auto">
+        {years.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-slate-400 text-center">No dates available</p>
+        ) : (
+          years.filter(y => matchesSearch(y) || Object.keys(dateTree[y]).some(m => matchesSearch(m))).map(year => {
+            const months = dateTree[year];
+            const monthKeys = Object.keys(months).sort();
+            const datesInYear = getDatesInYear(year);
+            const yearAllSelected = datesInYear.every(d => localSelected.includes(d));
+            const yearSomeSelected = datesInYear.some(d => localSelected.includes(d)) && !yearAllSelected;
+            const isYearExpanded = expandedYears[year] !== false; // default open
+
+            return (
+              <div key={year}>
+                {/* Year Row */}
+                <div className="flex items-center border-b border-slate-50 hover:bg-blue-50/50">
+                  <button
+                    onClick={() => toggleYear(year)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 flex-shrink-0"
+                  >
+                    {isYearExpanded
+                      ? <ChevronDownIcon size={14} />
+                      : <ChevronRight size={14} />
+                    }
+                  </button>
+                  <label className="flex items-center gap-2 flex-1 py-1.5 pr-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={yearAllSelected}
+                      ref={el => { if (el) el.indeterminate = yearSomeSelected; }}
+                      onChange={() => toggleAllInYear(year)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-semibold text-slate-800">{year}</span>
+                  </label>
+                </div>
+
+                {/* Months */}
+                {isYearExpanded && monthKeys.filter(m => matchesSearch(m)).map(monthLabel => {
+                  const datesInMonth = months[monthLabel];
+                  const monthAllSelected = datesInMonth.every(d => localSelected.includes(d));
+                  const monthSomeSelected = datesInMonth.some(d => localSelected.includes(d)) && !monthAllSelected;
+                  const monthKey = `${year}-${monthLabel}`;
+                  const isMonthExpanded = expandedMonths[monthKey] === true; // default closed
+
+                  return (
+                    <div key={monthKey}>
+                      {/* Month Row */}
+                      <div className="flex items-center pl-6 border-b border-slate-50 hover:bg-blue-50/50">
+                        <button
+                          onClick={() => toggleMonth(monthKey)}
+                          className="p-1.5 text-slate-400 hover:text-slate-700 flex-shrink-0"
+                        >
+                          {isMonthExpanded
+                            ? <ChevronDownIcon size={13} />
+                            : <ChevronRight size={13} />
+                          }
+                        </button>
+                        <label className="flex items-center gap-2 flex-1 py-1.5 pr-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={monthAllSelected}
+                            ref={el => { if (el) el.indeterminate = monthSomeSelected; }}
+                            onChange={() => toggleAllInMonth(year, monthLabel)}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-600">{monthLabel}</span>
+                        </label>
+                      </div>
+
+                      {/* Individual Dates */}
+                      {isMonthExpanded && datesInMonth
+                        .filter(d => matchesSearch(d))
+                        .map(d => (
+                          <label
+                            key={d}
+                            className="flex items-center gap-2.5 pl-12 pr-3 py-1.5 hover:bg-blue-50 cursor-pointer border-b border-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={localSelected.includes(d)}
+                              onChange={() => toggleDate(d)}
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-slate-600">{d}</span>
+                          </label>
+                        ))
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Cancel / APPLY Buttons */}
+      <div className="p-2.5 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
+        <button
+          onClick={onClose}
+          className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleApply}
+          className="px-4 py-1.5 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+        >
+          APPLY
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// GENERIC FILTER DROPDOWN (matches screenshot exactly)
+// ============================================================
+function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, anchorRef }) {
+  const dropdownRef = useRef(null);
+  const [search, setSearch] = useState("");
+  const [localSelected, setLocalSelected] = useState(
+    selectedValues && selectedValues.length > 0 ? [...selectedValues] : [...allValues]
+  );
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+          anchorRef.current && !anchorRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose, anchorRef]);
+
+  const filteredValues = allValues.filter(v =>
+    String(v).toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggleValue = (val) => {
+    setLocalSelected(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  };
+
+  const selectAll = () => setLocalSelected([...allValues]);
+  const clearAll = () => setLocalSelected([]);
+
+  const isAllSelected = allValues.length > 0 && localSelected.length === allValues.length;
+  const isSomeSelected = localSelected.length > 0 && localSelected.length < allValues.length;
+
+  const handleApply = () => {
+    onApply(localSelected);
+    onClose();
+  };
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-2xl w-56 overflow-hidden"
+      style={{ minWidth: "200px" }}
+    >
+      {/* Search Box */}
+      <div className="p-2 border-b border-slate-200">
+        <input
+          type="text"
+          placeholder="Search items..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          autoFocus
+        />
+      </div>
+
+      {/* (Select All) */}
+      <div className="border-b border-slate-100">
+        <label className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isAllSelected}
+            ref={el => { if (el) el.indeterminate = isSomeSelected; }}
+            onChange={() => isAllSelected ? clearAll() : selectAll()}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-slate-700 font-medium">(Select All)</span>
+        </label>
+      </div>
+
+      {/* Values List */}
+      <div className="max-h-52 overflow-y-auto">
+        {filteredValues.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-slate-400 text-center">No matches found</p>
+        ) : (
+          filteredValues.map((val) => (
+            <label
+              key={String(val)}
+              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50"
+            >
+              <input
+                type="checkbox"
+                checked={localSelected.includes(val)}
+                onChange={() => toggleValue(val)}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-slate-700 truncate">
+                {String(val) || <span className="text-slate-400 italic">(empty)</span>}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
+
+      {/* Cancel / APPLY Buttons */}
+      <div className="p-2.5 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
+        <button
+          onClick={onClose}
+          className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleApply}
+          className="px-4 py-1.5 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+        >
+          APPLY
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// FILTER HEADER CELL
+// ============================================================
+function FilterTh({ label, columnKey, align = "left", filters, allValues, onApplyFilter, onOpenFilter, openFilterKey }) {
+  const isActive = filters[columnKey] && filters[columnKey].length > 0 && filters[columnKey].length < allValues.length;
+  const isOpen = openFilterKey === columnKey;
+  const thRef = useRef(null);
+
+  const alignClass = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+  const justifyClass = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+
+  const handleClose = () => onOpenFilter(null);
+
+  const handleApply = (vals) => onApplyFilter(columnKey, vals);
+
+  return (
+    <th
+      ref={thRef}
+      className={`py-3 px-4 border border-[#00a884] text-[13px] font-bold uppercase tracking-wider whitespace-nowrap ${alignClass} select-none relative`}
+    >
+      <div className={`flex items-center gap-1.5 ${justifyClass}`}>
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenFilter(isOpen ? null : columnKey); }}
+          title={`Filter by ${label}`}
+          className={`p-0.5 rounded transition-all duration-150 hover:bg-white/20 ${
+            isActive ? "text-yellow-300 bg-white/25" : isOpen ? "text-white bg-white/20" : "text-white/50 hover:text-white"
+          }`}
+        >
+          <Filter size={13} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {isOpen && columnKey === "date" && (
+        <DateFilterDropdown
+          allDates={allValues}
+          selectedDates={filters[columnKey] || allValues}
+          onApply={handleApply}
+          onClose={handleClose}
+          anchorRef={thRef}
+        />
+      )}
+
+      {isOpen && columnKey !== "date" && (
+        <GenericFilterDropdown
+          allValues={allValues}
+          selectedValues={filters[columnKey] || allValues}
+          onApply={handleApply}
+          onClose={handleClose}
+          anchorRef={thRef}
+        />
+      )}
+    </th>
+  );
+}
+
+// ============================================================
+// MODAL COMPONENT
+// ============================================================
+function OperationModal({ isOpen, onClose, onSave, isLoading, initialData, compositions }) {
+  const [formData, setFormData] = useState({
     date: new Date().toISOString().split("T")[0],
-    jobNo: "",
-    styleNo: "",
     lineNo: "",
+    processType: PROCESS_TYPES[0],
+    todayInput: "",
+    todayOutput: "",
+    compositionId: ""
   });
 
-  // Job search
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        date: initialData?.date || new Date().toISOString().split("T")[0],
+        lineNo: initialData?.lineNo || "",
+        compositionId: initialData?.compositionId || (compositions.length === 1 ? compositions[0].id : "")
+      }));
+    }
+  }, [isOpen, initialData, compositions]);
+
+  if (!isOpen) return null;
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.lineNo.trim()) { alert("Please enter the Line / Unit number."); return; }
+    if (!formData.compositionId && compositions.length > 0) { alert("Please select a composition."); return; }
+    onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-100">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600"><Plus size={18} /></div>
+            Add Operation Entry
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <Layers size={14} /> Production & Contract Info
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Date</label>
+                <div className="relative group">
+                  <input type="date" name="date" value={formData.date} onChange={handleChange} required
+                    className="w-full pl-10 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 group-hover:bg-white" />
+                  <Calendar size={16} className="absolute left-3.5 top-3 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Line / Unit</label>
+                <div className="relative group">
+                  <input type="text" name="lineNo" placeholder="e.g. Line 04" value={formData.lineNo} onChange={handleChange} required
+                    className="w-full pl-10 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 group-hover:bg-white" />
+                  <Hash size={16} className="absolute left-3.5 top-3 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+            {compositions.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Composition</label>
+                <select name="compositionId" value={formData.compositionId} onChange={handleChange} required
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white appearance-none">
+                  {compositions.length === 1
+                    ? <option value={compositions[0].id}>{compositions[0].label} — Qty: {compositions[0].orderQty.toLocaleString()}</option>
+                    : <>
+                        <option value="">Select a composition...</option>
+                        {compositions.map(c => <option key={c.id} value={c.id}>{c.label} — Qty: {c.orderQty.toLocaleString()}</option>)}
+                      </>
+                  }
+                </select>
+              </div>
+            )}
+          </div>
+          <hr className="border-slate-100" />
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <TrendingUp size={14} /> Operation Output Entry
+            </h4>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Process Type</label>
+              <select name="processType" value={formData.processType} onChange={handleChange}
+                className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                {PROCESS_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Today Input (Pcs)</label>
+                <input type="number" name="todayInput" placeholder="0" min="0" value={formData.todayInput} onChange={handleChange} required
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Today Output (Pcs)</label>
+                <input type="number" name="todayOutput" placeholder="0" min="0" value={formData.todayOutput} onChange={handleChange} required
+                  className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-slate-50" />
+              </div>
+            </div>
+          </div>
+          <div className="pt-2 flex gap-3">
+            <button type="button" onClick={onClose} disabled={isLoading}
+              className="flex-1 px-4 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
+            <button type="submit" disabled={isLoading}
+              className="flex-1 px-4 py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2">
+              {isLoading ? <Loader size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+              Save Entry
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN DASHBOARD COMPONENT
+// ============================================================
+export default function SewingContract() {
+  const axiosPrivate = useAxiosPrivate();
+
+  const [headerData, setHeaderData] = useState({ date: new Date().toISOString().split("T")[0], jobNo: "", styleNo: "", lineNo: "" });
   const [jobSearch, setJobSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [compositionId, setCompositionId] = useState(null); // real composition row id from the API
+  const [compositionId, setCompositionId] = useState(null);
   const skipNextSearch = useRef(false);
 
-  // Active Entry Form
-  const [formData, setFormData] = useState({
-    processType: processLists[0],
-    todayInput: "",
-    todayOutput: "",
-  });
-
-  // Saving / loading state
-  const [isSaving, setIsSaving] = useState(false);
+  const [rows, setRows] = useState([]);
   const [isLoadingRows, setIsLoadingRows] = useState(false);
 
-  // Table Rows (Floor Operations) — loaded from the server
-  const [rows, setRows] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const axiosPrivate = useAxiosPrivate();
+  // ---- FILTER STATE ----
+  const [filters, setFilters] = useState({});
+  const [openFilterKey, setOpenFilterKey] = useState(null);
 
-  // Load recorded operations from the server
+  const handleApplyFilter = (columnKey, selectedValues) => {
+    setFilters(prev => ({ ...prev, [columnKey]: selectedValues }));
+  };
+
   const fetchSummary = useCallback(async () => {
     setIsLoadingRows(true);
     try {
@@ -77,612 +624,317 @@ export default function SewingContract() {
       const list = Array.isArray(data) ? data : data ? [data] : [];
       setRows(list.map(mapSummaryRow));
     } catch (error) {
-      console.error("Failed to load contractual job summary:", error);
+      console.error("Failed to load summary:", error);
     } finally {
       setIsLoadingRows(false);
     }
   }, [axiosPrivate]);
 
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
 
-  // Only compositions that actually have an order qty
   const compositions = useMemo(() => {
     if (!selectedJob?.rows) return [];
     return selectedJob.rows
-      .map((r) => ({
-        id: r.id,
-        label: getCompositionLabel(r.composition),
-        orderQty: Number(r.orderQty) || 0,
-      }))
+      .map((r) => ({ id: r.id, label: getCompositionLabel(r.composition), orderQty: Number(r.orderQty) || 0 }))
       .filter((c) => c.orderQty > 0);
   }, [selectedJob]);
 
-  const activeComposition =
-    compositions.find((c) => String(c.id) === String(compositionId)) || null;
+  const activeComposition = compositions.find((c) => String(c.id) === String(compositionId)) || null;
 
-  const handleHeaderChange = (e) => {
-    const { name, value } = e.target;
-    setHeaderData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSearchJob = (e) => {
-    setJobSearch(e.target.value);
-  };
-
-  // Debounced job search
-  useEffect(() => {
-    if (skipNextSearch.current) {
-      skipNextSearch.current = false;
-      return;
-    }
-
-    const term = jobSearch.trim();
-    if (!term) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const { data } = await axiosPrivate.get("/api/get-contractual-job", {
-          params: { jobNo: term },
-        });
-        if (cancelled) return;
-        setSearchResults(Array.isArray(data) ? data : data ? [data] : []);
-      } catch (error) {
-        if (cancelled) return;
-        console.error("Job search failed:", error);
-        setSearchResults([]);
-      } finally {
-        if (!cancelled) setIsSearching(false);
-      }
-    }, 1000);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [jobSearch, axiosPrivate]);
-
-  // When a job is picked from the dropdown
   const handleSelectJob = (job, chosenCompositionId = null) => {
     const firstValid = (job.rows || []).find((r) => Number(r.orderQty) > 0);
-
     setSelectedJob(job);
-    setCompositionId(
-      chosenCompositionId !== null
-        ? chosenCompositionId
-        : firstValid
-          ? firstValid.id
-          : null
-    );
-    setHeaderData((prev) => ({
-      ...prev,
-      jobNo: job.jobNo || "",
-      styleNo: job.styleNo || "",
-    }));
-
+    setCompositionId(chosenCompositionId !== null ? chosenCompositionId : firstValid ? firstValid.id : null);
+    setHeaderData(prev => ({ ...prev, jobNo: job.jobNo || "", styleNo: job.styleNo || "" }));
     skipNextSearch.current = true;
     setJobSearch(job.jobNo || "");
     setSearchResults([]);
   };
 
   const handleClearJob = () => {
-    setSelectedJob(null);
-    setCompositionId(null);
-    setHeaderData((prev) => ({ ...prev, jobNo: "", styleNo: "" }));
-    setJobSearch("");
-    setSearchResults([]);
+    setSelectedJob(null); setCompositionId(null);
+    setHeaderData(prev => ({ ...prev, jobNo: "", styleNo: "" }));
+    setJobSearch(""); setSearchResults([]);
   };
 
-  const handleAddRow = async (e) => {
-    e.preventDefault();
-    if (isSaving) return;
+  useEffect(() => {
+    if (skipNextSearch.current) { skipNextSearch.current = false; return; }
+    const term = jobSearch.trim();
+    if (!term) { setSearchResults([]); setIsSearching(false); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const { data } = await axiosPrivate.get("/api/get-contractual-job", { params: { jobNo: term } });
+        if (cancelled) return;
+        setSearchResults(Array.isArray(data) ? data : data ? [data] : []);
+      } catch (error) { if (!cancelled) setSearchResults([]); }
+      finally { if (!cancelled) setIsSearching(false); }
+    }, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [jobSearch, axiosPrivate]);
 
-    if (!headerData.jobNo) {
-      alert("Please search and select a contract job first.");
-      return;
-    }
-    if (!headerData.lineNo.trim()) {
-      alert("Please enter the line / unit.");
-      return;
-    }
-    if (!activeComposition) {
-      alert("Please select a composition.");
-      return;
-    }
-    if (
-      !formData.processType ||
-      formData.todayInput === "" ||
-      formData.todayOutput === ""
-    ) {
-      alert("Please fill in process type, input, and output quantities.");
-      return;
-    }
-
-    // ---- Payload sent to the server ----
+  const handleSaveOperation = async (formData) => {
+    if (!headerData.jobNo) { alert("Please search and select a Job No from the top bar first."); return; }
+    const compId = formData.compositionId || activeComposition?.id;
+    if (!compId) { alert("Please select a valid composition."); return; }
     const payload = {
-      jobNo: headerData.jobNo,
-      compositionId: activeComposition.id,
-      date: headerData.date,
-      lineNo: headerData.lineNo.trim(),
-      processType: formData.processType,
-      input: Number(formData.todayInput) || 0,
-      output: Number(formData.todayOutput) || 0,
+      jobNo: headerData.jobNo, compositionId: compId, date: formData.date,
+      lineNo: formData.lineNo.trim(), processType: formData.processType,
+      input: Number(formData.todayInput) || 0, output: Number(formData.todayOutput) || 0,
     };
-
     setIsSaving(true);
     try {
       await axiosPrivate.post("/api/add-contractual-job", payload);
-
-      // Reload real data from the server after a successful save
       await fetchSummary();
-
-      setFormData({
-        processType: processLists[0],
-        todayInput: "",
-        todayOutput: "",
-      });
+      setIsModalOpen(false);
     } catch (error) {
       console.error("Save failed:", error);
-      alert(
-        error?.response?.data?.message ||
-          "Could not save the entry. Please try again."
-      );
-    } finally {
-      setIsSaving(false);
-    }
+      alert(error?.response?.data?.message || "Could not save entry.");
+    } finally { setIsSaving(false); }
   };
 
-  // Local delete only (add a DELETE API call here, then fetchSummary(), if needed)
-  const handleDeleteRow = (id) => {
-    setRows((prev) => prev.filter((row) => row.id !== id));
+  const handleDeleteRow = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this record?")) return;
+    setRows(prev => prev.filter(row => row.id !== id));
   };
 
-  // All real rows from the API; narrowed to the selected job (+ composition when the row has one)
   const scopedRows = useMemo(() => {
     if (!headerData.jobNo) return rows;
-    return rows.filter((r) => {
+    return rows.filter(r => {
       if (r.jobNo !== headerData.jobNo) return false;
-      if (activeComposition && r.compositionId !== null) {
-        return String(r.compositionId) === String(activeComposition.id);
-      }
+      if (activeComposition && r.compositionId !== null) return String(r.compositionId) === String(activeComposition.id);
       return true;
     });
   }, [rows, headerData.jobNo, activeComposition]);
 
-  // Order qty: from the selected composition if there is one,
-  // otherwise from the real rows (counted once per job/composition)
+  // Unique values per column
+  const uniqueValues = useMemo(() => ({
+    date:        [...new Set(scopedRows.map(r => r.date).filter(Boolean))].sort(),
+    jobNo:       [...new Set(scopedRows.map(r => r.jobNo).filter(Boolean))].sort(),
+    styleNo:     [...new Set(scopedRows.map(r => r.styleNo).filter(Boolean))].sort(),
+    lineNo:      [...new Set(scopedRows.map(r => r.lineNo).filter(Boolean))].sort(),
+    processType: [...new Set(scopedRows.map(r => r.processType).filter(Boolean))].sort(),
+    status:      ["Target Met", "In Progress"],
+  }), [scopedRows]);
+
+  // Apply filters
+  const filteredRows = useMemo(() => {
+    return scopedRows.filter(row => {
+      const ratio = row.todayInput > 0 ? (row.todayOutput / row.todayInput) * 100 : 0;
+      const status = ratio >= 95 ? "Target Met" : "In Progress";
+      if (filters.date        && filters.date.length        && !filters.date.includes(row.date))              return false;
+      if (filters.jobNo       && filters.jobNo.length       && !filters.jobNo.includes(row.jobNo))             return false;
+      if (filters.styleNo     && filters.styleNo.length     && !filters.styleNo.includes(row.styleNo))         return false;
+      if (filters.lineNo      && filters.lineNo.length      && !filters.lineNo.includes(row.lineNo))           return false;
+      if (filters.processType && filters.processType.length && !filters.processType.includes(row.processType)) return false;
+      if (filters.status      && filters.status.length      && !filters.status.includes(status))               return false;
+      return true;
+    });
+  }, [scopedRows, filters]);
+
   const orderQty = useMemo(() => {
     if (activeComposition) return activeComposition.orderQty;
     const seen = new Map();
-    scopedRows.forEach((r) => {
-      const key = `${r.jobNo}|${r.compositionId ?? ""}|${r.orderQty}`;
-      if (!seen.has(key)) seen.set(key, r.orderQty);
-    });
+    scopedRows.forEach(r => { const k = `${r.jobNo}|${r.compositionId ?? ''}|${r.orderQty}`; if (!seen.has(k)) seen.set(k, r.orderQty); });
     return Array.from(seen.values()).reduce((a, b) => a + b, 0);
   }, [activeComposition, scopedRows]);
 
-  // Floor KPI calculations
-  const totalInput = scopedRows.reduce((acc, r) => acc + Number(r.todayInput || 0), 0);
-  const totalOutput = scopedRows.reduce((acc, r) => acc + Number(r.todayOutput || 0), 0);
-  const totalWip = Math.max(0, totalInput - totalOutput);
-  const efficiencyRate =
-    totalInput > 0 ? ((totalOutput / totalInput) * 100).toFixed(1) : 0;
+  const totalInput       = filteredRows.reduce((acc, r) => acc + Number(r.todayInput  || 0), 0);
+  const totalOutput      = filteredRows.reduce((acc, r) => acc + Number(r.todayOutput || 0), 0);
+  const totalWip         = Math.max(0, totalInput - totalOutput);
+  const efficiencyRate   = totalInput > 0 ? ((totalOutput / totalInput) * 100).toFixed(1) : 0;
   const remainingToOrder = Math.max(0, orderQty - totalOutput);
 
+  const activeFilterCount = Object.values(filters).filter(arr => arr && arr.length > 0 && arr.length < (uniqueValues[arr === filters.date ? 'date' : arr === filters.jobNo ? 'jobNo' : arr === filters.lineNo ? 'lineNo' : arr === filters.processType ? 'processType' : 'status'] || []).length).length;
+  const simpleActiveCount = Object.entries(filters).filter(([key, vals]) => {
+    if (!vals || vals.length === 0) return false;
+    const allVals = uniqueValues[key] || [];
+    return vals.length < allVals.length;
+  }).length;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      <div className="mx-auto space-y-8">
-        {/* Top Header */}
-        <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-200">
-          <div className="flex flex-wrap items-start gap-2 text-xs font-medium">
-            {/* Search box + dropdown */}
-            <div className="relative">
-              <span className="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-slate-600 shadow-xs flex items-center gap-2">
-                <span>Contract Job:</span>
-                <input
-                  className="px-2 py-1 border border-slate-200 rounded text-slate-900 font-semibold outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-slate-50/50"
-                  type="text"
-                  placeholder="Search Job No"
-                  value={jobSearch}
-                  onChange={handleSearchJob}
-                />
-                {selectedJob && (
-                  <button
-                    type="button"
-                    onClick={handleClearJob}
-                    className="text-slate-400 hover:text-rose-600"
-                    title="Clear selected job"
-                  >
-                    ✕
-                  </button>
-                )}
-              </span>
+    <div className="h-screen flex flex-col bg-slate-50 text-slate-800 font-sans overflow-hidden">
 
-              {searchResults.length > 0 && (
-                <ul className="absolute z-20 mt-1 w-full min-w-64 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-auto">
-                  {searchResults.flatMap((job, i) => {
-                    const validRows = (job.rows || []).filter(
-                      (r) => Number(r.orderQty) > 0
-                    );
-
-                    // Job without any valid composition: still selectable
-                    if (validRows.length === 0) {
-                      return [
-                        <li key={`${job.jobNo}-${i}`}>
-                          <button
-                            type="button"
-                            onClick={() => handleSelectJob(job)}
-                            className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors"
-                          >
-                            <span className="block font-semibold text-slate-900">
-                              {job.jobNo}
-                            </span>
-                            <span className="block text-[11px] text-slate-500">
-                              Style: {job.styleNo || "—"}
-                            </span>
-                          </button>
-                        </li>,
-                      ];
-                    }
-
-                    // One entry per composition
-                    return validRows.map((r) => (
-                      <li key={`${job.jobNo}-${i}-${r.id}`}>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectJob(job, r.id)}
-                          className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors"
-                        >
-                          <span className="block font-semibold text-slate-900">
-                            {job.jobNo}
-                          </span>
-                          <span className="block text-[11px] text-slate-500">
-                            Style: {job.styleNo || "—"}
-                          </span>
-                          <span className="block text-[11px] text-indigo-600 font-medium">
-                            {getCompositionLabel(r.composition)} • Order Qty{" "}
-                            {Number(r.orderQty).toLocaleString()}
-                          </span>
+      {/* Top Navigation */}
+      <header className="shrink-0 bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 shadow-sm z-20">
+        <div className="max-w-[1920px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-indigo-200 shadow-md">
+              <Layers size={18} />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-slate-900 leading-tight">Sewing Floor Control</h1>
+              <p className="text-[10px] text-slate-500">Real-time production tracking</p>
+            </div>
+          </div>
+          <div className="relative w-full md:w-80">
+            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:bg-white transition-all">
+              <Search size={14} className="text-slate-400 mr-2" />
+              <input type="text" placeholder="Search Contract Job No..." value={jobSearch} onChange={(e) => setJobSearch(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs w-full text-slate-700 placeholder:text-slate-400" />
+              {isSearching && <Loader size={14} className="text-indigo-500 animate-spin ml-2" />}
+              {selectedJob && (
+                <button onClick={handleClearJob} className="ml-2 p-0.5 hover:bg-slate-200 rounded-full text-slate-400 hover:text-rose-500 transition-colors">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {searchResults.length > 0 && (
+              <ul className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto z-40 text-xs">
+                {searchResults.flatMap((job, i) => {
+                  const validRows = (job.rows || []).filter(r => Number(r.orderQty) > 0);
+                  if (validRows.length === 0) {
+                    return (
+                      <li key={`${job.jobNo}-${i}`}>
+                        <button onClick={() => handleSelectJob(job)} className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0">
+                          <span className="font-semibold text-slate-900 block">{job.jobNo}</span>
+                          <span className="text-[10px] text-slate-500">Style: {job.styleNo || "—"}</span>
                         </button>
                       </li>
-                    ));
-                  })}
-                </ul>
-              )}
-            </div>
-
-            {isSearching && (
-              <span className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-md text-emerald-700">
-                <span className="animate-spin inline-block">
-                  <Loader size={16} />
-                </span>
-              </span>
-            )}
-
-            {selectedJob && (
-              <span className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-md text-indigo-700">
-                {selectedJob.jobNo} • {selectedJob.styleNo}
-              </span>
+                    );
+                  }
+                  return validRows.map((r) => (
+                    <li key={`${job.jobNo}-${i}-${r.id}`}>
+                      <button onClick={() => handleSelectJob(job, r.id)} className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0">
+                        <span className="font-semibold text-slate-900 block">{job.jobNo}</span>
+                        <span className="text-[10px] text-indigo-600 font-medium block mt-0.5">{getCompositionLabel(r.composition)} • {Number(r.orderQty).toLocaleString()} pcs</span>
+                      </button>
+                    </li>
+                  ));
+                })}
+              </ul>
             )}
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Real-time KPI Stats Bar */}
-        <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Order Qty</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{orderQty.toLocaleString()}</p>
-            <span className="text-xs text-slate-400">
-              {activeComposition
-                ? activeComposition.label
-                : headerData.jobNo || "All jobs"}
-            </span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Input</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{totalInput.toLocaleString()}</p>
-            <span className="text-xs text-slate-400">Pieces issued to line</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Total Output</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{totalOutput.toLocaleString()}</p>
-            <span className="text-xs text-slate-400">
-              {orderQty > 0
-                ? `${remainingToOrder.toLocaleString()} left to order qty`
-                : "Passed QA checkpoints"}
-            </span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">Balance</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{totalWip.toLocaleString()}</p>
-            <span className="text-xs text-slate-400">In-progress on floor</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Pass Rate / Eff.</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">{efficiencyRate}%</p>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-              <div
-                className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(100, efficiencyRate)}%` }}
-              />
-            </div>
-          </div>
-        </section>
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="max-w-[1920px] mx-auto space-y-4 h-full flex flex-col">
 
-        {/* SECTION 1: Floor Operation Entry & Recorded Table */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Form Column (4 cols) */}
-          <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-5">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">1. Production & Contract Info</h2>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Date</label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={headerData.date}
-                    onChange={handleHeaderChange}
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50"
-                  />
+          {/* KPI Cards */}
+          <section className="shrink-0 grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { label: "Order Qty",    val: orderQty.toLocaleString(),    sub: activeComposition ? activeComposition.label : "All Jobs", color: "slate",   icon: Hash },
+              { label: "Total Input",  val: totalInput.toLocaleString(),  sub: "Pieces issued",                                       color: "slate",   icon: Layers },
+              { label: "Total Output", val: totalOutput.toLocaleString(), sub: `${remainingToOrder.toLocaleString()} remaining`,        color: "emerald", icon: TrendingUp },
+              { label: "Balance WIP",  val: totalWip.toLocaleString(),    sub: "In-progress on floor",                                color: "amber",   icon: AlertCircle },
+              { label: "Efficiency",   val: `${efficiencyRate}%`,         sub: "Pass Rate",                                           color: "indigo",  icon: TrendingUp, isProgress: true }
+            ].map((stat, idx) => (
+              <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-1">
+                  <p className={`text-[10px] font-bold uppercase tracking-wider text-${stat.color}-500`}>{stat.label}</p>
+                  <stat.icon size={14} className={`text-${stat.color}-400`} />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Line / Unit</label>
-                  <input
-                    type="text"
-                    name="lineNo"
-                    value={headerData.lineNo}
-                    onChange={handleHeaderChange}
-                    placeholder="e.g. Line 04"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Job No</label>
-                  <input
-                    type="text"
-                    name="jobNo"
-                    value={headerData.jobNo}
-                    readOnly
-                    placeholder="Search a job above"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-700 cursor-not-allowed focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Style No</label>
-                  <input
-                    type="text"
-                    name="styleNo"
-                    value={headerData.styleNo}
-                    readOnly
-                    placeholder="Auto-filled"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-700 cursor-not-allowed focus:outline-none"
-                  />
-                </div>
+                <p className="text-xl font-extrabold text-slate-900 tracking-tight">{stat.val}</p>
+                {stat.isProgress
+                  ? <div className="w-full bg-slate-100 rounded-full h-1 mt-2"><div className={`bg-${stat.color}-500 h-1 rounded-full transition-all duration-500`} style={{ width: `${Math.min(100, parseFloat(stat.val))}%` }} /></div>
+                  : <p className="text-[10px] text-slate-400 mt-0.5 truncate">{stat.sub}</p>
+                }
               </div>
+            ))}
+          </section>
 
-              {/* Composition selector — only when more than one has an order qty */}
-              {compositions.length > 1 && (
-                <div className="mt-3">
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Composition
-                  </label>
-                  <select
-                    value={compositionId ?? ""}
-                    onChange={(e) => setCompositionId(e.target.value)}
-                    className="w-full text-xs px-3 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium text-slate-800"
-                  >
-                    {compositions.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label} — Order Qty {c.orderQty.toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+          {/* ===== TABLE CONTAINER — ROUNDED CORNERS ===== */}
+          <div className="flex-1 bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-0 border border-[#00a884]">
 
-              {/* Single composition: just show it */}
-              {compositions.length === 1 && (
-                <p className="mt-3 text-xs text-slate-500">
-                  {compositions[0].label} • Order Qty{" "}
-                  <span className="font-semibold text-slate-800">
-                    {compositions[0].orderQty.toLocaleString()}
-                  </span>
-                </p>
-              )}
-            </div>
-
-            <hr className="border-slate-100" />
-
-            {/* Step 2: Operation Entry */}
-            <form onSubmit={handleAddRow} className="space-y-4">
+            {/* Toolbar */}
+            <div className="shrink-0 p-4 border-b border-[#00a884] flex items-center justify-between bg-slate-50/50">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">2. Operation Output Entry</h2>
-                <p className="text-xs text-slate-500">Record current shift operational metrics.</p>
+                <h2 className="text-sm font-bold text-slate-900">Recorded Operations</h2>
+                <p className="text-[10px] text-slate-500 mt-0.5">Live breakdown by sewing stage.</p>
               </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Select Process Type</label>
-                <div className="relative">
-                  <select
-                    name="processType"
-                    value={formData.processType}
-                    onChange={handleFormChange}
-                    className="w-full text-xs px-3 py-2.5 border border-slate-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium text-slate-800"
+              <div className="flex items-center gap-2">
+                {simpleActiveCount > 0 && (
+                  <button
+                    onClick={() => { setFilters({}); setOpenFilterKey(null); }}
+                    className="text-[10px] font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2.5 py-1 rounded-full flex items-center gap-1 hover:bg-yellow-200 transition-colors"
+                    title="Clear all filters"
                   >
-                    {processLists.map((process) => (
-                      <option key={process} value={process}>
-                        {process}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Today Input (Pcs)</label>
-                  <input
-                    type="number"
-                    name="todayInput"
-                    placeholder="0"
-                    min="0"
-                    value={formData.todayInput}
-                    onChange={handleFormChange}
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Today Output (Pcs)</label>
-                  <input
-                    type="number"
-                    name="todayOutput"
-                    placeholder="0"
-                    min="0"
-                    value={formData.todayOutput}
-                    onChange={handleFormChange}
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="w-full mt-2 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm cursor-pointer"
-              >
-                {isSaving ? (
-                  <>
-                    <span className="animate-spin inline-block">
-                      <Loader size={16} />
-                    </span>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Operation Row
-                  </>
+                    <Filter size={10} />
+                    {simpleActiveCount} Filter{simpleActiveCount > 1 ? "s" : ""} Active — Clear All
+                  </button>
                 )}
-              </button>
-            </form>
-          </div>
-
-          {/* Right Data Table Column (8 cols) */}
-          <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Recorded Operations</h2>
-                <p className="text-xs text-slate-500">Live breakdown by sewing stage and piece count.</p>
+                <span className="text-[10px] font-medium text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-sm">
+                  {filteredRows.length} / {scopedRows.length} Records
+                </span>
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  disabled={!headerData.jobNo}
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-[11px] font-bold py-2 px-4 rounded-lg transition-all shadow-md shadow-indigo-200 active:scale-95"
+                >
+                  <Plus size={14} /> Add Operation Row
+                </button>
               </div>
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-                {scopedRows.length} {scopedRows.length === 1 ? "Record" : "Records"}
-              </span>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
-                    <th className="py-3 px-4">Date / Batch</th>
-                    <th className="py-3 px-4">Process Operation</th>
-                    <th className="py-3 px-4 text-right">Input</th>
-                    <th className="py-3 px-4 text-right">Output</th>
-                    <th className="py-3 px-4 text-right">Balance</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-center">Action</th>
+            {/* ===== SCROLLABLE TABLE ===== */}
+            <div className="flex-1 overflow-auto min-h-0 bg-white">
+              <table className="w-full text-left border-collapse">
+
+                <thead className="sticky top-0 z-10 bg-[#526D82] text-white">
+                  <tr>
+                    <FilterTh label="Date"       columnKey="date"        filters={filters} allValues={uniqueValues.date}        onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Job No"     columnKey="jobNo"       filters={filters} allValues={uniqueValues.jobNo}       onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Style No"   columnKey="styleNo"     filters={filters} allValues={uniqueValues.styleNo}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Line No"    columnKey="lineNo"      filters={filters} allValues={uniqueValues.lineNo}      onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Process Op" columnKey="processType" filters={filters} allValues={uniqueValues.processType} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Input"      columnKey="todayInput"  align="right"     filters={filters} allValues={[]}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Output"     columnKey="todayOutput" align="right"     filters={filters} allValues={[]}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Balance"    columnKey="balance"     align="right"     filters={filters} allValues={[]}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Status"     columnKey="status"      align="center"    filters={filters} allValues={uniqueValues.status} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <th className="py-3 px-4 border border-[#00a884] text-[13px] font-bold uppercase tracking-wider whitespace-nowrap text-center select-none">
+                      Action
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+
+                <tbody className="bg-white">
                   {isLoadingRows && rows.length === 0 ? (
+                    <tr><td colSpan="10" className="py-20 text-center text-slate-400 border-x border-b border-[#00a884]"><Loader size={20} className="animate-spin mx-auto" /></td></tr>
+                  ) : filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="py-12 text-center text-slate-400">
-                        <span className="animate-spin inline-block">
-                          <Loader size={20} />
-                        </span>
-                      </td>
-                    </tr>
-                  ) : scopedRows.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="py-12 text-center text-slate-400">
-                        <svg className="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <p className="text-sm font-medium text-slate-600">No operations entered yet</p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Fill the form on the left and click "Add Operation Row".
-                        </p>
+                      <td colSpan="10" className="py-20 text-center border-x border-b border-[#00a884]">
+                        <div className="flex flex-col items-center justify-center text-slate-400">
+                          <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-2">
+                            <Layers size={20} className="text-slate-300" />
+                          </div>
+                          <p className="text-xs font-semibold text-slate-600">
+                            {scopedRows.length === 0 ? "No operations recorded yet" : "No rows match current filters"}
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {scopedRows.length === 0 ? 'Click "Add Operation Row" to start.' : "Clear filters to see all records."}
+                          </p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    scopedRows.map((row) => {
+                    filteredRows.map((row, idx) => {
                       const balance = row.todayInput - row.todayOutput;
-                      const ratio =
-                        row.todayInput > 0 ? (row.todayOutput / row.todayInput) * 100 : 0;
+                      const ratio   = row.todayInput > 0 ? (row.todayOutput / row.todayInput) * 100 : 0;
                       return (
-                        <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-3 px-4">
-                            <span className="font-semibold text-slate-900 block">{row.date}</span>
-                            <span className="text-[11px] text-slate-400">
-                              {row.jobNo}
-                              {row.styleNo && ` • ${row.styleNo}`} • {row.lineNo}
-                              {row.compositionLabel !== "—" && ` • ${row.compositionLabel}`}
+                        <tr key={row.id} className={`hover:bg-[#00a884]/5 transition-colors group ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                          <td className="py-3 px-4 border border-[#00a884] font-bold text-slate-900 text-[14px] whitespace-nowrap">{row.date}</td>
+                          <td className="py-3 px-4 border border-[#00a884] font-bold text-emerald-700 text-[14px] whitespace-nowrap">{row.jobNo}</td>
+                          <td className="py-3 px-4 border border-[#00a884] font-bold text-slate-900 text-[14px] whitespace-nowrap">{row.styleNo || "—"}</td>
+                          <td className="py-3 px-4 border border-[#00a884] font-medium text-slate-600 text-[14px] whitespace-nowrap">{row.lineNo || "—"}</td>
+                          <td className="py-3 px-4 border border-[#00a884]">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-bold bg-slate-100 text-slate-700 border border-slate-200">{row.processType}</span>
+                          </td>
+                          <td className="py-3 px-4 border border-[#00a884] text-right font-medium text-slate-700 tabular-nums text-[14px]">{Number(row.todayInput).toLocaleString()}</td>
+                          <td className="py-3 px-4 border border-[#00a884] text-right font-bold text-emerald-600 tabular-nums text-[14px]">{Number(row.todayOutput).toLocaleString()}</td>
+                          <td className="py-3 px-4 border border-[#00a884] text-right font-bold text-amber-600 tabular-nums text-[14px]">{balance > 0 ? `+${balance.toLocaleString()}` : "0"}</td>
+                          <td className="py-3 px-4 border border-[#00a884] text-center">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${ratio >= 95 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                              {ratio >= 95 ? "Target Met" : "In Progress"}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-medium text-slate-800">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
-                              {row.processType}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-slate-700">
-                            {Number(row.todayInput).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-right font-semibold text-emerald-600">
-                            {Number(row.todayOutput).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-amber-600">
-                            {balance > 0 ? `+${balance.toLocaleString()}` : "0"}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {ratio >= 95 ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Target Met
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                                In Progress
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <button
-                              onClick={() => handleDeleteRow(row.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors"
-                              title="Delete Record"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
+                          <td className="py-3 px-4 border border-[#00a884] text-center">
+                            <button onClick={() => handleDeleteRow(row.id)}
+                              className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                              title="Delete Record">
+                              <Trash2 size={16} />
                             </button>
                           </td>
                         </tr>
@@ -691,19 +943,14 @@ export default function SewingContract() {
                   )}
                 </tbody>
 
-                {/* Table Footer with Summaries */}
-                {scopedRows.length > 0 && (
-                  <tfoot>
-                    <tr className="bg-slate-50 border-t border-slate-200 font-semibold text-slate-900">
-                      <td colSpan="2" className="py-3 px-4 text-slate-600">
-                        Total Production Run
-                      </td>
-                      <td className="py-3 px-4 text-right">{totalInput.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right text-emerald-600">{totalOutput.toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right text-amber-600">+{totalWip.toLocaleString()}</td>
-                      <td colSpan="2" className="py-3 px-4 text-center text-indigo-600">
-                        {efficiencyRate}% Avg
-                      </td>
+                {filteredRows.length > 0 && (
+                  <tfoot className="sticky bottom-0 z-10 bg-[#526D82] text-white font-bold text-[14px]">
+                    <tr>
+                      <td colSpan="5" className="py-3 px-4 border border-[#00a884] uppercase tracking-wider text-[13px]">TOTAL PRODUCTION RUN</td>
+                      <td className="py-3 px-4 border border-[#00a884] text-right tabular-nums">{totalInput.toLocaleString()}</td>
+                      <td className="py-3 px-4 border border-[#00a884] text-right text-emerald-300 tabular-nums">{totalOutput.toLocaleString()}</td>
+                      <td className="py-3 px-4 border border-[#00a884] text-right text-amber-300 tabular-nums">+{totalWip.toLocaleString()}</td>
+                      <td colSpan="2" className="py-3 px-4 border border-[#00a884] text-center text-teal-300">{efficiencyRate}% Avg Efficiency</td>
                     </tr>
                   </tfoot>
                 )}
@@ -711,7 +958,16 @@ export default function SewingContract() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
+
+      <OperationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveOperation}
+        isLoading={isSaving}
+        initialData={{ date: headerData.date, lineNo: "", compositionId }}
+        compositions={compositions}
+      />
     </div>
   );
 }
