@@ -56,6 +56,7 @@ import ReportStudio from "../dashboard/pages/reportStudio/ReportStudio";
 import SewingContract from "../dashboard/pages/swingContract/SweingContract";
 import ContractBilling from "../dashboard/pages/swingContract/ContractBilling";
 import ProductionPlanning from "../dashboard/pages/planning/productionPlanning";
+import DebitNote from "../dashboard/pages/debit-notes/DebitNote";
 
 const routers = createBrowserRouter([
     {
@@ -286,6 +287,10 @@ const routers = createBrowserRouter([
                     {
                         path: "planning",
                         element: <ProductionPlanning />
+                    },
+                    {
+                        path: "debit-note",
+                        element: <DebitNote />
                     },
                 ]
             }

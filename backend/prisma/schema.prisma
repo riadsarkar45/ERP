@@ -252,6 +252,7 @@ model user {
   reconciliationNotes reconciliationNotes[]
   permissionSections  permissionSection[]
   productionDatas     productionData[]
+  debitNotes          debitNote[]
 
   @@index([userName])
   @@index([userRole])
@@ -454,4 +455,23 @@ model processTypes {
   processRate String
   createdAt   DateTime @default(now())
   createdBy   String
+}
+
+model debitNote {
+  id           Int       @id @default(autoincrement())
+  noteNo       String?   @unique
+  title        String
+  content      String
+  status       String    @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED
+  createdBy    Int
+  submittedAt  DateTime?
+  reviewRemark String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         user?     @relation(fields: [id], references: [id])
+  userId       Int?
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
 }

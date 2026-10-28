@@ -83,6 +83,7 @@
     "redis": "^6.0.0",
     "router": "^2.2.0",
     "safer-buffer": "^2.1.2",
+    "sanitize-html": "^2.18.1",
     "send": "^1.2.1",
     "serve-static": "^2.2.1",
     "setprototypeof": "^1.2.0",
@@ -118,6 +119,7 @@
     "@types/ioredis": "^4.28.10",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
+    "@types/sanitize-html": "^2.16.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }

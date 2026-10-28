@@ -42,6 +42,7 @@ import { joinDeliveries } from "../controllers/deliveries/joinDeliveries";
 import { getAvailableMonths } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
 import { getContractJob } from "../controllers/contractualJob/searchContractJob";
 import { getContractualJobs } from "../controllers/contractualJob/getContractJob";
+import { createDebitNote, deleteDebitNote, getDebitNote, listDebitNotes,  } from "../controllers/debit-note/debitNotes";
 
 const getRouters = express.Router();
 
@@ -260,6 +261,11 @@ getRouters.get("/get-available-months", authenticate, getAvailableMonths);
 getRouters.get("/get-contractual-job", getContractJob);
 
 getRouters.get("/get-contractual-job-summary", getContractualJobs);
+
+// getRouters.get("/debit-notes", listDebitNotes);
+getRouters.get("/debit-notes/:id", authenticate, getDebitNote);
+getRouters.delete("/debit-notes/:id", authenticate, deleteDebitNote);
+getRouters.post("/debit-notes", authenticate, createDebitNote);
 
 
 export default getRouters;

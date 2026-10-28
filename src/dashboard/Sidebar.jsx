@@ -21,6 +21,8 @@ import {
     ClipboardList,
     ArrowLeftRight,
     Factory,
+    Receipt,
+    FilePlus,
 } from "lucide-react";
 import { AuthContext } from "./auth/AuthContext";
 import UseUserRoles from "./pages/users/allUsers/UserRoles";
@@ -115,6 +117,14 @@ const Sidebar = () => {
         { path: "/dashboard/high-loss-job", label: "Work Order Analysis", icon: FileText, permission: "workOrderAnalysis" }
     ];
 
+    // NEW: Debit Note Sub-Items
+    // (no `permission` key yet - add one later, e.g. permission: "createDebitNote", and filter like Work Orders)
+    const debitNoteSubItems = [
+        { path: "/dashboard/debit-note", label: "Create Debit Note", icon: FilePlus },
+        { path: "/dashboard/debit-note/list", label: "Debit Note Lists", icon: FileText },
+        { path: "/dashboard/debit-note/requested", label: "Requested Debit Notes", icon: ClipboardList },
+    ];
+
     // Split standalone nav items to place Daily Production dropdown in the correct order
     const topNavItems = [
         sections.styleRequirements?.bookingView && { path: "/dashboard/style-requirement", label: "Style Requirements", icon: PlusCircle },
@@ -142,6 +152,9 @@ const Sidebar = () => {
 
     // NEW: Work Orders dropdown open state
     const [isWorkOrdersOpen, setIsWorkOrdersOpen] = useState(() => workOrderSubItems.some(item => item.path === location.pathname));
+
+    // NEW: Debit Note dropdown open state
+    const [isDebitNoteOpen, setIsDebitNoteOpen] = useState(() => debitNoteSubItems.some(item => item.path === location.pathname));
 
     function ThreadIcon({ size = 16 }) {
         return (
@@ -201,6 +214,7 @@ const Sidebar = () => {
     const isAssetActive = assetSubItems.some(item => isActive(item.path));
     const isContractActive = contractSubItems.some(item => isActive(item.path)); // NEW
     const isWorkOrdersActive = workOrderSubItems.some(item => isActive(item.path)); // NEW
+    const isDebitNoteActive = debitNoteSubItems.some(item => isActive(item.path)); // NEW
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -227,6 +241,11 @@ const Sidebar = () => {
         // NEW: Work Orders page titles
         if (path.includes('work-orders/pending')) return { title: 'Pending Work Orders', subtitle: 'Track and manage pending work orders' };
         if (path.includes('work-orders/my-work-orders')) return { title: 'My Work Orders', subtitle: 'View your assigned work orders' };
+
+        // NEW: Debit Note page titles
+        if (path.includes('debit-note/create')) return { title: 'Create Debit Note', subtitle: 'Create a new debit note' };
+        if (path.includes('debit-note/list')) return { title: 'Debit Note Lists', subtitle: 'View all debit notes' };
+        if (path.includes('debit-note/requested')) return { title: 'Requested Debit Notes', subtitle: 'Review and approve requested debit notes' };
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
@@ -645,6 +664,44 @@ const Sidebar = () => {
                                                     </Link>
                                                 </li>
                                             ))}
+                                </ul>
+                            )}
+                        </li>
+
+                        {/* NEW: Debit Note Dropdown */}
+                        <li>
+                            <button
+                                onClick={() => !isCollapsed && setIsDebitNoteOpen(prev => !prev)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 ${isDebitNoteActive ? 'bg-primary-400 text-white' : 'text-white hover:bg-primary-600'
+                                    } ${isCollapsed ? 'justify-center' : 'justify-between'}`}
+                                title={isCollapsed ? 'Debit Note' : ''}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Receipt size={20} className="shrink-0" />
+                                    {!isCollapsed && <span className="font-medium text-sm">Debit Note</span>}
+                                </div>
+                                {!isCollapsed && (
+                                    isDebitNoteOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                                )}
+                            </button>
+
+                            {isDebitNoteOpen && !isCollapsed && (
+                                <ul className="mt-1 ml-4 space-y-1 border-l border-primary-400 pl-3">
+                                    {debitNoteSubItems.map(item => (
+                                        <li key={item.path}>
+                                            <Link
+                                                to={item.path}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200 no-underline text-sm ${isActive(item.path)
+                                                    ? 'bg-primary-400 text-white font-medium'
+                                                    : 'text-primary-100 hover:bg-primary-600 hover:text-white'
+                                                    }`}
+                                            >
+                                                <item.icon size={16} className="shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        </li>
+                                    ))}
                                 </ul>
                             )}
                         </li>
