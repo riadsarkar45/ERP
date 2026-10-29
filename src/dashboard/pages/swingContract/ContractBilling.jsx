@@ -19,7 +19,16 @@ import {
 const DEFAULT_DEDUCTION_RATE = 0.03; // 3% deducted from the gross bill
 const TOTAL_COLS = 14;
 
-
+// Default rate per dozen (Taka/Doz) by process operation
+const DEFAULT_RATES = {
+    "Body Hem": 45,
+    "Neck Joint": 60,
+    "Shoulder to Shoulder": 40,
+    "Sleeve Hem": 35,
+    "Sleeve Join": 55,
+    "Cuff Join": 50,
+    "Side Seam": 65,
+};
 
 // ================= HELPERS =================
 const pad = (n) => String(n).padStart(2, "0");
@@ -58,13 +67,14 @@ const getCompositionName = (comp) => {
     return comp.name || comp.title || comp.label || "";
 };
 
-// Style name of a record — updated to check styleRequirement based on your API structure
+// Style name of a record — updated to deeply check styleRequirement based on your API structure
 const getStyleName = (r) => {
     const raw =
         r?.jobs?.styleNo ??
         r?.jobs?.style ??
         r?.jobs?.styleName ??
-        r?.styleReqRows?.styleRequirement?.styleNo ?? // <-- ADDED THIS LINE FOR YOUR API STRUCTURE
+        r?.styleReqRows?.styleRequirement?.styleNo ?? // <-- ADDED FOR YOUR API STRUCTURE
+        r?.styleReqRows?.styleRequirement?.style ??   // <-- ADDED FALLBACK
         r?.styleReqRows?.styleNo ??
         r?.styleReqRows?.style ??
         r?.styleReqRows?.styleName ??
@@ -72,7 +82,10 @@ const getStyleName = (r) => {
         r?.style ??
         r?.styleName ??
         "";
-    if (raw && typeof raw === "object") return raw.name || raw.styleNo || raw.title || "";
+    
+    if (raw && typeof raw === "object") {
+        return raw.name || raw.styleNo || raw.title || "";
+    }
     return String(raw || "");
 };
 
@@ -104,6 +117,7 @@ const ContractBilling = () => {
     const [now, setNow] = useState(() => new Date());
 
     // Configurable rates & policy
+    const [rates, setRates] = useState(DEFAULT_RATES);
     const [deductionRate, setDeductionRate] = useState(DEFAULT_DEDUCTION_RATE);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [viewMode, setViewMode] = useState("table");
@@ -237,7 +251,10 @@ const ContractBilling = () => {
             const comp = comps.get(compKey);
 
             if (!comp.rowsByProcess.has(process)) {
-                const rate = Number(r.rate ?? rates[process] ?? 0) || 0;
+                // FIX: Check r.processRate as well as r.rate, safely handling "NULL" strings
+                const rawRate = r.rate ?? r.processRate ?? rates[process] ?? 0;
+                const rate = Number(rawRate) || 0;
+                
                 comp.rowsByProcess.set(process, {
                     jobNo,
                     process,
@@ -621,7 +638,6 @@ const ContractBilling = () => {
 
         setIsSubmitting(true);
         try {
-            // TODO: Update the endpoint URL to match your actual backend route
             await axiosPrivate.post("/api/add-process-types", processInputs);
 
             setProcessInputs([]);
@@ -1192,7 +1208,7 @@ const ContractBilling = () => {
                                                                 {row.pcQty.toLocaleString()} pcs ({(row.pcQty / 12).toFixed(1)} dz)
                                                             </span>
                                                             <span className="text-[11px] text-slate-500">
-                                                                ৳{formatTk((row.pcQty / 12) * row.processRate)}
+                                                                ৳{formatTk((row.pcQty / 12) * row.rate)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -1326,7 +1342,7 @@ const ContractBilling = () => {
                                                 </span>
                                                 <div>
                                                     <span className="text-sm font-semibold text-slate-800 block">{item.processType}</span>
-                                                    <span className="text-[11px] text-slate-500">Rate: ৳{Number(item.processRate).toFixed(2)} / Doz</span>
+                                                    <span className="text-[11px] text-slate-500">Rate: ৳{Number(item.price).toFixed(2)} / Doz</span>
                                                 </div>
                                             </div>
                                             <button
