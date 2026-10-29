@@ -1,311 +1,745 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Plus, RefreshCcw } from 'lucide-react';
-import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+import {
+  Eye,
+  Plus,
+  RefreshCcw,
+  Download,
+  CheckCircle2,
+  XCircle,
+  LoaderCircle,
+  FileText,
+  Search,
+  X,
+} from 'lucide-react';
+
 import UseResponsibleUsers from '../users/allUsers/ResponsibleUsers';
 import Input from '../../../components/Input';
+import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
-// where "View" and "New" go; change these if your routes are different
-const viewPath = (id) => `/dashboard/debit-notes/${id}`;
-const NEW_PATH = '/dashboard/debit-notes/new';
-
+const viewPath = '/debit-note/view';
+const NEW_PATH = '/debit-note/create';
 const PAGE_SIZE = 20;
 
 const TABS = [
-    { id: '', label: 'All' },
-    { id: 'DRAFT', label: 'Draft' },
-    { id: 'PENDING', label: 'Pending approval' },
-    { id: 'APPROVED', label: 'Approved' },
-    { id: 'REJECTED', label: 'Rejected' },
+  { label: 'All', value: 'ALL' },
+  { label: 'Draft', value: 'DRAFT' },
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Approved', value: 'APPROVED' },
+  { label: 'Rejected', value: 'REJECTED' },
 ];
 
 const STATUS_STYLE = {
-    DRAFT: 'bg-gray-100 text-gray-700 border-gray-300',
-    PENDING: 'bg-amber-100 text-amber-800 border-amber-300',
-    APPROVED: 'bg-green-100 text-green-800 border-green-300',
-    REJECTED: 'bg-red-100 text-red-700 border-red-300',
+  DRAFT: 'bg-slate-100 text-slate-700',
+  PENDING: 'bg-amber-100 text-amber-700',
+  APPROVED: 'bg-emerald-100 text-emerald-700',
+  REJECTED: 'bg-rose-100 text-rose-700',
 };
 
-const pad = (n) => String(n).padStart(2, '0');
-const formatDate = (iso) => {
-    if (!iso) return '-';
-    const d = new Date(iso);
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+const pad = (value) => String(value).padStart(2, '0');
+
+const formatDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+};
+
+const normalizeStatus = (value) => {
+  const normalized = String(value ?? '').trim().toUpperCase();
+  if (normalized === 'PENDING_APPROVAL' || normalized === 'PENDING APPROVAL') {
+    return 'PENDING';
+  }
+  return normalized;
+};
+
+const extractDebitNotes = (responseData) => {
+  const candidates = [
+    responseData?.debitNotes,
+    responseData?.data?.debitNotes,
+    responseData?.data?.data,
+    responseData?.data,
+    responseData?.results,
+    responseData?.items,
+    responseData,
+  ];
+  return candidates.find(Array.isArray) ?? [];
+};
+
+const Toast = ({ toast, onClose }) => {
+  if (!toast) return null;
+
+  const styles = {
+    success: 'bg-emerald-600',
+    error: 'bg-rose-600',
+    info: 'bg-slate-800',
+  };
+
+  return (
+    <div
+      className={`fixed right-5 top-5 z-[100] flex max-w-md items-center gap-3 rounded-xl px-4 py-3 text-white shadow-xl ${styles[toast.type] || styles.info
+        }`}
+    >
+      {toast.type === 'success' ? (
+        <CheckCircle2 size={18} />
+      ) : toast.type === 'error' ? (
+        <XCircle size={18} />
+      ) : (
+        <FileText size={18} />
+      )}
+
+      <span className="text-sm font-medium">{toast.message}</span>
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="ml-2 rounded p-1 hover:bg-white/20"
+        aria-label="Close notification"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
 };
 
 const DebitNoteLists = () => {
-    const navigate = useNavigate();
-    const axiosSecure = useAxiosPrivate();
-    const { allResponsibleUsers, setUserResponsibility, setResponsibleSection } = UseResponsibleUsers();
+  const axiosSecure = useAxiosPrivate();
+  const navigate = useNavigate();
+  const { allResponsibleUsers,loading: userLoading, setResponsibleSection, setUserResponsibility } = UseResponsibleUsers();
 
-    useEffect(() => {
-        setUserResponsibility("responsibleForApprovalDebitNote");
-        setResponsibleSection("debitNote")
-    }, [setUserResponsibility, setResponsibleSection])
+  // Safely extract array in case the hook returns { data: [...] }
+  const usersArray = Array.isArray(allResponsibleUsers)
+    ? allResponsibleUsers
+    : (allResponsibleUsers?.data || []);
 
-    console.log(allResponsibleUsers, "all responsible users");
+  const [status, setStatus] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
 
-    const [status, setStatus] = useState('');
-    const [searchText, setSearchText] = useState('');
-    const [query, setQuery] = useState(''); // the search that is actually applied
-    const [page, setPage] = useState(1);
-    const [data, setData] = useState({ items: [], total: 0, page: 1, limit: PAGE_SIZE });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [reloadKey, setReloadKey] = useState(0);
+  const [allDebitNotes, setAllDebitNotes] = useState([]);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
 
-    // refetch whenever the tab, search, page or refresh button changes
-    useEffect(() => {
-        const controller = new AbortController();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [requestingNoteId, setRequestingNoteId] = useState(null);
 
-        (async () => {
-            setLoading(true);
-            setError('');
-            try {
-                const res = await axiosSecure.get('/api/debit-notes', {
-                    params: {
-                        status: status || undefined,
-                        q: query || undefined,
-                        page,
-                        limit: PAGE_SIZE,
-                    },
-                    signal: controller.signal,
-                });
-                setData(res.data);
-            } catch (err) {
-                if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
-                console.error('Failed to load debit notes', err);
-                setError(err?.response?.data?.message || 'Failed to load debit notes');
-                setData({ items: [], total: 0, page: 1, limit: PAGE_SIZE });
-            } finally {
-                if (!controller.signal.aborted) setLoading(false);
-            }
-        })();
+  // NEW: Track selected user per debit note ID
+  const [selectedUserPerNote, setSelectedUserPerNote] = useState({});
 
-        return () => controller.abort();
-    }, [axiosSecure, status, query, page, reloadKey]);
+  const [toast, setToast] = useState(null);
 
-    const totalPages = Math.max(1, Math.ceil(data.total / data.limit));
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
-    const changeTab = (id) => {
-        setStatus(id);
-        setPage(1);
-    };
+  useEffect(() => {
+    setUserResponsibility("responsibleForApprovalDebitNote");
+    setResponsibleSection("debitNote")
+  }, [setUserResponsibility, setResponsibleSection])
 
-    const submitSearch = (e) => {
-        e.preventDefault();
-        setQuery(searchText.trim());
-        setPage(1);
-    };
+  useEffect(() => {
+    const controller = new AbortController();
 
-    const clearSearch = () => {
-        setSearchText('');
-        setQuery('');
-        setPage(1);
-    };
+    const fetchDebitNotes = async () => {
+      setLoading(true);
+      setError('');
 
-    const handleDebitNoteApproveRequest = async (e, debitNoteId) => {
-        console.log(e);
+      try {
+        const response = await axiosSecure.get('/api/debit-notes', {
+          params: {
+            status: status === 'ALL' ? undefined : status,
+            q: query || undefined,
+            page,
+            limit: PAGE_SIZE,
+          },
+          signal: controller.signal,
+        });
 
-        if (!e || !debitNoteId) return;
+        const responseData = response.data;
+        const records = extractDebitNotes(responseData);
 
-        console.log(e, debitNoteId);
+        setAllDebitNotes(records);
 
-        try {
-            const response = await axiosSecure.patch(
-                `/api/request-for-debit-note-approval/debitNoteApproval/${debitNoteId}/${e}`
-            );
+        const totalValue =
+          responseData?.total ??
+          responseData?.pagination?.total ??
+          responseData?.data?.total;
 
-            console.log(response.data);
-        } catch (error) {
-            console.log("BACKEND RESPONSE:", error.response?.data);
-            console.log("STATUS:", error.response?.status);
+        const totalPagesValue =
+          responseData?.totalPages ??
+          responseData?.pagination?.totalPages ??
+          responseData?.data?.totalPages;
+
+        setServerTotal(
+          Number.isFinite(Number(totalValue))
+            ? Number(totalValue)
+            : records.length
+        );
+
+        setServerTotalPages(
+          Number.isFinite(Number(totalPagesValue)) &&
+            Number(totalPagesValue) > 0
+            ? Number(totalPagesValue)
+            : Math.max(1, Math.ceil(records.length / PAGE_SIZE))
+        );
+      } catch (err) {
+        if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+          return;
         }
 
+        setError(
+          err.response?.data?.message ||
+          err.message ||
+          'Failed to load debit notes.'
+        );
+
+        setAllDebitNotes([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchDebitNotes();
+
+    return () => controller.abort();
+  }, [axiosSecure, status, query, page, reloadKey]);
+
+  const changeTab = (nextStatus) => {
+    setStatus(nextStatus);
+    setPage(1);
+  };
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    setQuery(search.trim());
+    setPage(1);
+  };
+
+  const clearSearch = () => {
+    setSearch('');
+    setQuery('');
+    setPage(1);
+  };
+
+  const refreshList = () => {
+    setReloadKey((previous) => previous + 1);
+  };
+
+  const handleDebitNoteApproveRequest = async (debitNoteId, userId) => {
+    if (!debitNoteId || !userId) return;
+
+    setRequestingNoteId(debitNoteId);
+
+    try {
+      await axiosSecure.patch(
+        `/api/request-for-debit-note-approval/debitNoteApproval/${debitNoteId}/${userId}`
+      );
+
+      setToast({
+        type: 'success',
+        message: 'Approval request sent successfully.',
+      });
+
+      // Clear the dropdown selection for this row after success
+      setSelectedUserPerNote((prev) => {
+        const newState = { ...prev };
+        delete newState[debitNoteId];
+        return newState;
+      });
+
+      refreshList();
+    } catch (err) {
+      setToast({
+        type: 'error',
+        message:
+          err.response?.data?.message ||
+          err.message ||
+          'Failed to send approval request.',
+      });
+
+      // Revert dropdown on error so user can try again
+      setSelectedUserPerNote((prev) => {
+        const newState = { ...prev };
+        delete newState[debitNoteId];
+        return newState;
+      });
+    } finally {
+      setRequestingNoteId(null);
     }
+  };
 
-    return (
-        <div className="bg-white p-4">
-            {/* header: search, refresh, new */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-                <h1 className="text-lg font-semibold mr-auto">Debit Notes</h1>
+  const handleDownload = useCallback(
+    async (note) => {
+      const label = note.noteNo || `DN-${note.id}`;
 
-                <form onSubmit={submitSearch} className="flex gap-2">
-                    <input
-                        type="text"
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        placeholder="Search title or note no."
-                        className="border rounded-md px-3 py-2 text-sm w-56"
-                    />
-                    <button
-                        type="submit"
-                        className="border rounded-md px-3 py-2 text-sm hover:bg-gray-100"
-                    >
-                        Search
-                    </button>
-                    {query && (
-                        <button
-                            type="button"
-                            onClick={clearSearch}
-                            className="border rounded-md px-3 py-2 text-sm text-gray-500 hover:bg-gray-100"
-                        >
-                            Clear
-                        </button>
-                    )}
-                </form>
+      if (note.status !== 'Approved') {
+        setToast({
+          type: 'error',
+          message: `${label} must be approved before it can be downloaded.`,
+        });
+        return;
+      }
 
-                <button
-                    type="button"
-                    onClick={() => setReloadKey((k) => k + 1)}
-                    title="Refresh"
-                    className="border p-2 hover:bg-gray-100 rounded-lg text-gray-400"
-                >
-                    <RefreshCcw className={loading ? 'animate-spin' : ''} size={18} />
-                </button>
+      try {
+        setToast({ type: 'info', message: `Preparing ${label}...` });
 
-                <button
-                    type="button"
-                    onClick={() => navigate(NEW_PATH)}
-                    className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white rounded-md px-3 py-2 text-sm"
-                >
-                    <Plus size={16} /> New debit note
-                </button>
+        const res = await axiosSecure.get(`/api/debit-note/${note.id}/download`, {
+          responseType: 'blob',
+        });
+
+        const header = res.headers['content-disposition'] || '';
+        const match = header.match(/filename="?([^"]+)"?/);
+        const fileName = match
+          ? match[1]
+          : `${label.replace(/[^\w.-]+/g, '-')}.pdf`;
+
+        const url = window.URL.createObjectURL(
+          new Blob([res.data], { type: 'application/pdf' })
+        );
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        setToast({ type: 'success', message: `${label} downloaded.` });
+      } catch (err) {
+        let message = `Could not download ${label}.`;
+        try {
+          const text = await err?.response?.data?.text?.();
+          if (text) message = JSON.parse(text).message || message;
+        } catch {
+          /* keep the default message */
+        }
+        setToast({ type: 'error', message });
+      }
+    },
+    [axiosSecure]
+  );
+
+  const filteredNotes = useMemo(() => {
+    const normalizedQuery = query.toLowerCase();
+
+    return allDebitNotes.filter((note) => {
+      const noteStatus = normalizeStatus(note.status);
+      const matchesStatus = status === 'ALL' || noteStatus === status;
+
+      const searchableText = [note.noteNo, note.title, note.partyName, note.id]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch = !normalizedQuery || searchableText.includes(normalizedQuery);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [allDebitNotes, status, query]);
+
+  const serverAppearsPaginated =
+    allDebitNotes.length <= PAGE_SIZE && serverTotal > allDebitNotes.length;
+
+  const debitNotes = serverAppearsPaginated
+    ? filteredNotes
+    : filteredNotes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const total = serverAppearsPaginated ? serverTotal : filteredNotes.length;
+
+  const totalPages = serverAppearsPaginated
+    ? serverTotalPages
+    : Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+      <Toast toast={toast} onClose={() => setToast(null)} />
+
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white">
+              <FileText size={23} />
             </div>
 
-            {/* status tabs */}
-            <div className="flex flex-wrap gap-2 mb-4">
-                {TABS.map((t) => (
-                    <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => changeTab(t.id)}
-                        className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${status === t.id
-                            ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-gray-300 text-gray-600 hover:bg-gray-100'
-                            }`}
-                    >
-                        {t.label}
-                    </button>
-                ))}
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                Debit Notes
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Manage debit notes and their approval requests.
+              </p>
             </div>
+          </div>
 
-            {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={refreshList}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw
+                size={16}
+                className={loading ? 'animate-spin' : ''}
+              />
+              Refresh
+            </button>
 
-            {/* table */}
-            <div className={`overflow-x-auto border rounded-lg ${loading ? 'opacity-60' : ''}`}>
-                <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
-                        <tr>
-                            <th className="px-3 py-2">Note No</th>
-                            <th className="px-3 py-2">Title / Party</th>
-                            <th className="px-3 py-2">Status</th>
-                            <th className="px-3 py-2">Created By</th>
-                            <th className="px-3 py-2">Created</th>
-                            <th className="px-3 py-2">Reviewed By</th>
-                            <th className="px-3 py-2">Request For Approval</th>
-                            <th className="px-3 py-2 text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.items.map((n) => (
-                            <tr
-                                key={n.id}
-                                className="border-t hover:bg-gray-50 cursor-pointer"
-                            >
-                                <td className="px-3 py-2 tabular-nums">{n.noteNo ?? `#${n.id}`}</td>
-                                <td className="px-3 py-2 font-medium">{n.title}</td>
-                                <td className="px-3 py-2">
-                                    <span
-                                        className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${STATUS_STYLE[n.status] ?? STATUS_STYLE.DRAFT
-                                            }`}
-                                    >
-                                        {n.status}
-                                    </span>
-                                </td>
-                                <td className="px-3 py-2">{n.creator?.name ?? '-'}</td>
-                                <td className="px-3 py-2">{formatDate(n.createdAt)}</td>
-                                <td className="px-3 py-2">{n.reviewer?.name ?? '-'}</td>
-                                <td className="px-3 py-2">
-
-                                    <Input
-                                        type="select"
-                                        name={`responsibleUser-${n.id}`}
-                                        label="Request For Approval"
-                                        placeholder="Select responsible user"
-                                        options={(allResponsibleUsers ?? [])
-                                            .filter((item) => item?.user?.name)
-                                            .map((item) => item.user.name)}
-                                        onChange={(e) => {
-                                            const selectedUser = allResponsibleUsers.find(
-                                                (item) => item.user?.name === e.target.value
-                                            );
-
-                                            if (selectedUser) {
-                                                handleDebitNoteApproveRequest(
-                                                    selectedUser.user.id,
-                                                    n.id
-                                                );
-                                            }
-                                        }}
-                                        required
-                                    />
-
-                                </td>
-
-                                <td className="px-3 py-2 text-right">
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // don't trigger the row click twice
-                                            navigate(viewPath(n.id));
-                                        }}
-                                        className="inline-flex items-center gap-1 border rounded-md px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-100"
-                                    >
-                                        <Eye size={14} /> View
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-
-                        {!loading && data.items.length === 0 && (
-                            <tr>
-                                <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
-                                    No debit notes found
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* pagination */}
-            <div className="flex items-center justify-between mt-3 text-sm text-gray-500">
-                <span>{data.total} total</span>
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        disabled={page <= 1 || loading}
-                        onClick={() => setPage((p) => p - 1)}
-                        className="border rounded-md px-3 py-1.5 hover:bg-gray-100 disabled:opacity-40"
-                    >
-                        Previous
-                    </button>
-                    <span>
-                        Page {page} of {totalPages}
-                    </span>
-                    <button
-                        type="button"
-                        disabled={page >= totalPages || loading}
-                        onClick={() => setPage((p) => p + 1)}
-                        className="border rounded-md px-3 py-1.5 hover:bg-gray-100 disabled:opacity-40"
-                    >
-                        Next
-                    </button>
-                </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate(NEW_PATH)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              <Plus size={17} />
+              Create Debit Note
+            </button>
+          </div>
         </div>
-    );
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              label: 'Total Debit Notes',
+              value: status === 'ALL' ? total : '—',
+              icon: <FileText size={19} className="text-slate-400" />,
+              border: 'border-slate-200',
+            },
+            {
+              label: 'Pending',
+              value:
+                status === 'PENDING'
+                  ? total
+                  : status === 'ALL'
+                    ? allDebitNotes.filter(
+                      (note) => normalizeStatus(note.status) === 'PENDING'
+                    ).length
+                    : '—',
+              icon: <LoaderCircle size={19} className="text-amber-500" />,
+              border: 'border-amber-200',
+            },
+            {
+              label: 'Approved',
+              value:
+                status === 'APPROVED'
+                  ? total
+                  : status === 'ALL'
+                    ? allDebitNotes.filter(
+                      (note) => normalizeStatus(note.status) === 'APPROVED'
+                    ).length
+                    : '—',
+              icon: <CheckCircle2 size={19} className="text-emerald-500" />,
+              border: 'border-emerald-200',
+            },
+            {
+              label: 'Rejected',
+              value:
+                status === 'REJECTED'
+                  ? total
+                  : status === 'ALL'
+                    ? allDebitNotes.filter(
+                      (note) => normalizeStatus(note.status) === 'REJECTED'
+                    ).length
+                    : '—',
+              icon: <XCircle size={19} className="text-rose-500" />,
+              border: 'border-rose-200',
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className={`rounded-xl border ${item.border} bg-white p-5 shadow-sm`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-slate-500">
+                  {item.label}
+                </p>
+                {item.icon}
+              </div>
+              <p className="mt-3 text-3xl font-bold text-slate-900">
+                {item.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <form
+              onSubmit={submitSearch}
+              className="flex w-full gap-2 lg:max-w-md"
+            >
+              <div className="relative flex-1">
+                <Search
+                  size={17}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search note number or title..."
+                  className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-9 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                />
+
+                {search && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label="Clear search"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Search
+              </button>
+            </form>
+
+            <div className="flex flex-wrap gap-2">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => changeTab(tab.value)}
+                  className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${status === tab.value
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="m-4 flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={refreshList}
+                className="shrink-0 font-semibold underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Note No.</th>
+                  <th className="px-4 py-3 font-semibold">Title / Party</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Created By</th>
+                  <th className="px-4 py-3 font-semibold">Created</th>
+                  <th className="px-4 py-3 font-semibold">Reviewed By</th>
+                  <th className="px-4 py-3 font-semibold">
+                    Approval / Document
+                  </th>
+                  <th className="px-4 py-3 text-right font-semibold">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-16 text-center">
+                      <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                        <LoaderCircle size={18} className="animate-spin" />
+                        Loading debit notes...
+                      </div>
+                    </td>
+                  </tr>
+                ) : debitNotes.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-16 text-center">
+                      <div className="mx-auto flex max-w-sm flex-col items-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                          <FileText size={23} />
+                        </div>
+                        <p className="mt-3 font-semibold text-slate-800">
+                          No debit notes found
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Try changing the status filter or search keywords.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  debitNotes.map((n) => {
+                    const noteStatus = normalizeStatus(n.status);
+
+                    return (
+                      <tr
+                        key={n.id}
+                        className="transition hover:bg-slate-50/80"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3.5">
+                          <span className="font-semibold text-slate-900">
+                            {n.noteNo || `DN-${n.id}`}
+                          </span>
+                        </td>
+
+                        <td className="max-w-[260px] px-4 py-3.5">
+                          <p className="truncate font-medium text-slate-800">
+                            {n.title || 'Untitled'}
+                          </p>
+                          {n.partyName && (
+                            <p className="mt-1 truncate text-xs text-slate-500">
+                              {n.partyName}
+                            </p>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[noteStatus] ||
+                              'bg-slate-100 text-slate-600'
+                              }`}
+                          >
+                            {noteStatus || 'UNKNOWN'}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3.5 text-slate-600">
+                          {n.creator?.name ?? n.user?.name ?? '—'}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3.5 text-slate-600">
+                          {formatDate(n.createdAt)}
+                        </td>
+
+                        <td className="px-4 py-3.5 text-slate-600">
+                          {n.reviewer?.name ?? n.approvedBy?.name ?? '—'}
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          {noteStatus === 'APPROVED' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(n)}
+                              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                            >
+                              <Download size={15} />
+                              Download
+                            </button>
+                          ) : (
+                            <select
+                              name={`responsibleUser-${n.id}`}
+                              value={selectedUserPerNote[n.id] || ""}
+                              disabled={requestingNoteId === n.id}
+                              onChange={(event) => {
+                                const userId = event.target.value;
+
+                                if (!userId) return;
+
+                                setSelectedUserPerNote((prev) => ({
+                                  ...prev,
+                                  [n.id]: userId,
+                                }));
+
+                                handleDebitNoteApproveRequest(n.id, userId);
+                              }}
+                              className="w-full min-w-[200px] rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <option value="">Select responsible user</option>
+
+                              {usersArray.map((item) => {
+                                const user = item.user;
+
+                                if (!user?.id) return null;
+
+                                return (
+                                  <option key={user.id} value={user.id}>
+                                    {user.name || `User ${user.id}`}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`${viewPath}/${n.id}`)}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                          >
+                            <Eye size={15} />
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!loading && debitNotes.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-500">
+                Showing{' '}
+                <span className="font-semibold text-slate-700">
+                  {(page - 1) * PAGE_SIZE + 1}
+                </span>{' '}
+                to{' '}
+                <span className="font-semibold text-slate-700">
+                  {Math.min(page * PAGE_SIZE, total)}
+                </span>{' '}
+                of{' '}
+                <span className="font-semibold text-slate-700">{total}</span>{' '}
+                debit notes
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((previous) => previous - 1)}
+                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Previous
+                </button>
+
+                <span className="min-w-20 text-center text-sm font-medium text-slate-600">
+                  Page {page} of {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((previous) => previous + 1)}
+                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default DebitNoteLists;

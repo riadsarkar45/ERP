@@ -53,9 +53,6 @@ const permissionsFor = (note: NoteLike, a: Actor) => {
     };
 };
 
-const canView = (note: NoteLike, a: Actor) =>
-    (note.createdBy ?? note.userId) === a.id || isApprover(a);
-
 // The stored HTML is later rendered in other people's browsers, so only allow
 // what the editor can actually produce.
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
@@ -151,11 +148,11 @@ export const listDebitNotes = async (req: Request, res: Response) => {
             ...((STATUSES as readonly string[]).includes(status) ? { status } : {}),
             ...(q
                 ? {
-                      OR: [
-                          { title: { contains: q, mode: "insensitive" } },
-                          { noteNo: { contains: q, mode: "insensitive" } },
-                      ],
-                  }
+                    OR: [
+                        { title: { contains: q, mode: "insensitive" } },
+                        { noteNo: { contains: q, mode: "insensitive" } },
+                    ],
+                }
                 : {}),
         };
 
@@ -196,7 +193,6 @@ export const getDebitNote = async (req: Request, res: Response) => {
 
         const note = await loadNote(id);
         if (!note) return fail(res, 404, "Debit note not found");
-        if (!canView(note, actor)) return fail(res, 403, "You cannot view this debit note");
 
         return res.send(serialize(note, actor));
     } catch (err) {
@@ -373,3 +369,43 @@ export const deleteDebitNote = async (req: Request, res: Response) => {
         return fail(res, 500, "Failed to delete debit note");
     }
 };
+
+export const approveDebitNote = async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+
+    const { debitNoteId } = req.params;
+
+    if (!userId || !debitNoteId) {
+        return res.status(400).send({ message: "Not authorized", type: "error" })
+    }
+
+    const approveDebitNote = await prisma.debitNote.findUnique(
+        {
+            where: { id: Number(debitNoteId) },
+            select: {
+                id: true,
+            }
+        }
+    )
+
+    if (!approveDebitNote) {
+        return res.status(400).send({ message: "No debit note found", type: "error" })
+    }
+
+    const update = await prisma.debitNote.update(
+        {
+            where: { id: Number(debitNoteId) },
+            data: {
+                status: "Approved",
+                approvedBy: Number(userId),
+                approvedAt: new Date(),
+            }
+        }
+    )
+
+    if (!update) {
+        return res.status(400).send({ message: "Something went wrong. Please try again later." })
+    }
+
+    return res.status(200).send({ message: "Debit Note Approved", type: "success" })
+}

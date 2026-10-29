@@ -20,6 +20,11 @@ export const getContractualJobs = async (req: Request, res: Response) => {
                 styleReqRows: {
                     select: {
                         orderQty: true,
+                        styleRequirement: {
+                            select: {
+                                styleNo: true,
+                            }
+                        }
                     }
                 }
             }

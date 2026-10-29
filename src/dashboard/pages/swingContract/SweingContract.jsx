@@ -6,6 +6,27 @@ import {
   ChevronRight, ChevronDown as ChevronDownIcon
 } from "lucide-react";
 
+// ============================================================
+// TOAST NOTIFICATION COMPONENT
+// ============================================================
+const Toast = ({ toast, onClose }) => {
+  if (!toast) return null;
+  const styles = {
+    success: 'bg-emerald-600',
+    error: 'bg-rose-600',
+    info: 'bg-slate-800',
+  };
+  return (
+    <div className={`fixed right-5 top-5 z-[100] flex max-w-md items-center gap-3 rounded-xl px-4 py-3 text-white shadow-xl ${styles[toast.type] || styles.info}`}>
+      {toast.type === 'success' ? <CheckCircle2 size={18} /> : <X size={18} />}
+      <span className="text-sm font-medium">{toast.message}</span>
+      <button type="button" onClick={onClose} className="ml-2 rounded p-1 hover:bg-white/20" aria-label="Close notification">
+        <X size={16} />
+      </button>
+    </div>
+  );
+};
+
 // --- Constants & Helpers ---
 const PROCESS_TYPES = [
   "Body Hem", "Neck Joint", "Shoulder to Shoulder",
@@ -39,15 +60,14 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
   const dropdownRef = useRef(null);
   const [search, setSearch] = useState("");
 
-  // Build year > month > [dates] tree
   const dateTree = useMemo(() => {
     const tree = {};
     const sorted = [...allDates].sort();
     sorted.forEach(d => {
       if (!d) return;
       const [year, month] = d.split("-");
-      const monthNames = ["","January","February","March","April","May","June",
-                          "July","August","September","October","November","December"];
+      const monthNames = ["", "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"];
       const monthLabel = `${monthNames[parseInt(month)]} ${year}`;
       if (!tree[year]) tree[year] = {};
       if (!tree[year][monthLabel]) tree[year][monthLabel] = [];
@@ -56,23 +76,17 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
     return tree;
   }, [allDates]);
 
-  // All flat dates
   const allFlat = allDates.filter(Boolean);
-
-  // Local selected state
   const [localSelected, setLocalSelected] = useState(
     selectedDates && selectedDates.length > 0 ? [...selectedDates] : [...allFlat]
   );
-
-  // Expanded years/months
   const [expandedYears, setExpandedYears] = useState({});
   const [expandedMonths, setExpandedMonths] = useState({});
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
-          anchorRef.current && !anchorRef.current.contains(e.target)) {
+        anchorRef.current && !anchorRef.current.contains(e.target)) {
         onClose();
       }
     };
@@ -92,13 +106,11 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
     setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Get all dates under a year
   const getDatesInYear = (year) => {
     const months = dateTree[year] || {};
     return Object.values(months).flat();
   };
 
-  // Get all dates under a month
   const getDatesInMonth = (year, monthLabel) => {
     return dateTree[year]?.[monthLabel] || [];
   };
@@ -135,8 +147,6 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
   };
 
   const years = Object.keys(dateTree).sort().reverse();
-
-  // Filter years/months by search
   const matchesSearch = (str) => str.toLowerCase().includes(search.toLowerCase());
 
   return (
@@ -145,7 +155,6 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
       className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-2xl w-64 overflow-hidden"
       style={{ minWidth: "240px" }}
     >
-      {/* Search Box */}
       <div className="p-2 border-b border-slate-200">
         <input
           type="text"
@@ -156,8 +165,6 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
           autoFocus
         />
       </div>
-
-      {/* Select All */}
       <div className="border-b border-slate-100">
         <label className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer">
           <input
@@ -170,8 +177,6 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
           <span className="text-sm text-slate-700 font-medium">(Select All)</span>
         </label>
       </div>
-
-      {/* Date Tree */}
       <div className="max-h-52 overflow-y-auto">
         {years.length === 0 ? (
           <p className="px-3 py-4 text-sm text-slate-400 text-center">No dates available</p>
@@ -182,20 +187,13 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
             const datesInYear = getDatesInYear(year);
             const yearAllSelected = datesInYear.every(d => localSelected.includes(d));
             const yearSomeSelected = datesInYear.some(d => localSelected.includes(d)) && !yearAllSelected;
-            const isYearExpanded = expandedYears[year] !== false; // default open
+            const isYearExpanded = expandedYears[year] !== false;
 
             return (
               <div key={year}>
-                {/* Year Row */}
                 <div className="flex items-center border-b border-slate-50 hover:bg-blue-50/50">
-                  <button
-                    onClick={() => toggleYear(year)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 flex-shrink-0"
-                  >
-                    {isYearExpanded
-                      ? <ChevronDownIcon size={14} />
-                      : <ChevronRight size={14} />
-                    }
+                  <button onClick={() => toggleYear(year)} className="p-1.5 text-slate-400 hover:text-slate-700 flex-shrink-0">
+                    {isYearExpanded ? <ChevronDownIcon size={14} /> : <ChevronRight size={14} />}
                   </button>
                   <label className="flex items-center gap-2 flex-1 py-1.5 pr-3 cursor-pointer">
                     <input
@@ -208,27 +206,18 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
                     <span className="text-sm font-semibold text-slate-800">{year}</span>
                   </label>
                 </div>
-
-                {/* Months */}
                 {isYearExpanded && monthKeys.filter(m => matchesSearch(m)).map(monthLabel => {
                   const datesInMonth = months[monthLabel];
                   const monthAllSelected = datesInMonth.every(d => localSelected.includes(d));
                   const monthSomeSelected = datesInMonth.some(d => localSelected.includes(d)) && !monthAllSelected;
                   const monthKey = `${year}-${monthLabel}`;
-                  const isMonthExpanded = expandedMonths[monthKey] === true; // default closed
+                  const isMonthExpanded = expandedMonths[monthKey] === true;
 
                   return (
                     <div key={monthKey}>
-                      {/* Month Row */}
                       <div className="flex items-center pl-6 border-b border-slate-50 hover:bg-blue-50/50">
-                        <button
-                          onClick={() => toggleMonth(monthKey)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 flex-shrink-0"
-                        >
-                          {isMonthExpanded
-                            ? <ChevronDownIcon size={13} />
-                            : <ChevronRight size={13} />
-                          }
+                        <button onClick={() => toggleMonth(monthKey)} className="p-1.5 text-slate-400 hover:text-slate-700 flex-shrink-0">
+                          {isMonthExpanded ? <ChevronDownIcon size={13} /> : <ChevronRight size={13} />}
                         </button>
                         <label className="flex items-center gap-2 flex-1 py-1.5 pr-3 cursor-pointer">
                           <input
@@ -241,25 +230,17 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
                           <span className="text-sm text-slate-600">{monthLabel}</span>
                         </label>
                       </div>
-
-                      {/* Individual Dates */}
-                      {isMonthExpanded && datesInMonth
-                        .filter(d => matchesSearch(d))
-                        .map(d => (
-                          <label
-                            key={d}
-                            className="flex items-center gap-2.5 pl-12 pr-3 py-1.5 hover:bg-blue-50 cursor-pointer border-b border-slate-50"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={localSelected.includes(d)}
-                              onChange={() => toggleDate(d)}
-                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-slate-600">{d}</span>
-                          </label>
-                        ))
-                      }
+                      {isMonthExpanded && datesInMonth.filter(d => matchesSearch(d)).map(d => (
+                        <label key={d} className="flex items-center gap-2.5 pl-12 pr-3 py-1.5 hover:bg-blue-50 cursor-pointer border-b border-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={localSelected.includes(d)}
+                            onChange={() => toggleDate(d)}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-600">{d}</span>
+                        </label>
+                      ))}
                     </div>
                   );
                 })}
@@ -268,28 +249,16 @@ function DateFilterDropdown({ allDates, selectedDates, onApply, onClose, anchorR
           })
         )}
       </div>
-
-      {/* Cancel / APPLY Buttons */}
       <div className="p-2.5 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
-        <button
-          onClick={onClose}
-          className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleApply}
-          className="px-4 py-1.5 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-        >
-          APPLY
-        </button>
+        <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors">Cancel</button>
+        <button onClick={handleApply} className="px-4 py-1.5 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors">APPLY</button>
       </div>
     </div>
   );
 }
 
 // ============================================================
-// GENERIC FILTER DROPDOWN (matches screenshot exactly)
+// GENERIC FILTER DROPDOWN
 // ============================================================
 function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, anchorRef }) {
   const dropdownRef = useRef(null);
@@ -301,7 +270,7 @@ function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, an
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target) &&
-          anchorRef.current && !anchorRef.current.contains(e.target)) {
+        anchorRef.current && !anchorRef.current.contains(e.target)) {
         onClose();
       }
     };
@@ -309,14 +278,10 @@ function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, an
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose, anchorRef]);
 
-  const filteredValues = allValues.filter(v =>
-    String(v).toLowerCase().includes(search.toLowerCase())
-  );
-
+  const filteredValues = allValues.filter(v => String(v).toLowerCase().includes(search.toLowerCase()));
   const toggleValue = (val) => {
     setLocalSelected(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   };
-
   const selectAll = () => setLocalSelected([...allValues]);
   const clearAll = () => setLocalSelected([]);
 
@@ -334,7 +299,6 @@ function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, an
       className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-2xl w-56 overflow-hidden"
       style={{ minWidth: "200px" }}
     >
-      {/* Search Box */}
       <div className="p-2 border-b border-slate-200">
         <input
           type="text"
@@ -345,8 +309,6 @@ function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, an
           autoFocus
         />
       </div>
-
-      {/* (Select All) */}
       <div className="border-b border-slate-100">
         <label className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer">
           <input
@@ -359,45 +321,26 @@ function GenericFilterDropdown({ allValues, selectedValues, onApply, onClose, an
           <span className="text-sm text-slate-700 font-medium">(Select All)</span>
         </label>
       </div>
-
-      {/* Values List */}
       <div className="max-h-52 overflow-y-auto">
         {filteredValues.length === 0 ? (
           <p className="px-3 py-4 text-sm text-slate-400 text-center">No matches found</p>
         ) : (
           filteredValues.map((val) => (
-            <label
-              key={String(val)}
-              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50"
-            >
+            <label key={String(val)} className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50">
               <input
                 type="checkbox"
                 checked={localSelected.includes(val)}
                 onChange={() => toggleValue(val)}
                 className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm text-slate-700 truncate">
-                {String(val) || <span className="text-slate-400 italic">(empty)</span>}
-              </span>
+              <span className="text-sm text-slate-700 truncate">{String(val) || <span className="text-slate-400 italic">(empty)</span>}</span>
             </label>
           ))
         )}
       </div>
-
-      {/* Cancel / APPLY Buttons */}
       <div className="p-2.5 border-t border-slate-200 flex justify-end gap-2 bg-slate-50">
-        <button
-          onClick={onClose}
-          className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleApply}
-          className="px-4 py-1.5 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-        >
-          APPLY
-        </button>
+        <button onClick={onClose} className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors">Cancel</button>
+        <button onClick={handleApply} className="px-4 py-1.5 text-sm font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors">APPLY</button>
       </div>
     </div>
   );
@@ -410,51 +353,33 @@ function FilterTh({ label, columnKey, align = "left", filters, allValues, onAppl
   const isActive = filters[columnKey] && filters[columnKey].length > 0 && filters[columnKey].length < allValues.length;
   const isOpen = openFilterKey === columnKey;
   const thRef = useRef(null);
+  const hasValues = allValues && allValues.length > 0;
 
   const alignClass = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
   const justifyClass = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
-
   const handleClose = () => onOpenFilter(null);
-
   const handleApply = (vals) => onApplyFilter(columnKey, vals);
 
   return (
-    <th
-      ref={thRef}
-      className={`py-3 px-4 border border-[#00a884] text-[13px] font-bold uppercase tracking-wider whitespace-nowrap ${alignClass} select-none relative`}
-    >
+    <th ref={thRef} className={`py-3 px-4 border border-[#00a884] text-[13px] font-bold uppercase tracking-wider whitespace-nowrap ${alignClass} select-none relative`}>
       <div className={`flex items-center gap-1.5 ${justifyClass}`}>
         <span>{label}</span>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onOpenFilter(isOpen ? null : columnKey); }}
-          title={`Filter by ${label}`}
-          className={`p-0.5 rounded transition-all duration-150 hover:bg-white/20 ${
-            isActive ? "text-yellow-300 bg-white/25" : isOpen ? "text-white bg-white/20" : "text-white/50 hover:text-white"
-          }`}
-        >
-          <Filter size={13} strokeWidth={2.5} />
-        </button>
+        {hasValues && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenFilter(isOpen ? null : columnKey); }}
+            title={`Filter by ${label}`}
+            className={`p-0.5 rounded transition-all duration-150 hover:bg-white/20 ${isActive ? "text-yellow-300 bg-white/25" : isOpen ? "text-white bg-white/20" : "text-white/50 hover:text-white"}`}
+          >
+            <Filter size={13} strokeWidth={2.5} />
+          </button>
+        )}
       </div>
-
       {isOpen && columnKey === "date" && (
-        <DateFilterDropdown
-          allDates={allValues}
-          selectedDates={filters[columnKey] || allValues}
-          onApply={handleApply}
-          onClose={handleClose}
-          anchorRef={thRef}
-        />
+        <DateFilterDropdown allDates={allValues} selectedDates={filters[columnKey] || allValues} onApply={handleApply} onClose={handleClose} anchorRef={thRef} />
       )}
-
-      {isOpen && columnKey !== "date" && (
-        <GenericFilterDropdown
-          allValues={allValues}
-          selectedValues={filters[columnKey] || allValues}
-          onApply={handleApply}
-          onClose={handleClose}
-          anchorRef={thRef}
-        />
+      {isOpen && columnKey !== "date" && hasValues && (
+        <GenericFilterDropdown allValues={allValues} selectedValues={filters[columnKey] || allValues} onApply={handleApply} onClose={handleClose} anchorRef={thRef} />
       )}
     </th>
   );
@@ -472,6 +397,8 @@ function OperationModal({ isOpen, onClose, onSave, isLoading, initialData, compo
     todayOutput: "",
     compositionId: ""
   });
+  const [processOption, setProcessOption] = useState(PROCESS_TYPES); // Fallback to hardcoded types
+  const axiosPrivate = useAxiosPrivate();
 
   useEffect(() => {
     if (isOpen) {
@@ -484,6 +411,19 @@ function OperationModal({ isOpen, onClose, onSave, isLoading, initialData, compo
     }
   }, [isOpen, initialData, compositions]);
 
+  const fetchProcesses = useCallback(async () => {
+    try {
+      const res = await axiosPrivate.get("/api/get-all-processes");
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setProcessOption(res.data);
+      }
+    } catch (e) {
+      console.log("Falling back to default process types", e);
+    }
+  }, [axiosPrivate]);
+
+  useEffect(() => { fetchProcesses(); }, [fetchProcesses]);
+
   if (!isOpen) return null;
 
   const handleChange = (e) => {
@@ -493,8 +433,8 @@ function OperationModal({ isOpen, onClose, onSave, isLoading, initialData, compo
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.lineNo.trim()) { alert("Please enter the Line / Unit number."); return; }
-    if (!formData.compositionId && compositions.length > 0) { alert("Please select a composition."); return; }
+    if (!formData.lineNo.trim()) { return; } // Handled by parent toast
+    if (!formData.compositionId && compositions.length > 0) { return; } // Handled by parent toast
     onSave(formData);
   };
 
@@ -541,9 +481,9 @@ function OperationModal({ isOpen, onClose, onSave, isLoading, initialData, compo
                   {compositions.length === 1
                     ? <option value={compositions[0].id}>{compositions[0].label} — Qty: {compositions[0].orderQty.toLocaleString()}</option>
                     : <>
-                        <option value="">Select a composition...</option>
-                        {compositions.map(c => <option key={c.id} value={c.id}>{c.label} — Qty: {c.orderQty.toLocaleString()}</option>)}
-                      </>
+                      <option value="">Select a composition...</option>
+                      {compositions.map(c => <option key={c.id} value={c.id}>{c.label} — Qty: {c.orderQty.toLocaleString()}</option>)}
+                    </>
                   }
                 </select>
               </div>
@@ -558,7 +498,10 @@ function OperationModal({ isOpen, onClose, onSave, isLoading, initialData, compo
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">Process Type</label>
               <select name="processType" value={formData.processType} onChange={handleChange}
                 className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
-                {PROCESS_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
+                {(processOption.length > 0 ? processOption : PROCESS_TYPES).map((p, idx) => {
+                  const val = typeof p === 'string' ? p : (p.name || p.processType || p.label || p.id);
+                  return <option key={idx} value={val}>{val}</option>;
+                })}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -609,9 +552,17 @@ export default function SewingContract() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // ---- FILTER STATE ----
   const [filters, setFilters] = useState({});
   const [openFilterKey, setOpenFilterKey] = useState(null);
+  
+  // Toast state
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const handleApplyFilter = (columnKey, selectedValues) => {
     setFilters(prev => ({ ...prev, [columnKey]: selectedValues }));
@@ -625,12 +576,16 @@ export default function SewingContract() {
       setRows(list.map(mapSummaryRow));
     } catch (error) {
       console.error("Failed to load summary:", error);
+      setToast({ type: 'error', message: "Failed to load production summary." });
     } finally {
       setIsLoadingRows(false);
     }
   }, [axiosPrivate]);
 
-  useEffect(() => { fetchSummary(); }, [fetchSummary]);
+  // FIX: Actually call fetchSummary on mount
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
   const compositions = useMemo(() => {
     if (!selectedJob?.rows) return [];
@@ -675,9 +630,15 @@ export default function SewingContract() {
   }, [jobSearch, axiosPrivate]);
 
   const handleSaveOperation = async (formData) => {
-    if (!headerData.jobNo) { alert("Please search and select a Job No from the top bar first."); return; }
+    if (!headerData.jobNo) { 
+      setToast({ type: 'error', message: "Please search and select a Job No from the top bar first." }); 
+      return; 
+    }
     const compId = formData.compositionId || activeComposition?.id;
-    if (!compId) { alert("Please select a valid composition."); return; }
+    if (!compId) { 
+      setToast({ type: 'error', message: "Please select a valid composition." }); 
+      return; 
+    }
     const payload = {
       jobNo: headerData.jobNo, compositionId: compId, date: formData.date,
       lineNo: formData.lineNo.trim(), processType: formData.processType,
@@ -686,17 +647,33 @@ export default function SewingContract() {
     setIsSaving(true);
     try {
       await axiosPrivate.post("/api/add-contractual-job", payload);
+      setToast({ type: 'success', message: "Operation entry saved successfully." });
       await fetchSummary();
       setIsModalOpen(false);
     } catch (error) {
       console.error("Save failed:", error);
-      alert(error?.response?.data?.message || "Could not save entry.");
-    } finally { setIsSaving(false); }
+      setToast({ type: 'error', message: error?.response?.data?.message || "Could not save entry." });
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleDeleteRow = async (id) => {
     if (!window.confirm("Are you sure you want to delete this record?")) return;
+    
+    // Optimistic update
     setRows(prev => prev.filter(row => row.id !== id));
+    
+    try {
+      // NOTE: Replace '/api/delete-contractual-job' with your actual delete endpoint
+      await axiosPrivate.delete(`/api/delete-contractual-job/${id}`);
+      setToast({ type: 'success', message: 'Record deleted successfully.' });
+      await fetchSummary(); // Refresh to ensure sync with backend
+    } catch (error) {
+      console.error("Delete failed:", error);
+      setToast({ type: 'error', message: error?.response?.data?.message || "Could not delete record." });
+      await fetchSummary(); // Revert optimistic update by fetching latest
+    }
   };
 
   const scopedRows = useMemo(() => {
@@ -708,27 +685,25 @@ export default function SewingContract() {
     });
   }, [rows, headerData.jobNo, activeComposition]);
 
-  // Unique values per column
   const uniqueValues = useMemo(() => ({
-    date:        [...new Set(scopedRows.map(r => r.date).filter(Boolean))].sort(),
-    jobNo:       [...new Set(scopedRows.map(r => r.jobNo).filter(Boolean))].sort(),
-    styleNo:     [...new Set(scopedRows.map(r => r.styleNo).filter(Boolean))].sort(),
-    lineNo:      [...new Set(scopedRows.map(r => r.lineNo).filter(Boolean))].sort(),
+    date: [...new Set(scopedRows.map(r => r.date).filter(Boolean))].sort(),
+    jobNo: [...new Set(scopedRows.map(r => r.jobNo).filter(Boolean))].sort(),
+    styleNo: [...new Set(scopedRows.map(r => r.styleNo).filter(Boolean))].sort(),
+    lineNo: [...new Set(scopedRows.map(r => r.lineNo).filter(Boolean))].sort(),
     processType: [...new Set(scopedRows.map(r => r.processType).filter(Boolean))].sort(),
-    status:      ["Target Met", "In Progress"],
+    status: ["Target Met", "In Progress"],
   }), [scopedRows]);
 
-  // Apply filters
   const filteredRows = useMemo(() => {
     return scopedRows.filter(row => {
       const ratio = row.todayInput > 0 ? (row.todayOutput / row.todayInput) * 100 : 0;
       const status = ratio >= 95 ? "Target Met" : "In Progress";
-      if (filters.date        && filters.date.length        && !filters.date.includes(row.date))              return false;
-      if (filters.jobNo       && filters.jobNo.length       && !filters.jobNo.includes(row.jobNo))             return false;
-      if (filters.styleNo     && filters.styleNo.length     && !filters.styleNo.includes(row.styleNo))         return false;
-      if (filters.lineNo      && filters.lineNo.length      && !filters.lineNo.includes(row.lineNo))           return false;
+      if (filters.date && filters.date.length && !filters.date.includes(row.date)) return false;
+      if (filters.jobNo && filters.jobNo.length && !filters.jobNo.includes(row.jobNo)) return false;
+      if (filters.styleNo && filters.styleNo.length && !filters.styleNo.includes(row.styleNo)) return false;
+      if (filters.lineNo && filters.lineNo.length && !filters.lineNo.includes(row.lineNo)) return false;
       if (filters.processType && filters.processType.length && !filters.processType.includes(row.processType)) return false;
-      if (filters.status      && filters.status.length      && !filters.status.includes(status))               return false;
+      if (filters.status && filters.status.length && !filters.status.includes(status)) return false;
       return true;
     });
   }, [scopedRows, filters]);
@@ -740,13 +715,12 @@ export default function SewingContract() {
     return Array.from(seen.values()).reduce((a, b) => a + b, 0);
   }, [activeComposition, scopedRows]);
 
-  const totalInput       = filteredRows.reduce((acc, r) => acc + Number(r.todayInput  || 0), 0);
-  const totalOutput      = filteredRows.reduce((acc, r) => acc + Number(r.todayOutput || 0), 0);
-  const totalWip         = Math.max(0, totalInput - totalOutput);
-  const efficiencyRate   = totalInput > 0 ? ((totalOutput / totalInput) * 100).toFixed(1) : 0;
+  const totalInput = filteredRows.reduce((acc, r) => acc + Number(r.todayInput || 0), 0);
+  const totalOutput = filteredRows.reduce((acc, r) => acc + Number(r.todayOutput || 0), 0);
+  const totalWip = Math.max(0, totalInput - totalOutput);
+  const efficiencyRate = totalInput > 0 ? ((totalOutput / totalInput) * 100).toFixed(1) : 0;
   const remainingToOrder = Math.max(0, orderQty - totalOutput);
 
-  const activeFilterCount = Object.values(filters).filter(arr => arr && arr.length > 0 && arr.length < (uniqueValues[arr === filters.date ? 'date' : arr === filters.jobNo ? 'jobNo' : arr === filters.lineNo ? 'lineNo' : arr === filters.processType ? 'processType' : 'status'] || []).length).length;
   const simpleActiveCount = Object.entries(filters).filter(([key, vals]) => {
     if (!vals || vals.length === 0) return false;
     const allVals = uniqueValues[key] || [];
@@ -755,6 +729,7 @@ export default function SewingContract() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-800 font-sans overflow-hidden">
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       {/* Top Navigation */}
       <header className="shrink-0 bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 shadow-sm z-20">
@@ -816,11 +791,11 @@ export default function SewingContract() {
           {/* KPI Cards */}
           <section className="shrink-0 grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
-              { label: "Order Qty",    val: orderQty.toLocaleString(),    sub: activeComposition ? activeComposition.label : "All Jobs", color: "slate",   icon: Hash },
-              { label: "Total Input",  val: totalInput.toLocaleString(),  sub: "Pieces issued",                                       color: "slate",   icon: Layers },
-              { label: "Total Output", val: totalOutput.toLocaleString(), sub: `${remainingToOrder.toLocaleString()} remaining`,        color: "emerald", icon: TrendingUp },
-              { label: "Balance WIP",  val: totalWip.toLocaleString(),    sub: "In-progress on floor",                                color: "amber",   icon: AlertCircle },
-              { label: "Efficiency",   val: `${efficiencyRate}%`,         sub: "Pass Rate",                                           color: "indigo",  icon: TrendingUp, isProgress: true }
+              { label: "Order Qty", val: orderQty.toLocaleString(), sub: activeComposition ? activeComposition.label : "All Jobs", color: "slate", icon: Hash },
+              { label: "Total Input", val: totalInput.toLocaleString(), sub: "Pieces issued", color: "slate", icon: Layers },
+              { label: "Total Output", val: totalOutput.toLocaleString(), sub: `${remainingToOrder.toLocaleString()} remaining`, color: "emerald", icon: TrendingUp },
+              { label: "Balance WIP", val: totalWip.toLocaleString(), sub: "In-progress on floor", color: "amber", icon: AlertCircle },
+              { label: "Efficiency", val: `${efficiencyRate}%`, sub: "Pass Rate", color: "indigo", icon: TrendingUp, isProgress: true }
             ].map((stat, idx) => (
               <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-1">
@@ -836,7 +811,7 @@ export default function SewingContract() {
             ))}
           </section>
 
-          {/* ===== TABLE CONTAINER — ROUNDED CORNERS ===== */}
+          {/* TABLE CONTAINER */}
           <div className="flex-1 bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-0 border border-[#00a884]">
 
             {/* Toolbar */}
@@ -869,24 +844,21 @@ export default function SewingContract() {
               </div>
             </div>
 
-            {/* ===== SCROLLABLE TABLE ===== */}
+            {/* SCROLLABLE TABLE */}
             <div className="flex-1 overflow-auto min-h-0 bg-white">
               <table className="w-full text-left border-collapse">
-
                 <thead className="sticky top-0 z-10 bg-[#526D82] text-white">
                   <tr>
-                    <FilterTh label="Date"       columnKey="date"        filters={filters} allValues={uniqueValues.date}        onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Job No"     columnKey="jobNo"       filters={filters} allValues={uniqueValues.jobNo}       onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Style No"   columnKey="styleNo"     filters={filters} allValues={uniqueValues.styleNo}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Line No"    columnKey="lineNo"      filters={filters} allValues={uniqueValues.lineNo}      onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Date" columnKey="date" filters={filters} allValues={uniqueValues.date} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Job No" columnKey="jobNo" filters={filters} allValues={uniqueValues.jobNo} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Style No" columnKey="styleNo" filters={filters} allValues={uniqueValues.styleNo} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Line No" columnKey="lineNo" filters={filters} allValues={uniqueValues.lineNo} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
                     <FilterTh label="Process Op" columnKey="processType" filters={filters} allValues={uniqueValues.processType} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Input"      columnKey="todayInput"  align="right"     filters={filters} allValues={[]}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Output"     columnKey="todayOutput" align="right"     filters={filters} allValues={[]}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Balance"    columnKey="balance"     align="right"     filters={filters} allValues={[]}     onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <FilterTh label="Status"     columnKey="status"      align="center"    filters={filters} allValues={uniqueValues.status} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
-                    <th className="py-3 px-4 border border-[#00a884] text-[13px] font-bold uppercase tracking-wider whitespace-nowrap text-center select-none">
-                      Action
-                    </th>
+                    <FilterTh label="Input" columnKey="todayInput" align="right" filters={filters} allValues={[]} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Output" columnKey="todayOutput" align="right" filters={filters} allValues={[]} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Balance" columnKey="balance" align="right" filters={filters} allValues={[]} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <FilterTh label="Status" columnKey="status" align="center" filters={filters} allValues={uniqueValues.status} onApplyFilter={handleApplyFilter} onOpenFilter={setOpenFilterKey} openFilterKey={openFilterKey} />
+                    <th className="py-3 px-4 border border-[#00a884] text-[13px] font-bold uppercase tracking-wider whitespace-nowrap text-center select-none">Action</th>
                   </tr>
                 </thead>
 
@@ -912,7 +884,7 @@ export default function SewingContract() {
                   ) : (
                     filteredRows.map((row, idx) => {
                       const balance = row.todayInput - row.todayOutput;
-                      const ratio   = row.todayInput > 0 ? (row.todayOutput / row.todayInput) * 100 : 0;
+                      const ratio = row.todayInput > 0 ? (row.todayOutput / row.todayInput) * 100 : 0;
                       return (
                         <tr key={row.id} className={`hover:bg-[#00a884]/5 transition-colors group ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
                           <td className="py-3 px-4 border border-[#00a884] font-bold text-slate-900 text-[14px] whitespace-nowrap">{row.date}</td>

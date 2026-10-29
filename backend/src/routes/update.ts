@@ -11,6 +11,7 @@ import { requestForApproval, requestForDebitNoteApproval } from "../controllers/
 import { editChallan } from "../controllers/movements/update.challan";
 import { editStyleRequirement } from "../controllers/newStyleRequirements/editStyleRequirement";
 import { userActiveInActive } from "../controllers/users/allUser";
+import { approveDebitNote } from "../controllers/debit-note/debitNotes";
 
 const updateRouters = express.Router();
 
@@ -43,5 +44,7 @@ updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, 
 ]), editStyleRequirement)
 
 updateRouters.patch("/update-user-activity/:userId/:status", responseTimeMonitor, authenticate, userActiveInActive)
+
+updateRouters.put("/approve-debit-note/:debitNoteId", responseTimeMonitor, authenticate, approveDebitNote)
 
 export default updateRouters;

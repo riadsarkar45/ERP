@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
+import { Link } from "react-router-dom";
 
 const PAGE_SIZE = 8;
 
@@ -117,8 +118,8 @@ const ApprovalRequestReceived = () => {
                 const result = Array.isArray(response.data)
                     ? response.data
                     : Array.isArray(response.data?.data)
-                      ? response.data.data
-                      : [];
+                        ? response.data.data
+                        : [];
 
                 setRequests(result);
             } catch (err) {
@@ -295,11 +296,24 @@ const ApprovalRequestReceived = () => {
         }
     };
 
+
+    const handleDebitNoteApproval = async (debitNoteId) => {
+
+        if (!debitNoteId) return;
+
+        axiosSecure.put(`/api/approve-debit-note/${debitNoteId}`)
+            .then((res) => {
+                console.log(res.status);
+            }).catch((e) => {
+                console.log(e.message);
+            })
+
+    }
+
     const renderStatus = (status) => (
         <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                STATUS_STYLES[status] || STATUS_STYLES.DRAFT
-            }`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[status] || STATUS_STYLES.DRAFT
+                }`}
         >
             <span className="h-1.5 w-1.5 rounded-full bg-current" />
             {status || "UNKNOWN"}
@@ -538,6 +552,7 @@ const ApprovalRequestReceived = () => {
                                     <tbody className="divide-y divide-slate-100">
                                         {visibleRequests.map((request) => {
                                             const note = request.debitNote;
+                                            console.log(note, "note line 541");
                                             const requester = request.byUser;
 
                                             return (
@@ -612,18 +627,27 @@ const ApprovalRequestReceived = () => {
                                                     </td>
 
                                                     <td className="px-5 py-4 text-right">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                setSelectedRequest(
-                                                                    request
-                                                                )
-                                                            }
-                                                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
-                                                        >
-                                                            <Eye size={15} />
-                                                            Review
-                                                        </button>
+                                                        <div className="flex items-center gap-2">
+                                                            <Link to={`/dashboard/debit-notes/${note.id}`}>
+                                                                <button
+                                                                    type="button"
+
+                                                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-1 py-1 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                                                                >
+                                                                    <Eye size={15} />
+                                                                    Review
+                                                                </button>
+                                                            </Link>
+                                                            <span>|</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDebitNoteApproval(note.id)}
+                                                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-1 py-1 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                                                            >
+                                                                <Check size={15} />
+                                                                Approve
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -997,11 +1021,10 @@ const ApprovalRequestReceived = () => {
                     >
                         <div className="p-5 sm:p-6">
                             <div
-                                className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                                    decision === "APPROVE"
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : "bg-rose-50 text-rose-700"
-                                }`}
+                                className={`flex h-12 w-12 items-center justify-center rounded-xl ${decision === "APPROVE"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-rose-50 text-rose-700"
+                                    }`}
                             >
                                 {decision === "APPROVE" ? (
                                     <CheckCircle2 size={24} />
@@ -1096,11 +1119,10 @@ const ApprovalRequestReceived = () => {
                                         !remark.trim())
                                 }
                                 onClick={submitDecision}
-                                className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
-                                    decision === "APPROVE"
-                                        ? "bg-emerald-700 hover:bg-emerald-800"
-                                        : "bg-rose-700 hover:bg-rose-800"
-                                }`}
+                                className={`inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${decision === "APPROVE"
+                                    ? "bg-emerald-700 hover:bg-emerald-800"
+                                    : "bg-rose-700 hover:bg-rose-800"
+                                    }`}
                             >
                                 {processingId !== null ? (
                                     <>

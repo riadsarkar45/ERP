@@ -145,3 +145,20 @@ export const addProcessTypes = async (
         });
     }
 };
+
+
+export const getProcessTypes = async (req: Request, res: Response) => {
+    const processes = await prisma.processTypes.findMany(
+        {
+            select: {
+                processType: true,
+            }
+        }
+    )
+
+    if(!processes){
+        return res.status(400).send({message: "No process found", type: "error"})
+    }
+
+    return res.status(200).send(processes)
+}

@@ -43,6 +43,8 @@ import { getAvailableMonths } from "../helpers/uploadStyleReqData/upload.factory
 import { getContractJob } from "../controllers/contractualJob/searchContractJob";
 import { getContractualJobs } from "../controllers/contractualJob/getContractJob";
 import { createDebitNote, deleteDebitNote, getDebitNote, listDebitNotes,  } from "../controllers/debit-note/debitNotes";
+import { downloadDebitNote } from "../controllers/debit-note/downloadDebitNote";
+import { getProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 
 const getRouters = express.Router();
 
@@ -276,6 +278,10 @@ getRouters.get(
   authenticate,
   requestedDebitNotes
 );
+
+getRouters.get("/debit-note/:id/download", authenticate, downloadDebitNote);
+
+getRouters.get("/get-all-processes", authenticate, getProcessTypes);
 
 
 export default getRouters;

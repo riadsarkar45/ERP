@@ -254,7 +254,8 @@ model user {
   reconciliationNotes       reconciliationNotes[]
   permissionSections        permissionSection[]
   productionDatas           productionData[]
-  debitNotes                debitNote[]
+  debitNotesCreated         debitNote[]                @relation("DebitNoteCreator")
+  debitNotesApproved        debitNote[]                @relation("DebitNoteApprover")
 
   @@index([userName])
   @@index([userRole])
@@ -463,30 +464,45 @@ model contractualJobs {
   styleRequirementRowId Int
   styleReqRows          StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   jobs                  jobs?                @relation(fields: [jobId], references: [id])
+  processRate           String @default("NULL")
 }
 
 model processTypes {
   id          Int      @id @default(autoincrement())
-  processType String
+  processType String   @unique
   processRate String
   createdAt   DateTime @default(now())
   createdBy   String
 }
 
 model debitNote {
-  id                        Int                        @id @default(autoincrement())
-  noteNo                    String?                    @unique
-  title                     String
-  content                   String
-  status                    String                     @default("DRAFT") // DRAFT | PENDING | APPROVED | REJECTED
-  submittedAt               DateTime?
-  reviewRemark              String?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  user                      user?                      @relation(fields: [userId], references: [id])
-  userId                    Int?
+  id      Int     @id @default(autoincrement())
+  noteNo  String? @unique
+  title   String
+  content String
+
+  status String @default("DRAFT")
+  // DRAFT | PENDING | APPROVED | REJECTED
+
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+
+  reviewRemark String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId Int?
+  user   user? @relation("DebitNoteCreator", fields: [userId], references: [id])
+
+  approvedBy Int?
+  approver   user? @relation("DebitNoteApprover", fields: [approvedBy], references: [id])
+
   debitNoteApprovalRequests debitNoteApprovalRequest[]
 
   @@index([status])
   @@index([createdAt])
+  @@index([userId])
+  @@index([approvedBy])
 }

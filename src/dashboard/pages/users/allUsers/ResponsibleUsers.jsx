@@ -36,6 +36,7 @@ const UseResponsibleUsers = () => {
                         : [];
 
                 setAllUsers(users);
+                console.log(users, "77777777777");
 
                 console.log("Responsible users API response:", response.data);
             } catch (err) {

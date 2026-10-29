@@ -67,12 +67,13 @@ const getCompositionName = (comp) => {
     return comp.name || comp.title || comp.label || "";
 };
 
-// Style name of a record — adjust the field name here if your API uses a different one
+// Style name of a record — updated to check styleRequirement based on your API structure
 const getStyleName = (r) => {
     const raw =
         r?.jobs?.styleNo ??
         r?.jobs?.style ??
         r?.jobs?.styleName ??
+        r?.styleReqRows?.styleRequirement?.styleNo ?? // <-- ADDED THIS LINE FOR YOUR API STRUCTURE
         r?.styleReqRows?.styleNo ??
         r?.styleReqRows?.style ??
         r?.styleReqRows?.styleName ??
@@ -161,6 +162,7 @@ const ContractBilling = () => {
                 const { data } = await axiosPrivate.get("/api/get-contractual-job-summary");
                 setRecords(Array.isArray(data) ? data : data ? [data] : []);
                 setLastFetchedAt(new Date());
+                console.log(data, "summary data");
             } catch (e) {
                 console.error("Failed to load billing data:", e);
                 setError("Could not load billing data. Please try again.");
@@ -697,8 +699,8 @@ const ContractBilling = () => {
                                     type="button"
                                     onClick={() => setViewMode("table")}
                                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${viewMode === "table"
-                                        ? "bg-white text-slate-900 shadow-xs font-semibold"
-                                        : "text-slate-600 hover:text-slate-900"
+                                            ? "bg-white text-slate-900 shadow-xs font-semibold"
+                                            : "text-slate-600 hover:text-slate-900"
                                         }`}
                                 >
                                     <TableIcon size={14} /> Table View
@@ -707,8 +709,8 @@ const ContractBilling = () => {
                                     type="button"
                                     onClick={() => setViewMode("cards")}
                                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${viewMode === "cards"
-                                        ? "bg-white text-slate-900 shadow-xs font-semibold"
-                                        : "text-slate-600 hover:text-slate-900"
+                                            ? "bg-white text-slate-900 shadow-xs font-semibold"
+                                            : "text-slate-600 hover:text-slate-900"
                                         }`}
                                 >
                                     <LayoutGrid size={14} /> Job Cards
@@ -857,8 +859,8 @@ const ContractBilling = () => {
                                             }))
                                         }
                                         className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${isActive
-                                            ? "bg-emerald-600 border-emerald-600 text-white font-semibold"
-                                            : "border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                                                ? "bg-emerald-600 border-emerald-600 text-white font-semibold"
+                                                : "border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
                                             }`}
                                     >
                                         {label}

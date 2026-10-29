@@ -16,7 +16,9 @@ export const addNewContractualJob = async (req: Request, res: Response) => {
 
         const findJobs = await prisma.jobs.findUnique({ where: { jobNo: jobNo }, select: { id: true, } })
 
-        if (!findUniqueJobId?.id || !findJobs?.id) {
+        const findProcessTypes = await prisma.processTypes.findUnique({ where: { processType: processType }, select:{id: true, processRate: true} })
+
+        if (!findUniqueJobId?.id || !findJobs?.id || !findProcessTypes) {
             return res.status(404).send({ message: "Missing required fields." })
         }
 
@@ -27,6 +29,7 @@ export const addNewContractualJob = async (req: Request, res: Response) => {
                     date: new Date(date),
                     lineNo: lineNo,
                     processType: processType,
+                    processRate: findProcessTypes.processRate,
                     input: String(input),
                     output: String(output),
                     styleRequirementRowId: Number(findUniqueJobId.id)
