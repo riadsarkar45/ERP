@@ -19,16 +19,7 @@ import {
 const DEFAULT_DEDUCTION_RATE = 0.03; // 3% deducted from the gross bill
 const TOTAL_COLS = 14;
 
-// Default rate per dozen (Taka/Doz) by process operation
-const DEFAULT_RATES = {
-    "Body Hem": 45,
-    "Neck Joint": 60,
-    "Shoulder to Shoulder": 40,
-    "Sleeve Hem": 35,
-    "Sleeve Join": 55,
-    "Cuff Join": 50,
-    "Side Seam": 65,
-};
+
 
 // ================= HELPERS =================
 const pad = (n) => String(n).padStart(2, "0");
@@ -113,7 +104,6 @@ const ContractBilling = () => {
     const [now, setNow] = useState(() => new Date());
 
     // Configurable rates & policy
-    const [rates, setRates] = useState(DEFAULT_RATES);
     const [deductionRate, setDeductionRate] = useState(DEFAULT_DEDUCTION_RATE);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [viewMode, setViewMode] = useState("table");
@@ -1202,7 +1192,7 @@ const ContractBilling = () => {
                                                                 {row.pcQty.toLocaleString()} pcs ({(row.pcQty / 12).toFixed(1)} dz)
                                                             </span>
                                                             <span className="text-[11px] text-slate-500">
-                                                                ৳{formatTk((row.pcQty / 12) * row.rate)}
+                                                                ৳{formatTk((row.pcQty / 12) * row.processRate)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -1336,7 +1326,7 @@ const ContractBilling = () => {
                                                 </span>
                                                 <div>
                                                     <span className="text-sm font-semibold text-slate-800 block">{item.processType}</span>
-                                                    <span className="text-[11px] text-slate-500">Rate: ৳{Number(item.price).toFixed(2)} / Doz</span>
+                                                    <span className="text-[11px] text-slate-500">Rate: ৳{Number(item.processRate).toFixed(2)} / Doz</span>
                                                 </div>
                                             </div>
                                             <button

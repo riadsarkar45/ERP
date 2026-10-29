@@ -17,7 +17,7 @@ import UseResponsibleUsers from '../users/allUsers/ResponsibleUsers';
 import Input from '../../../components/Input';
 import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
-const viewPath = '/debit-note/view';
+const viewPath = (id) => `/dashboard/debit-notes/${id}`;
 const NEW_PATH = '/debit-note/create';
 const PAGE_SIZE = 20;
 
@@ -105,7 +105,7 @@ const Toast = ({ toast, onClose }) => {
 const DebitNoteLists = () => {
   const axiosSecure = useAxiosPrivate();
   const navigate = useNavigate();
-  const { allResponsibleUsers,loading: userLoading, setResponsibleSection, setUserResponsibility } = UseResponsibleUsers();
+  const { allResponsibleUsers, setResponsibleSection, setUserResponsibility } = UseResponsibleUsers();
 
   // Safely extract array in case the hook returns { data: [...] }
   const usersArray = Array.isArray(allResponsibleUsers)
@@ -680,7 +680,7 @@ const DebitNoteLists = () => {
                         <td className="px-4 py-3.5 text-right">
                           <button
                             type="button"
-                            onClick={() => navigate(`${viewPath}/${n.id}`)}
+                            onClick={() => navigate(`/dashboard/debit-notes/${n.id}`)}
                             className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
                           >
                             <Eye size={15} />
