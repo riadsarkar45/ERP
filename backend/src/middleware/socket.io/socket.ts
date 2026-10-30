@@ -6,7 +6,17 @@ import { Server as HTTPServer } from 'http';
 let io: SocketIOServer;
 
 export const initSocket = (server: HTTPServer): SocketIOServer => {
-  const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173"];
+  const corsOrigins = [
+    "https://erp-three-pied.vercel.app",
+    "https://erp-backend-ruby.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:8081",
+    "http://127.0.0.1:1420",
+    "http://localhost:1420",   // tauri dev
+    "http://tauri.localhost",  // installed Windows app (MSI)
+    "https://tauri.localhost", // if useHttpsScheme is enabled in tauri.conf.json
+    "tauri://localhost",
+  ];
 
   io = new SocketIOServer(server, {
     cors: {
