@@ -15,7 +15,7 @@ import getMobileRouters from "./routes/mobileRoutes/get";
 const app = express();
 app.use(cookieParser())
 // http://localhost:8081/ @this is mobile api cors access
-const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app", "http://localhost:8081", "http://127.0.0.1:1420"];
+const corsOrigins = ["https://erp-three-pied.vercel.app", "http://localhost:5173", "https://erp-backend-ruby.vercel.app", "http://localhost:8081", "http://127.0.0.1:1420", "http://localhost:1420"];
 app.set('trust proxy', 1); // Trust the first proxy (if behind a reverse proxy)
 app.use(cors(
   {
