@@ -14,10 +14,8 @@ import {
 } from 'lucide-react';
 
 import UseResponsibleUsers from '../users/allUsers/ResponsibleUsers';
-import Input from '../../../components/Input';
-import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
+  import useAxiosPrivate from '../../../hooks/UseAxiosPrivate';
 
-const viewPath = (id) => `/dashboard/debit-notes/${id}`;
 const NEW_PATH = '/debit-note/create';
 const PAGE_SIZE = 20;
 

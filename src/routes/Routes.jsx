@@ -147,16 +147,16 @@ const routers = createBrowserRouter([
                                 <AddNewUser />
                             </ProtectedRoute>
                         )
-                    },
-                    {
-                        // ADJUST allowed roles if AUDITOR (or another role) should also manage users
-                        path: "party-wise-view",
-                        element: (
-                            <ProtectedRoute allowedRoles={["SUPER ADMIN", "ADMIN"]}>
-                                <PartyWiseView />
-                            </ProtectedRoute>
-                        )
-                    },
+                        },
+                        {
+                            // ADJUST allowed roles if AUDITOR (or another role) should also manage users
+                            path: "party-wise-view",
+                            element: (
+                                <ProtectedRoute allowedRoles={["SUPER ADMIN", "ADMIN"]}>
+                                    <PartyWiseView />
+                                </ProtectedRoute>
+                            )
+                        },
                     {
                         path: "challan/aop",
                         element: <Aop />

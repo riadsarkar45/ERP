@@ -6,7 +6,7 @@ import YarnDyeOrders from "./YarnDyeOrders";
 import KnittingOrder from "./KnittingOrder";
 import DyeingOrder from "./DyeingOrder";
 import AopOrder from "./AopOrder";
-import InlineEdit from "../helpers/InlineEdit/InlineEdit";
+// import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 import FilterDropdown from "../helpers/filtering/FilterDropdown";
 import useAxiosPrivate from "../hooks/UseAxiosPrivate";
 import Toast from "./Toast";
@@ -52,7 +52,6 @@ const AllOrders = ({ orderType }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
-    const [searchTerm, setSearchTerm] = useState("");
     const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
 
     const [filters, setFilters] = useState(() => getSavedFilters(orderType));
