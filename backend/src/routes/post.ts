@@ -58,7 +58,7 @@ router.post(
   factoryStockComparison as any
 );
 
-router.post("/add-contractual-job", responseTimeMonitor, addNewContractualJob)
+router.post("/add-contractual-job", responseTimeMonitor, authenticate, addNewContractualJob)
 
 router.post("/add-process-types", responseTimeMonitor, authenticate, addProcessTypes)
 

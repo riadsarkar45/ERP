@@ -16,8 +16,8 @@ type UserRolePermission = {
   isPermitted?: Array<
     | string
     | {
-        isPermitted?: string;
-      }
+      isPermitted?: string;
+    }
   >;
 };
 
@@ -117,7 +117,7 @@ export async function authenticate(
 
       select: {
         isActive: true,
-
+        workingStation: true,
         permissionSections: {
           select: {
             permittedSection: true,
@@ -150,7 +150,7 @@ export async function authenticate(
 
     req.user = {
       ...payload,
-
+      workingStation: user.workingStation ?? "",
       permissionSections:
         user.permissionSections,
     };

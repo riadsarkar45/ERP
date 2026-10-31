@@ -58,6 +58,7 @@ export async function login(req: Request, res: Response) {
             phoneNo: true,
             id: true,
             userRole: true,
+            workingStation: true,
             name: true,
             isActive: true,
             permissionSections: {
@@ -81,7 +82,7 @@ export async function login(req: Request, res: Response) {
         return res.status(400).json({ message: "User not active yet. Please contact the admin." })
     }
 
-    const accessToken = signAccessToken({ userId: String(user.id), role: String(user.permissionSections) });
+    const accessToken = signAccessToken({ userId: String(user.id), workingStation: String(user.workingStation), role: String(user.permissionSections) });
     const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
 
     await prisma.refreshToken.create({
@@ -150,6 +151,7 @@ export async function refresh(req: Request, res: Response) {
     const accessToken = signAccessToken({
         userId: String(stored.user.id),
         role: String(stored.user.permissionSections),
+        workingStation: String(stored.user.workingStation)
     });
 
     res.cookie(REFRESH_TOKEN_COOKIE_NAME, newRawToken, REFRESH_COOKIE_OPTIONS);
@@ -185,7 +187,7 @@ export async function getMe(req: Request, res: Response) {
             where: { id: Number(userId) },
             select: {
                 id: true,
-                userName: true,
+                workingStation: true,
                 name: true,
                 permissionSections: {
                     select: {
@@ -208,7 +210,7 @@ export async function getMe(req: Request, res: Response) {
 
     return res.json({
         id: foundUser.id,
-        userName: foundUser.userName,
+        workingStation: foundUser.workingStation,
         name: foundUser.name,
         userRole: foundUser.permissionSections
     });

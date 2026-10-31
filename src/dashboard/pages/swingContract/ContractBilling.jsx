@@ -17,6 +17,7 @@ import {
     Filter,
     Factory,
 } from "lucide-react";
+import { useAuth } from "../../auth/AuthContext";
 
 // ================= CONSTANTS & DEFAULTS =================
 const TOTAL_COLS = 14;
@@ -388,7 +389,7 @@ const ContractBilling = () => {
     const [currentProcess, setCurrentProcess] = useState({ type: "", price: "" });
     const [processInputs, setProcessInputs] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
+    const {user} = useAuth();
     // Keep time fresh
     useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 30000);
@@ -420,12 +421,11 @@ const ContractBilling = () => {
             if (isManual) setIsRefreshing(true);
             else setIsLoading(true);
             setError("");
-
+            if(!user) return;
             try {
-                const { data } = await axiosPrivate.get("/api/get-contractual-job-summary");
+                const { data } = await axiosPrivate.get(`/api/get-contractual-job-summary/${user?.workingStation}`);
                 setRecords(Array.isArray(data) ? data : data ? [data] : []);
                 setLastFetchedAt(new Date());
-                console.log(data, "summary data");
             } catch (e) {
                 console.error("Failed to load billing data:", e);
                 setError("Could not load billing data. Please try again.");
@@ -922,7 +922,6 @@ const ContractBilling = () => {
     };
 
     const handleRemoveProcessInput = (id) => {
-        console.log(id);
         setProcessInputs((prev) => prev.filter((_, i) => i !== id));
     };
 

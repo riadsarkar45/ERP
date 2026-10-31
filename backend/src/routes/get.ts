@@ -263,7 +263,7 @@ getRouters.get("/get-available-months", authenticate, getAvailableMonths);
 
 getRouters.get("/get-contractual-job", getContractJob);
 
-getRouters.get("/get-contractual-job-summary", getContractualJobs);
+getRouters.get("/get-contractual-job-summary/:workingStation", responseTimeMonitor, authenticate, getContractualJobs);
 
 getRouters.get("/all-responsible-users/:section/:responsibleType", getResponsibleUsers);
 
@@ -284,10 +284,7 @@ getRouters.get("/debit-note/:id/download", authenticate, downloadDebitNote);
 
 getRouters.get("/get-all-processes", authenticate, getProcessTypes);
 
-<<<<<<< HEAD
-=======
 getRouters.delete("/delete-contractual-job/:jobId", responseTimeMonitor, authenticate, deleteContractualJobs)
 
 
->>>>>>> 96c3493c91c3a069cfbb033de7cfe11fbf8990df
 export default getRouters;

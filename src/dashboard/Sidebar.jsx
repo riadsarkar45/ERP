@@ -24,7 +24,7 @@ import {
     Receipt,
     FilePlus,
 } from "lucide-react";
-import { AuthContext } from "./auth/AuthContext";
+import { AuthContext, useAuth } from "./auth/AuthContext";
 import UseUserRoles from "./pages/users/allUsers/UserRoles";
 
 const Sidebar = () => {
@@ -36,7 +36,8 @@ const Sidebar = () => {
     const [zoomLevel, setZoomLevel] = useState(100);
 
     const isActive = (path) => location.pathname === path;
-    const { user } = useContext(AuthContext);
+    const { user } = useAuth();
+    console.log(user, "users from sidebar");
     const { sections } = UseUserRoles();
 
     // Handle zoom changes with a fixed minimum of 70% and maximum of 200%

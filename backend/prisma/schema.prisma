@@ -458,13 +458,19 @@ model contractualJobs {
   jobId                 Int
   date                  DateTime
   processType           String
-  input                 String
-  output                String
-  lineNo                String
+  input                 String?
+  output                String?
+  lineNo                String?
   styleRequirementRowId Int
   styleReqRows          StyleRequirementRow? @relation(fields: [styleRequirementRowId], references: [id])
   jobs                  jobs?                @relation(fields: [jobId], references: [id])
-  processRate           String @default("NULL")
+  processRate           String               @default("NULL")
+
+  // new fields
+  entryType         String  @default("PROCESS")
+  manufacturingUnit String?
+  pricePerPcs       Float?
+  workingStation    String  @default("NULL")
 }
 
 model processTypes {

@@ -12,6 +12,7 @@ if (!ACCESS_TOKEN_SECRET) {
 export interface AccessTokenPayload {
   userId: string;
   role: string;
+  workingStation: string;
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {
