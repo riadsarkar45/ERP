@@ -989,6 +989,7 @@ export default function Summary() {
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
                                                         {(sent === 0 && receivedGrey === 0 && receivedFinish === 0) || isNaN(diff) ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
+                                                    fffffffff
                                                     </div>
                                                 );
                                             })}
