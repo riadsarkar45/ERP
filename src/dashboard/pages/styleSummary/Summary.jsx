@@ -777,7 +777,7 @@ export default function Summary() {
                                                 const loss = getProcessLoss(cell, row);
                                                 const additional = safeNum(cell.additional);
                                                 const lossQty = additional * (loss / 100);
-                                                const netAdditional = additional ;
+                                                const netAdditional = additional;
 
                                                 const finishReq = safeNum(cell.finishRequiredQty);
                                                 const inCreaseFinishQty = finishReq + netAdditional;
@@ -785,7 +785,7 @@ export default function Summary() {
                                                 return (
                                                     <div key={j} className="px-3 py-2 subrow-cell">
                                                         {Number.isNaN(inCreaseFinishQty) ? "0.00" : inCreaseFinishQty.toFixed(2)}
-                                                        
+
                                                     </div>
                                                 );
                                             })}
@@ -813,7 +813,7 @@ export default function Summary() {
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell`}>
                                                         {isNaN(yarnReqQty) ? "0.00" : yarnReqQty.toFixed(2)}
-                                                        
+
                                                     </div>
                                                 );
                                             })}
@@ -830,14 +830,14 @@ export default function Summary() {
                                                 const loss = getProcessLoss(cell, row);
                                                 const finishRequiredQty = safeNum(cell.finishRequiredQty);
                                                 const additional = safeNum(cell.additional);
-                                                 const yarnReqQty = (finishRequiredQty + additional) * (1 + loss / 100);
+                                                const yarnReqQty = (finishRequiredQty + additional) * (1 + loss / 100);
                                                 const knittingWorkOrderQty = getBreakdownValue(cb, 'knittingOrder_workOrderQty');
-                                                const diff0 =  yarnReqQty - knittingWorkOrderQty;
+                                                const diff0 = yarnReqQty - knittingWorkOrderQty;
                                                 const isExceeded0 = diff0 > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}`}>
                                                         {isNaN(diff0) ? "0.00" : (isExceeded0 ? `(${diff0.toFixed(2)})` : Math.abs(diff0).toFixed(2))}
-                                                    
+
                                                     </div>
                                                 );
                                             })}
@@ -909,16 +909,23 @@ export default function Summary() {
                                     <td className="p-0 align-top" style={getFormulaCellStyle()}>
                                         <div className="divide-y divide-[#14b8a6]">
                                             {compBreakdown.map((cb, j) => {
-                                                if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
-                                                const diff = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery') - getBreakdownValue(cb, 'dyeingOrder_Grey_Received') -
-                                                    getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
+                                                if (cb?.status) return <div key={j} className="px-3 py-2 subrow-cell text-gray-400">_</div>;
+
+                                                const greyDelivery = getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
+                                                const greyReturn = getBreakdownValue(cb, 'dyeingOrder_Grey_Return');
+                                                const greyReceived = getBreakdownValue(cb, 'dyeingOrder_Grey_Received');
+                                                
+                                                const diff = greyDelivery - (greyReceived + greyReturn);
+
                                                 const isExceeded = diff > 0;
-                                                const hasAnyData = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received') ||
-                                                    getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing') ||
-                                                    getBreakdownValue(cb, 'dyeingOrder_Grey_Delivery');
+                                                const hasAnyData = greyDelivery || greyReturn || greyReceived;
+
                                                 return (
-                                                    <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
-                                                        {!hasAnyData || isNaN(diff) ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
+                                                    <div
+                                                        key={j}
+                                                        className={`px-3 py-2 subrow-cell font-bold ${isExceeded ? "text-green-600" : "text-red-600"}`}
+                                                    >
+                                                        {!hasAnyData || isNaN(diff) ? "_" : isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2)}
                                                     </div>
                                                 );
                                             })}
@@ -938,8 +945,9 @@ export default function Summary() {
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
+                                                const aopreturn = getBreakdownValue(cb, 'aopOrder_Return_From_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
-                                                const diff = received - sent;
+                                                const diff = sent - received + aopreturn;
                                                 const isExceeded = diff > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
@@ -982,6 +990,7 @@ export default function Summary() {
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>
                                                         {(sent === 0 && receivedGrey === 0 && receivedFinish === 0) || isNaN(diff) ? "_" : (isExceeded ? `(${diff.toFixed(2)})` : Math.abs(diff).toFixed(2))}
+                                                    
                                                     </div>
                                                 );
                                             })}
