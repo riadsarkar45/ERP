@@ -42,7 +42,7 @@ import { joinDeliveries } from "../controllers/deliveries/joinDeliveries";
 import { getAvailableMonths } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
 import { getContractJob } from "../controllers/contractualJob/searchContractJob";
 import { getContractualJobs } from "../controllers/contractualJob/getContractJob";
-import { createDebitNote, deleteDebitNote, getDebitNote, listDebitNotes,  } from "../controllers/debit-note/debitNotes";
+import { createDebitNote, deleteDebitNote, getDebitNote, listDebitNotes, } from "../controllers/debit-note/debitNotes";
 import { downloadDebitNote } from "../controllers/debit-note/downloadDebitNote";
 import { getProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 import { deleteContractualJobs } from "../controllers/contractualJob/deleteContract";
@@ -284,7 +284,10 @@ getRouters.get("/debit-note/:id/download", authenticate, downloadDebitNote);
 
 getRouters.get("/get-all-processes", authenticate, getProcessTypes);
 
+<<<<<<< HEAD
+=======
 getRouters.delete("/delete-contractual-job/:jobId", responseTimeMonitor, authenticate, deleteContractualJobs)
 
 
+>>>>>>> 96c3493c91c3a069cfbb033de7cfe11fbf8990df
 export default getRouters;
