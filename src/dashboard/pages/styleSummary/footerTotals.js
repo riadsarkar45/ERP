@@ -89,11 +89,11 @@ export const footerTotals = ({ FROZEN_COUNT, filteredData, COLUMNS, getBreakdown
             totals[26] += greyReceivedDyeing;
             totals[27] += getBreakdownValue(cb, 'dyeingOrder_Finish_Received');
 
-            const greyReturnRcvd = getBreakdownValue(cb, 'dyeingOrder_Grey_Return_Received');
-            const greyReceivedFromDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Received_From_Dyeing');
-            const hasGreyData = greyReturnRcvd || greyReceivedFromDyeing || greyDelivery;
+            // GREY BALANCE = Grey Received + Grey Return - Grey Delivery
+            const greyReturnDyeing = getBreakdownValue(cb, 'dyeingOrder_Grey_Return');
+            const hasGreyData = greyDelivery || greyReturnDyeing || greyReceivedDyeing;
             if (hasGreyData) {
-                totals[28] += (greyReceivedDyeing + greyReturnRcvd) - greyDelivery;
+                totals[28] += (greyReceivedDyeing + greyReturnDyeing) - greyDelivery;
             }
 
             const aopSent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
