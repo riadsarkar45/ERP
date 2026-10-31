@@ -51,7 +51,7 @@ process.on("SIGINT", async () => {
 
 process.on("SIGTERM", async () => {
   await disconnectDatabase();
-  // await disconnectRedis();
+  await disconnectRedis();
   process.exit(0);
 });
 const PORT = 3000;
