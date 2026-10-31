@@ -629,8 +629,9 @@ const ContractBilling = () => {
         setCurrentProcess({ type: "", price: "" });
     };
 
-    const handleRemoveProcessInput = (index) => {
-        setProcessInputs((prev) => prev.filter((_, i) => i !== index));
+    const handleRemoveProcessInput = (id) => {
+        console.log(id);
+        setProcessInputs((prev) => prev.filter((_, i) => i !== id));
     };
 
     const handleSubmitProcesses = async () => {
@@ -1347,7 +1348,7 @@ const ContractBilling = () => {
                                             </div>
                                             <button
                                                 type="button"
-                                                onClick={() => handleRemoveProcessInput(index)}
+                                                onClick={() => handleRemoveProcessInput(item.id)}
                                                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                                                 title="Remove"
                                             >

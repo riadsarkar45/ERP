@@ -45,6 +45,7 @@ import { getContractualJobs } from "../controllers/contractualJob/getContractJob
 import { createDebitNote, deleteDebitNote, getDebitNote, listDebitNotes,  } from "../controllers/debit-note/debitNotes";
 import { downloadDebitNote } from "../controllers/debit-note/downloadDebitNote";
 import { getProcessTypes } from "../controllers/contractualJob/addProcessTypes";
+import { deleteContractualJobs } from "../controllers/contractualJob/deleteContract";
 
 const getRouters = express.Router();
 
@@ -282,6 +283,8 @@ getRouters.get(
 getRouters.get("/debit-note/:id/download", authenticate, downloadDebitNote);
 
 getRouters.get("/get-all-processes", authenticate, getProcessTypes);
+
+getRouters.delete("/delete-contractual-job/:jobId", responseTimeMonitor, authenticate, deleteContractualJobs)
 
 
 export default getRouters;

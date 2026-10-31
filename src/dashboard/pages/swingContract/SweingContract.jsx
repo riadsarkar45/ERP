@@ -660,7 +660,7 @@ export default function SewingContract() {
 
   const handleDeleteRow = async (id) => {
     if (!window.confirm("Are you sure you want to delete this record?")) return;
-    
+    console.log(id);
     // Optimistic update
     setRows(prev => prev.filter(row => row.id !== id));
     
