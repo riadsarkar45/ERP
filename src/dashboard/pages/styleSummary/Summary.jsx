@@ -945,8 +945,9 @@ export default function Summary() {
                                             {compBreakdown.map((cb, j) => {
                                                 if (cb?.status) return <div key={j} className={`px-3 py-2 subrow-cell text-gray-400`}>_</div>;
                                                 const sent = getBreakdownValue(cb, 'aopOrder_Sent_For_Aop');
+                                                const aopreturn = getBreakdownValue(cb, 'aopOrder_Return_From_Aop');
                                                 const received = getBreakdownValue(cb, 'aopOrder_Received_From_Aop');
-                                                const diff = received - sent;
+                                                const diff = sent - received + aopreturn;
                                                 const isExceeded = diff > 0;
                                                 return (
                                                     <div key={j} className={`px-3 py-2 subrow-cell ${isExceeded ? "text-green-600 font-bold" : "font-bold text-red-600"}`}>

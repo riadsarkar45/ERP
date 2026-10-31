@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useContext, useRef } from "react";
-import { DownloadCloudIcon, FunnelX, Loader, Loader2, Save, Search, X, Filter } from "lucide-react";
+import { DownloadCloudIcon, FunnelX, Loader, Loader2, Save, Search, X, Filter, RefreshCcw } from "lucide-react";
 import Modal from "./Modal";
 import { useFetchData } from "../hooks/fetch";
 import YarnDyeOrders from "./YarnDyeOrders";
@@ -40,6 +40,15 @@ const getSavedFilters = (type) => {
     }
 };
 
+// SEARCH helper: checks every value of a row (including nested objects / arrays)
+const rowMatchesSearch = (value, term) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "object") {
+        return Object.values(value).some(v => rowMatchesSearch(v, term));
+    }
+    return String(value).toLowerCase().includes(term);
+};
+
 const AllOrders = ({ orderType }) => {
     const axiosPrivate = useAxiosPrivate();
     const [jobId, setJobId] = useState(null);
@@ -53,6 +62,7 @@ const AllOrders = ({ orderType }) => {
     const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
     const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
 
     const [filters, setFilters] = useState(() => getSavedFilters(orderType));
     const [filterOptions, setFilterOptions] = useState({});
@@ -284,6 +294,18 @@ const AllOrders = ({ orderType }) => {
         () => (Object.keys(filters).length ? JSON.stringify(filters) : undefined),
         [filters]
     );
+
+    // SEARCH: clear the search box when the order type changes
+    useEffect(() => {
+        setSearchTerm("");
+    }, [orderType]);
+
+    // SEARCH: rows that match the search text (client-side, on the rows currently loaded)
+    const visibleOrders = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        if (!term) return orders;
+        return (orders || []).filter(o => rowMatchesSearch(o, term));
+    }, [orders, searchTerm]);
 
     useEffect(() => {
         const prepareToGenerateChallans = async () => {
@@ -650,6 +672,26 @@ const AllOrders = ({ orderType }) => {
         setFilterOptions({});
     };
 
+    // REFRESH: re-fetch the table data with the SAME page + filters (filters are NOT cleared),
+    // and reload the filter dropdown options for the active filters so they are not stale.
+    const handleRefresh = () => {
+        fetchData(`/api/work-order/${orderType}`, {
+            params: { page, limit, filters: filtersParam }
+        })
+            .then(res => {
+                if (res) {
+                    setOrders(res.data ?? []);
+                    if (res.pagination) setPagination(res.pagination);
+                }
+            })
+            .catch(err => {
+                console.error("Failed to refresh orders:", err);
+            });
+
+        setFilterOptions({});
+        Object.keys(filters).forEach(columnName => loadFilterOptions(columnName));
+    };
+
     const handlePDFchallanDownload = async () => {
         try {
             setIsChallanDownloading({ isLoading: true, isError: false });
@@ -766,15 +808,46 @@ const AllOrders = ({ orderType }) => {
 
             <div className="flex gap-2 mb-0.5">
                 {isEdit?.isEditing && (
-                    <button onClick={() => handleEditedSubmit()} title="Save Changes" className="bg-blue-700 text-white rounded-md p-2 text-lg">
+                    <button onClick={() => handleEditedSubmit()} title="Save Changes" className="bg-primary-500 text-white rounded-md p-2 text-lg">
                         <Save />
                     </button>
                 )}
                 {isInlineEditingLoading && (
-                    <button title="Saving..." className="bg-blue-700 text-white rounded-md p-2 text-lg cursor-wait">
+                    <button title="Saving..." className="bg-primary-500 text-white rounded-md p-2 text-lg cursor-wait">
                         <Loader />
                     </button>
                 )}
+                {/* REFRESH: re-fetches data, keeps active filters */}
+                <button
+                    onClick={() => handleRefresh()}
+                    disabled={loading}
+                    title="Refresh data (filters will be kept)"
+                    className="bg-primary-500 text-white rounded-md p-2 text-lg flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                    <span className={loading ? "animate-spin" : ""}><RefreshCcw /></span>
+                    {loading ? "Refreshing..." : "Refresh"}
+                </button>
+                {/* SEARCH: beside the Refresh button */}
+                <div className="relative flex items-center">
+                    <Search size={16} className="absolute left-2.5 text-gray-400 pointer-events-none" />
+                    <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search orders..."
+                        title="Search in the rows currently shown"
+                        className="h-full pl-8 pr-8 py-2 text-sm border border-gray-300 rounded-md w-64 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 bg-white"
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => setSearchTerm("")}
+                            title="Clear search"
+                            className="absolute right-2 text-gray-400 hover:text-gray-700"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
                 {Object.keys(filters).length > 0 && (
                     <button onClick={() => handleClearFilters()} title="Clear Filter" className="bg-red-600 text-white rounded-md p-2 text-lg flex items-center gap-2">
                         <FunnelX /> Clear Filters
@@ -834,7 +907,7 @@ const AllOrders = ({ orderType }) => {
             )}
 
             <div className="mb-5 p-2 rounded-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {(!orders || orders.length < 1) && !isRefetching && <div className="text-gray-600 font-medium">No order found</div>}
+                {(!visibleOrders || visibleOrders.length < 1) && !isRefetching && <div className="text-gray-600 font-medium">No order found</div>}
                 {isRefetching && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#6b7280", fontSize: 13 }}>
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -1151,7 +1224,7 @@ const AllOrders = ({ orderType }) => {
                         </thead>
 
                         {orderType === "yarnDyeingOrder" && <YarnDyeOrders
-                            orders={orders}
+                            orders={visibleOrders}
                             searchTerm={appliedSearchTerm}
                             handleEditRowData={handleEditRowData}
                             FROZEN_COUNT={FROZEN_COUNT}
@@ -1165,7 +1238,7 @@ const AllOrders = ({ orderType }) => {
                             columnWidths={columnWidths}
                         />}
                         {orderType === "knittingOrder" && <KnittingOrder
-                            orders={orders}
+                            orders={visibleOrders}
                             searchTerm={appliedSearchTerm}
                             setJobId={setJobId}
                             handleEditRowData={handleEditRowData}
@@ -1180,7 +1253,7 @@ const AllOrders = ({ orderType }) => {
                             columnWidths={columnWidths}
                         />}
                         {orderType === "dyeingOrder" && <DyeingOrder
-                            orders={orders}
+                            orders={visibleOrders}
                             searchTerm={appliedSearchTerm}
                             handleEditRowData={handleEditRowData}
                             updatedFields={updatedFields}
@@ -1194,7 +1267,7 @@ const AllOrders = ({ orderType }) => {
                             columnWidths={columnWidths}
                         />}
                         {orderType === "aopOrder" && <AopOrder
-                            orders={orders}
+                            orders={visibleOrders}
                             searchTerm={appliedSearchTerm}
                             handleEditRowData={handleEditRowData}
                             setJobId={setJobId}
