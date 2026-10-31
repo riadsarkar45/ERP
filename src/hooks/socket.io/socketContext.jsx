@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { AuthContext } from '../../dashboard/auth/AuthContext';
+import { useAuth } from '../../dashboard/auth/AuthContext';
 // https://erp-eyf7.onrender.com
 // http://localhost:3000
 const socket = io(import.meta.env.VITE_BACKEND_URL || 'https://erp-eyf7.onrender.com', {
@@ -12,7 +12,7 @@ const socket = io(import.meta.env.VITE_BACKEND_URL || 'https://erp-eyf7.onrender
 const SocketContext = createContext(socket);
 
 export const SocketProvider = ({ children }) => {
-    const { user } = useContext(AuthContext);
+    const { user } = useAuth();
     const userId = user?.id || user?._id || user?.userId;
 
     useEffect(() => {

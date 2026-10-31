@@ -6,7 +6,7 @@ import YarnDyeOrders from "./YarnDyeOrders";
 import KnittingOrder from "./KnittingOrder";
 import DyeingOrder from "./DyeingOrder";
 import AopOrder from "./AopOrder";
-// import InlineEdit from "../helpers/InlineEdit/InlineEdit";
+import InlineEdit from "../helpers/InlineEdit/InlineEdit";
 import FilterDropdown from "../helpers/filtering/FilterDropdown";
 import useAxiosPrivate from "../hooks/UseAxiosPrivate";
 import Toast from "./Toast";
