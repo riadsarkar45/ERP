@@ -46,6 +46,7 @@ import { createDebitNote, deleteDebitNote, getDebitNote, listDebitNotes, } from 
 import { downloadDebitNote } from "../controllers/debit-note/downloadDebitNote";
 import { getProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 import { deleteContractualJobs } from "../controllers/contractualJob/deleteContract";
+import { assetItems } from "../controllers/fix-assets/asset.items";
 
 const getRouters = express.Router();
 
@@ -285,6 +286,8 @@ getRouters.get("/debit-note/:id/download", authenticate, downloadDebitNote);
 getRouters.get("/get-all-processes", authenticate, getProcessTypes);
 
 getRouters.delete("/delete-contractual-job/:jobId", responseTimeMonitor, authenticate, deleteContractualJobs)
+
+getRouters.get("/asset-items/:workingStation", responseTimeMonitor, authenticate, assetItems);
 
 
 export default getRouters;

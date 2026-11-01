@@ -256,6 +256,7 @@ model user {
   productionDatas           productionData[]
   debitNotesCreated         debitNote[]                @relation("DebitNoteCreator")
   debitNotesApproved        debitNote[]                @relation("DebitNoteApprover")
+  fixAssets                 fixAsset[]
 
   @@index([userName])
   @@index([userRole])
@@ -511,4 +512,35 @@ model debitNote {
   @@index([createdAt])
   @@index([userId])
   @@index([approvedBy])
+}
+
+model fixAsset {
+  id             Int      @id @default(autoincrement())
+  additionsQty   Int      @default(0)
+  amount         Float    @default(0)
+  assetCode      String   @default("NULL")
+  assetId        String   @default("NULL")
+  assetType      String   @default("NULL")
+  category       String   @default("NULL")
+  challanNo      String   @default("NULL")
+  description    String   @default("NULL")
+  destination    String   @default("NULL")
+  disposedQty    Int      @default(0)
+  factoryName    String   @default("NULL")
+  from           String   @default("NULL")
+  model          String   @default("NULL")
+  openingQty     Int      @default(0)
+  origin         String   @default("NULL")
+  priceValue     Float    @default(0.0)
+  receivedQty    Int      @default(0)
+  remarks        String   @default("NULL")
+  sentQty        Int      @default(0)
+  sku            String   @default("NULL")
+  source         String   @default("NULL")
+  supplier       String   @default("NULL")
+  createdBy      Int      @default(0)
+  user           user     @relation(fields: [createdBy], references: [id])
+  createdAt      DateTime @default(now())
+  workingStation String   @default("NULL")
+  to             String   @default("NULL")
 }

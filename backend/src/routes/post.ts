@@ -17,6 +17,7 @@ import { newYarnMovement } from "../controllers/yarns/yarn.movement";
 import { factoryStockComparison } from "../helpers/uploadStyleReqData/upload.factory.stock.comparison";
 import { addNewContractualJob } from "../controllers/contractualJob/addNewContractualJob";
 import { addProcessTypes } from "../controllers/contractualJob/addProcessTypes";
+import { newAssetItem } from "../controllers/fix-assets/new-asset.item";
 
 const router = express.Router();
 
@@ -61,6 +62,8 @@ router.post(
 router.post("/add-contractual-job", responseTimeMonitor, authenticate, addNewContractualJob)
 
 router.post("/add-process-types", responseTimeMonitor, authenticate, addProcessTypes)
+
+router.post("/new-asset-items", responseTimeMonitor, authenticate, newAssetItem)
 
 
 export default router;
