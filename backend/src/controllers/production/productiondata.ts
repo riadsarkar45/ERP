@@ -73,12 +73,21 @@ const fetchProductionData = async (date: Date) => {
               productionDate: true,
               productionQty: true,
               productionType: true,
+              createdAt: true, // when the reporter entered it
+              // updatedAt: true, // when the reporter last changed it
             },
           },
         },
       },
     },
   })
+
+  // true when the given time falls inside the selected (Dhaka) day
+  const inSelectedDay = (value: Date | string | null | undefined) => {
+    if (!value) return false
+    const t = new Date(value).getTime()
+    return t >= startMs && t < endMs
+  }
 
   const jobs = styles.map((style) => {
     const jobToday: QtyMap = {}
@@ -108,8 +117,13 @@ const fetchProductionData = async (date: Date) => {
       for (const pd of row.productionDatas) {
         const type = String(pd.productionType)
         const qty = toNumber(pd.productionQty)
-        const t = new Date(pd.productionDate).getTime()
-        const isToday = t >= startMs && t < endMs
+
+        // "Today" = dated today (current date input)
+        //        OR entered / changed today (back-dated input, e.g. date 1 given today)
+        const isToday =
+          inSelectedDay(pd.productionDate) ||
+          inSelectedDay(pd.createdAt) ||
+          // inSelectedDay(pd.updatedAt)
 
         // total = previous days + today
         addQty(colors[colorId].total, type, qty)
@@ -160,4 +174,3 @@ export const getProductionDataController = async (
       .json({ success: false, message: "Failed to fetch production data" })
   }
 }
-
