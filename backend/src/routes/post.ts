@@ -23,7 +23,7 @@ const router = express.Router();
 
 const upload = multer({ dest: "uploads/" });
 
-router.post("/upload", responseTimeMonitor, upload.single("file"), fileUpload as any);
+router.post("/upload", responseTimeMonitor, authenticate, upload.single("file"), fileUpload as any);
 
 router.post("/create-job", responseTimeMonitor, authenticate, createNewJob)
 

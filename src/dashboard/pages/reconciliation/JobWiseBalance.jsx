@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useAxiosPrivate from "../../../hooks/UseAxiosPrivate";
+import { useSocket } from "../../../hooks/socket.io/socketContext";
 
 // --- Helpers ---
 const yarnBalance = (row) => (row.knittingGrey || 0) + (row.yarnReturn || 0) - (row.issue || 0);
@@ -181,6 +182,12 @@ const BalanceSheet = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
+    
+    // --- ADDED: Loading progress state ---
+    const [loadingProgress, setLoadingProgress] = useState(0);
+    const [loadingMessage, setLoadingMessage] = useState("Initializing...");
+
+    const socket = useSocket();
 
     const axiosSecure = useAxiosPrivate();
     const ITEMS_PER_PAGE = 15;
@@ -198,7 +205,6 @@ const BalanceSheet = () => {
     };
 
     const handleDoubleClick = (jobIdx) => {
-
         setEditingCell(jobIdx);
     };
 
@@ -610,25 +616,162 @@ const BalanceSheet = () => {
         };
     };
 
-    // Fetch is a reusable function so both the first load and the Refresh button can use it.
-    // It only replaces `jobs` — search / colFilters / currentPage are NOT touched,
-    // so all active filters are kept after refresh.
-    const fetchBalanceSheetData = useCallback(async () => {
+    // --- UPDATED: Fetch data with Socket.IO progress tracking ---
+        // --- BULLETPROOF DEBUGGING: Fetch data with Socket.IO progress tracking ---
+ 
+useEffect(() => {
+    if (!socket) {
+        setIsLoading(false);
+        return;
+    }
+
+    let isActive = true;
+    let joinedRoom = false;
+
+    const requestId = `balance_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
+    // IMPORTANT: Register the listener BEFORE joining the room
+    // and BEFORE starting the API request.
+    const handleProgress = (data) => {
+        if (!isActive || !data) return;
+
+        console.log("[BalanceSheet] Progress received:", data);
+
+        const percentage = Number(data.percentage);
+
+        if (Number.isFinite(percentage)) {
+            setLoadingProgress(
+                Math.min(100, Math.max(0, percentage))
+            );
+        }
+
+        if (data.message) {
+            setLoadingMessage(data.message);
+        }
+    };
+
+    // Do not remove listeners belonging to other components.
+    socket.on("reportProgress", handleProgress);
+
+    const fetchBalanceSheetData = async () => {
         setIsLoading(true);
+        setLoadingProgress(0);
+        setLoadingMessage("Connecting to report server...");
+
         try {
-            const response = await axiosSecure.get("/api/balance/sheet");
+            // Wait until the socket is connected.
+            if (!socket.connected) {
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        cleanup();
+                        reject(new Error("Socket connection timeout"));
+                    }, 10000);
+
+                    const onConnect = () => {
+                        cleanup();
+                        resolve();
+                    };
+
+                    const onConnectError = (error) => {
+                        cleanup();
+                        reject(error);
+                    };
+
+                    const cleanup = () => {
+                        clearTimeout(timeout);
+                        socket.off("connect", onConnect);
+                        socket.off("connect_error", onConnectError);
+                    };
+
+                    socket.once("connect", onConnect);
+                    socket.once("connect_error", onConnectError);
+                });
+            }
+
+            if (!isActive) return;
+
+            console.log("[BalanceSheet] Joining room:", requestId);
+            setLoadingMessage("Joining report progress channel...");
+
+            // Wait for server acknowledgement before making API request.
+            await new Promise((resolve, reject) => {
+                socket.timeout(7000).emit(
+                    "joinRoom",
+                    requestId,
+                    (error, response) => {
+                        if (error) {
+                            reject(
+                                new Error("Server did not acknowledge joinRoom")
+                            );
+                            return;
+                        }
+
+                        if (!response?.success) {
+                            reject(
+                                new Error(
+                                    response?.message || "Failed to join report room"
+                                )
+                            );
+                            return;
+                        }
+
+                        joinedRoom = true;
+
+                        console.log(
+                            "[BalanceSheet] Successfully joined room:",
+                            response
+                        );
+
+                        resolve(response);
+                    }
+                );
+            });
+
+            if (!isActive) return;
+
+            setLoadingMessage("Preparing balance sheet report...");
+
+            console.log(
+                "[BalanceSheet] Calling API:",
+                `/api/balance/sheet?requestId=${requestId}`
+            );
+
+            const response = await axiosSecure.get(
+                `/api/balance/sheet?requestId=${encodeURIComponent(requestId)}`
+            );
+
+            if (!isActive) return;
+
             const rawData = response.data.jobs || response.data || [];
 
-            const transformed = rawData.map(job => {
+            const transformed = rawData.map((job) => {
                 const yarnRows = [];
                 const dyeingRows = [];
                 const aopRows = [];
 
-                (job.dyeingRows || []).forEach(row => {
+                (job.dyeingRows || []).forEach((row) => {
                     const dt = row.deliveryTypeTotals || {};
-                    const hasYarn = dt["Yarn Delivery"] || dt["Yarn Return"] || dt["Grey Fabric Received"];
-                    const hasDyeing = dt["Grey Delivery"] || dt["Grey Received"] || dt["Finish Received"] || dt["Grey Return"] || dt["Received From Compacting"] || dt["Received From Reprocess"] || dt["Received From HEAT Set"];
-                    const hasAop = dt["Sent For Aop"] || dt["Received From Aop"] || dt["AOP Finish Fabric Rcvd"] || dt["Return From Aop"];
+
+                    const hasYarn =
+                        dt["Yarn Delivery"] ||
+                        dt["Yarn Return"] ||
+                        dt["Grey Fabric Received"];
+
+                    const hasDyeing =
+                        dt["Grey Delivery"] ||
+                        dt["Grey Received"] ||
+                        dt["Finish Received"] ||
+                        dt["Grey Return"] ||
+                        dt["Received From Compacting"] ||
+                        dt["Received From Reprocess"] ||
+                        dt["Received From HEAT Set"];
+
+                    const hasAop =
+                        dt["Sent For Aop"] ||
+                        dt["Received From Aop"] ||
+                        dt["AOP Finish Fabric Rcvd"] ||
+                        dt["Return From Aop"];
 
                     if (hasYarn) {
                         yarnRows.push({
@@ -639,6 +782,7 @@ const BalanceSheet = () => {
                             yarnReturn: dt["Yarn Return"] || 0,
                         });
                     }
+
                     if (hasDyeing) {
                         dyeingRows.push({
                             factoryName: row.factoryName,
@@ -646,40 +790,98 @@ const BalanceSheet = () => {
                             greyRcvd: dt["Grey Received"] || 0,
                             finishRcvd: dt["Finish Received"] || 0,
                             greyReturn: dt["Grey Return"] || 0,
-                            receivedFromCompacting: dt["Received From Compacting"] || 0,
-                            receivedFromReprocess: dt["Received From Reprocess"] || 0,
-                            receivedFromHeatSet: dt["Received From HEAT Set"] || 0,
+                            receivedFromCompacting:
+                                dt["Received From Compacting"] || 0,
+                            receivedFromReprocess:
+                                dt["Received From Reprocess"] || 0,
+                            receivedFromHeatSet:
+                                dt["Received From HEAT Set"] || 0,
                         });
                     }
+
                     if (hasAop) {
                         aopRows.push({
                             factoryName: row.factoryName,
                             sentForAop: dt["Sent For Aop"] || 0,
                             receivedFromAop: dt["Received From Aop"] || 0,
-                            aopFinishRcvd: dt["AOP Finish Fabric Rcvd"] || 0,
+                            aopFinishRcvd:
+                                dt["AOP Finish Fabric Rcvd"] || 0,
                             returnFromAop: dt["Return From Aop"] || 0,
                         });
                     }
                 });
 
-                if (yarnRows.length === 0 && dyeingRows.length === 0 && aopRows.length === 0) {
-                    yarnRows.push({ factory: "N/A", req: job.totalWorkOrderQty || 0, issue: 0, knittingGrey: 0, yarnReturn: 0 });
+                if (
+                    yarnRows.length === 0 &&
+                    dyeingRows.length === 0 &&
+                    aopRows.length === 0
+                ) {
+                    yarnRows.push({
+                        factory: "N/A",
+                        req: job.totalWorkOrderQty || 0,
+                        issue: 0,
+                        knittingGrey: 0,
+                        yarnReturn: 0,
+                    });
                 }
 
-                return { ...job, yarnRows, dyeingRows, aopRows, remarks: job.remarks || "" };
+                return {
+                    ...job,
+                    yarnRows,
+                    dyeingRows,
+                    aopRows,
+                    remarks: job.remarks || "",
+                };
             });
 
             setJobs(transformed);
-        } catch (error) {
-            console.error("Failed to fetch balance sheet data:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [axiosSecure]);
+            setLoadingProgress(100);
+            setLoadingMessage("Balance sheet loaded successfully.");
 
-    useEffect(() => {
-        fetchBalanceSheetData();
-    }, [fetchBalanceSheetData]);
+            console.log(
+                `[BalanceSheet] Loaded ${transformed.length} jobs successfully.`
+            );
+        } catch (error) {
+            console.error("[BalanceSheet] Report loading failed:", error);
+
+            if (isActive) {
+                setLoadingMessage(
+                    error.message || "Failed to load balance sheet."
+                );
+            }
+        } finally {
+            if (isActive) {
+                setIsLoading(false);
+            }
+
+            // Remove only this component's listener.
+            socket.off("reportProgress", handleProgress);
+
+            if (joinedRoom && socket.connected) {
+                socket.emit("leaveRoom", requestId);
+            }
+
+            console.log(
+                "[BalanceSheet] Request completed:",
+                requestId
+            );
+        }
+    };
+
+    fetchBalanceSheetData();
+
+    return () => {
+        isActive = false;
+
+        // Component-specific cleanup only.
+        socket.off("reportProgress", handleProgress);
+
+        if (joinedRoom && socket.connected) {
+            socket.emit("leaveRoom", requestId);
+        }
+    };
+}, [axiosSecure, socket]);
+
 
     return (
         <div className="p-5 bg-slate-50 h-screen flex flex-col overflow-hidden" onClick={() => setOpenCol(null)}>
@@ -719,22 +921,6 @@ const BalanceSheet = () => {
                             Clear Filters
                         </button>
                     )}
-
-                    {/* REFRESH: re-fetches data, keeps search + column filters */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); fetchBalanceSheetData(); }}
-                        disabled={isLoading}
-                        title="Refresh data (filters will be kept)"
-                        className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 px-3 py-1.5 rounded-md shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <svg
-                            className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        {isLoading ? "Refreshing..." : "Refresh"}
-                    </button>
 
                     <button
                         onClick={(e) => { e.stopPropagation(); exportExcel(); }}
@@ -779,14 +965,47 @@ const BalanceSheet = () => {
             )}
 
             <div className="overflow-auto border border-[#b4bcc2] rounded-2xl shadow-sm bg-white relative flex-1 min-h-0">
-                {isLoading && (
-                    <div className="absolute inset-0 bg-white/80 z-50 flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-6 h-6 border-2 border-[#dfebf0] border-t-transparent rounded-full animate-spin"></div>
-                            <span className="text-xs font-medium text-slate-500">Loading data...</span>
-                        </div>
-                    </div>
-                )}
+                {/* --- UPDATED: Loading overlay with real-time progress bar --- */}
+                
+{isLoading && (
+    <div className="absolute inset-0 bg-white/90 z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 w-64">
+
+            {/* Progress Track */}
+            <div
+                className="w-full h-2.5 rounded-full overflow-hidden"
+                style={{
+                    backgroundColor: "#e2e8f0",
+                }}
+                role="progressbar"
+                aria-valuenow={loadingProgress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+            >
+                {/* Progress Fill */}
+                <div
+                    style={{
+                        width: "100%",
+                        height: "100%",
+                        backgroundColor: "#0f2544",
+                        transform: `scaleX(${Math.min(
+                            100,
+                            Math.max(0, Number(loadingProgress) || 0)
+                        ) / 100})`,
+                        transformOrigin: "left center",
+                        transition: "transform 300ms ease-in-out",
+                    }}
+                />
+            </div>
+
+            <span className="text-xs font-medium text-slate-600 text-center">
+                {loadingMessage} ({loadingProgress}%)
+            </span>
+
+        </div>
+    </div>
+)}
+
 
                 <table className="border-separate border-spacing-0 tabular-nums text-[11px] border border-[#b4bcc2]" style={{ width: '100%', minWidth: TOTAL_WIDTH }}>
                     <thead>
