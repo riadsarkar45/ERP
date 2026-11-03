@@ -123,6 +123,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             machineDia: true,
                             yarnCount: true,
                             stichLength: true,
+                            isCancelled: true,
+                            reason: true,
+                            remarks: true,
                             compositions: {
                                 select: {
                                     id: true,

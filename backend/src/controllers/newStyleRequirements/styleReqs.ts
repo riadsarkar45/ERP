@@ -150,6 +150,7 @@ export const styleRequirements = async (req: Request, res: Response) => {
                     },
                     ...(!isProd && {
                         workOrders: {
+                            where: {isCancelled: false},
                             select: {
                                 orderType: true,
                                 compositions: {

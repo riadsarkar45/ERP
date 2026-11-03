@@ -47,6 +47,7 @@ import { downloadDebitNote } from "../controllers/debit-note/downloadDebitNote";
 import { getProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 import { deleteContractualJobs } from "../controllers/contractualJob/deleteContract";
 import { assetItems } from "../controllers/fix-assets/asset.items";
+import { cancelWorkOrder, getWorkOrderForCancellation } from "../controllers/orders/cancel.work.order/cancel.work.order";
 
 const getRouters = express.Router();
 
@@ -288,6 +289,10 @@ getRouters.get("/get-all-processes", authenticate, getProcessTypes);
 getRouters.delete("/delete-contractual-job/:jobId", responseTimeMonitor, authenticate, deleteContractualJobs)
 
 getRouters.get("/asset-items/:workingStation", responseTimeMonitor, authenticate, assetItems);
+
+getRouters.get("/work-order-for-cancellation/:jobNo/:orderType", responseTimeMonitor, authenticate, getWorkOrderForCancellation);
+
+getRouters.put("/cancel-work-order/:workOrderId", responseTimeMonitor, authenticate, cancelWorkOrder);
 
 
 export default getRouters;

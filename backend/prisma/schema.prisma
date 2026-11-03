@@ -44,6 +44,11 @@ model WorkOrder {
   approvedBy                Int?                       @default(0)
   isRequested               Boolean?                   @default(false)
   createdAt                 DateTime                   @default(now())
+  isCancelled               Boolean                    @default(false)
+  cancelledBy               Int?                       @default(0)
+  canceledAt                DateTime?
+  reason                    String                     @default("NULL")
+  remarks                   String                     @default("NULL")
   workOrderApprovalRequests workOrderApprovalRequest[]
 
   @@index([yarnCount])

@@ -49,7 +49,7 @@ export const balanceGlanceReport = async (req: Request, res: Response) => {
     try {
         const io = getIO();
         const requestId = (req.query?.requestId as string) || (req.body?.requestId as string) || `req_fallback_${Date.now()}`;
-        
+
 
         const emitProgress = (percentage: number, message: string) => {
             if (io) {
@@ -77,6 +77,7 @@ export const balanceGlanceReport = async (req: Request, res: Response) => {
             const chunk = await prisma.workOrder.findMany({
                 skip,
                 take: chunkSize,
+                where: { isCancelled: false },
                 select: {
                     id: true, factoryName: true, jobNo: true,
                     compositions: {
