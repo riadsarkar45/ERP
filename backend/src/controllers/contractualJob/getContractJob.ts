@@ -52,6 +52,9 @@ export const getContractualJobs = async (req: Request, res: Response) => {
                 lineNo: true,
                 processRate: true,
                 manufacturingUnit: true,
+                partyName: true,
+                productionType: true,
+                pricePerPcs: true,
                 jobs: {
                     select: { jobNo: true },
                 },

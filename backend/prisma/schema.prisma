@@ -472,6 +472,8 @@ model contractualJobs {
   manufacturingUnit String?
   pricePerPcs       Float?
   workingStation    String  @default("NULL")
+  partyName         String  @default("NULL")
+  productionType    String  @default("NULL")
 }
 
 model processTypes {

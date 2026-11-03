@@ -16,6 +16,8 @@ export const addNewContractualJob = async (req: Request, res: Response) => {
         pricePerPcs,
         input,
         output,
+        partyName,
+        productionType,
     } = req.body ?? {};
 
     const workingStation = req.user?.workingStation
@@ -89,6 +91,8 @@ export const addNewContractualJob = async (req: Request, res: Response) => {
             processType: String(processType),
             processRate:String(processRate),
             workingStation: workingStation,
+            productionType: productionType || "NULL",
+            partyName: partyName || "NULL",
             entryType: type,
         };
         if (isFilled(lineNo)) data.lineNo = lineNo;
