@@ -1,8 +1,7 @@
-
 import type { Request, Response } from "express";
 import prisma from "../../../database/prismaClient/prisma";
 
-// Keep your existing GREY_FABRIC_RECEIVED constant/import.
+
 const DELIVERY_TYPES_BY_ORDER: Record<string, string[]> = {
     knittingOrder: [
         "Yarn Delivery",
@@ -247,3 +246,57 @@ export const cancelWorkOrder = async (
         });
     }
 };
+
+
+export const getWorkOrderForCancellation = async (req: Request, res: Response) => {
+    const { jobNo, orderType } = req.params;
+
+    if (!jobNo || !orderType) {
+        return res.status(400).json({
+            success: false,
+            message: "Job number and order type are required",
+        });
+    }
+
+    try {
+
+        const existingWorkOrder = await prisma.workOrder.findMany(
+            {
+                where: { jobNo: String(jobNo), orderType: String(orderType) },
+                select: {
+                    id: true,
+                    factoryName: true,
+                    jobNo: true,
+                    orderType: true,
+                    compositions: {
+                        select: {
+                            id: true,
+                            color: true,
+                            composition: true,
+                            workOrderQty: true,
+                        }
+                    }
+                }
+            }
+        )
+
+        if (!existingWorkOrder || existingWorkOrder.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Work order not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            workOrder: existingWorkOrder,
+        });
+
+    } catch (error) {
+        console.error("Error fetching work order for cancellation:", error);
+        return res.status(500).json({
+            success: false,
+            message: "An error occurred while fetching the work order",
+        });
+    }
+}
