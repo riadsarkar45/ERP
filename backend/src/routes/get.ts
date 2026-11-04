@@ -48,6 +48,7 @@ import { getProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 import { deleteContractualJobs } from "../controllers/contractualJob/deleteContract";
 import { assetItems } from "../controllers/fix-assets/asset.items";
 import { cancelWorkOrder, getWorkOrderForCancellation } from "../controllers/orders/cancel.work.order/cancel.work.order";
+import { searchJobForWorkOrder } from "../controllers/orders/searchJobForWorkOrder/search";
 
 const getRouters = express.Router();
 
@@ -293,6 +294,13 @@ getRouters.get("/asset-items/:workingStation", responseTimeMonitor, authenticate
 getRouters.get("/work-order-for-cancellation/:jobNo/:orderType", responseTimeMonitor, authenticate, getWorkOrderForCancellation);
 
 getRouters.put("/cancel-work-order/:workOrderId", responseTimeMonitor, authenticate, cancelWorkOrder);
+
+getRouters.get(
+    "/search-job-for-work-order",
+    responseTimeMonitor,
+    authenticate,
+    searchJobForWorkOrder
+);
 
 
 export default getRouters;
