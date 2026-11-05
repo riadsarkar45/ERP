@@ -24,6 +24,7 @@ model WorkOrder {
   id                        Int                        @id @default(autoincrement())
   workOrderNo               String
   workOrderPlaceDate        String
+  newWorkOrderPlaceDate     DateTime @default(now()) @db.Date
   month                     String
   styleNo                   String
   lotNo                     String

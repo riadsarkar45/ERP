@@ -242,6 +242,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                     data: {
                         workOrderPlaceDate,
                         workOrderNo,
+                        newWorkOrderPlaceDate: workOrderPlaceDate,
                         month,
                         styleNo: styleNo || style || "",
                         lotNo,
