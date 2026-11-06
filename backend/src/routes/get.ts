@@ -27,7 +27,7 @@ import { allUsers, getResponsibleUsers } from "../controllers/users/allUser";
 import { requestedData, requestedDebitNotes } from "../controllers/orders/requestedData";
 import { downloadChallan, prepareToGenerate } from "../controllers/deliveries/generatePdfChallan";
 import { balanceGlanceReport } from "../controllers/Glance/balanceGlanceReport";
-import { partyData, partyViewData } from "../controllers/partyViewData/partyViewData";
+import { partyData, partyViewData, partyWiseStockData } from "../controllers/partyViewData/partyViewData";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { getHighLossJobs } from "../controllers/newStyleRequirements/jobLossReport";
 import { hourlyWorkOrder } from "../controllers/users/hrlyNewWorkOrder";
@@ -301,6 +301,13 @@ getRouters.get(
     authenticate,
     searchJobForWorkOrder
 );
+getRouters.get(
+    "/mis-party-stock/:orderType",
+    responseTimeMonitor,
+    partyWiseStockData
+);
+
+
 
 
 export default getRouters;
