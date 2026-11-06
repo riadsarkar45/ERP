@@ -236,13 +236,22 @@ export const createNewJob = async (req: Request, res: Response) => {
             return res.status(404).send({ message: "Job record not found", type: "error" });
         }
 
+        const parsedWorkOrderDate = new Date(workOrderPlaceDate);
+
+        if (Number.isNaN(parsedWorkOrderDate.getTime())) {
+            return res.status(400).send({
+                message: "Invalid work order place date",
+                type: "error",
+            });
+        }
+
         const workOrder = await prisma.$transaction(
             async (tx) => {
                 return await tx.workOrder.create({
                     data: {
                         workOrderPlaceDate,
                         workOrderNo,
-                        newWorkOrderPlaceDate: workOrderPlaceDate,
+                        newWorkOrderPlaceDate: parsedWorkOrderDate,
                         month,
                         styleNo: styleNo || style || "",
                         lotNo,
