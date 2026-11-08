@@ -53,6 +53,7 @@ export const challanMovement = async (req: Request, res: Response) => {
             workOrder: {
                 select: {
                     jobNo: true,
+                    factoryName: true,
                 }
             },
             deliveries: {
