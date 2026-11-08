@@ -8,7 +8,7 @@ authRouter.post("/auth/register", responseTimeMonitor, authenticate,  authorize(
   "addNewUser",
 ]), register);
 authRouter.post("/auth/login", responseTimeMonitor, login);
-authRouter.post("/auth/logout", responseTimeMonitor, authenticate, logout);
+authRouter.post("/auth/logout", responseTimeMonitor, logout);
 authRouter.post("/auth/refresh", responseTimeMonitor, refresh)
 authRouter.get("/auth/me", responseTimeMonitor, authenticate, getMe)
 export default authRouter;
