@@ -50,6 +50,7 @@ import { assetItems } from "../controllers/fix-assets/asset.items";
 import { cancelWorkOrder, getWorkOrderForCancellation } from "../controllers/orders/cancel.work.order/cancel.work.order";
 import { searchJobForWorkOrder } from "../controllers/orders/searchJobForWorkOrder/search";
 import { partyWiseStock } from "../controllers/partyViewData/partyWiseStock";
+import { quarterlyDetail, quarterlyMonths, quarterlySummary } from "../controllers/quaterly.balances/quaterlyBalance";
 
 const getRouters = express.Router();
 
@@ -307,6 +308,10 @@ getRouters.get(
     responseTimeMonitor,
     partyWiseStock
 );
+
+getRouters.get("/quarterly-balance/:orderType/months", /* same middleware */ quarterlyMonths);
+getRouters.get("/quarterly-balance/:orderType/summary", /* same middleware */ quarterlySummary);
+getRouters.get("/quarterly-balance/:orderType/detail", /* same middleware */ quarterlyDetail);
 
 
 
