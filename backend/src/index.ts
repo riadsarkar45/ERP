@@ -65,7 +65,7 @@ const start = async () => {
   app.use("/api", authRouter)
   app.use("/api/mobile", getMobileRouters)
 
-  // await redis.ping();
+  await redis.ping();
   console.log("redis connected");
 
   const server = app.listen(PORT, () => {
