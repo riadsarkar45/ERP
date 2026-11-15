@@ -24,7 +24,7 @@ model WorkOrder {
   id                        Int                        @id @default(autoincrement())
   workOrderNo               String
   workOrderPlaceDate        String
-  newWorkOrderPlaceDate     DateTime @default(now()) @db.Date
+  newWorkOrderPlaceDate     DateTime                   @default(now()) @db.Date
   month                     String
   styleNo                   String
   lotNo                     String
@@ -207,6 +207,7 @@ model deliveries {
   createdBy Int      @default(1)
   userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  status    String   @default("IN TRANSIT")
 
   @@index([yarnCompId])
   @@index([createdBy])

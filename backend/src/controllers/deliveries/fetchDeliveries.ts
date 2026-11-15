@@ -5,6 +5,9 @@ export const deliveryDetail = async (req: Request, res: Response) => {
     const { orderType } = req.params;
     const { workOrderIds } = req.query;
     // const ids = String(workOrderIds).split(',').map(Number);
+
+    const isYarnDyeingOrder = orderType === "yarnDyeingOrder"
+
     const deliveries = await prisma.workOrder.findMany({
         where: {
             id: Number(workOrderIds) as number,
@@ -17,14 +20,27 @@ export const deliveryDetail = async (req: Request, res: Response) => {
             factoryName: true,
             compositions: {
                 select: {
-                    id: true,
-                    composition: true,
-                    color: true,
-                    workOrderQty: true,
+                    ...(!isYarnDyeingOrder && {
+                        id: true,
+                        composition: true,
+                        color: true,
+                        workOrderQty: true,
+                    }),
+                    yarnColors: {
+                        select: {
+                            color: true,
+                            qty: true,
+                            id: true,
+                        }
+                    },
                     styleRequirementRow: {
                         select: {
                             styleRequirement: {
-
+                                select: {
+                                    jobNo: true,
+                                    processLoss: true,
+                                    buyerName: true,
+                                }
                             }
                         }
                     },

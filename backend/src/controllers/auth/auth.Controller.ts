@@ -1,4 +1,5 @@
-import { Request, Response } from "express";
+
+import type { Request, Response } from "express";
 
 import prisma from "../../database/prismaClient/prisma";
 import { comparePassword, hashPassword } from "../../utils/auth/password.util";
@@ -11,52 +12,168 @@ import {
 } from "../../utils/auth/token.util";
 import redis from "../../redis/connect.redis";
 
-const isProd = process.env.NODE_ENV === "production";
-
-const REFRESH_COOKIE_OPTIONS = {
-    httpOnly: true,
-    secure: isProd, // requires HTTPS in prod
-    sameSite: isProd ? ("none" as const) : ("lax" as const), // "none" for cross-site frontend/backend
-    path: "/api/auth", // scope cookie to auth routes only
-    maxAge: REFRESH_TOKEN_MAX_AGE_MS,
-};
-
 /* -------------------------------------------------------------------------- */
-/*                               Redis constants                              */
+/*                                  CONFIG                                    */
 /* -------------------------------------------------------------------------- */
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_SEC = 15 * 60;
-const SESSION_CACHE_TTL_SEC = 5 * 60;
-const REFRESH_TTL_SEC = Math.ceil(REFRESH_TOKEN_MAX_AGE_MS / 1000);
-const REFRESH_LOCK_TTL_SEC = 10;
 
-const K = {
-    loginFails: (ip: string, phoneNo: string) => `auth:login:fails:${ip}:${phoneNo}`,
-    session: (userId: number) => `auth:session:${userId}`,
-    refresh: (hash: string) => `auth:rt:${hash}`,
-    revoked: (hash: string) => `auth:rt:revoked:${hash}`,
-    userTokens: (userId: number) => `auth:user:${userId}:rts`,
-    lock: (hash: string) => `auth:rt:lock:${hash}`,
+const SESSION_CACHE_TTL_SEC = 5 * 60;
+
+const REFRESH_TTL_SEC = Math.ceil(
+    REFRESH_TOKEN_MAX_AGE_MS / 1000
+);
+
+const REFRESH_COOKIE_OPTIONS = {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? ("none" as const) : ("lax" as const),
+    path: "/api/auth",
+    maxAge: REFRESH_TOKEN_MAX_AGE_MS,
 };
 
-/** Redis must never take auth down: on error, log and fall back to the DB. */
-async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+const CLEAR_COOKIE_OPTIONS = {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? ("none" as const) : ("lax" as const),
+    path: "/api/auth",
+};
+
+/* -------------------------------------------------------------------------- */
+/*                                REDIS KEYS                                  */
+/* -------------------------------------------------------------------------- */
+
+const K = {
+    loginFails: (ip: string, phoneNo: string) =>
+        `auth:login:fails:${ip}:${phoneNo}`,
+
+    session: (userId: number) =>
+        `auth:session:${userId}`,
+
+    refresh: (hash: string) =>
+        `auth:rt:${hash}`,
+
+    revoked: (hash: string) =>
+        `auth:rt:revoked:${hash}`,
+
+    userTokens: (userId: number) =>
+        `auth:user:${userId}:rts`,
+};
+
+/* -------------------------------------------------------------------------- */
+/*                              ERROR HELPERS                                 */
+/* -------------------------------------------------------------------------- */
+
+function logRedisError(operation: string, error: unknown) {
+    console.error(
+        `[Redis:${operation}]`,
+        error instanceof Error ? error.message : error
+    );
+}
+
+async function safe<T>(
+    operation: string,
+    fn: () => Promise<T>,
+    fallback: T
+): Promise<T> {
     try {
         return await fn();
-    } catch (err) {
-        console.error("[redis]", err);
+    } catch (error) {
+        logRedisError(operation, error);
         return fallback;
     }
 }
 
+function clearRefreshCookie(res: Response) {
+    res.clearCookie(
+        REFRESH_TOKEN_COOKIE_NAME,
+        CLEAR_COOKIE_OPTIONS
+    );
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+    return (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "P2002"
+    );
+}
+
 /* -------------------------------------------------------------------------- */
-/*                          Cached user session (profile)                     */
+/*                       LOGIN RATE LIMITER (REDIS)                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Atomically reserves a login attempt.
+ *
+ * Five attempts are allowed within the configured window.
+ * The next attempt is rejected.
+ *
+ * Redis failure is fail-closed: login returns 503.
+ */
+async function reserveLoginAttempt(key: string): Promise<{
+    allowed: boolean;
+    count: number;
+    retryAfter: number;
+}> {
+    const script = `
+        local current = tonumber(redis.call("GET", KEYS[1]) or "0")
+        local maximum = tonumber(ARGV[1])
+        local window = tonumber(ARGV[2])
+
+        if current >= maximum then
+            local ttl = redis.call("TTL", KEYS[1])
+
+            if ttl < 1 then
+                ttl = window
+            end
+
+            return {0, current, ttl}
+        end
+
+        local count = redis.call("INCR", KEYS[1])
+
+        if count == 1 then
+            redis.call("EXPIRE", KEYS[1], window)
+        end
+
+        local ttl = redis.call("TTL", KEYS[1])
+
+        return {1, count, ttl}
+    `;
+
+    const result = await redis.eval(
+        script,
+        1,
+        key,
+        LOGIN_MAX_ATTEMPTS,
+        LOGIN_WINDOW_SEC
+    ) as number[];
+
+    const allowed = Number(result[0]) === 1;
+    const count = Number(result[1]);
+    const retryAfter = Math.max(Number(result[2]), 1);
+
+    return {
+        allowed,
+        count,
+        retryAfter,
+    };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              SESSION CACHE                                 */
 /* -------------------------------------------------------------------------- */
 
 async function loadUserSession(userId: number) {
     return prisma.user.findUnique({
-        where: { id: userId },
+        where: {
+            id: userId,
+        },
         select: {
             id: true,
             name: true,
@@ -65,155 +182,339 @@ async function loadUserSession(userId: number) {
             userRole: true,
             isActive: true,
             permissionSections: {
-                select: { permittedSection: true, isPermitted: true },
+                select: {
+                    permittedSection: true,
+                    isPermitted: true,
+                },
             },
         },
     });
 }
 
-type SessionUser = NonNullable<Awaited<ReturnType<typeof loadUserSession>>>;
+type SessionUser = NonNullable<
+    Awaited<ReturnType<typeof loadUserSession>>
+>;
 
-/** Read-through cache: Redis first, DB on miss, then populate Redis. */
-async function getUserSession(userId: number): Promise<SessionUser | null> {
-    const cached = await safe(() => redis.get(K.session(userId)), null);
+/**
+ * Redis read-through cache.
+ * PostgreSQL is the source of truth.
+ */
+async function getUserSession(
+    userId: number
+): Promise<SessionUser | null> {
+    const cached = await safe(
+        "session:get",
+        () => redis.get(K.session(userId)),
+        null
+    );
+
     if (cached) {
         try {
             return JSON.parse(cached) as SessionUser;
         } catch {
-            await safe(() => redis.del(K.session(userId)), 0);
+            await safe(
+                "session:delete-invalid",
+                () => redis.del(K.session(userId)),
+                0
+            );
         }
     }
 
     const user = await loadUserSession(userId);
-    if (!user) return null;
+
+    if (!user) {
+        return null;
+    }
 
     await safe(
-        () => redis.set(K.session(userId), JSON.stringify(user), "EX", SESSION_CACHE_TTL_SEC),
+        "session:set",
+        () =>
+            redis.set(
+                K.session(userId),
+                JSON.stringify(user),
+                "EX",
+                SESSION_CACHE_TTL_SEC
+            ),
         null
     );
+
     return user;
 }
 
 /**
- * Call this from any admin route that changes a user's permissions, role,
- * station or active status. Otherwise changes show up only after the TTL.
+ * Call after changing permissions, role, station or active status.
  */
 export async function invalidateUserSession(userId: number) {
-    await safe(() => redis.del(K.session(userId)), 0);
+    await safe(
+        "session:invalidate",
+        () => redis.del(K.session(userId)),
+        0
+    );
 }
 
-/** Only the sections the user is actually allowed to access. */
-function permittedSectionNames(user: Pick<SessionUser, "permissionSections">): string {
+/* -------------------------------------------------------------------------- */
+/*                             PERMISSION HELPERS                             */
+/* -------------------------------------------------------------------------- */
+
+function permittedSectionNames(
+    user: Pick<SessionUser, "permissionSections">
+): string {
     return user.permissionSections
-        .filter((p) => p.isPermitted)
-        .map((p) => String(p.permittedSection))
+        .filter((permission) => permission.isPermitted)
+        .map((permission) => String(permission.permittedSection))
         .join(",");
 }
 
 /* -------------------------------------------------------------------------- */
-/*                           Refresh token helpers                            */
+/*                          REFRESH TOKEN CACHE                               */
 /* -------------------------------------------------------------------------- */
 
-async function cacheRefreshToken(userId: number, tokenHash: string) {
-    await safe(async () => {
-        await redis
-            .multi()
-            .set(K.refresh(tokenHash), String(userId), "EX", REFRESH_TTL_SEC)
-            .sadd(K.userTokens(userId), tokenHash)
-            .expire(K.userTokens(userId), REFRESH_TTL_SEC)
-            .exec();
-    }, undefined);
+async function cacheRefreshToken(
+    userId: number,
+    tokenHash: string
+): Promise<void> {
+    await safe(
+        "refresh:cache",
+        async () => {
+            await redis
+                .multi()
+                .set(
+                    K.refresh(tokenHash),
+                    String(userId),
+                    "EX",
+                    REFRESH_TTL_SEC
+                )
+                .sadd(K.userTokens(userId), tokenHash)
+                .expire(K.userTokens(userId), REFRESH_TTL_SEC)
+                .exec();
+        },
+        undefined
+    );
 }
 
-/** Drop a token from the active cache and leave a marker so reuse can be detected. */
-async function markRefreshTokenRevoked(userId: number, tokenHash: string) {
-    await safe(async () => {
-        await redis
-            .multi()
-            .del(K.refresh(tokenHash))
-            .srem(K.userTokens(userId), tokenHash)
-            .set(K.revoked(tokenHash), String(userId), "EX", REFRESH_TTL_SEC)
-            .exec();
-    }, undefined);
+async function markRefreshTokenRevoked(
+    userId: number,
+    tokenHash: string
+): Promise<void> {
+    await safe(
+        "refresh:revoke-cache",
+        async () => {
+            await redis
+                .multi()
+                .del(K.refresh(tokenHash))
+                .srem(K.userTokens(userId), tokenHash)
+                .set(
+                    K.revoked(tokenHash),
+                    String(userId),
+                    "EX",
+                    REFRESH_TTL_SEC
+                )
+                .exec();
+        },
+        undefined
+    );
 }
 
-/** Kill every session of a user (used when token reuse is detected). */
-async function revokeAllUserRefreshTokens(userId: number) {
+/**
+ * Revoke every refresh token belonging to a user.
+ *
+ * PostgreSQL update happens first.
+ * Redis cleanup is best-effort.
+ */
+async function revokeAllUserRefreshTokens(
+    userId: number
+): Promise<void> {
     await prisma.refreshToken.updateMany({
-        where: { userId, revoked: false },
-        data: { revoked: true },
+        where: {
+            userId,
+            revoked: false,
+        },
+        data: {
+            revoked: true,
+        },
     });
 
-    await safe(async () => {
-        const hashes = await redis.smembers(K.userTokens(userId));
-        const pipeline = redis.multi();
-        for (const h of hashes) {
-            pipeline.del(K.refresh(h));
-            pipeline.set(K.revoked(h), String(userId), "EX", REFRESH_TTL_SEC);
-        }
-        pipeline.del(K.userTokens(userId));
-        await pipeline.exec();
-    }, undefined);
-}
+    await safe(
+        "refresh:revoke-all-cache",
+        async () => {
+            const hashes = await redis.smembers(
+                K.userTokens(userId)
+            );
 
-function clearRefreshCookie(res: Response) {
-    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: "/api/auth" });
+            const pipeline = redis.multi();
+
+            for (const hash of hashes) {
+                pipeline.del(K.refresh(hash));
+
+                pipeline.set(
+                    K.revoked(hash),
+                    String(userId),
+                    "EX",
+                    REFRESH_TTL_SEC
+                );
+            }
+
+            pipeline.del(K.userTokens(userId));
+
+            await pipeline.exec();
+        },
+        undefined
+    );
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  Handlers                                  */
+/*                                  REGISTER                                  */
 /* -------------------------------------------------------------------------- */
 
 export async function register(req: Request, res: Response) {
     try {
-        const { phoneNo, name, password, userRole, workStation } = req.body;
-        if (!phoneNo || !password) {
-            return res.status(400).json({ message: "Phone number and password are required" });
+        const {
+            phoneNo,
+            name,
+            password,
+            workStation,
+        } = req.body;
+
+        if (
+            typeof phoneNo !== "string" ||
+            typeof password !== "string" ||
+            !phoneNo.trim() ||
+            !password
+        ) {
+            return res.status(400).json({
+                message: "Phone number and password are required",
+            });
         }
 
-        const existing = await prisma.user.findUnique({ where: { phoneNo } });
-        if (existing) {
-            return res.status(409).json({ message: "Phone number is already registered" });
+        const normalizedPhone = phoneNo.trim();
+
+        const normalizedName =
+            typeof name === "string" ? name.trim() : undefined;
+
+        if (normalizedName === "") {
+            return res.status(400).json({
+                message: "Name cannot be empty",
+            });
         }
 
-        const hashed = await hashPassword(password);
-
-        const user = await prisma.user.create({
-            data: {
-                password: hashed,
-                name,
-                userRole: userRole ?? "AUDITOR", // ADJUST default role to match your app
-                userName: "username",
-                phoneNo,
-                workingStation: workStation,
+        const existing = await prisma.user.findUnique({
+            where: {
+                phoneNo: normalizedPhone,
+            },
+            select: {
+                id: true,
             },
         });
 
-        return res.status(201).json({ id: user.id, role: user.userRole });
-    } catch (err) {
-        console.error("[register]", err);
-        return res.status(500).json({ message: "Internal server error" });
+        if (existing) {
+            return res.status(409).json({
+                message: "Phone number is already registered",
+            });
+        }
+
+        const hashedPassword = await hashPassword(password);
+
+        const user = await prisma.user.create({
+            data: {
+                password: hashedPassword,
+                name: "normalizedName",
+
+                // Public registration cannot assign privileged roles.
+                userRole: "AUDITOR",
+
+                // Replace the previous constant username.
+                userName: name,
+
+                phoneNo: normalizedPhone,
+                workingStation: workStation || null,
+            },
+            select: {
+                id: true,
+                userRole: true,
+            },
+        });
+
+        return res.status(201).json({
+            id: user.id,
+            role: user.userRole,
+        });
+    } catch (error) {
+        if (isUniqueConstraintError(error)) {
+            return res.status(409).json({
+                message: "Phone number or username is already registered",
+            });
+        }
+
+        console.error("[register]", error);
+
+        return res.status(500).json({
+            message: "Internal server error",
+        });
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                    LOGIN                                   */
+/* -------------------------------------------------------------------------- */
 
 export async function login(req: Request, res: Response) {
     try {
         const { phoneNo, password } = req.body;
-        if (!phoneNo || !password) {
-            return res.status(400).json({ message: "Phone number and password are required" });
+
+        if (
+            typeof phoneNo !== "string" ||
+            typeof password !== "string" ||
+            !phoneNo.trim() ||
+            !password
+        ) {
+            return res.status(400).json({
+                message: "Phone number and password are required",
+            });
         }
 
-        // ---- Brute-force protection (per IP + phone) ----
-        const failKey = K.loginFails(req.ip ?? "unknown", String(phoneNo));
-        const fails = Number((await safe(() => redis.get(failKey), null)) ?? 0);
-        if (fails >= LOGIN_MAX_ATTEMPTS) {
-            const retryAfter = await safe(() => redis.ttl(failKey), LOGIN_WINDOW_SEC);
-            res.setHeader("Retry-After", String(Math.max(retryAfter, 1)));
-            return res.status(429).json({ message: "Too many failed attempts. Try again later." });
+        const normalizedPhone = phoneNo.trim();
+        const ip = req.ip || "unknown";
+
+        const failKey = K.loginFails(
+            ip,
+            normalizedPhone
+        );
+
+        /*
+         * Reserve the attempt atomically before checking credentials.
+         * This prevents concurrent requests bypassing the limit.
+         */
+        let attempt: {
+            allowed: boolean;
+            count: number;
+            retryAfter: number;
+        };
+
+        try {
+            attempt = await reserveLoginAttempt(failKey);
+        } catch (error) {
+            logRedisError("login:rate-limit", error);
+
+            return res.status(503).json({
+                message: "Authentication service temporarily unavailable. Please try again.",
+            });
+        }
+
+        if (!attempt.allowed) {
+            res.setHeader(
+                "Retry-After",
+                String(attempt.retryAfter)
+            );
+
+            return res.status(429).json({
+                message: "Too many login attempts. Try again later.",
+            });
         }
 
         const user = await prisma.user.findUnique({
-            where: { phoneNo },
+            where: {
+                phoneNo: normalizedPhone,
+            },
             select: {
                 password: true,
                 phoneNo: true,
@@ -223,28 +524,48 @@ export async function login(req: Request, res: Response) {
                 name: true,
                 isActive: true,
                 permissionSections: {
-                    select: { permittedSection: true, isPermitted: true },
+                    select: {
+                        permittedSection: true,
+                        isPermitted: true,
+                    },
                 },
             },
         });
 
-        const valid = user ? await comparePassword(password, user.password) : false;
+        const valid = user
+            ? await comparePassword(password, user.password)
+            : false;
+
         if (!user || !valid) {
-            await safe(async () => {
-                const count = await redis.incr(failKey);
-                if (count === 1) await redis.expire(failKey, LOGIN_WINDOW_SEC);
-            }, undefined);
-            return res.status(401).json({ message: "Invalid credentials" });
+            if (attempt.count >= LOGIN_MAX_ATTEMPTS) {
+                res.setHeader(
+                    "Retry-After",
+                    String(attempt.retryAfter)
+                );
+            }
+
+            return res.status(401).json({
+                message: "Invalid credentials",
+            });
         }
+
+        // Credentials are valid. Reset the failed-attempt counter.
+        await safe(
+            "login:reset-counter",
+            () => redis.del(failKey),
+            0
+        );
 
         if (user.isActive === false) {
-            return res.status(400).json({ message: "User not active yet. Please contact the admin." });
+            return res.status(403).json({
+                message: "User not active yet. Please contact the admin.",
+            });
         }
 
-        // Successful login -> reset the failure counter
-        await safe(() => redis.del(failKey), 0);
-
-        const { password: _pw, ...sessionUser } = user;
+        const {
+            password: _password,
+            ...sessionUser
+        } = user;
 
         const accessToken = signAccessToken({
             userId: String(user.id),
@@ -252,20 +573,41 @@ export async function login(req: Request, res: Response) {
             role: permittedSectionNames(sessionUser),
         });
 
-        const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
+        const {
+            rawToken,
+            tokenHash,
+            expiresAt,
+        } = generateRefreshToken();
 
+        // Persist token in PostgreSQL before returning it.
         await prisma.refreshToken.create({
-            data: { userId: user.id, tokenHash, expiresAt },
+            data: {
+                userId: user.id,
+                tokenHash,
+                expiresAt,
+            },
         });
+
+        // Redis is only a cache.
         await cacheRefreshToken(user.id, tokenHash);
 
-        // Warm the session cache so the first /me call is a hit
         await safe(
-            () => redis.set(K.session(user.id), JSON.stringify(sessionUser), "EX", SESSION_CACHE_TTL_SEC),
+            "session:warm",
+            () =>
+                redis.set(
+                    K.session(user.id),
+                    JSON.stringify(sessionUser),
+                    "EX",
+                    SESSION_CACHE_TTL_SEC
+                ),
             null
         );
 
-        res.cookie(REFRESH_TOKEN_COOKIE_NAME, rawToken, REFRESH_COOKIE_OPTIONS);
+        res.cookie(
+            REFRESH_TOKEN_COOKIE_NAME,
+            rawToken,
+            REFRESH_COOKIE_OPTIONS
+        );
 
         return res.json({
             accessToken,
@@ -276,92 +618,189 @@ export async function login(req: Request, res: Response) {
                 role: user.permissionSections,
             },
         });
-    } catch (err) {
-        console.error("[login]", err);
-        return res.status(500).json({ message: "Internal server error" });
+    } catch (error) {
+        console.error("[login]", error);
+
+        return res.status(500).json({
+            message: "Internal server error",
+        });
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   REFRESH                                  */
+/* -------------------------------------------------------------------------- */
+
 export async function refresh(req: Request, res: Response) {
     const rawToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
-    if (!rawToken) {
-        return res.status(401).json({ message: "No refresh token provided" });
+
+    if (!rawToken || typeof rawToken !== "string") {
+        return res.status(401).json({
+            message: "No refresh token provided",
+        });
     }
 
     const tokenHash = hashRefreshToken(rawToken);
-    let lockAcquired = false;
 
     try {
-        // 1. Reuse detection: this token was already rotated or revoked
-        const reusedBy = await safe(() => redis.get(K.revoked(tokenHash)), null);
-        if (reusedBy) {
-            await revokeAllUserRefreshTokens(Number(reusedBy));
+        /*
+         * Always validate refresh tokens from PostgreSQL.
+         * Redis cache alone cannot authorize token rotation.
+         */
+        const stored = await prisma.refreshToken.findUnique({
+            where: {
+                tokenHash,
+            },
+            select: {
+                id: true,
+                userId: true,
+                revoked: true,
+                expiresAt: true,
+            },
+        });
+
+        if (!stored) {
             clearRefreshCookie(res);
-            return res.status(401).json({ message: "Invalid or expired refresh token" });
+
+            return res.status(401).json({
+                message: "Invalid or expired refresh token",
+            });
         }
 
-        // 2. Lock so two parallel refreshes (e.g. two tabs) don't trip reuse detection
-        const lock = await safe(
-            () => redis.set(K.lock(tokenHash), "1", "EX", REFRESH_LOCK_TTL_SEC, "NX"),
-            "OK" // Redis down -> proceed without a lock
-        );
-        if (lock !== "OK") {
-            return res.status(409).json({ message: "Refresh already in progress, retry shortly" });
-        }
-        lockAcquired = true;
+        /*
+         * A revoked token presented again indicates possible reuse.
+         * Revoke all active refresh tokens for that user.
+         */
+        if (stored.revoked) {
+            await revokeAllUserRefreshTokens(stored.userId);
 
-        // 3. Validate token: Redis fast path, DB fallback
-        let userId: number;
-        const cachedUserId = await safe(() => redis.get(K.refresh(tokenHash)), null);
+            clearRefreshCookie(res);
 
-        if (cachedUserId) {
-            userId = Number(cachedUserId);
-        } else {
-            const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
-
-            if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-                if (stored && stored.revoked) {
-                    // Revoked token presented again (Redis marker lost) -> treat as reuse
-                    await revokeAllUserRefreshTokens(stored.userId);
-                } else if (stored) {
-                    await prisma.refreshToken.update({
-                        where: { id: stored.id },
-                        data: { revoked: true },
-                    });
-                }
-                clearRefreshCookie(res);
-                return res.status(401).json({ message: "Invalid or expired refresh token" });
-            }
-            userId = stored.userId;
+            return res.status(401).json({
+                message: "Invalid or expired refresh token",
+            });
         }
 
-        // 4. User must still exist and be active (cached read)
-        const session = await getUserSession(userId);
+        const now = new Date();
+
+        if (stored.expiresAt <= now) {
+            await prisma.refreshToken.updateMany({
+                where: {
+                    id: stored.id,
+                    revoked: false,
+                },
+                data: {
+                    revoked: true,
+                },
+            });
+
+            await markRefreshTokenRevoked(
+                stored.userId,
+                tokenHash
+            );
+
+            clearRefreshCookie(res);
+
+            return res.status(401).json({
+                message: "Invalid or expired refresh token",
+            });
+        }
+
+        /*
+         * Load current permissions and account status from DB.
+         * Do not use potentially stale session cache for rotation.
+         */
+        const session = await loadUserSession(stored.userId);
+
         if (!session || session.isActive === false) {
             await prisma.refreshToken.updateMany({
-                where: { tokenHash },
-                data: { revoked: true },
+                where: {
+                    id: stored.id,
+                    revoked: false,
+                },
+                data: {
+                    revoked: true,
+                },
             });
-            await markRefreshTokenRevoked(userId, tokenHash);
+
+            await markRefreshTokenRevoked(
+                stored.userId,
+                tokenHash
+            );
+
             clearRefreshCookie(res);
-            return res.status(401).json({ message: "Invalid or expired refresh token" });
+
+            return res.status(401).json({
+                message: "Invalid or expired refresh token",
+            });
         }
 
-        // 5. Rotate: revoke old, issue new
-        const { rawToken: newRawToken, tokenHash: newTokenHash, expiresAt } = generateRefreshToken();
+        const {
+            rawToken: newRawToken,
+            tokenHash: newTokenHash,
+            expiresAt,
+        } = generateRefreshToken();
 
-        await prisma.$transaction([
-            prisma.refreshToken.updateMany({
-                where: { tokenHash, revoked: false },
-                data: { revoked: true },
-            }),
-            prisma.refreshToken.create({
-                data: { userId, tokenHash: newTokenHash, expiresAt },
-            }),
-        ]);
+        /*
+         * Database compare-and-swap.
+         *
+         * Only one request can revoke the old token.
+         * A concurrent request gets count = 0.
+         */
+        const rotationSucceeded = await prisma.$transaction(
+            async (tx) => {
+                const result = await tx.refreshToken.updateMany({
+                    where: {
+                        id: stored.id,
+                        tokenHash,
+                        userId: stored.userId,
+                        revoked: false,
+                        expiresAt: {
+                            gt: now,
+                        },
+                    },
+                    data: {
+                        revoked: true,
+                    },
+                });
 
-        await markRefreshTokenRevoked(userId, tokenHash);
-        await cacheRefreshToken(userId, newTokenHash);
+                if (result.count !== 1) {
+                    return false;
+                }
+
+                await tx.refreshToken.create({
+                    data: {
+                        userId: stored.userId,
+                        tokenHash: newTokenHash,
+                        expiresAt,
+                    },
+                });
+
+                return true;
+            }
+        );
+
+        if (!rotationSucceeded) {
+            /*
+             * Another concurrent request already rotated this token.
+             * Do not clear the cookie here: the successful response
+             * may be setting the replacement cookie.
+             */
+            return res.status(409).json({
+                message: "Refresh already processed. Please retry.",
+            });
+        }
+
+        // Database rotation succeeded. Redis cleanup is best-effort.
+        await markRefreshTokenRevoked(
+            stored.userId,
+            tokenHash
+        );
+
+        await cacheRefreshToken(
+            stored.userId,
+            newTokenHash
+        );
 
         const accessToken = signAccessToken({
             userId: String(session.id),
@@ -369,63 +808,105 @@ export async function refresh(req: Request, res: Response) {
             workingStation: String(session.workingStation),
         });
 
-        res.cookie(REFRESH_TOKEN_COOKIE_NAME, newRawToken, REFRESH_COOKIE_OPTIONS);
-        return res.json({ accessToken });
-    } catch (err) {
-        console.error("[refresh]", err);
-        return res.status(500).json({ message: "Internal server error" });
-    } finally {
-        if (lockAcquired) {
-            await safe(() => redis.del(K.lock(tokenHash)), 0);
-        }
+        res.cookie(
+            REFRESH_TOKEN_COOKIE_NAME,
+            newRawToken,
+            REFRESH_COOKIE_OPTIONS
+        );
+
+        return res.json({
+            accessToken,
+        });
+    } catch (error) {
+        console.error("[refresh]", error);
+
+        return res.status(500).json({
+            message: "Internal server error",
+        });
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                    LOGOUT                                  */
+/* -------------------------------------------------------------------------- */
 
 export async function logout(req: Request, res: Response) {
     try {
         const rawToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
 
-        if (rawToken) {
+        if (rawToken && typeof rawToken === "string") {
             const tokenHash = hashRefreshToken(rawToken);
 
             const stored = await prisma.refreshToken.findUnique({
-                where: { tokenHash },
-                select: { userId: true },
+                where: {
+                    tokenHash,
+                },
+                select: {
+                    userId: true,
+                },
             });
 
             await prisma.refreshToken.updateMany({
-                where: { tokenHash },
-                data: { revoked: true },
+                where: {
+                    tokenHash,
+                    revoked: false,
+                },
+                data: {
+                    revoked: true,
+                },
             });
 
             if (stored) {
-                await markRefreshTokenRevoked(stored.userId, tokenHash);
+                await markRefreshTokenRevoked(
+                    stored.userId,
+                    tokenHash
+                );
             }
         }
 
         clearRefreshCookie(res);
+
         return res.status(204).send();
-    } catch (err) {
-        console.error("[logout]", err);
+    } catch (error) {
+        console.error("[logout]", error);
+
         clearRefreshCookie(res);
-        return res.status(204).send();
+
+        return res.status(503).json({
+            message: "Logout could not be completed. Please try again.",
+        });
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                    GET ME                                  */
+/* -------------------------------------------------------------------------- */
+
 export async function getMe(req: Request, res: Response) {
-    // req.user is set by the `authenticate` middleware (see auth.routes.ts).
     try {
-        const userId = req.user?.userId;
-        if (!userId) {
-            return res.status(401).json({ message: "Not authenticated" });
+        const userId = Number(req.user?.userId);
+
+        if (
+            !Number.isSafeInteger(userId) ||
+            userId <= 0
+        ) {
+            return res.status(401).json({
+                message: "Not authenticated",
+            });
         }
 
-        const foundUser = await getUserSession(Number(userId));
+        const foundUser = await getUserSession(userId);
+
         if (!foundUser) {
-            return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({
+                message: "User not found",
+            });
         }
+
         if (foundUser.isActive === false) {
-            return res.status(403).json({ message: "User is not active" });
+            return res.status(403).json({
+                message: "User is not active",
+            });
         }
 
         return res.json({
@@ -434,8 +915,11 @@ export async function getMe(req: Request, res: Response) {
             name: foundUser.name,
             userRole: foundUser.permissionSections,
         });
-    } catch (err) {
-        console.error("[getMe]", err);
-        return res.status(500).json({ message: "Internal server error" });
+    } catch (error) {
+        console.error("[getMe]", error);
+
+        return res.status(500).json({
+            message: "Internal server error",
+        });
     }
 }
