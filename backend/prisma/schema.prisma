@@ -207,7 +207,6 @@ model deliveries {
   createdBy Int      @default(1)
   userId    user     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
-  status    String   @default("IN TRANSIT")
 
   @@index([yarnCompId])
   @@index([createdBy])
