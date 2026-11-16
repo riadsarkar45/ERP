@@ -12,6 +12,7 @@ import { editChallan } from "../controllers/movements/update.challan";
 import { editStyleRequirement } from "../controllers/newStyleRequirements/editStyleRequirement";
 import { userActiveInActive } from "../controllers/users/allUser";
 import { approveDebitNote } from "../controllers/debit-note/debitNotes";
+import { verifyChallanQty } from "../controllers/movements/verify.challan.qty";
 
 const updateRouters = express.Router();
 
@@ -46,5 +47,12 @@ updateRouters.put("/edit-style-requirement", responseTimeMonitor, authenticate, 
 updateRouters.patch("/update-user-activity/:userId/:status", responseTimeMonitor, authenticate, userActiveInActive)
 
 updateRouters.put("/approve-debit-note/:debitNoteId", responseTimeMonitor, authenticate, approveDebitNote)
+
+updateRouters.patch(
+  "/movement/update/in-transit", responseTimeMonitor, authenticate, authorize("factoryChallanVerificationQcReceive", [
+    "verifyChallanQty"
+  ]),
+  verifyChallanQty
+);
 
 export default updateRouters;

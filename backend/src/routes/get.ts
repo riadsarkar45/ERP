@@ -51,6 +51,7 @@ import { cancelWorkOrder, getWorkOrderForCancellation } from "../controllers/ord
 import { searchJobForWorkOrder } from "../controllers/orders/searchJobForWorkOrder/search";
 import { partyWiseStock } from "../controllers/partyViewData/partyWiseStock";
 import { quarterlyDetail, quarterlyMonths, quarterlySummary } from "../controllers/quaterly.balances/quaterlyBalance";
+import { verifyChallanQty } from "../controllers/movements/verify.challan.qty";
 
 const getRouters = express.Router();
 
@@ -315,6 +316,7 @@ getRouters.get(
   ]),
   challanMovement
 );
+
 
 getRouters.get("/quarterly-balance/:orderType/months", /* same middleware */ quarterlyMonths);
 getRouters.get("/quarterly-balance/:orderType/summary", /* same middleware */ quarterlySummary);

@@ -188,30 +188,29 @@ model Challan {
   @@index([fromFactory])
 }
 
-
 model deliveries {
-  id                  Int      @id @default(autoincrement())
-  challanNo           Int
-  deliveryDate        DateTime
-  deliveryQty         Float
-  deliveryType        String
-  yarnId              Int
-  toFactory           String
-  fromFactory         String
-  deliveryMonth       String   @default("N/A")
+  id            Int      @id @default(autoincrement())
+  challanNo     Int
+  deliveryDate  DateTime
+  deliveryQty   Float
+  deliveryType  String
+  yarnId        Int
+  toFactory     String
+  fromFactory   String
+  deliveryMonth String   @default("N/A")
 
-  composition         Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
-  yarnCompId          Int?
+  composition Composition? @relation(fields: [yarnCompId], references: [id], onDelete: Cascade)
+  yarnCompId  Int?
 
-  challan             Challan? @relation(fields: [challanId], references: [id])
-  challanId           Int?
+  challan   Challan? @relation(fields: [challanId], references: [id])
+  challanId Int?
 
-  createdBy           Int      @default(1)
-  userId              user     @relation("DeliveryCreatedBy", fields: [createdBy], references: [id], onDelete: Cascade)
+  createdBy Int  @default(1)
+  userId    user @relation("DeliveryCreatedBy", fields: [createdBy], references: [id], onDelete: Cascade)
 
   checkedBy           Int?
   checkUser           user?    @relation("DeliveryCheckedBy", fields: [checkedBy], references: [id], onDelete: Cascade)
-
+  verifiedQty         Int?     @default(0)
   workingStation      String   @default("NULL")
   createdAt           DateTime @default(now())
   deliveryStatus      String   @default("inTransit")
@@ -229,7 +228,6 @@ model deliveries {
   @@index([fromFactory])
   @@index([createdAt])
 }
-
 
 model audit {
   id             Int      @id @default(autoincrement())
@@ -249,18 +247,18 @@ model jobs {
 }
 
 model user {
-  id                        Int                        @id @default(autoincrement())
-  userName                  String?                    @default("NULL")
-  name                      String
-  phoneNo                   String                     @unique
-  password                  String
-  userRole                  String
-  workingStation            String?                    @default("NULL")
-  designation               String                     @default("Auditor")
-  dateOfJoin                DateTime                   @default(now())
-  isActive                  Boolean                    @default(false)
+  id             Int      @id @default(autoincrement())
+  userName       String?  @default("NULL")
+  name           String
+  phoneNo        String   @unique
+  password       String
+  userRole       String
+  workingStation String?  @default("NULL")
+  designation    String   @default("Auditor")
+  dateOfJoin     DateTime @default(now())
+  isActive       Boolean  @default(false)
 
-  refreshTokens             refreshToken[]
+  refreshTokens refreshToken[]
 
   workOrders                WorkOrder[]                @relation("WorkOrderCreatedBy")
   styleRequirements         StyleRequirement[]
@@ -275,8 +273,8 @@ model user {
   debitNotesApproved        debitNote[]                @relation("DebitNoteApprover")
   fixAssets                 fixAsset[]
 
-  createdDeliveries         deliveries[]               @relation("DeliveryCreatedBy")
-  checkedDeliveries         deliveries[]               @relation("DeliveryCheckedBy")
+  createdDeliveries deliveries[] @relation("DeliveryCreatedBy")
+  checkedDeliveries deliveries[] @relation("DeliveryCheckedBy")
 
   @@index([userName])
   @@index([userRole])
