@@ -15,6 +15,7 @@ const MASTER_PERMISSIONS: Record<string, string[]> = {
     dashboard: ['hourlyChallanActivity', 'hourlyWorkOrderActivity', 'hourlyBookingActivity'],
     debitNote: ['responsibleForMakingDebitNote', 'responsibleForApprovalDebitNote'],
     newSoftwareUpdates: ['getNewUpdates'],
+    factoryChallanVerificationQcReceive:["verifyChallanQty"]
 };
 
 type SectionPayload = {

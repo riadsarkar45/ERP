@@ -298,15 +298,23 @@ getRouters.get("/work-order-for-cancellation/:jobNo/:orderType", responseTimeMon
 getRouters.put("/cancel-work-order/:workOrderId", responseTimeMonitor, authenticate, cancelWorkOrder);
 
 getRouters.get(
-    "/search-job-for-work-order",
-    responseTimeMonitor,
-    authenticate,
-    searchJobForWorkOrder
+  "/search-job-for-work-order",
+  responseTimeMonitor,
+  authenticate,
+  searchJobForWorkOrder
 );
 getRouters.get(
-    "/mis-party-stock/:orderType",
-    responseTimeMonitor,
-    partyWiseStock
+  "/mis-party-stock/:orderType",
+  responseTimeMonitor,
+  partyWiseStock
+);
+
+getRouters.get(
+  "/movement/:orderType/:deliveryStatus", authorize("factoryChallanVerificationQcReceive", [
+    "verifyChallanQty"
+  ]),
+  responseTimeMonitor,
+  challanMovement
 );
 
 getRouters.get("/quarterly-balance/:orderType/months", /* same middleware */ quarterlyMonths);

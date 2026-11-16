@@ -70,7 +70,7 @@ const parseMonthRanges = (raw?: string) => {
 };
 
 export const challanMovement = async (req: Request, res: Response) => {
-    const { orderType, noOrderType } = req.params as { orderType: string, noOrderType: string };
+    const { orderType, noOrderType, deliveryStatus } = req.params as { orderType: string, noOrderType: string, deliveryStatus: string };
     const { limit: limitRaw, cursor: cursorRaw, filters: filtersRaw, challanMonths } = req.query as {
         limit?: string;
         cursor?: string;
@@ -102,6 +102,8 @@ export const challanMovement = async (req: Request, res: Response) => {
     const monthRanges = parseMonthRanges(challanMonths);
 
     const deliveryWhere: any = { deliveryType: { in: deliveryTypes } };
+
+    if (deliveryStatus === "in-transit") { deliveryWhere.deliveryStatus = "inTransit"; }
     if (filters.toFactory) deliveryWhere.toFactory = { in: filters.toFactory };
     if (filters.fromFactory) deliveryWhere.fromFactory = { in: filters.fromFactory };
     if (filters.challanNo) {
@@ -156,6 +158,7 @@ export const challanMovement = async (req: Request, res: Response) => {
                         challanNo: true,
                         toFactory: true,
                         fromFactory: true,
+                        deliveryStatus: true,
                     }
                 }
             },
