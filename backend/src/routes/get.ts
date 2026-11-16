@@ -310,7 +310,9 @@ getRouters.get(
 );
 
 getRouters.get(
-  "/movement/:orderType/:deliveryStatus", responseTimeMonitor,
+  "/movement/:orderType/:deliveryStatus", responseTimeMonitor, authenticate, authorize("factoryChallanVerificationQcReceive", [
+    "verifyChallanQty"
+  ]),
   challanMovement
 );
 
