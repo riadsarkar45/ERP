@@ -134,6 +134,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
                                     orderQty: true,
                                     workOrderQty: true,
                                     unitePrice: true,
+                                    stichLength: true,
+                                    lotNo: true,
+                                    yarnCount: true,
                                     deliveries: {
                                         select: { id: true, deliveryQty: true, deliveryType: true },
                                     },

@@ -15,6 +15,8 @@ interface UpdateJobsBody {
     fromFactory: string;
     date: string;
     challanNo: number;
+    lotNo: string;
+    piId: string;
     deliveries: DeliveryItem[];
 }
 
@@ -30,7 +32,7 @@ export const updateJobs = async (req: Request, res: Response) => {
     try {
         // workOrderId is optional in the query now — it is resolved from the composition (yarnId)
         const { yarnId, workOrderId: queryWorkOrderId } = req.query as { yarnId: string; workOrderId?: string };
-        const { toFactory, fromFactory, date, challanNo, deliveries } = req.body as UpdateJobsBody;
+        const { toFactory, fromFactory, date, challanNo, lotNo, piId, deliveries } = req.body as UpdateJobsBody;
 
         if (!toFactory || !fromFactory || !date || !challanNo || !deliveries?.length) {
             return res.status(400).json({ type: "error", message: "Missing required fields" });
@@ -153,6 +155,8 @@ export const updateJobs = async (req: Request, res: Response) => {
                     toFactory,
                     yarnCompId: checkYarnIfExist.id,
                     createdBy: userId,
+                    lotNo: String(lotNo),
+                    piId: piId,
                 };
                 return prisma.deliveries.create({
                     data,

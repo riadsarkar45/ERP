@@ -10,6 +10,8 @@ interface MovementInput {
   quantity: number;
   date: Date;
   deliveryType: string;
+  lotNo: String;
+  yarnCount: String;
 }
 
 interface UpdateInput {
@@ -104,6 +106,8 @@ const validateBody = (body: any): ValidationResult => {
           quantity,
           date,
           deliveryType: String(m.deliveryType ?? "").trim(),
+          lotNo: String(m?.lotNo ?? "").trim(),
+          yarnCount: String(m?.yarnCount ?? "").trim(),
         });
       }
     });
@@ -231,6 +235,8 @@ export const newYarnMovement = async (req: Request, res: Response) => {
               movementDate: m.date,
               movementQty: m.quantity,
               challanNo: m.challanNo,
+              lotNo: m.lotNo,
+              yarnCount: m.yarnCount
             })),
           });
           added += result.count;

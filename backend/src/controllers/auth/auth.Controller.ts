@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 
 import prisma from "../../database/prismaClient/prisma";
 import { comparePassword, hashPassword } from "../../utils/auth/password.util";
+
 import {
     generateRefreshToken,
     hashRefreshToken,
@@ -10,22 +11,12 @@ import {
     REFRESH_TOKEN_MAX_AGE_MS,
     signAccessToken,
 } from "../../utils/auth/token.util";
-import redis from "../../redis/connect.redis";
 
 /* -------------------------------------------------------------------------- */
 /*                                  CONFIG                                    */
 /* -------------------------------------------------------------------------- */
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-
-const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_WINDOW_SEC = 15 * 60;
-
-const SESSION_CACHE_TTL_SEC = 5 * 60;
-
-const REFRESH_TTL_SEC = Math.ceil(
-    REFRESH_TOKEN_MAX_AGE_MS / 1000
-);
 
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
@@ -43,49 +34,8 @@ const CLEAR_COOKIE_OPTIONS = {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                                REDIS KEYS                                  */
-/* -------------------------------------------------------------------------- */
-
-const K = {
-    loginFails: (ip: string, phoneNo: string) =>
-        `auth:login:fails:${ip}:${phoneNo}`,
-
-    session: (userId: number) =>
-        `auth:session:${userId}`,
-
-    refresh: (hash: string) =>
-        `auth:rt:${hash}`,
-
-    revoked: (hash: string) =>
-        `auth:rt:revoked:${hash}`,
-
-    userTokens: (userId: number) =>
-        `auth:user:${userId}:rts`,
-};
-
-/* -------------------------------------------------------------------------- */
 /*                              ERROR HELPERS                                 */
 /* -------------------------------------------------------------------------- */
-
-function logRedisError(operation: string, error: unknown) {
-    console.error(
-        `[Redis:${operation}]`,
-        error instanceof Error ? error.message : error
-    );
-}
-
-async function safe<T>(
-    operation: string,
-    fn: () => Promise<T>,
-    fallback: T
-): Promise<T> {
-    try {
-        return await fn();
-    } catch (error) {
-        logRedisError(operation, error);
-        return fallback;
-    }
-}
 
 function clearRefreshCookie(res: Response) {
     res.clearCookie(
@@ -104,69 +54,7 @@ function isUniqueConstraintError(error: unknown): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                       LOGIN RATE LIMITER (REDIS)                           */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Atomically reserves a login attempt.
- *
- * Five attempts are allowed within the configured window.
- * The next attempt is rejected.
- *
- * Redis failure is fail-closed: login returns 503.
- */
-async function reserveLoginAttempt(key: string): Promise<{
-    allowed: boolean;
-    count: number;
-    retryAfter: number;
-}> {
-    const script = `
-        local current = tonumber(redis.call("GET", KEYS[1]) or "0")
-        local maximum = tonumber(ARGV[1])
-        local window = tonumber(ARGV[2])
-
-        if current >= maximum then
-            local ttl = redis.call("TTL", KEYS[1])
-
-            if ttl < 1 then
-                ttl = window
-            end
-
-            return {0, current, ttl}
-        end
-
-        local count = redis.call("INCR", KEYS[1])
-
-        if count == 1 then
-            redis.call("EXPIRE", KEYS[1], window)
-        end
-
-        local ttl = redis.call("TTL", KEYS[1])
-
-        return {1, count, ttl}
-    `;
-
-    const result = await redis.eval(
-        script,
-        1,
-        key,
-        LOGIN_MAX_ATTEMPTS,
-        LOGIN_WINDOW_SEC
-    ) as number[];
-
-    const allowed = Number(result[0]) === 1;
-    const count = Number(result[1]);
-    const retryAfter = Math.max(Number(result[2]), 1);
-
-    return {
-        allowed,
-        count,
-        retryAfter,
-    };
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              SESSION CACHE                                 */
+/*                              SESSION HELPERS                               */
 /* -------------------------------------------------------------------------- */
 
 async function loadUserSession(userId: number) {
@@ -196,60 +84,13 @@ type SessionUser = NonNullable<
 >;
 
 /**
- * Redis read-through cache.
- * PostgreSQL is the source of truth.
+ * PostgreSQL is the single source of truth.
+ * No Redis caching.
  */
 async function getUserSession(
     userId: number
 ): Promise<SessionUser | null> {
-    const cached = await safe(
-        "session:get",
-        () => redis.get(K.session(userId)),
-        null
-    );
-
-    if (cached) {
-        try {
-            return JSON.parse(cached) as SessionUser;
-        } catch {
-            await safe(
-                "session:delete-invalid",
-                () => redis.del(K.session(userId)),
-                0
-            );
-        }
-    }
-
-    const user = await loadUserSession(userId);
-
-    if (!user) {
-        return null;
-    }
-
-    await safe(
-        "session:set",
-        () =>
-            redis.set(
-                K.session(userId),
-                JSON.stringify(user),
-                "EX",
-                SESSION_CACHE_TTL_SEC
-            ),
-        null
-    );
-
-    return user;
-}
-
-/**
- * Call after changing permissions, role, station or active status.
- */
-export async function invalidateUserSession(userId: number) {
-    await safe(
-        "session:invalidate",
-        () => redis.del(K.session(userId)),
-        0
-    );
+    return loadUserSession(userId);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -266,60 +107,12 @@ function permittedSectionNames(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                          REFRESH TOKEN CACHE                               */
+/*                       REFRESH TOKEN REVOCATION                             */
 /* -------------------------------------------------------------------------- */
-
-async function cacheRefreshToken(
-    userId: number,
-    tokenHash: string
-): Promise<void> {
-    await safe(
-        "refresh:cache",
-        async () => {
-            await redis
-                .multi()
-                .set(
-                    K.refresh(tokenHash),
-                    String(userId),
-                    "EX",
-                    REFRESH_TTL_SEC
-                )
-                .sadd(K.userTokens(userId), tokenHash)
-                .expire(K.userTokens(userId), REFRESH_TTL_SEC)
-                .exec();
-        },
-        undefined
-    );
-}
-
-async function markRefreshTokenRevoked(
-    userId: number,
-    tokenHash: string
-): Promise<void> {
-    await safe(
-        "refresh:revoke-cache",
-        async () => {
-            await redis
-                .multi()
-                .del(K.refresh(tokenHash))
-                .srem(K.userTokens(userId), tokenHash)
-                .set(
-                    K.revoked(tokenHash),
-                    String(userId),
-                    "EX",
-                    REFRESH_TTL_SEC
-                )
-                .exec();
-        },
-        undefined
-    );
-}
 
 /**
  * Revoke every refresh token belonging to a user.
- *
- * PostgreSQL update happens first.
- * Redis cleanup is best-effort.
+ * PostgreSQL is the only storage.
  */
 async function revokeAllUserRefreshTokens(
     userId: number
@@ -333,33 +126,6 @@ async function revokeAllUserRefreshTokens(
             revoked: true,
         },
     });
-
-    await safe(
-        "refresh:revoke-all-cache",
-        async () => {
-            const hashes = await redis.smembers(
-                K.userTokens(userId)
-            );
-
-            const pipeline = redis.multi();
-
-            for (const hash of hashes) {
-                pipeline.del(K.refresh(hash));
-
-                pipeline.set(
-                    K.revoked(hash),
-                    String(userId),
-                    "EX",
-                    REFRESH_TTL_SEC
-                );
-            }
-
-            pipeline.del(K.userTokens(userId));
-
-            await pipeline.exec();
-        },
-        undefined
-    );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -417,12 +183,11 @@ export async function register(req: Request, res: Response) {
         const user = await prisma.user.create({
             data: {
                 password: hashedPassword,
-                name: "normalizedName",
+                name: name,
 
                 // Public registration cannot assign privileged roles.
                 userRole: "AUDITOR",
 
-                // Replace the previous constant username.
                 userName: name,
 
                 phoneNo: normalizedPhone,
@@ -438,6 +203,7 @@ export async function register(req: Request, res: Response) {
             id: user.id,
             role: user.userRole,
         });
+
     } catch (error) {
         if (isUniqueConstraintError(error)) {
             return res.status(409).json({
@@ -473,43 +239,6 @@ export async function login(req: Request, res: Response) {
         }
 
         const normalizedPhone = phoneNo.trim();
-        const ip = req.ip || "unknown";
-
-        const failKey = K.loginFails(
-            ip,
-            normalizedPhone
-        );
-
-        /*
-         * Reserve the attempt atomically before checking credentials.
-         * This prevents concurrent requests bypassing the limit.
-         */
-        let attempt: {
-            allowed: boolean;
-            count: number;
-            retryAfter: number;
-        };
-
-        try {
-            attempt = await reserveLoginAttempt(failKey);
-        } catch (error) {
-            logRedisError("login:rate-limit", error);
-
-            return res.status(503).json({
-                message: "Authentication service temporarily unavailable. Please try again.",
-            });
-        }
-
-        if (!attempt.allowed) {
-            res.setHeader(
-                "Retry-After",
-                String(attempt.retryAfter)
-            );
-
-            return res.status(429).json({
-                message: "Too many login attempts. Try again later.",
-            });
-        }
 
         const user = await prisma.user.findUnique({
             where: {
@@ -537,24 +266,10 @@ export async function login(req: Request, res: Response) {
             : false;
 
         if (!user || !valid) {
-            if (attempt.count >= LOGIN_MAX_ATTEMPTS) {
-                res.setHeader(
-                    "Retry-After",
-                    String(attempt.retryAfter)
-                );
-            }
-
             return res.status(401).json({
                 message: "Invalid credentials",
             });
         }
-
-        // Credentials are valid. Reset the failed-attempt counter.
-        await safe(
-            "login:reset-counter",
-            () => redis.del(failKey),
-            0
-        );
 
         if (user.isActive === false) {
             return res.status(403).json({
@@ -579,7 +294,7 @@ export async function login(req: Request, res: Response) {
             expiresAt,
         } = generateRefreshToken();
 
-        // Persist token in PostgreSQL before returning it.
+        // Persist refresh token in PostgreSQL.
         await prisma.refreshToken.create({
             data: {
                 userId: user.id,
@@ -587,21 +302,6 @@ export async function login(req: Request, res: Response) {
                 expiresAt,
             },
         });
-
-        // Redis is only a cache.
-        await cacheRefreshToken(user.id, tokenHash);
-
-        await safe(
-            "session:warm",
-            () =>
-                redis.set(
-                    K.session(user.id),
-                    JSON.stringify(sessionUser),
-                    "EX",
-                    SESSION_CACHE_TTL_SEC
-                ),
-            null
-        );
 
         res.cookie(
             REFRESH_TOKEN_COOKIE_NAME,
@@ -618,6 +318,7 @@ export async function login(req: Request, res: Response) {
                 role: user.permissionSections,
             },
         });
+
     } catch (error) {
         console.error("[login]", error);
 
@@ -645,7 +346,6 @@ export async function refresh(req: Request, res: Response) {
     try {
         /*
          * Always validate refresh tokens from PostgreSQL.
-         * Redis cache alone cannot authorize token rotation.
          */
         const stored = await prisma.refreshToken.findUnique({
             where: {
@@ -668,8 +368,7 @@ export async function refresh(req: Request, res: Response) {
         }
 
         /*
-         * A revoked token presented again indicates possible reuse.
-         * Revoke all active refresh tokens for that user.
+         * Revoked token reuse detection.
          */
         if (stored.revoked) {
             await revokeAllUserRefreshTokens(stored.userId);
@@ -694,11 +393,6 @@ export async function refresh(req: Request, res: Response) {
                 },
             });
 
-            await markRefreshTokenRevoked(
-                stored.userId,
-                tokenHash
-            );
-
             clearRefreshCookie(res);
 
             return res.status(401).json({
@@ -707,8 +401,7 @@ export async function refresh(req: Request, res: Response) {
         }
 
         /*
-         * Load current permissions and account status from DB.
-         * Do not use potentially stale session cache for rotation.
+         * Load current permissions and account status from PostgreSQL.
          */
         const session = await loadUserSession(stored.userId);
 
@@ -722,11 +415,6 @@ export async function refresh(req: Request, res: Response) {
                     revoked: true,
                 },
             });
-
-            await markRefreshTokenRevoked(
-                stored.userId,
-                tokenHash
-            );
 
             clearRefreshCookie(res);
 
@@ -745,7 +433,6 @@ export async function refresh(req: Request, res: Response) {
          * Database compare-and-swap.
          *
          * Only one request can revoke the old token.
-         * A concurrent request gets count = 0.
          */
         const rotationSucceeded = await prisma.$transaction(
             async (tx) => {
@@ -781,26 +468,10 @@ export async function refresh(req: Request, res: Response) {
         );
 
         if (!rotationSucceeded) {
-            /*
-             * Another concurrent request already rotated this token.
-             * Do not clear the cookie here: the successful response
-             * may be setting the replacement cookie.
-             */
             return res.status(409).json({
                 message: "Refresh already processed. Please retry.",
             });
         }
-
-        // Database rotation succeeded. Redis cleanup is best-effort.
-        await markRefreshTokenRevoked(
-            stored.userId,
-            tokenHash
-        );
-
-        await cacheRefreshToken(
-            stored.userId,
-            newTokenHash
-        );
 
         const accessToken = signAccessToken({
             userId: String(session.id),
@@ -817,6 +488,7 @@ export async function refresh(req: Request, res: Response) {
         return res.json({
             accessToken,
         });
+
     } catch (error) {
         console.error("[refresh]", error);
 
@@ -837,15 +509,6 @@ export async function logout(req: Request, res: Response) {
         if (rawToken && typeof rawToken === "string") {
             const tokenHash = hashRefreshToken(rawToken);
 
-            const stored = await prisma.refreshToken.findUnique({
-                where: {
-                    tokenHash,
-                },
-                select: {
-                    userId: true,
-                },
-            });
-
             await prisma.refreshToken.updateMany({
                 where: {
                     tokenHash,
@@ -855,18 +518,12 @@ export async function logout(req: Request, res: Response) {
                     revoked: true,
                 },
             });
-
-            if (stored) {
-                await markRefreshTokenRevoked(
-                    stored.userId,
-                    tokenHash
-                );
-            }
         }
 
         clearRefreshCookie(res);
 
         return res.status(204).send();
+
     } catch (error) {
         console.error("[logout]", error);
 
@@ -915,6 +572,7 @@ export async function getMe(req: Request, res: Response) {
             name: foundUser.name,
             userRole: foundUser.permissionSections,
         });
+
     } catch (error) {
         console.error("[getMe]", error);
 

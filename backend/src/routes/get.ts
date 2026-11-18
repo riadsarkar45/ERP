@@ -52,6 +52,8 @@ import { searchJobForWorkOrder } from "../controllers/orders/searchJobForWorkOrd
 import { partyWiseStock } from "../controllers/partyViewData/partyWiseStock";
 import { quarterlyDetail, quarterlyMonths, quarterlySummary } from "../controllers/quaterly.balances/quaterlyBalance";
 import { verifyChallanQty } from "../controllers/movements/verify.challan.qty";
+import { getLotsAndYarnCounts } from "../controllers/yarns/get.lots.for.work.order";
+import { stockStatus, yarnStockTable } from "../controllers/yarns/stock.status";
 
 const getRouters = express.Router();
 
@@ -316,6 +318,17 @@ getRouters.get(
   ]),
   challanMovement
 );
+
+getRouters.get(
+  "/lots-work-orders", responseTimeMonitor, authenticate,
+  getLotsAndYarnCounts
+);
+getRouters.get(
+  "/yarn-stock", responseTimeMonitor, authenticate,
+  stockStatus
+);
+
+getRouters.get('/yarn-stock/table', authenticate, yarnStockTable)
 
 
 getRouters.get("/quarterly-balance/:orderType/months", /* same middleware */ quarterlyMonths);

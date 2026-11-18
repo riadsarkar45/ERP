@@ -25,6 +25,10 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                         composition: true,
                         color: true,
                         workOrderQty: true,
+                        yarnCount: true,
+                        lotNo: true,
+                        stichLength: true,
+                        piId: true,
                     }),
                     yarnColors: {
                         select: {

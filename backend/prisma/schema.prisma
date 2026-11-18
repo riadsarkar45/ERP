@@ -93,7 +93,14 @@ model Composition {
   styleRequirementRowId Int?
   challans              Challan[]
   yarnColors            YarnColorBooking[]
+  lotNo                 String?
+  yarnCount             String?
+  stichLength           String?
+  machineDia            String?
+  piId                  String?
+  status                String               @default("ASSIGNED")
 
+  @@index([status])
   @@index([workOrderId])
   @@index([color])
   @@index([styleRequirementRowId])
@@ -215,6 +222,8 @@ model deliveries {
   createdAt           DateTime @default(now())
   deliveryStatus      String   @default("inTransit")
   physicalReceivedQty Int      @default(0)
+  lotNo               String?   @default("NULL")
+  piId                String?   @default("NULL")
 
   @@index([yarnCompId])
   @@index([createdBy])
@@ -470,6 +479,10 @@ model spinningYarnMovement {
   challanNo     Int
   yarnPoItems   yarnPoItems? @relation(fields: [yarnPoItemsId], references: [id])
   yarnPoItemsId Int?
+  lotNo         String
+  yarnCount     String
+
+  @@index([lotNo, yarnCount, movementType])
 }
 
 model contractualJobs {
