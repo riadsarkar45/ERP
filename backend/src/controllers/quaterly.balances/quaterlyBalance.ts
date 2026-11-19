@@ -45,9 +45,11 @@ const DELIVERY_TYPES: Record<string, string[]> = {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// Classifies every delivery row (delivery / return / received / finish), resolves the party
-// (work order factory, else To/From factory) and the signed balance amount.
-// WorkOrder.factoryName defaults to the literal string 'NULL', so that value is treated as empty.
+// Classifies every delivery row (delivery / return / received / finish) and gives it a signed
+// balance amount. The party is ALWAYS WorkOrder.factoryName (deliveries.toFactory / fromFactory
+// are not used). Tabs, newlines and repeated spaces are collapsed to a single space so one
+// factory can never split into two parties. WorkOrder.factoryName defaults to the literal string
+// 'NULL', so that value (or an empty one) is shown as 'Unknown'.
 const baseCte = (orderType: string, types: string[]) => {
     const finishAmt = Prisma.raw(FINISH_IN_BALANCE ? "-qty" : "0");
     return Prisma.sql`
@@ -58,8 +60,6 @@ const baseCte = (orderType: string, types: string[]) => {
             (COALESCE(dl."deliveryDate", dl."createdAt"))::date AS day,
             COALESCE(dl."deliveryQty", 0)::float8 AS qty,
             regexp_replace(lower(dl."deliveryType"::text), '[[:space:]_-]+', '', 'g') AS t,
-            dl."toFactory" AS to_factory,
-            dl."fromFactory" AS from_factory,
             wo."factoryName" AS wo_factory,
             wo."jobNo" AS job_no,
             c."composition" AS composition,
@@ -83,8 +83,7 @@ const baseCte = (orderType: string, types: string[]) => {
     base AS (
         SELECT s1.*,
             COALESCE(
-                NULLIF(NULLIF(btrim(wo_factory), ''), 'NULL'),
-                NULLIF(NULLIF(btrim(CASE WHEN kind = 'delivery' THEN to_factory ELSE from_factory END), ''), 'NULL'),
+                NULLIF(NULLIF(btrim(regexp_replace(wo_factory, '[[:space:]]+', ' ', 'g')), ''), 'NULL'),
                 'Unknown'
             ) AS party,
             CASE kind
@@ -96,7 +95,7 @@ const baseCte = (orderType: string, types: string[]) => {
         FROM s1
     ),
     keyed AS (
-        SELECT base.*, lower(regexp_replace(btrim(party), '[[:space:]]+', ' ', 'g')) AS party_key
+        SELECT base.*, lower(party) AS party_key
         FROM base
     )`;
 };

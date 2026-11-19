@@ -320,7 +320,7 @@ getRouters.get(
 );
 
 getRouters.get(
-  "/lots-work-orders", responseTimeMonitor, authenticate,
+  "/lots-work-orders/:orderType", responseTimeMonitor, authenticate,
   getLotsAndYarnCounts
 );
 getRouters.get(
@@ -328,7 +328,7 @@ getRouters.get(
   stockStatus
 );
 
-getRouters.get('/yarn-stock/table', authenticate, yarnStockTable)
+getRouters.get('/yarn-stock/table', yarnStockTable)
 
 
 getRouters.get("/quarterly-balance/:orderType/months", /* same middleware */ quarterlyMonths);

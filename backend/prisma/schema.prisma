@@ -72,6 +72,7 @@ model YarnColorBooking {
   price         Float
   composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
   compositionId Int
+  piId          String?
 
   @@index([compositionId])
   @@index([color])
@@ -222,8 +223,8 @@ model deliveries {
   createdAt           DateTime @default(now())
   deliveryStatus      String   @default("inTransit")
   physicalReceivedQty Int      @default(0)
-  lotNo               String?   @default("NULL")
-  piId                String?   @default("NULL")
+  lotNo               String?  @default("NULL")
+  piId                String?  @default("NULL")
 
   @@index([yarnCompId])
   @@index([createdBy])
@@ -479,8 +480,8 @@ model spinningYarnMovement {
   challanNo     Int
   yarnPoItems   yarnPoItems? @relation(fields: [yarnPoItemsId], references: [id])
   yarnPoItemsId Int?
-  lotNo         String
-  yarnCount     String
+  lotNo         String       @default("NULL")
+  yarnCount     String       @default("NULL")
 
   @@index([lotNo, yarnCount, movementType])
 }
