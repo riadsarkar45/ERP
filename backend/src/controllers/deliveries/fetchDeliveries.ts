@@ -20,9 +20,9 @@ export const deliveryDetail = async (req: Request, res: Response) => {
             factoryName: true,
             compositions: {
                 select: {
+                    composition: true,
+                    id: true,
                     ...(!isYarnDyeingOrder && {
-                        id: true,
-                        composition: true,
                         color: true,
                         workOrderQty: true,
                         yarnCount: true,
@@ -30,12 +30,17 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                         stichLength: true,
                         piId: true,
                     }),
-                    yarnColors: {
-                        select: {
-                            color: true,
-                            qty: true,
-                            id: true,
-                        }
+                    ...isYarnDyeingOrder && {
+                        yarnColors: {
+                            select: {
+                                color: true,
+                                qty: true,
+                                id: true,
+                                lotNo: true,
+                                yarnCount: true,
+
+                            }
+                        },
                     },
                     styleRequirementRow: {
                         select: {
@@ -53,6 +58,7 @@ export const deliveryDetail = async (req: Request, res: Response) => {
                             id: true,
                             deliveryType: true,
                             deliveryQty: true,
+                            yarnId: true,
                         }
                     }
                 }

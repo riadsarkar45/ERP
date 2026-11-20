@@ -28,6 +28,12 @@ const getDeliveryTypes = (orderType: string, noOrderType?: string): string[] => 
         deliveryTypes.push("Grey Delivery", "Grey Return", "Grey Received", "Finish Received");
     } else if (orderType === "aopOrder") {
         deliveryTypes.push("Sent For Aop", "Received From Aop", "AOP Finish Fabric Rcvd", "Return From Aop");
+    } else if (orderType === "yarnDyeingOrder") {
+        deliveryTypes.push("Yarn Delivery For Yarn Dye",
+            "Yarn Return From Yarn Dye",
+            "Yarn Received From Yarn Dye",
+            "Finish Received",
+            "Finish Return")
     }
     return deliveryTypes;
 };
@@ -104,6 +110,8 @@ export const challanMovement = async (req: Request, res: Response) => {
 
     const deliveryWhere: any = { deliveryType: { in: deliveryTypes } };
 
+    const isYarnDyeType = orderType === "yarnDyeingOrder"
+
     if (deliveryStatus === "inTransit") { deliveryWhere.deliveryStatus = "inTransit"; }
     if (filters.toFactory) deliveryWhere.toFactory = { in: filters.toFactory };
     if (filters.fromFactory) deliveryWhere.fromFactory = { in: filters.fromFactory };
@@ -141,6 +149,15 @@ export const challanMovement = async (req: Request, res: Response) => {
                 id: true,
                 workOrderQty: true,
                 color: true,
+                yarnCount: true,
+                lotNo: true,
+                piId: true,
+                yarnColors: {
+                    select: {
+                        color: true,
+                    }
+                }
+                ,
                 workOrder: {
                     select: {
                         jobNo: true,
