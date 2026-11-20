@@ -27,7 +27,6 @@ type CompositionInput = {
     unitPrice?: string | number;
     piNo?: string;
     lotNo?: string;
-    ydBatch?: string; // NEW
     yarnCount?: string;
     stichLength?: string;
     machineDia?: string;
@@ -65,7 +64,6 @@ type CleanLine = {
     color: string;
     piNo: string;
     lotNo: string;
-    ydBatch: string; // NEW
     yarnCount: string;
     stichLength: string;
     machineDia: string;
@@ -197,7 +195,6 @@ function parseBody(body: CreateJobBody): CleanBody {
             piNo: str(c.piNo),
             lotNo: str(c.lotNo),
             // NEW: only knitting orders can draw from a Y/D batch
-            ydBatch: orderType === "knittingOrder" ? str(c.ydBatch) : "",
             yarnCount: str(c.yarnCount),
             stichLength: str(c.stichLength),
             machineDia: str(c.machineDia),
@@ -214,17 +211,9 @@ function parseBody(body: CreateJobBody): CleanBody {
             line.styleRequirementRowId = id;
         }
 
-        // NEW: a line uses EITHER a raw lot OR a Y/D batch, never both
-        if (line.ydBatch && line.lotNo) {
-            throw new HttpError(
-                400,
-                `${at}: choose either a Lot No or a Y/D Batch, not both`
-            );
-        }
 
         for (const field of rule.requiredLineFields) {
             // CHANGED: Lot No is not required when the line uses a Y/D batch
-            if (field === "lotNo" && line.ydBatch) continue;
 
             if (!line[field]) {
                 throw new HttpError(400, `${at}: ${FIELD_LABEL[field]} is required`);
@@ -282,9 +271,7 @@ function parseBody(body: CreateJobBody): CleanBody {
             line.piNo = line.yarnColors[0]!.piNo;
         } else {
             // CHANGED: PI No is not needed for a Y/D batch line
-            if (!line.piNo && !line.ydBatch) {
-                throw new HttpError(400, `${at}: PI No is required`);
-            }
+           
 
             const qty = toNumber(c.workOrderQty);
             const price = toNumber(c.unitPrice);
@@ -368,7 +355,6 @@ function buildStockRequests(lines: CleanLine[], orderType: string): StockRequest
             }
         } else {
             // NEW: Y/D batch lines do not use the spinning (raw yarn) stock
-            if (line.ydBatch) continue;
 
             requests.push({ piNo: line.piNo, lotNo: line.lotNo, yarnCount: line.yarnCount, qty: line.qty });
         }
@@ -478,15 +464,10 @@ async function validateYdBatches(
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
-        if (!line.ydBatch) continue;
 
-        const key = JSON.stringify([line.ydBatch, line.yarnCount]);
-        if (checked.has(key)) continue;
-        checked.add(key);
 
         const booking = await tx.yarnColorBooking.findFirst({
             where: {
-                lotNo: line.ydBatch,
                 ...(line.yarnCount ? { yarnCount: line.yarnCount } : {}),
                 composition: {
                     orderType: "yarnDyeingOrder",
@@ -496,14 +477,7 @@ async function validateYdBatches(
             select: { id: true },
         });
 
-        if (!booking) {
-            throw new HttpError(
-                400,
-                `Composition ${i + 1}: Y/D Batch "${line.ydBatch}"` +
-                    (line.yarnCount ? ` / Yarn Count "${line.yarnCount}"` : "") +
-                    ` was not found in the yarn dyeing orders of job ${jobNo}`
-            );
-        }
+       
     }
 }
 
@@ -592,7 +566,6 @@ export const createNewJob = async (req: Request, res: Response) => {
                                 // For a Y/D batch line lotNo stays null on purpose,
                                 // so the raw yarn balance is not reduced.
                                 lotNo: line.lotNo || null,
-                                ydBatch: line.ydBatch || null, // NEW
                                 yarnCount: line.yarnCount || null,
                                 stichLength: line.stichLength || null,
                                 machineDia: line.machineDia || null,
