@@ -1,4 +1,3 @@
-
 import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
@@ -534,6 +533,74 @@ export const yarnStockTable = async (
       updateDate(row, delivery.deliveryDate);
     }
 
+    // 7.5 MERGE ORPHAN ROWS
+    //
+    // An "orphan" row has assigned/delivery quantities but no spinning
+    // received/returned quantity. This usually happens when the PI or
+    // yarn count text differs between the spinning movement and the
+    // delivery/composition, so they end up on different row keys.
+    //
+    // We only merge when there is exactly ONE possible target row for
+    // the same lot, so we never guess between several candidates.
+
+    const isOrphan = (row: YarnStockRow): boolean =>
+      row.received === 0 && row.returnSpinning === 0;
+
+    for (const [orphanKey, orphan] of Array.from(rows.entries())) {
+
+      if (!isOrphan(orphan)) continue;
+
+      const lotName = normalize(orphan.lot);
+
+      const candidates = Array.from(rows.entries()).filter(
+        ([key, row]) =>
+          key !== orphanKey &&
+          !isOrphan(row) &&
+          normalize(row.lot) === lotName
+      );
+
+      const tiers = [
+        // 1) same lot + same PI
+        candidates.filter(
+          ([, row]) =>
+            normalize(row.piNo) === normalize(orphan.piNo)
+        ),
+
+        // 2) same lot + same yarn count
+        candidates.filter(
+          ([, row]) =>
+            normalize(row.yarnCount) ===
+            normalize(orphan.yarnCount)
+        ),
+
+        // 3) same lot only
+        candidates,
+      ];
+
+      const match = tiers.find((tier) => tier.length === 1);
+
+      if (!match) continue;
+
+      const target = match[0]![1];
+
+      target.assignQty += orphan.assignQty;
+      target.deliveryKnitting += orphan.deliveryKnitting;
+      target.returnFromKnitting += orphan.returnFromKnitting;
+
+      if (
+        orphan.date &&
+        (!target.date || orphan.date < target.date)
+      ) {
+        target.date = orphan.date;
+      }
+
+      rows.delete(orphanKey);
+
+      lotCountKeys
+        .get(makeLotKey(orphan.lot, orphan.yarnCount))
+        ?.delete(orphanKey);
+    }
+
     // 8. LOT-LEVEL PHYSICAL STOCK
 
     const physicalStock = new Map<
@@ -581,12 +648,6 @@ export const yarnStockTable = async (
     // Include stock-only lots without inventing a PI.
     for (const stock of physicalStock.values()) {
 
-      const key = makeKey(
-        "",
-        stock.lotNo,
-        stock.yarnCount
-      );
-
       const hasPiRows = lotCountKeys.get(
         makeLotKey(stock.lotNo, stock.yarnCount)
       );
@@ -621,6 +682,14 @@ export const yarnStockTable = async (
           row.assignQty
         );
 
+        const deliveryKnitting = round2(
+          row.deliveryKnitting
+        );
+
+        const returnFromKnitting = round2(
+          row.returnFromKnitting
+        );
+
         return {
           ...row,
 
@@ -636,13 +705,22 @@ export const yarnStockTable = async (
             assignQty
           ),
 
-          deliveryKnitting: round2(
-            row.deliveryKnitting
+          deliveryKnitting,
+
+          returnFromKnitting,
+
+          // received - returned to spinning - delivered + returned back
+          calculatedPhysicalBalance: round2(
+            received -
+            returnSpinning -
+            deliveryKnitting +
+            returnFromKnitting
           ),
 
-          returnFromKnitting: round2(
-            row.returnFromKnitting
-          ),
+          // true = this row has no spinning received/returned qty,
+          // so its balance is not reliable (check PI / lot / count data).
+          noSpinningRecord:
+            received === 0 && returnSpinning === 0,
         };
       })
       .sort((a, b) =>
