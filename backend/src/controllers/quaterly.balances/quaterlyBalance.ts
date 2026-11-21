@@ -41,6 +41,11 @@ const DELIVERY_TYPES: Record<string, string[]> = {
     knittingOrder: ["Yarn Delivery", "Yarn Return", "Grey Received", "Grey Fabric Received", "Finish Received"],
     dyeingOrder: ["Grey Delivery", "Grey Return", "Grey Received", "Finish Received"],
     aopOrder: ["Sent For Aop", "Received From Aop", "AOP Finish Fabric Rcvd", "Return From Aop"],
+    yarnDyeingOrder: ["Yarn Delivery For Yarn Dye",
+        "Yarn Return From Yarn Dye",
+        "Yarn Received From Yarn Dye",
+        "Finish Received"
+    ],
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
