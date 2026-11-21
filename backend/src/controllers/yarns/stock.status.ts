@@ -162,6 +162,10 @@ type YarnStockRow = {
   assignQty: number;
   assignBalance: number;
 
+  // Starting stock taken from yarnStock for lots that have
+  // NO spinning movement records (opening stock / direct entry).
+  openingStock: number;
+
   deliveryKnitting: number;
   returnFromKnitting: number;
 
@@ -383,6 +387,8 @@ export const yarnStockTable = async (
 
           assignQty: 0,
           assignBalance: 0,
+
+          openingStock: 0,
 
           deliveryKnitting: 0,
           returnFromKnitting: 0,
@@ -665,6 +671,58 @@ export const yarnStockTable = async (
       }
     }
 
+    // 8.5 OPENING STOCK FOR LOTS WITH NO SPINNING RECORDS
+    //
+    // If a lot has no "Received From Spinning" / "Return To Spinning"
+    // rows at all, its starting quantity must come from yarnStock.
+    // The stock is applied ONCE per lot (to the row with the most
+    // knitting delivery), so it is never counted twice.
+
+    // Lot-level stock, matched by lot number only (yarn count text
+    // often differs between tables).
+    const stockByLot = new Map<string, number>();
+
+    for (const stock of physicalStock.values()) {
+      const lotKey = normalize(stock.lotNo);
+
+      stockByLot.set(
+        lotKey,
+        (stockByLot.get(lotKey) ?? 0) + stock.physicalBalance
+      );
+    }
+
+    const lotsWithSpinning = new Set<string>();
+    const noSpinningRowsByLot = new Map<string, YarnStockRow[]>();
+
+    for (const row of rows.values()) {
+      const lotKey = normalize(row.lot);
+
+      if (!isOrphan(row)) {
+        lotsWithSpinning.add(lotKey);
+        continue;
+      }
+
+      const list = noSpinningRowsByLot.get(lotKey) ?? [];
+      list.push(row);
+      noSpinningRowsByLot.set(lotKey, list);
+    }
+
+    for (const [lotKey, list] of noSpinningRowsByLot.entries()) {
+
+      // Lot has spinning records somewhere: do not touch.
+      if (lotsWithSpinning.has(lotKey)) continue;
+
+      const stockQty = stockByLot.get(lotKey);
+
+      if (stockQty === undefined) continue;
+
+      const target = [...list].sort(
+        (a, b) => b.deliveryKnitting - a.deliveryKnitting
+      )[0]!;
+
+      target.openingStock = stockQty;
+    }
+
     // --------------------------------------------------
     // 9. FINAL RESPONSE
     // --------------------------------------------------
@@ -680,6 +738,10 @@ export const yarnStockTable = async (
 
         const assignQty = round2(
           row.assignQty
+        );
+
+        const openingStock = round2(
+          row.openingStock
         );
 
         const deliveryKnitting = round2(
@@ -699,8 +761,11 @@ export const yarnStockTable = async (
 
           assignQty,
 
+          openingStock,
+
           assignBalance: round2(
-            received -
+            received +
+            openingStock -
             returnSpinning -
             assignQty
           ),
@@ -709,18 +774,22 @@ export const yarnStockTable = async (
 
           returnFromKnitting,
 
-          // received - returned to spinning - delivered + returned back
+          // (received + opening stock) - returned to spinning
+          // - delivered to knitting + returned from knitting
           calculatedPhysicalBalance: round2(
-            received -
+            received +
+            openingStock -
             returnSpinning -
             deliveryKnitting +
             returnFromKnitting
           ),
 
-          // true = this row has no spinning received/returned qty,
-          // so its balance is not reliable (check PI / lot / count data).
+          // true = no spinning records AND no opening stock found,
+          // so the balance cannot be trusted.
           noSpinningRecord:
-            received === 0 && returnSpinning === 0,
+            received === 0 &&
+            returnSpinning === 0 &&
+            openingStock === 0,
         };
       })
       .sort((a, b) =>
