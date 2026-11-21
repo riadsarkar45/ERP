@@ -17,6 +17,7 @@ export const stockStatus = async (req: Request, res: Response) => {
       assignedStock,
       spinningMovement,
       yarnMovement,
+      enteredStock,
     ] = await Promise.all([
       prisma.composition.aggregate({
         where: {
@@ -59,6 +60,16 @@ export const stockStatus = async (req: Request, res: Response) => {
           deliveryQty: true,
         },
       }),
+
+      // Stock you enter manually in yarnStock.
+      prisma.yarnStock.aggregate({
+        _sum: {
+          physicalBalanceQty: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
     ]);
 
     return res.status(200).json({
@@ -67,6 +78,12 @@ export const stockStatus = async (req: Request, res: Response) => {
         assignedStock: {
           totalQty: assignedStock._sum.workOrderQty ?? 0,
           totalCount: assignedStock._count.id,
+        },
+
+        // Total of the stock you entered.
+        availableStock: {
+          totalQty: enteredStock._sum.physicalBalanceQty ?? 0,
+          totalCount: enteredStock._count.id,
         },
 
         spinningMovement: {
