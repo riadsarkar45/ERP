@@ -69,7 +69,7 @@ const FINISH_KEEP_FACTORIES = [
 
 /* !!! EDIT THIS ONE LINE !!!
    the column of the delivery row that holds the "To" (garments) factory name of the challan */
-const DELIVERY_TO_FACTORY_FIELD = "toFactoryName";
+const DELIVERY_TO_FACTORY_FIELD = "toFactory";
 
 const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 const FINISH_KEEP_SET = new Set(FINISH_KEEP_FACTORIES.map(normName));
