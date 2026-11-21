@@ -10,7 +10,7 @@ const MASTER_PERMISSIONS: Record<string, string[]> = {
     productionDataReport: ['summary', 'dailyCuttingUpdate', 'dailySewingUpdate', 'dailyFinishingUpdate', 'dailyExportUpdate', 'infoEdit', 'readOnly'],
     production: ['summary', 'dailyCuttingUpdate', 'dailySewingUpdate', 'dailyFinishingUpdate', 'dailyExportUpdate', 'infoEdit', 'readOnly'],
     partyWiseView: ['knittingFilter', 'knittingDataExport', 'dyeingFilter', 'dyeingDataExport', 'aopFilter', 'aopDataExport', 'readOnly'],
-    movementBilling: ['qtyEdit', 'billingMake', 'billApproved', 'challanInfoExport', 'priceChange', 'billInfoSee', 'aopOrder', 'dyeingOrder', 'knittingOrder'],
+    movementBilling: ['qtyEdit', 'billingMake', 'billApproved', 'challanInfoExport', 'priceChange', 'billInfoSee', 'aopOrder', 'dyeingOrder', 'knittingOrder', "yarnDyeingOrder"],
     userManagement: ['addNewUser', 'setUserPermission', 'deleteExistingUser'],
     dashboard: ['hourlyChallanActivity', 'hourlyWorkOrderActivity', 'hourlyBookingActivity'],
     debitNote: ['responsibleForMakingDebitNote', 'responsibleForApprovalDebitNote'],

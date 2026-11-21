@@ -25,7 +25,7 @@ import {
 } from "./redis/connect.redis";
 
 const app = express();
-
+app.disable("x-powered-by");
 const PORT = Number(process.env.PORT) || 3000;
 
 const corsOrigins = [
