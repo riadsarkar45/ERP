@@ -2,124 +2,292 @@ import type { Request, Response } from "express";
 import prisma from "../../database/prismaClient/prisma";
 
 const MOVEMENT_TYPES = {
-  IN: "Received From Spinning",
-  OUT: "Return To Spinning",
+    IN: "Received From Spinning",
+    OUT: "Return To Spinning",
 } as const;
 
 const DELIVERY_TYPES = {
-  IN: "Yarn Delivery",
-  OUT: "Yarn Return",
+    IN: "Yarn Delivery",
+    OUT: "Yarn Return",
+    FINISH_RECEIVED: "Finish Received",
+    YARN_RECEIVED_FROM_YD: "Yarn Received From YD",
+    YARN_DELIVERY: "Yarn Delivery",
+    YARN_RETURN: "Yarn Return",
+    YARN_DELIVERY_FOR_YD: "Yarn Delivery For Yarn Dye",
 } as const;
 
+// challanNo used for the opening-stock rows imported from the YARN STOCK sheet
+const OPENING_CHALLAN_NO = 0;
+
+// Stock start date = the day the opening stock was loaded. The opening stock is
+// today's physical balance, so yarn deliveries/returns made BEFORE that day are
+// already inside it and must not be subtracted again.
+// Returns null when no opening stock exists (then all deliveries count).
+const getStockStartDate = async (): Promise<Date | null> => {
+    const opening = await prisma.spinningYarnMovement.aggregate({
+        where: {
+            movementType: MOVEMENT_TYPES.IN,
+            challanNo: OPENING_CHALLAN_NO,
+        },
+        _min: {
+            movementDate: true,
+        },
+    });
+
+    const first = opening._min.movementDate;
+    if (!first) return null;
+
+    return new Date(
+        Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), first.getUTCDate())
+    );
+};
+
 export const stockStatus = async (req: Request, res: Response) => {
-  try {
-    const [
-      assignedStock,
-      spinningMovement,
-      yarnMovement,
-      enteredStock,
-    ] = await Promise.all([
-      prisma.composition.aggregate({
-        where: {
-          status: "ASSIGNED",
-        },
-        _sum: {
-          workOrderQty: true,
-        },
-        _count: {
-          id: true,
-        },
-      }),
+    try {
+        const stockStartDate = await getStockStartDate();
 
-      prisma.spinningYarnMovement.groupBy({
-        by: ["movementType"],
-        where: {
-          movementType: {
-            in: [
-              MOVEMENT_TYPES.IN,
-              MOVEMENT_TYPES.OUT,
-            ],
-          },
-        },
-        _sum: {
-          movementQty: true,
-        },
-      }),
+        const sinceStart = stockStartDate
+            ? { deliveryDate: { gte: stockStartDate } }
+            : {};
 
-      prisma.deliveries.groupBy({
-        by: ["deliveryType"],
-        where: {
-          deliveryType: {
-            in: [
-              DELIVERY_TYPES.IN,
-              DELIVERY_TYPES.OUT,
-            ],
-          },
-        },
-        _sum: {
-          deliveryQty: true,
-        },
-      }),
+        const [
+            compositions,
+            spinningMovement,
+            yarnMovementSinceStart,
+        ] = await Promise.all([
+            // Assigned work orders and their delivered quantities
+            prisma.composition.findMany({
+                where: {
+                    status: "ASSIGNED",
+                },
+                select: {
+                    workOrderQty: true,
+                    deliveries: {
+                        where: {
+                            deliveryType: DELIVERY_TYPES.IN,
+                        },
+                        select: {
+                            deliveryQty: true,
+                        },
+                    },
+                },
+            }),
 
-      // Stock you enter manually in yarnStock.
-      prisma.yarnStock.aggregate({
-        _sum: {
-          physicalBalanceQty: true,
-        },
-        _count: {
-          id: true,
-        },
-      }),
-    ]);
+            // Spinning movement summary (opening stock is stored here too,
+            // as "Received From Spinning" rows)
+            prisma.spinningYarnMovement.groupBy({
+                by: ["movementType"],
+                where: {
+                    movementType: {
+                        in: [
+                            MOVEMENT_TYPES.IN,
+                            MOVEMENT_TYPES.OUT,
+                        ],
+                    },
+                },
+                _sum: {
+                    movementQty: true,
+                },
+                _count: {
+                    _all: true,
+                },
+            }),
 
-    return res.status(200).json({
-      success: true,
-      data: {
-        assignedStock: {
-          totalQty: assignedStock._sum.workOrderQty ?? 0,
-          totalCount: assignedStock._count.id,
-        },
+            // Knitting delivery and return summary since the stock start date
+            // (used for the physical stock calculation)
+            prisma.deliveries.groupBy({
+                by: ["deliveryType"],
+                where: {
+                    deliveryType: {
+                        in: [
+                            DELIVERY_TYPES.IN,
+                            DELIVERY_TYPES.OUT,
+                            DELIVERY_TYPES.YARN_DELIVERY_FOR_YD,
+                        ],
+                    },
+                    ...sinceStart,
+                },
+                _sum: {
+                    deliveryQty: true,
+                },
+            }),
+        ]);
 
-        // Total of the stock you entered.
-        availableStock: {
-          totalQty: enteredStock._sum.physicalBalanceQty ?? 0,
-          totalCount: enteredStock._count.id,
-        },
+        // --------------------------------------------------
+        // 1. Assigned quantity and assignment balance
+        // --------------------------------------------------
 
-        spinningMovement: {
-          received:
+        let assignedQty = 0;
+        let deliveredAgainstAssignment = 0;
+
+        for (const composition of compositions) {
+            const workOrderQty = Number(composition.workOrderQty ?? 0);
+
+            const deliveredQty = composition.deliveries.reduce(
+                (sum, delivery) => sum + Number(delivery.deliveryQty ?? 0),
+                0
+            );
+
+            assignedQty += workOrderQty;
+            deliveredAgainstAssignment += deliveredQty;
+        }
+
+        const assignedCount = compositions.length;
+
+        // --------------------------------------------------
+        // 2. Spinning movement totals
+        // --------------------------------------------------
+
+        const spinningReceivedRow = spinningMovement.find(
+            (item) => item.movementType === MOVEMENT_TYPES.IN
+        );
+
+        const spinningReceived =
+            spinningReceivedRow?._sum.movementQty ?? 0;
+
+        const spinningReceivedCount =
+            spinningReceivedRow?._count._all ?? 0;
+
+        const spinningReturned =
             spinningMovement.find(
-              (item) => item.movementType === MOVEMENT_TYPES.IN
-            )?._sum.movementQty ?? 0,
+                (item) => item.movementType === MOVEMENT_TYPES.OUT
+            )?._sum.movementQty ?? 0;
 
-          returned:
-            spinningMovement.find(
-              (item) => item.movementType === MOVEMENT_TYPES.OUT
-            )?._sum.movementQty ?? 0,
-        },
+        // --------------------------------------------------
+        // 3. Knitting movement totals
+        // --------------------------------------------------
 
-        yarnMovement: {
-          delivered:
-            yarnMovement.find(
-              (item) => item.deliveryType === DELIVERY_TYPES.IN
-            )?._sum.deliveryQty ?? 0,
+        const stockYarnDelivered =
+            yarnMovementSinceStart.find(
+                (item) => item.deliveryType === DELIVERY_TYPES.IN
+            )?._sum.deliveryQty ?? 0;
 
-          returned:
-            yarnMovement.find(
-              (item) => item.deliveryType === DELIVERY_TYPES.OUT
-            )?._sum.deliveryQty ?? 0,
-        },
-      },
-    });
+        const stockYarnReturned =
+            yarnMovementSinceStart.find(
+                (item) => item.deliveryType === DELIVERY_TYPES.OUT
+            )?._sum.deliveryQty ?? 0;
 
-  } catch (error) {
-    console.error("Stock status error:", error);
+        const stockYarnDyeDelivered =
+            yarnMovementSinceStart.find(
+                (item) =>
+                    item.deliveryType === DELIVERY_TYPES.YARN_DELIVERY_FOR_YD
+            )?._sum.deliveryQty ?? 0;
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve stock status",
-    });
-  }
+        // --------------------------------------------------
+        // 4. Physical stock calculation (from movements only)
+        //    stock = received from spinning (incl. opening stock)
+        //            - return to spinning
+        //            - yarn delivery - yarn delivery for yarn dye
+        //            + yarn return
+        //    Deliveries/returns counted only from the stock start date.
+        // --------------------------------------------------
+
+        const spinningNetStock = spinningReceived - spinningReturned;
+
+        const totalStock =
+            spinningReceived -
+            spinningReturned -
+            stockYarnDelivered -
+            stockYarnDyeDelivered +
+            stockYarnReturned;
+
+        // --------------------------------------------------
+        // 5. Assignment balance
+        // --------------------------------------------------
+
+        // Assign balance = physical stock - assigned qty
+        const assignBalance = Number(totalStock) - assignedQty;
+
+        const reservedQty = Math.max(assignBalance, 0);
+
+        // Available stock after reservation
+        const availableStock = Number(totalStock) - reservedQty;
+
+        // --------------------------------------------------
+        // 6. Reconciliation
+        // --------------------------------------------------
+
+        const overDeliveredQty = Math.max(
+            deliveredAgainstAssignment - assignedQty,
+            0
+        );
+
+        // --------------------------------------------------
+        // 7. Response
+        // --------------------------------------------------
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                assignedStock: {
+                    totalQty: assignedQty,
+                    totalCount: assignedCount,
+                },
+
+                assignBalance: {
+                    totalQty: assignBalance,
+                },
+
+                reservedStock: {
+                    totalQty: reservedQty,
+                    totalCount: assignedCount,
+                },
+
+                availableStock: {
+                    totalQty: availableStock,
+                    totalCount: spinningReceivedCount,
+                },
+
+                totalStock: {
+                    totalQty: totalStock,
+                },
+
+                spinningMovement: {
+                    received: spinningReceived,
+                    returned: spinningReturned,
+                    netMovement:
+                        spinningReceived - spinningReturned,
+                },
+
+                // Deliveries/returns counted in the stock (since stockStartDate)
+                yarnMovement: {
+                    delivered: stockYarnDelivered,
+                    returned: stockYarnReturned,
+                    netMovement:
+                        stockYarnReturned - stockYarnDelivered,
+                },
+
+                // "Yarn Delivery For Yarn Dye" since stockStartDate (also deducted from stock)
+                yarnDyeDelivery: {
+                    delivered: stockYarnDyeDelivered,
+                },
+
+                stockStartDate: stockStartDate
+                    ? stockStartDate.toISOString().slice(0, 10)
+                    : null,
+
+                // Key kept so the frontend does not break. It now comes from
+                // spinningYarnMovement (net received − returned, and the number
+                // of "Received From Spinning" rows), not from the yarnStock table.
+                enteredStock: {
+                    totalQty: spinningNetStock,
+                    totalCount: spinningReceivedCount,
+                },
+
+                reconciliation: {
+                    deliveredAgainstAssignment,
+                    overDeliveredQty,
+                },
+            },
+        });
+    } catch (error) {
+        console.error("Stock status error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve stock status",
+        });
+    }
 };
 
 
@@ -128,6 +296,7 @@ export const stockStatus = async (req: Request, res: Response) => {
 const SPINNING_RECEIVED = "RECEIVED FROM SPINNING";
 const SPINNING_RETURNED = "RETURN TO SPINNING";
 const DELIVERY_TO_KNITTING = "YARN DELIVERY";
+const DELIVERY_FOR_YARN_DYE = "YARN DELIVERY FOR YARN DYE";
 const RETURN_FROM_KNITTING = "YARN RETURN";
 const ASSIGNED_STATUS = "ASSIGNED";
 
@@ -153,15 +322,6 @@ const makeKey = (
     normalize(yarnCount),
   ]);
 
-const makeLotKey = (
-  lotNo: string,
-  yarnCount: string
-): string =>
-  JSON.stringify([
-    normalize(lotNo),
-    normalize(yarnCount),
-  ]);
-
 const toDateString = (date: Date): string =>
   date.toISOString().slice(0, 10);
 
@@ -179,14 +339,18 @@ type YarnStockRow = {
   assignQty: number;
   assignBalance: number;
 
-  // Starting stock taken from yarnStock for lots that have
-  // NO spinning movement records (opening stock / direct entry).
+  // Opening stock is now stored as "Received From Spinning" movements
+  // (PI "OPENING-<SUPPLIER>"), so it is already inside `received`.
+  // Kept at 0 so existing frontend code reading this field does not break.
   openingStock: number;
 
   deliveryKnitting: number;
   returnFromKnitting: number;
 
-  // Not available from yarnStock at PI level.
+  // "Yarn Delivery For Yarn Dye" (also deducted from stock)
+  deliveryForYd: number;
+
+  // Not available at PI level.
   physicalBalance: null;
 };
 
@@ -203,7 +367,11 @@ export const yarnStockTable = async (
   try {
     // 1. FETCH REQUIRED DATA
 
-    const [movements, assignedComps, deliveries, stocks,] = await Promise.all([
+    // Same rule as stockStatus: deliveries before the opening-stock date
+    // are already inside the opening stock.
+    const stockStartDate = await getStockStartDate();
+
+    const [movements, assignedComps, deliveries] = await Promise.all([
 
       prisma.spinningYarnMovement.findMany({
         select: {
@@ -259,6 +427,9 @@ export const yarnStockTable = async (
 
       prisma.deliveries.findMany({
         where: {
+          ...(stockStartDate
+            ? { deliveryDate: { gte: stockStartDate } }
+            : {}),
           OR: [
             {
               deliveryType: {
@@ -269,6 +440,12 @@ export const yarnStockTable = async (
             {
               deliveryType: {
                 equals: RETURN_FROM_KNITTING,
+                mode: "insensitive",
+              },
+            },
+            {
+              deliveryType: {
+                equals: DELIVERY_FOR_YARN_DYE,
                 mode: "insensitive",
               },
             },
@@ -289,16 +466,6 @@ export const yarnStockTable = async (
               yarnCount: true,
             },
           },
-        },
-      }),
-
-      prisma.yarnStock.findMany({
-        select: {
-          supplierName: true,
-          count: true,
-          composition: true,
-          lotNo: true,
-          physicalBalanceQty: true,
         },
       }),
     ]);
@@ -361,9 +528,6 @@ export const yarnStockTable = async (
 
     const rows = new Map<string, YarnStockRow>();
 
-    // PI + Lot + Count -> row key
-    const lotCountKeys = new Map<string, Set<string>>();
-
     const getRow = (
       piNo: string,
       lotNo: string,
@@ -409,25 +573,12 @@ export const yarnStockTable = async (
 
           deliveryKnitting: 0,
           returnFromKnitting: 0,
+          deliveryForYd: 0,
 
           physicalBalance: null,
         };
 
         rows.set(key, row);
-
-        const lotKey = makeLotKey(
-          lotNo,
-          yarnCount
-        );
-
-        let keys = lotCountKeys.get(lotKey);
-
-        if (!keys) {
-          keys = new Set<string>();
-          lotCountKeys.set(lotKey, keys);
-        }
-
-        keys.add(key);
       }
 
       return row;
@@ -549,6 +700,11 @@ export const yarnStockTable = async (
         row.returnFromKnitting +=
           delivery.deliveryQty;
 
+      } else if (type === DELIVERY_FOR_YARN_DYE) {
+
+        row.deliveryForYd +=
+          delivery.deliveryQty;
+
       } else {
         continue;
       }
@@ -609,6 +765,7 @@ export const yarnStockTable = async (
       target.assignQty += orphan.assignQty;
       target.deliveryKnitting += orphan.deliveryKnitting;
       target.returnFromKnitting += orphan.returnFromKnitting;
+      target.deliveryForYd += orphan.deliveryForYd;
 
       if (
         orphan.date &&
@@ -618,130 +775,10 @@ export const yarnStockTable = async (
       }
 
       rows.delete(orphanKey);
-
-      lotCountKeys
-        .get(makeLotKey(orphan.lot, orphan.yarnCount))
-        ?.delete(orphanKey);
-    }
-
-    // 8. LOT-LEVEL PHYSICAL STOCK
-
-    const physicalStock = new Map<
-      string,
-      {
-        lotNo: string;
-        yarnCount: string;
-        supplierName: string;
-        composition: string;
-        physicalBalance: number;
-      }
-    >();
-
-    for (const stock of stocks) {
-
-      const lotNo = clean(stock.lotNo);
-
-      if (!lotNo) continue;
-
-      const yarnCount = clean(stock.count);
-
-      const key = makeLotKey(
-        lotNo,
-        yarnCount
-      );
-
-      let existing = physicalStock.get(key);
-
-      if (!existing) {
-        existing = {
-          lotNo,
-          yarnCount,
-          supplierName: clean(stock.supplierName),
-          composition: clean(stock.composition),
-          physicalBalance: 0,
-        };
-
-        physicalStock.set(key, existing);
-      }
-
-      existing.physicalBalance +=
-        stock.physicalBalanceQty;
-    }
-
-    // Include stock-only lots without inventing a PI.
-    for (const stock of physicalStock.values()) {
-
-      const hasPiRows = lotCountKeys.get(
-        makeLotKey(stock.lotNo, stock.yarnCount)
-      );
-
-      if (!hasPiRows?.size) {
-
-        const row = getRow(
-          "",
-          stock.lotNo,
-          stock.yarnCount
-        );
-
-        row.supplierName = stock.supplierName;
-        row.composition = stock.composition;
-      }
-    }
-
-    // 8.5 OPENING STOCK FOR LOTS WITH NO SPINNING RECORDS
-    //
-    // If a lot has no "Received From Spinning" / "Return To Spinning"
-    // rows at all, its starting quantity must come from yarnStock.
-    // The stock is applied ONCE per lot (to the row with the most
-    // knitting delivery), so it is never counted twice.
-
-    // Lot-level stock, matched by lot number only (yarn count text
-    // often differs between tables).
-    const stockByLot = new Map<string, number>();
-
-    for (const stock of physicalStock.values()) {
-      const lotKey = normalize(stock.lotNo);
-
-      stockByLot.set(
-        lotKey,
-        (stockByLot.get(lotKey) ?? 0) + stock.physicalBalance
-      );
-    }
-
-    const lotsWithSpinning = new Set<string>();
-    const noSpinningRowsByLot = new Map<string, YarnStockRow[]>();
-
-    for (const row of rows.values()) {
-      const lotKey = normalize(row.lot);
-
-      if (!isOrphan(row)) {
-        lotsWithSpinning.add(lotKey);
-        continue;
-      }
-
-      const list = noSpinningRowsByLot.get(lotKey) ?? [];
-      list.push(row);
-      noSpinningRowsByLot.set(lotKey, list);
-    }
-
-    for (const [lotKey, list] of noSpinningRowsByLot.entries()) {
-
-      // Lot has spinning records somewhere: do not touch.
-      if (lotsWithSpinning.has(lotKey)) continue;
-
-      const stockQty = stockByLot.get(lotKey);
-
-      if (stockQty === undefined) continue;
-
-      const target = [...list].sort(
-        (a, b) => b.deliveryKnitting - a.deliveryKnitting
-      )[0]!;
-
-      target.openingStock = stockQty;
     }
 
     // --------------------------------------------------
-    // 9. FINAL RESPONSE
+    // 8. FINAL RESPONSE
     // --------------------------------------------------
 
     const data = Array.from(rows.values())
@@ -769,6 +806,10 @@ export const yarnStockTable = async (
           row.returnFromKnitting
         );
 
+        const deliveryForYd = round2(
+          row.deliveryForYd
+        );
+
         return {
           ...row,
 
@@ -791,17 +832,21 @@ export const yarnStockTable = async (
 
           returnFromKnitting,
 
+          deliveryForYd,
+
           // (received + opening stock) - returned to spinning
-          // - delivered to knitting + returned from knitting
+          // - delivered to knitting - delivered for yarn dye
+          // + returned from knitting
           calculatedPhysicalBalance: round2(
             received +
             openingStock -
             returnSpinning -
-            deliveryKnitting +
+            deliveryKnitting -
+            deliveryForYd +
             returnFromKnitting
           ),
 
-          // true = no spinning records AND no opening stock found,
+          // true = no spinning records for this row,
           // so the balance cannot be trusted.
           noSpinningRecord:
             received === 0 &&
@@ -816,15 +861,6 @@ export const yarnStockTable = async (
         a.yarnCount.localeCompare(b.yarnCount)
       );
 
-    const lotPhysicalBalances = Array.from(
-      physicalStock.values()
-    ).map((stock) => ({
-      ...stock,
-      physicalBalance: round2(
-        stock.physicalBalance
-      ),
-    }));
-
     return res.status(200).json({
       success: true,
 
@@ -832,9 +868,9 @@ export const yarnStockTable = async (
 
       data,
 
-      // Separate lot-level stock summary.
-      // Do not sum this alongside PI rows.
-      lotPhysicalBalances,
+      // Kept (empty) so existing frontend code reading it does not break.
+      // Stock now comes only from spinningYarnMovement.
+      lotPhysicalBalances: [],
     });
 
   } catch (error) {

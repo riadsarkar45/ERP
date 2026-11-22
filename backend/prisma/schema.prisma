@@ -100,6 +100,7 @@ model Composition {
   machineDia            String?
   piId                  String?
   status                String               @default("ASSIGNED")
+  ydBatch               String               @default("NULL")
 
   @@index([status])
   @@index([workOrderId])
@@ -225,6 +226,7 @@ model deliveries {
   physicalReceivedQty Int      @default(0)
   lotNo               String?  @default("NULL")
   piId                String?  @default("NULL")
+  batchNo             String   @default("NULL")
 
   @@index([yarnCompId])
   @@index([createdBy])
@@ -363,17 +365,17 @@ model reconciliationNotes {
 }
 
 model yarnStock {
-  id                 Int    @unique @default(autoincrement())
+  id                 Int     @unique @default(autoincrement())
   supplierName       String
   count              String
   composition        String
   lotNo              String
-  physicalBalanceQty Int
+  physicalBalanceQty Decimal @db.Decimal(18, 2)
   createdBy          Int
 }
 
 model ydStock {
-  id            Int    @unique @default(autoincrement())
+  id            Int     @unique @default(autoincrement())
   count         String
   composition   String
   buyer         String
@@ -381,7 +383,7 @@ model ydStock {
   styleNo       String
   color         String
   dyedYarnLot   String
-  yarnDyedStock String
+  yarnDyedStock Decimal @db.Decimal(18, 2)
 }
 
 model workOrderApprovalRequest {

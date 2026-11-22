@@ -52,8 +52,8 @@ import { searchJobForWorkOrder } from "../controllers/orders/searchJobForWorkOrd
 import { partyWiseStock } from "../controllers/partyViewData/partyWiseStock";
 import { quarterlyDetail, quarterlyMonths, quarterlySummary } from "../controllers/quaterly.balances/quaterlyBalance";
 import { verifyChallanQty } from "../controllers/movements/verify.challan.qty";
-import { getLotsAndYarnCounts } from "../controllers/yarns/get.lots.for.work.order";
 import { stockStatus, yarnStockTable } from "../controllers/yarns/stock.status";
+import { getLotsAndYarnCounts } from "../controllers/yarns/get.lots.for.work.order";
 
 const getRouters = express.Router();
 
@@ -324,7 +324,7 @@ getRouters.get(
   getLotsAndYarnCounts
 );
 getRouters.get(
-  "/yarn-stock", responseTimeMonitor, authenticate,
+  "/yarn-stock", responseTimeMonitor,
   stockStatus
 );
 

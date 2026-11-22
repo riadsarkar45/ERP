@@ -19,14 +19,17 @@ interface YarnDyeItem {
     challanNo: number | string;
     lotNo?: string | null;
     piId?: string | null;
+    batchNo?: string | null; // required for "Finish Received"
     deliveries: DeliveryItem[];
 }
+
+const FINISH_RECEIVED = "Finish Received";
 
 const ALLOWED_TYPES = new Set([
     "Yarn Delivery For Yarn Dye",
     "Yarn Return From Yarn Dye",
     "Yarn Received From Yarn Dye",
-    "Finish Received",
+    FINISH_RECEIVED,
     "Finish Return",
 ]);
 
@@ -57,7 +60,7 @@ export const yarnDyeDeliveries = async (req: Request, res: Response) => {
         }
 
         // ---------- 1. validate the shape of every item ----------
-        const errors: { yarnId: unknown; message: string }[] = [];
+        const errors: { yarnId: unknown; message: string; deliveryType?: string }[] = [];
         const seenYarnIds = new Set<number>();
 
         const parsed = items.map((item) => {
@@ -66,9 +69,15 @@ export const yarnDyeDeliveries = async (req: Request, res: Response) => {
             const date = new Date(item?.date);
             const toFactory = String(item?.toFactory ?? "").trim();
             const fromFactory = String(item?.fromFactory ?? "").trim();
+            const batchNo = String(item?.batchNo ?? "").trim();
             const deliveries = Array.isArray(item?.deliveries) ? item.deliveries : [];
 
-            const fail = (message: string) => errors.push({ yarnId: item?.yarnId, message });
+            const fail = (message: string, deliveryType?: string) =>
+                errors.push(
+                    deliveryType === undefined
+                        ? { yarnId: item?.yarnId, message }
+                        : { yarnId: item?.yarnId, message, deliveryType },
+                );
 
             if (!Number.isInteger(yarnId) || yarnId <= 0) fail("Invalid yarn color booking ID");
             else if (seenYarnIds.has(yarnId)) fail("Same yarn color sent twice");
@@ -92,6 +101,14 @@ export const yarnDyeDeliveries = async (req: Request, res: Response) => {
                 }
             }
 
+            // Batch No is required when a Finish Received delivery is present
+            const hasFinishReceived = deliveries.some(
+                (d) => d && d.deliveryType === FINISH_RECEIVED
+            );
+            if (hasFinishReceived && !batchNo) {
+                fail("Batch No is required for Finish Received", FINISH_RECEIVED);
+            }
+
             return {
                 yarnId,
                 queryWorkOrderId: item?.workOrderId ? Number(item.workOrderId) : null,
@@ -101,6 +118,7 @@ export const yarnDyeDeliveries = async (req: Request, res: Response) => {
                 challanNo,
                 lotNo: item?.lotNo ?? null,
                 piId: item?.piId ?? null,
+                batchNo,
                 deliveries,
             };
         });
@@ -245,6 +263,11 @@ export const yarnDyeDeliveries = async (req: Request, res: Response) => {
                             createdBy: userId,
                             lotNo: r.lotNo,
                             piId: r.piId,
+                            // batchNo is saved only on Finish Received rows
+                            // (other rows keep the column default)
+                            ...(d.deliveryType === FINISH_RECEIVED
+                                ? { batchNo: r.batchNo }
+                                : {}),
                         };
                         const created = await tx.deliveries.create({ data, select: { id: true } });
                         ids.push(created.id);
