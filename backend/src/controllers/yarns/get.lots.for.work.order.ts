@@ -65,7 +65,9 @@ type YdLot = {
 
 // Batch numbers of the yarn dyeing Finish Received movements of the job
 type YdBatch = {
-    batchNo: string;
+    batchNo: string; // batchNo when present, otherwise lotNo fallback
+    lotNo: string;
+    batchType: "batch" | "lot";
     finishReceivedQuantity: number;
     piNo: string;
     lots: { lotNo: string; yarnCount: string; yarnComposition: string; piNo: string }[];
@@ -720,7 +722,7 @@ const getYdFinishBatches = async (
                 ...COMP_LINE_SELECT,
                 deliveries: {
                     where: { deliveryType: YD_FINISH_TYPE },
-                    select: { deliveryQty: true, [YD_BATCH_FIELD]: true },
+                    select: { deliveryQty: true, [YD_BATCH_FIELD]: true, lotNo: true },
                 },
             },
         } as any);
@@ -729,6 +731,8 @@ const getYdFinishBatches = async (
             string,
             {
                 batchNo: string;
+                lotNo: string;
+                batchType: "batch" | "lot";
                 qty: number;
                 lots: Map<
                     string,
@@ -741,11 +745,20 @@ const getYdFinishBatches = async (
             const lines = toLines(c);
 
             for (const d of c.deliveries ?? []) {
-                const batchNo = clean(d[YD_BATCH_FIELD]);
+                const rawBatchNo = clean(d[YD_BATCH_FIELD]);
+                const rawLotNo = clean(d.lotNo);
+                const batchNo = !isBlank(rawBatchNo) ? rawBatchNo : rawLotNo;
                 if (isBlank(batchNo)) continue;
 
-                const key = norm(batchNo);
-                const entry = batches.get(key) ?? { batchNo, qty: 0, lots: new Map() };
+                const batchType: "batch" | "lot" = !isBlank(rawBatchNo) ? "batch" : "lot";
+                const key = JSON.stringify([norm(batchNo), batchType]);
+                const entry = batches.get(key) ?? {
+                    batchNo,
+                    lotNo: isBlank(rawLotNo) ? "" : rawLotNo,
+                    batchType,
+                    qty: 0,
+                    lots: new Map(),
+                };
                 entry.qty += Number(d.deliveryQty) || 0;
 
                 for (const l of lines) {
@@ -773,6 +786,8 @@ const getYdFinishBatches = async (
 
                 return {
                     batchNo: b.batchNo,
+                    lotNo: b.lotNo,
+                    batchType: b.batchType,
                     finishReceivedQuantity: round3(b.qty),
                     piNo: pis.length === 1 ? pis[0]! : "",
                     lots,

@@ -1,3 +1,4 @@
+
 import type { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 
@@ -27,11 +28,12 @@ type CompositionInput = {
     unitPrice?: string | number;
     piNo?: string;
     lotNo?: string;
+    ydBatch?: string;
     yarnCount?: string;
     stichLength?: string;
     machineDia?: string;
     yarnColors?: YarnColorInput[];
-    yarnComposition: string,
+    yarnComposition: string;
 };
 
 type CreateJobBody = {
@@ -65,12 +67,13 @@ type CleanLine = {
     color: string;
     piNo: string;
     lotNo: string;
+    ydBatch: string;
     yarnCount: string;
     stichLength: string;
     machineDia: string;
     qty: number;
     price: number;
-    yarnComposition: string
+    yarnComposition: string;
     yarnColors: CleanYarnColor[];
 };
 
@@ -101,10 +104,22 @@ type OrderTypeRule = {
 };
 
 const ORDER_TYPE_RULES: Record<string, OrderTypeRule> = {
-    knittingOrder: { mode: "standard", requiredLineFields: ["lotNo", "yarnCount", "stichLength", "machineDia"] },
-    aopOrder: { mode: "standard", requiredLineFields: ["lotNo", "yarnCount"] },
-    dyeingOrder: { mode: "standard", requiredLineFields: ["lotNo", "yarnCount", "stichLength"] },
-    yarnDyeingOrder: { mode: "yarnDyeing", requiredLineFields: [] },
+    knittingOrder: {
+        mode: "standard",
+        requiredLineFields: ["lotNo", "yarnCount", "stichLength", "machineDia"],
+    },
+    aopOrder: {
+        mode: "standard",
+        requiredLineFields: ["lotNo", "yarnCount"],
+    },
+    dyeingOrder: {
+        mode: "standard",
+        requiredLineFields: ["lotNo", "yarnCount", "stichLength"],
+    },
+    yarnDyeingOrder: {
+        mode: "yarnDyeing",
+        requiredLineFields: [],
+    },
 };
 
 const FIELD_LABEL: Record<LineField, string> = {
@@ -121,6 +136,8 @@ const MOVEMENT_TYPES = {
     OUT: "Return To Spinning",
 } as const;
 
+const NULL_VALUE = "NULL";
+
 /* ------------------------------- HELPERS ------------------------------- */
 
 class HttpError extends Error {
@@ -133,7 +150,10 @@ class HttpError extends Error {
 const str = (value: unknown): string => String(value ?? "").trim();
 
 const toNumber = (value: unknown): number | null => {
-    if (value === null || value === undefined || str(value) === "") return null;
+    if (value === null || value === undefined || str(value) === "") {
+        return null;
+    }
+
     try {
         const result = Number(evaluateQtyExpression(String(value)));
         return Number.isFinite(result) ? result : null;
@@ -143,14 +163,18 @@ const toNumber = (value: unknown): number | null => {
 };
 
 const norm = (value: unknown): string => str(value).toLowerCase();
+
 const rowKey = (composition: unknown, color: unknown): string =>
     `${norm(composition)}||${norm(color)}`;
 
-// One stock bucket = PI + Lot + Yarn Count
-const stockKey = (piNo: string, lotNo: string, yarnCount: string): string =>
-    JSON.stringify([piNo, lotNo, yarnCount]);
+const stockKey = (
+    piNo: string,
+    lotNo: string,
+    yarnCount: string
+): string => JSON.stringify([piNo, lotNo, yarnCount]);
 
-const formatQty = (qty: number): string => Number(qty.toFixed(3)).toString();
+const formatQty = (qty: number): string =>
+    Number(qty.toFixed(3)).toString();
 
 /* ----------------------- STEP 1: PARSE AND VALIDATE ----------------------- */
 
@@ -167,15 +191,22 @@ function parseBody(body: CreateJobBody): CleanBody {
         ["month", "Month"],
         ["factoryName", "Factory name"],
     ];
+
     for (const [key, label] of required) {
-        if (!str(body[key])) throw new HttpError(400, `${label} is required`);
+        if (!str(body[key])) {
+            throw new HttpError(400, `${label} is required`);
+        }
     }
 
     const orderType = str(body.orderType);
     const rule = ORDER_TYPE_RULES[orderType];
-    if (!rule) throw new HttpError(400, `Unknown order type: ${orderType}`);
+
+    if (!rule) {
+        throw new HttpError(400, `Unknown order type: ${orderType}`);
+    }
 
     const placeDate = new Date(str(body.workOrderPlaceDate));
+
     if (Number.isNaN(placeDate.getTime())) {
         throw new HttpError(400, "Invalid work order place date");
     }
@@ -188,7 +219,20 @@ function parseBody(body: CreateJobBody): CleanBody {
         const at = `Composition ${i + 1}`;
 
         if (!c || !str(c.composition) || !str(c.color)) {
-            throw new HttpError(400, `${at}: composition and color are required`);
+            throw new HttpError(
+                400,
+                `${at}: composition and color are required`
+            );
+        }
+
+        const ydBatch = str(c.ydBatch);
+
+        // Y/D Batch is supported only for knitting orders.
+        if (ydBatch && orderType !== "knittingOrder") {
+            throw new HttpError(
+                400,
+                `${at}: Y/D Batch is only supported for knitting orders`
+            );
         }
 
         const line: CleanLine = {
@@ -196,37 +240,65 @@ function parseBody(body: CreateJobBody): CleanBody {
             color: str(c.color),
             piNo: str(c.piNo),
             lotNo: str(c.lotNo),
-            // NEW: only knitting orders can draw from a Y/D batch
+            ydBatch,
             yarnCount: str(c.yarnCount),
             stichLength: str(c.stichLength),
             machineDia: str(c.machineDia),
             qty: 0,
             price: 0,
             yarnColors: [],
-            yarnComposition: str(c.yarnComposition)
+            yarnComposition: str(c.yarnComposition),
         };
 
         if (str(c.styleRequirementRowId) !== "") {
             const id = Number(c.styleRequirementRowId);
+
             if (!Number.isInteger(id) || id <= 0) {
-                throw new HttpError(400, `${at}: invalid styleRequirementRowId`);
+                throw new HttpError(
+                    400,
+                    `${at}: invalid styleRequirementRowId`
+                );
             }
+
             line.styleRequirementRowId = id;
         }
 
-
         for (const field of rule.requiredLineFields) {
-            // CHANGED: Lot No is not required when the line uses a Y/D batch
-
             if (!line[field]) {
-                throw new HttpError(400, `${at}: ${FIELD_LABEL[field]} is required`);
+                throw new HttpError(
+                    400,
+                    `${at}: ${FIELD_LABEL[field]} is required`
+                );
+            }
+        }
+
+        // A Y/D batch line must have its own lot and count.
+        if (ydBatch) {
+            if (!line.lotNo) {
+                throw new HttpError(
+                    400,
+                    `${at}: Lot No is required when using a Y/D Batch`
+                );
+            }
+
+            if (!line.yarnCount) {
+                throw new HttpError(
+                    400,
+                    `${at}: Yarn Count is required when using a Y/D Batch`
+                );
             }
         }
 
         if (rule.mode === "yarnDyeing") {
-            const yarnColors = Array.isArray(c.yarnColors) ? c.yarnColors : [];
+            const yarnColors = Array.isArray(c.yarnColors)
+                ? c.yarnColors
+                : [];
+
             if (yarnColors.length === 0) {
-                throw new HttpError(400, `${at}: at least one yarn color is required`);
+                throw new HttpError(
+                    400,
+                    `${at}: at least one yarn color is required`
+                );
             }
 
             let totalQty = 0;
@@ -234,23 +306,43 @@ function parseBody(body: CreateJobBody): CleanBody {
 
             line.yarnColors = yarnColors.map((yc, j) => {
                 const where = `${at}, Yarn Color ${j + 1}`;
+
                 const qty = toNumber(yc?.qty);
                 const price = toNumber(yc?.price);
 
                 if (!yc || !str(yc.color)) {
-                    throw new HttpError(400, `${where}: color is required`);
+                    throw new HttpError(
+                        400,
+                        `${where}: color is required`
+                    );
                 }
+
                 if (!str(yc.lotNo) || !str(yc.yarnCount)) {
-                    throw new HttpError(400, `${where}: Lot No and Yarn Count are required`);
+                    throw new HttpError(
+                        400,
+                        `${where}: Lot No and Yarn Count are required`
+                    );
                 }
+
                 if (!str(yc.piNo)) {
-                    throw new HttpError(400, `${where}: PI No is required`);
+                    throw new HttpError(
+                        400,
+                        `${where}: PI No is required`
+                    );
                 }
+
                 if (qty === null || qty <= 0) {
-                    throw new HttpError(400, `${where}: quantity must be greater than zero`);
+                    throw new HttpError(
+                        400,
+                        `${where}: quantity must be greater than zero`
+                    );
                 }
+
                 if (price === null || price < 0) {
-                    throw new HttpError(400, `${where}: invalid price`);
+                    throw new HttpError(
+                        400,
+                        `${where}: invalid price`
+                    );
                 }
 
                 totalQty += qty;
@@ -270,24 +362,38 @@ function parseBody(body: CreateJobBody): CleanBody {
 
             line.qty = totalQty;
             line.price = totalQty > 0 ? totalAmount / totalQty : 0;
-            // Composition-level PI = PI of the first yarn color
+
+            // Composition-level PI = PI of the first yarn color.
             line.piNo = line.yarnColors[0]!.piNo;
         } else {
-            // CHANGED: PI No is not needed for a Y/D batch line
-           
-
             const qty = toNumber(c.workOrderQty);
             const price = toNumber(c.unitPrice);
 
             if (qty === null || qty <= 0) {
-                throw new HttpError(400, `${at}: work order quantity must be greater than zero`);
+                throw new HttpError(
+                    400,
+                    `${at}: work order quantity must be greater than zero`
+                );
             }
+
             if (price === null || price < 0) {
-                throw new HttpError(400, `${at}: valid price per kg is required`);
+                throw new HttpError(
+                    400,
+                    `${at}: valid price per kg is required`
+                );
             }
 
             line.qty = qty;
             line.price = price;
+
+            // PI is mandatory for raw yarn stock lines.
+            // It is not required when the line uses a Y/D batch.
+            if (!ydBatch && !line.piNo) {
+                throw new HttpError(
+                    400,
+                    `${at}: PI No is required when not using a Y/D Batch`
+                );
+            }
         }
 
         return line;
@@ -317,7 +423,10 @@ function matchRows(
 
     for (const row of rows) {
         const key = rowKey(row.composition, row.color);
-        if (!idByKey.has(key)) idByKey.set(key, row.id);
+
+        if (!idByKey.has(key)) {
+            idByKey.set(key, row.id);
+        }
     }
 
     return lines.map((line, i) => {
@@ -328,13 +437,21 @@ function matchRows(
                     `Composition ${i + 1}: styleRequirementRowId does not belong to this job's style requirement`
                 );
             }
+
             return line.styleRequirementRowId;
         }
 
-        const matched = idByKey.get(rowKey(line.composition, line.color));
-        if (matched !== undefined) return matched;
+        const matched = idByKey.get(
+            rowKey(line.composition, line.color)
+        );
 
-        if (rows.length === 1) return rows[0]!.id;
+        if (matched !== undefined) {
+            return matched;
+        }
+
+        if (rows.length === 1) {
+            return rows[0]!.id;
+        }
 
         throw new HttpError(
             400,
@@ -345,42 +462,74 @@ function matchRows(
 
 /* -------------------- STEP 3: BUILD STOCK REQUIREMENTS -------------------- */
 
-function buildStockRequests(lines: CleanLine[], orderType: string): StockRequest[] {
+function buildStockRequests(
+    lines: CleanLine[],
+    orderType: string
+): StockRequest[] {
     const rule = ORDER_TYPE_RULES[orderType];
-    if (!rule) throw new HttpError(400, `Unsupported order type: ${orderType}`);
+
+    if (!rule) {
+        throw new HttpError(
+            400,
+            `Unsupported order type: ${orderType}`
+        );
+    }
 
     const requests: StockRequest[] = [];
 
     for (const line of lines) {
         if (rule.mode === "yarnDyeing") {
             for (const yc of line.yarnColors) {
-                requests.push({ piNo: yc.piNo, lotNo: yc.lotNo, yarnCount: yc.yarnCount, qty: yc.qty });
+                requests.push({
+                    piNo: yc.piNo,
+                    lotNo: yc.lotNo,
+                    yarnCount: yc.yarnCount,
+                    qty: yc.qty,
+                });
             }
         } else {
-            // NEW: Y/D batch lines do not use the spinning (raw yarn) stock
+            // Y/D Batch lines do not use spinning raw yarn stock.
+            if (line.ydBatch) {
+                continue;
+            }
 
-            requests.push({ piNo: line.piNo, lotNo: line.lotNo, yarnCount: line.yarnCount, qty: line.qty });
+            requests.push({
+                piNo: line.piNo,
+                lotNo: line.lotNo,
+                yarnCount: line.yarnCount,
+                qty: line.qty,
+            });
         }
     }
 
     return requests;
 }
 
-function aggregateStockRequests(requests: StockRequest[]): Map<string, StockRequest> {
+function aggregateStockRequests(
+    requests: StockRequest[]
+): Map<string, StockRequest> {
     const aggregated = new Map<string, StockRequest>();
 
     for (const request of requests) {
-        const key = stockKey(request.piNo, request.lotNo, request.yarnCount);
+        const key = stockKey(
+            request.piNo,
+            request.lotNo,
+            request.yarnCount
+        );
+
         const existing = aggregated.get(key);
 
-        if (existing) existing.qty += request.qty;
-        else aggregated.set(key, { ...request });
+        if (existing) {
+            existing.qty += request.qty;
+        } else {
+            aggregated.set(key, { ...request });
+        }
     }
 
     return aggregated;
 }
 
-/* ------------------- STEP 4: VALIDATE STOCK PER PI + LOT + COUNT ------------------- */
+/* ------------------- STEP 4: VALIDATE RAW YARN STOCK ------------------- */
 
 async function validateAvailableStock(
     tx: Prisma.TransactionClient,
@@ -389,7 +538,10 @@ async function validateAvailableStock(
     const aggregated = aggregateStockRequests(requests);
 
     if (aggregated.size === 0) {
-        throw new HttpError(400, "No valid stock requirements found");
+        throw new HttpError(
+            400,
+            "No valid stock requirements found"
+        );
     }
 
     const requested = Array.from(aggregated.values());
@@ -400,7 +552,12 @@ async function validateAvailableStock(
                 lotNo: item.lotNo,
                 yarnCount: item.yarnCount,
             })),
-            movementType: { in: [MOVEMENT_TYPES.IN, MOVEMENT_TYPES.OUT] },
+            movementType: {
+                in: [
+                    MOVEMENT_TYPES.IN,
+                    MOVEMENT_TYPES.OUT,
+                ],
+            },
         },
         select: {
             lotNo: true,
@@ -408,23 +565,43 @@ async function validateAvailableStock(
             movementType: true,
             movementQty: true,
             yarnPoItems: {
-                select: { yarnPo: { select: { piNo: true } } },
+                select: {
+                    yarnPo: {
+                        select: {
+                            piNo: true,
+                        },
+                    },
+                },
             },
         },
     });
 
-    // Balance per PI + Lot + Yarn Count
     const balanceByKey = new Map<string, number>();
 
-    for (const m of movements) {
-        const piNo = str(m.yarnPoItems?.yarnPo?.piNo);
+    for (const movement of movements) {
+        const piNo = str(
+            movement.yarnPoItems?.yarnPo?.piNo
+        );
+
         if (!piNo) continue;
 
-        const key = stockKey(piNo, str(m.lotNo), str(m.yarnCount));
-        const qty = m.movementQty ?? 0;
-        const signed = m.movementType === MOVEMENT_TYPES.IN ? qty : -qty;
+        const key = stockKey(
+            piNo,
+            str(movement.lotNo),
+            str(movement.yarnCount)
+        );
 
-        balanceByKey.set(key, (balanceByKey.get(key) ?? 0) + signed);
+        const qty = movement.movementQty ?? 0;
+
+        const signed =
+            movement.movementType === MOVEMENT_TYPES.IN
+                ? qty
+                : -qty;
+
+        balanceByKey.set(
+            key,
+            (balanceByKey.get(key) ?? 0) + signed
+        );
     }
 
     for (const [key, request] of aggregated) {
@@ -435,7 +612,10 @@ async function validateAvailableStock(
             );
         }
 
-        const available = Math.max(0, balanceByKey.get(key) ?? 0);
+        const available = Math.max(
+            0,
+            balanceByKey.get(key) ?? 0
+        );
 
         if (request.qty > available + 0.000001) {
             throw new HttpError(
@@ -454,82 +634,89 @@ async function validateAvailableStock(
     }
 }
 
-/* ------------------- NEW: VALIDATE Y/D BATCHES OF THE JOB ------------------- */
-
-// A Y/D batch is valid only when this job really has a yarn dyeing booking
-// with that lot (and yarn count, when given).
-async function validateYdBatches(
-    tx: Prisma.TransactionClient,
-    jobNo: string,
-    lines: CleanLine[]
-): Promise<void> {
-    const checked = new Set<string>();
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]!;
-
-
-        const booking = await tx.yarnColorBooking.findFirst({
-            where: {
-                ...(line.yarnCount ? { yarnCount: line.yarnCount } : {}),
-                composition: {
-                    orderType: "yarnDyeingOrder",
-                    workOrder: { jobNo },
-                },
-            },
-            select: { id: true },
-        });
-
-       
-    }
-}
-
 /* --------------------------- MAIN CONTROLLER --------------------------- */
 
-export const createNewJob = async (req: Request, res: Response) => {
+export const createNewJob = async (
+    req: Request,
+    res: Response
+) => {
     try {
         const userId = Number(req.user?.userId);
 
-        if (!req.user || !Number.isInteger(userId) || userId <= 0) {
-            return res.status(401).json({ type: "error", message: "Unauthorized" });
+        if (
+            !req.user ||
+            !Number.isInteger(userId) ||
+            userId <= 0
+        ) {
+            return res.status(401).json({
+                type: "error",
+                message: "Unauthorized",
+            });
         }
 
-        const data = parseBody(req.body as CreateJobBody);
+        const data = parseBody(
+            req.body as CreateJobBody
+        );
 
         const job = await checkDataExist(data.jobNo);
-        if (!job?.id) throw new HttpError(404, "Job record not found");
 
-        const stockRequests = buildStockRequests(data.lines, data.orderType);
+        if (!job?.id) {
+            throw new HttpError(404, "Job record not found");
+        }
+
+        // Raw spinning stock requests exclude all Y/D batch lines.
+        const stockRequests = buildStockRequests(
+            data.lines,
+            data.orderType
+        );
 
         const workOrder = await prisma.$transaction(
             async (tx) => {
                 const sr = await tx.styleRequirement.findUnique({
-                    where: { jobNo: data.jobNo },
+                    where: {
+                        jobNo: data.jobNo,
+                    },
                     select: {
                         id: true,
                         rows: {
-                            select: { id: true, composition: true, color: true },
-                            orderBy: { id: "asc" },
+                            select: {
+                                id: true,
+                                composition: true,
+                                color: true,
+                            },
+                            orderBy: {
+                                id: "asc",
+                            },
                         },
                     },
                 });
 
                 if (!sr) {
-                    throw new HttpError(404, "Style requirement not found for this job number");
+                    throw new HttpError(
+                        404,
+                        "Style requirement not found for this job number"
+                    );
                 }
+
                 if (sr.rows.length === 0) {
-                    throw new HttpError(404, "Style requirement row not found for this job number");
+                    throw new HttpError(
+                        404,
+                        "Style requirement row not found for this job number"
+                    );
                 }
 
-                const rowIds = matchRows(sr.rows, data.lines);
+                const rowIds = matchRows(
+                    sr.rows,
+                    data.lines
+                );
 
-                // CHANGED: only check raw yarn stock when some line uses it
+                // Validate raw spinning yarn stock only for non-Y/D lines.
                 if (stockRequests.length > 0) {
-                    await validateAvailableStock(tx, stockRequests);
+                    await validateAvailableStock(
+                        tx,
+                        stockRequests
+                    );
                 }
-
-                // NEW: check the Y/D batches
-                await validateYdBatches(tx, data.jobNo, data.lines);
 
                 const first = data.lines[0]!;
                 const firstYarnColor = first.yarnColors[0];
@@ -549,57 +736,82 @@ export const createNewJob = async (req: Request, res: Response) => {
                         styleRequirementId: sr.id,
                         createdBy: userId,
 
-                        // Legacy header fields (copy of the first line)
-                        lotNo: first.lotNo || firstYarnColor?.lotNo || "",
-                        yarnCount: first.yarnCount || firstYarnColor?.yarnCount || "",
+                        // Legacy header fields (copy of the first line).
+                        lotNo:
+                            first.lotNo ||
+                            firstYarnColor?.lotNo ||
+                            "",
+                        yarnCount:
+                            first.yarnCount ||
+                            firstYarnColor?.yarnCount ||
+                            "",
                         stichLength: first.stichLength,
                         machineDia: first.machineDia,
 
                         compositions: {
-                            create: data.lines.map((line, index) => ({
-                                composition: line.composition,
-                                color: line.color,
-                                yarnComposition: line.yarnComposition,
-                                orderQty: 0,
-                                workOrderQty: line.qty,
-                                unitePrice: line.price,
-                                orderType: data.orderType,
-                                styleRequirementRowId: rowIds[index]!,
+                            create: data.lines.map(
+                                (line, index) => ({
+                                    composition: line.composition,
+                                    color: line.color,
+                                    yarnComposition: line.yarnComposition,
+                                    orderQty: 0,
+                                    workOrderQty: line.qty,
+                                    unitePrice: line.price,
+                                    orderType: data.orderType,
+                                    styleRequirementRowId: rowIds[index]!,
 
-                                // For a Y/D batch line lotNo stays null on purpose,
-                                // so the raw yarn balance is not reduced.
-                                lotNo: line.lotNo || null,
-                                yarnCount: line.yarnCount || null,
-                                stichLength: line.stichLength || null,
-                                machineDia: line.machineDia || null,
+                                    // Save Lot No even when a Y/D Batch is selected.
+                                    lotNo: line.lotNo || null,
 
-                                // PI selected by the user (empty for a Y/D batch line)
-                                piId: line.piNo || null,
+                                    // Save selected Y/D Batch.
+                                    // If no batch is selected, save "NULL".
+                                    ydBatch:
+                                        line.ydBatch || NULL_VALUE,
 
-                                ...(line.yarnColors.length > 0
-                                    ? {
-                                        yarnColors: {
-                                            create: line.yarnColors.map((yc) => ({
-                                                color: yc.color,
-                                                shade: yc.shade,
-                                                yarnCount: yc.yarnCount,
-                                                machineDia: yc.machineDia,
-                                                lotNo: yc.lotNo,
-                                                piId: yc.piNo,
-                                                qty: yc.qty,
-                                                price: yc.price,
-                                            })),
-                                        },
-                                    }
-                                    : {}),
-                            })),
+                                    yarnCount:
+                                        line.yarnCount || null,
+
+                                    stichLength:
+                                        line.stichLength || null,
+
+                                    machineDia:
+                                        line.machineDia || null,
+
+                                    // PI is empty for Y/D batch lines.
+                                    piId: line.piNo || null,
+
+                                    ...(line.yarnColors.length > 0
+                                        ? {
+                                            yarnColors: {
+                                                create: line.yarnColors.map(
+                                                    (yc) => ({
+                                                        color: yc.color,
+                                                        shade: yc.shade,
+                                                        yarnCount: yc.yarnCount,
+                                                        machineDia: yc.machineDia,
+                                                        lotNo: yc.lotNo,
+                                                        piId: yc.piNo,
+                                                        qty: yc.qty,
+                                                        price: yc.price,
+                                                    })
+                                                ),
+                                            },
+                                        }
+                                        : {}),
+                                })
+                            ),
                         },
                     },
-                    select: { id: true, workOrderNo: true, jobNo: true },
+                    select: {
+                        id: true,
+                        workOrderNo: true,
+                        jobNo: true,
+                    },
                 });
             },
             {
-                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+                isolationLevel:
+                    Prisma.TransactionIsolationLevel.Serializable,
                 maxWait: 10000,
                 timeout: 20000,
             }
@@ -612,34 +824,46 @@ export const createNewJob = async (req: Request, res: Response) => {
         });
     } catch (error) {
         if (error instanceof HttpError) {
-            return res.status(error.status).json({ message: error.message, type: "error" });
+            return res.status(error.status).json({
+                message: error.message,
+                type: "error",
+            });
         }
 
         const code = (error as { code?: string })?.code;
 
         if (code === "P2002") {
             return res.status(409).json({
-                message: "A work order with this number already exists",
+                message:
+                    "A work order with this number already exists",
                 type: "error",
             });
         }
+
         if (code === "P2003") {
             return res.status(400).json({
-                message: "Invalid reference data - please check your inputs",
+                message:
+                    "Invalid reference data - please check your inputs",
                 type: "error",
             });
         }
+
         if (code === "P2034") {
             return res.status(409).json({
-                message: "A concurrent database transaction occurred. Please retry creating the work order.",
+                message:
+                    "A concurrent database transaction occurred. Please retry creating the work order.",
                 type: "error",
             });
         }
 
-        console.error("Error creating work order:", error);
+        console.error(
+            "Error creating work order:",
+            error
+        );
 
         return res.status(500).json({
-            message: "Internal server error while creating work order",
+            message:
+                "Internal server error while creating work order",
             type: "error",
         });
     }

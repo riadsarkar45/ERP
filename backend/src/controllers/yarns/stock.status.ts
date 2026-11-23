@@ -7,13 +7,12 @@ const MOVEMENT_TYPES = {
 } as const;
 
 const DELIVERY_TYPES = {
-    IN: "Yarn Delivery",
-    OUT: "Yarn Return",
-    FINISH_RECEIVED: "Finish Received",
-    YARN_RECEIVED_FROM_YD: "Yarn Received From YD",
+    // knitting
     YARN_DELIVERY: "Yarn Delivery",
     YARN_RETURN: "Yarn Return",
-    YARN_DELIVERY_FOR_YD: "Yarn Delivery For Yarn Dye",
+    // yarn dyeing
+    YARN_DELIVERY_FOR_YD: "Yarn Delivery For Yarn Dye", // deducts from the stock
+    YARN_RETURN_FROM_YD: "Yarn Return From Yarn Dye",   // increases the stock
 } as const;
 
 // challanNo used for the opening-stock rows imported from the YARN STOCK sheet
@@ -55,16 +54,27 @@ export const stockStatus = async (req: Request, res: Response) => {
             spinningMovement,
             yarnMovementSinceStart,
         ] = await Promise.all([
-            // Assigned work orders and their delivered quantities
+            // Assigned work orders and their delivered quantities.
+            // Yarn dyeing orders keep their qty on the yarn color lines.
             prisma.composition.findMany({
                 where: {
                     status: "ASSIGNED",
                 },
                 select: {
                     workOrderQty: true,
+                    yarnColors: {
+                        select: {
+                            qty: true,
+                        },
+                    },
                     deliveries: {
                         where: {
-                            deliveryType: DELIVERY_TYPES.IN,
+                            deliveryType: {
+                                in: [
+                                    DELIVERY_TYPES.YARN_DELIVERY,
+                                    DELIVERY_TYPES.YARN_DELIVERY_FOR_YD,
+                                ],
+                            },
                         },
                         select: {
                             deliveryQty: true,
@@ -93,16 +103,17 @@ export const stockStatus = async (req: Request, res: Response) => {
                 },
             }),
 
-            // Knitting delivery and return summary since the stock start date
-            // (used for the physical stock calculation)
+            // Knitting + yarn dye delivery and return summary since the stock
+            // start date (used for the physical stock calculation)
             prisma.deliveries.groupBy({
                 by: ["deliveryType"],
                 where: {
                     deliveryType: {
                         in: [
-                            DELIVERY_TYPES.IN,
-                            DELIVERY_TYPES.OUT,
+                            DELIVERY_TYPES.YARN_DELIVERY,
+                            DELIVERY_TYPES.YARN_RETURN,
                             DELIVERY_TYPES.YARN_DELIVERY_FOR_YD,
+                            DELIVERY_TYPES.YARN_RETURN_FROM_YD,
                         ],
                     },
                     ...sinceStart,
@@ -121,7 +132,14 @@ export const stockStatus = async (req: Request, res: Response) => {
         let deliveredAgainstAssignment = 0;
 
         for (const composition of compositions) {
-            const workOrderQty = Number(composition.workOrderQty ?? 0);
+            // yarn dyeing: sum of the color lines, otherwise the composition qty
+            const colorQty = composition.yarnColors.reduce(
+                (sum, yarnColor) => sum + Number(yarnColor.qty ?? 0),
+                0
+            );
+
+            const workOrderQty =
+                colorQty > 0 ? colorQty : Number(composition.workOrderQty ?? 0);
 
             const deliveredQty = composition.deliveries.reduce(
                 (sum, delivery) => sum + Number(delivery.deliveryQty ?? 0),
@@ -154,31 +172,27 @@ export const stockStatus = async (req: Request, res: Response) => {
             )?._sum.movementQty ?? 0;
 
         // --------------------------------------------------
-        // 3. Knitting movement totals
+        // 3. Knitting + yarn dye movement totals
         // --------------------------------------------------
 
-        const stockYarnDelivered =
+        const sumOf = (deliveryType: string): number =>
             yarnMovementSinceStart.find(
-                (item) => item.deliveryType === DELIVERY_TYPES.IN
+                (item) => item.deliveryType === deliveryType
             )?._sum.deliveryQty ?? 0;
 
-        const stockYarnReturned =
-            yarnMovementSinceStart.find(
-                (item) => item.deliveryType === DELIVERY_TYPES.OUT
-            )?._sum.deliveryQty ?? 0;
-
-        const stockYarnDyeDelivered =
-            yarnMovementSinceStart.find(
-                (item) =>
-                    item.deliveryType === DELIVERY_TYPES.YARN_DELIVERY_FOR_YD
-            )?._sum.deliveryQty ?? 0;
+        const stockYarnDelivered = sumOf(DELIVERY_TYPES.YARN_DELIVERY);
+        const stockYarnReturned = sumOf(DELIVERY_TYPES.YARN_RETURN);
+        const stockYarnDyeDelivered = sumOf(DELIVERY_TYPES.YARN_DELIVERY_FOR_YD);
+        const stockYarnDyeReturned = sumOf(DELIVERY_TYPES.YARN_RETURN_FROM_YD);
 
         // --------------------------------------------------
         // 4. Physical stock calculation (from movements only)
         //    stock = received from spinning (incl. opening stock)
         //            - return to spinning
-        //            - yarn delivery - yarn delivery for yarn dye
+        //            - yarn delivery
+        //            - yarn delivery for yarn dye   (deducts)
         //            + yarn return
+        //            + yarn return from yarn dye    (increases)
         //    Deliveries/returns counted only from the stock start date.
         // --------------------------------------------------
 
@@ -189,7 +203,8 @@ export const stockStatus = async (req: Request, res: Response) => {
             spinningReturned -
             stockYarnDelivered -
             stockYarnDyeDelivered +
-            stockYarnReturned;
+            stockYarnReturned +
+            stockYarnDyeReturned;
 
         // --------------------------------------------------
         // 5. Assignment balance
@@ -249,7 +264,7 @@ export const stockStatus = async (req: Request, res: Response) => {
                         spinningReceived - spinningReturned,
                 },
 
-                // Deliveries/returns counted in the stock (since stockStartDate)
+                // Knitting deliveries/returns counted in the stock (since stockStartDate)
                 yarnMovement: {
                     delivered: stockYarnDelivered,
                     returned: stockYarnReturned,
@@ -257,9 +272,16 @@ export const stockStatus = async (req: Request, res: Response) => {
                         stockYarnReturned - stockYarnDelivered,
                 },
 
-                // "Yarn Delivery For Yarn Dye" since stockStartDate (also deducted from stock)
+                // "Yarn Delivery For Yarn Dye" (deducted from stock)
                 yarnDyeDelivery: {
                     delivered: stockYarnDyeDelivered,
+                },
+
+                // "Yarn Return From Yarn Dye" (added back to stock)
+                yarnDyeReturn: {
+                    returned: stockYarnDyeReturned,
+                    netMovement:
+                        stockYarnDyeReturned - stockYarnDyeDelivered,
                 },
 
                 stockStartDate: stockStartDate
@@ -298,6 +320,7 @@ const SPINNING_RETURNED = "RETURN TO SPINNING";
 const DELIVERY_TO_KNITTING = "YARN DELIVERY";
 const DELIVERY_FOR_YARN_DYE = "YARN DELIVERY FOR YARN DYE";
 const RETURN_FROM_KNITTING = "YARN RETURN";
+const RETURN_FROM_YARN_DYE = "YARN RETURN FROM YARN DYE";
 const ASSIGNED_STATUS = "ASSIGNED";
 
 const round2 = (value: number): number =>
@@ -347,8 +370,11 @@ type YarnStockRow = {
   deliveryKnitting: number;
   returnFromKnitting: number;
 
-  // "Yarn Delivery For Yarn Dye" (also deducted from stock)
+  // "Yarn Delivery For Yarn Dye" (deducted from stock)
   deliveryForYd: number;
+
+  // "Yarn Return From Yarn Dye" (added back to stock)
+  returnFromYd: number;
 
   // Not available at PI level.
   physicalBalance: null;
@@ -371,7 +397,12 @@ export const yarnStockTable = async (
     // are already inside the opening stock.
     const stockStartDate = await getStockStartDate();
 
-    const [movements, assignedComps, deliveries] = await Promise.all([
+    const [
+      movements,
+      assignedComps,
+      assignedColors,
+      deliveries,
+    ] = await Promise.all([
 
       prisma.spinningYarnMovement.findMany({
         select: {
@@ -401,6 +432,7 @@ export const yarnStockTable = async (
         },
       }),
 
+      // Assigned qty of knitting / AOP / dyeing compositions
       prisma.composition.groupBy({
         by: [
           "piId",
@@ -422,6 +454,34 @@ export const yarnStockTable = async (
 
         _sum: {
           workOrderQty: true,
+        },
+      }),
+
+      // Assigned qty of yarn dyeing orders: the qty lives on the yarn color
+      // lines (each with its own lot / count / PI)
+      prisma.yarnColorBooking.groupBy({
+        by: [
+          "piId",
+          "lotNo",
+          "yarnCount",
+        ],
+
+        where: {
+          lotNo: {
+            not: null,
+          },
+
+          composition: {
+            status: ASSIGNED_STATUS,
+
+            workOrder: {
+              isCancelled: false,
+            },
+          },
+        },
+
+        _sum: {
+          qty: true,
         },
       }),
 
@@ -449,6 +509,12 @@ export const yarnStockTable = async (
                 mode: "insensitive",
               },
             },
+            {
+              deliveryType: {
+                equals: RETURN_FROM_YARN_DYE,
+                mode: "insensitive",
+              },
+            },
           ],
         },
 
@@ -464,11 +530,64 @@ export const yarnStockTable = async (
               piId: true,
               lotNo: true,
               yarnCount: true,
+
+              // yarn dyeing compositions keep lot / count / PI on the colors
+              yarnColors: {
+                select: {
+                  lotNo: true,
+                  yarnCount: true,
+                  piId: true,
+                },
+              },
             },
           },
         },
       }),
     ]);
+
+    // 1.5 RESOLVE LOT / PI / YARN COUNT OF EVERY DELIVERY
+    //
+    // The delivery's own lot / PI come first, then the composition's.
+    // A yarn dyeing composition has no yarn count (or PI) of its own, so they
+    // are taken from the yarn color line with the same lot.
+
+    const resolvedDeliveries = deliveries.map((delivery) => {
+      const composition = delivery.composition;
+
+      const lotNo =
+        clean(delivery.lotNo) ||
+        clean(composition?.lotNo);
+
+      let piNo =
+        clean(delivery.piId) ||
+        clean(composition?.piId);
+
+      let yarnCount = clean(composition?.yarnCount);
+
+      if (lotNo && composition?.yarnColors?.length) {
+        const matches = composition.yarnColors.filter(
+          (color) =>
+            normalize(color.lotNo) === normalize(lotNo) &&
+            (!piNo ||
+              !clean(color.piId) ||
+              normalize(color.piId) === normalize(piNo))
+        );
+
+        const match = matches[0];
+
+        if (match) {
+          if (!yarnCount) yarnCount = clean(match.yarnCount);
+          if (!piNo) piNo = clean(match.piId);
+        }
+      }
+
+      return {
+        delivery,
+        lotNo,
+        piNo,
+        yarnCount,
+      };
+    });
 
     // 2. COLLECT PI NUMBERS
 
@@ -488,12 +607,14 @@ export const yarnStockTable = async (
       if (piNo) piNumbers.add(piNo);
     }
 
-    for (const delivery of deliveries) {
-      const piNo =
-        clean(delivery.piId) ||
-        clean(delivery.composition?.piId);
+    for (const color of assignedColors) {
+      const piNo = clean(color.piId);
 
       if (piNo) piNumbers.add(piNo);
+    }
+
+    for (const item of resolvedDeliveries) {
+      if (item.piNo) piNumbers.add(item.piNo);
     }
 
     // 3. FETCH PI MASTER INFORMATION
@@ -574,6 +695,7 @@ export const yarnStockTable = async (
           deliveryKnitting: 0,
           returnFromKnitting: 0,
           deliveryForYd: 0,
+          returnFromYd: 0,
 
           physicalBalance: null,
         };
@@ -662,23 +784,34 @@ export const yarnStockTable = async (
         composition._sum.workOrderQty ?? 0;
     }
 
-    // 7. KNITTING DELIVERY / RETURN (PI-WISE)
+    // 6.5 ASSIGNED QUANTITY OF YARN DYEING COLOR LINES (PI-WISE)
 
-    for (const delivery of deliveries) {
+    for (const color of assignedColors) {
 
-      const lotNo =
-        clean(delivery.lotNo) ||
-        clean(delivery.composition?.lotNo);
+      const lotNo = clean(color.lotNo);
 
       if (!lotNo) continue;
 
-      const yarnCount = clean(
-        delivery.composition?.yarnCount
+      const piNo = clean(color.piId);
+
+      const yarnCount = clean(color.yarnCount);
+
+      const row = getRow(
+        piNo,
+        lotNo,
+        yarnCount
       );
 
-      const piNo =
-        clean(delivery.piId) ||
-        clean(delivery.composition?.piId);
+      row.assignQty += color._sum.qty ?? 0;
+    }
+
+    // 7. KNITTING + YARN DYE DELIVERY / RETURN (PI-WISE)
+
+    for (const item of resolvedDeliveries) {
+
+      const { delivery, lotNo, piNo, yarnCount } = item;
+
+      if (!lotNo) continue;
 
       const row = getRow(
         piNo,
@@ -702,7 +835,14 @@ export const yarnStockTable = async (
 
       } else if (type === DELIVERY_FOR_YARN_DYE) {
 
+        // deducts from the stock
         row.deliveryForYd +=
+          delivery.deliveryQty;
+
+      } else if (type === RETURN_FROM_YARN_DYE) {
+
+        // increases the stock
+        row.returnFromYd +=
           delivery.deliveryQty;
 
       } else {
@@ -766,6 +906,7 @@ export const yarnStockTable = async (
       target.deliveryKnitting += orphan.deliveryKnitting;
       target.returnFromKnitting += orphan.returnFromKnitting;
       target.deliveryForYd += orphan.deliveryForYd;
+      target.returnFromYd += orphan.returnFromYd;
 
       if (
         orphan.date &&
@@ -810,6 +951,10 @@ export const yarnStockTable = async (
           row.deliveryForYd
         );
 
+        const returnFromYd = round2(
+          row.returnFromYd
+        );
+
         return {
           ...row,
 
@@ -834,16 +979,19 @@ export const yarnStockTable = async (
 
           deliveryForYd,
 
+          returnFromYd,
+
           // (received + opening stock) - returned to spinning
           // - delivered to knitting - delivered for yarn dye
-          // + returned from knitting
+          // + returned from knitting + returned from yarn dye
           calculatedPhysicalBalance: round2(
             received +
             openingStock -
             returnSpinning -
             deliveryKnitting -
             deliveryForYd +
-            returnFromKnitting
+            returnFromKnitting +
+            returnFromYd
           ),
 
           // true = no spinning records for this row,
