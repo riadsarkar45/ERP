@@ -783,6 +783,7 @@ export const yarnStockTable = async (
       row.assignQty +=
         composition._sum.workOrderQty ?? 0;
     }
+    
 
     // 6.5 ASSIGNED QUANTITY OF YARN DYEING COLOR LINES (PI-WISE)
 
