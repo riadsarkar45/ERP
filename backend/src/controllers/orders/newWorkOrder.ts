@@ -31,6 +31,7 @@ type CompositionInput = {
     stichLength?: string;
     machineDia?: string;
     yarnColors?: YarnColorInput[];
+    yarnComposition: string,
 };
 
 type CreateJobBody = {
@@ -69,6 +70,7 @@ type CleanLine = {
     machineDia: string;
     qty: number;
     price: number;
+    yarnComposition: string
     yarnColors: CleanYarnColor[];
 };
 
@@ -201,6 +203,7 @@ function parseBody(body: CreateJobBody): CleanBody {
             qty: 0,
             price: 0,
             yarnColors: [],
+            yarnComposition: str(c.yarnComposition)
         };
 
         if (str(c.styleRequirementRowId) !== "") {
@@ -556,7 +559,7 @@ export const createNewJob = async (req: Request, res: Response) => {
                             create: data.lines.map((line, index) => ({
                                 composition: line.composition,
                                 color: line.color,
-
+                                yarnComposition: line.yarnComposition,
                                 orderQty: 0,
                                 workOrderQty: line.qty,
                                 unitePrice: line.price,
