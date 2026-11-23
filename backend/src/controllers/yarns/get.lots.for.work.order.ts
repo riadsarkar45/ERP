@@ -42,6 +42,7 @@ type RawYarnRow = {
     piNo: string;
     lotNo: string;
     yarnCount: string;
+    yarnComposition: string;
     physicalQuantity: number;
     assignedQuantity: number;
     totalQuantity: number;
@@ -52,6 +53,8 @@ type YdLot = {
     ydBatch: string;
     lotNo: string;
     yarnCount: string;
+    yarnComposition: string; // "" when none or more than one composition is possible
+    yarnCompositions: string[];
     piNo: string; // auto resolved PI ("" when none or more than one PI is possible)
     piNos: string[];
     colors: string[];
@@ -65,12 +68,14 @@ type YdBatch = {
     batchNo: string;
     finishReceivedQuantity: number;
     piNo: string;
-    lots: { lotNo: string; yarnCount: string; piNo: string }[];
+    lots: { lotNo: string; yarnCount: string; yarnComposition: string; piNo: string }[];
 };
 
 type JobLot = {
     lotNo: string;
     yarnCount: string;
+    yarnComposition: string;
+    yarnCompositions: string[];
     piNo: string;
     piNos: string[];
     sources: string[];
@@ -82,6 +87,7 @@ type JobLot = {
 type PrefillLine = {
     lotNo: string;
     yarnCount: string;
+    yarnComposition: string;
     piNo: string;
     qty: number;
 };
@@ -98,11 +104,12 @@ type Prefill = {
 
 const EMPTY_PREFILL: Prefill = { sourceOrderType: null, rows: [] };
 
-// One lot / yarn count / PI / qty line of a composition
+// One lot / yarn count / yarn composition / PI / qty line of a composition
 type Line = {
     rowId: number | null; // styleRequirementRowId
     lotNo: string;
     yarnCount: string;
+    yarnComposition: string;
     piNo: string;
     qty: number;
 };
@@ -111,6 +118,7 @@ type CompLike = {
     styleRequirementRowId: unknown;
     lotNo: unknown;
     yarnCount: unknown;
+    yarnComposition: unknown;
     piId: unknown;
     workOrderQty: unknown;
     yarnColors: { lotNo: unknown; yarnCount: unknown; piId: unknown; qty: unknown }[];
@@ -125,6 +133,7 @@ const COMP_LINE_SELECT = {
     styleRequirementRowId: true,
     lotNo: true,
     yarnCount: true,
+    yarnComposition: true,
     piId: true,
     workOrderQty: true,
     yarnColors: {
@@ -143,6 +152,8 @@ const workOrderFilter = (orderType?: string) => ({
 // All lot lines of one composition:
 //  - knitting / AOP / dyeing: the composition's own lot / count / PI / qty
 //  - yarn dyeing:             every yarn color booking
+// Yarn color bookings have no yarnComposition of their own: they use the
+// yarnComposition of their parent composition.
 // Lines without a lot (Y/D batch lines) are skipped.
 const toLines = (c: CompLike): Line[] => {
     const rowRaw = c.styleRequirementRowId;
@@ -150,6 +161,10 @@ const toLines = (c: CompLike): Line[] => {
         rowRaw === null || rowRaw === undefined || Number.isNaN(Number(rowRaw))
             ? null
             : Number(rowRaw);
+
+    // the "NULL" default of the column becomes ""
+    const rawYarnComposition = clean(c.yarnComposition);
+    const yarnComposition = isBlank(rawYarnComposition) ? "" : rawYarnComposition;
 
     const lines: Line[] = [];
 
@@ -164,6 +179,7 @@ const toLines = (c: CompLike): Line[] => {
             rowId,
             lotNo,
             yarnCount: isBlank(rawCount) ? "" : rawCount,
+            yarnComposition,
             piNo: isBlank(rawPi) ? "" : rawPi,
             qty: Number(qty) || 0,
         });
@@ -207,11 +223,16 @@ const findBaseOrderType = (comps: JobComp[]): string | null => {
 };
 
 // ---------------------------------------------------------------------------
-// 0) PI LOOKUP (auto select PI)
-//    lot + count -> the PI numbers the spinning received this lot + count under.
-//    When a line has no PI saved and exactly ONE PI is possible, that PI is used.
+// 0) PI + YARN COMPOSITION LOOKUP (auto select)
+//    lot + count -> the PI numbers the spinning received this lot + count under,
+//    and the yarn compositions of the PO items they belong to.
+//    When a line has no PI / yarn composition saved and exactly ONE is possible,
+//    that one is used.
 // ---------------------------------------------------------------------------
-type PiLookup = Map<string, string[]>;
+type PiLookup = {
+    pi: Map<string, string[]>;
+    yarnComposition: Map<string, string[]>;
+};
 
 const getPiLookup = async (): Promise<PiLookup> => {
     const grouped = await prisma.spinningYarnMovement.groupBy({
@@ -233,31 +254,46 @@ const getPiLookup = async (): Promise<PiLookup> => {
 
     const items = await prisma.yarnPoItems.findMany({
         where: { id: { in: itemIds } },
-        select: { id: true, yarnPo: { select: { piNo: true } } },
+        select: { id: true, composition: true, yarnPo: { select: { piNo: true } } },
     });
 
     const piByItem = new Map<number, string>(
         items.map((item) => [item.id, clean(item.yarnPo?.piNo)])
     );
+    const compByItem = new Map<number, string>(
+        items.map((item) => [item.id, clean(item.composition)])
+    );
 
-    const sets = new Map<string, Set<string>>();
+    const piSets = new Map<string, Set<string>>();
+    const compSets = new Map<string, Set<string>>();
 
     for (const g of grouped) {
         if (g.yarnPoItemsId === null) continue;
 
-        const piNo = piByItem.get(g.yarnPoItemsId);
-        if (!piNo) continue;
-
         const key = JSON.stringify([norm(g.lotNo), norm(g.yarnCount)]);
-        const set = sets.get(key) ?? new Set<string>();
-        set.add(piNo);
-        sets.set(key, set);
+
+        const piNo = piByItem.get(g.yarnPoItemsId);
+        if (piNo) {
+            const set = piSets.get(key) ?? new Set<string>();
+            set.add(piNo);
+            piSets.set(key, set);
+        }
+
+        const comp = compByItem.get(g.yarnPoItemsId);
+        if (comp && !isBlank(comp)) {
+            const set = compSets.get(key) ?? new Set<string>();
+            set.add(comp);
+            compSets.set(key, set);
+        }
     }
 
-    const lookup: PiLookup = new Map();
-    for (const [key, set] of sets) lookup.set(key, Array.from(set).sort());
+    const toSortedMap = (sets: Map<string, Set<string>>) => {
+        const map = new Map<string, string[]>();
+        for (const [key, set] of sets) map.set(key, Array.from(set).sort());
+        return map;
+    };
 
-    return lookup;
+    return { pi: toSortedMap(piSets), yarnComposition: toSortedMap(compSets) };
 };
 
 // saved PI first, otherwise the only possible PI of this lot + count, otherwise ""
@@ -269,7 +305,20 @@ const resolvePi = (
 ): string => {
     if (!isBlank(piNo)) return piNo;
 
-    const list = lookup.get(lotCountKey({ lotNo, yarnCount }));
+    const list = lookup.pi.get(lotCountKey({ lotNo, yarnCount }));
+    return list && list.length === 1 ? list[0]! : "";
+};
+
+// saved yarn composition first, otherwise the only possible one of this lot + count, otherwise ""
+const resolveYarnComposition = (
+    value: string,
+    lotNo: string,
+    yarnCount: string,
+    lookup: PiLookup
+): string => {
+    if (!isBlank(value)) return value;
+
+    const list = lookup.yarnComposition.get(lotCountKey({ lotNo, yarnCount }));
     return list && list.length === 1 ? list[0]! : "";
 };
 
@@ -361,7 +410,7 @@ const getRawYarnInventory = async (
         getRawAssignedLines(excludeWorkOrderId),
     ]);
 
-    // PO item -> PI number
+    // PO item -> PI number + yarn composition
     const itemIds = [
         ...new Set(
             grouped
@@ -372,17 +421,26 @@ const getRawYarnInventory = async (
 
     const items = await prisma.yarnPoItems.findMany({
         where: { id: { in: itemIds } },
-        select: { id: true, yarnPo: { select: { piNo: true } } },
+        select: { id: true, composition: true, yarnPo: { select: { piNo: true } } },
     });
 
     const piByItem = new Map<number, string>(
         items.map((item) => [item.id, clean(item.yarnPo?.piNo)])
     );
+    const compByItem = new Map<number, string>(
+        items.map((item) => [item.id, clean(item.composition)])
+    );
 
     // a) Net spinning balance per PI + Lot + Yarn Count
     const balances = new Map<
         string,
-        { piNo: string; lotNo: string; yarnCount: string; physicalQuantity: number }
+        {
+            piNo: string;
+            lotNo: string;
+            yarnCount: string;
+            yarnComposition: string;
+            physicalQuantity: number;
+        }
     >();
 
     for (const g of grouped) {
@@ -390,6 +448,9 @@ const getRawYarnInventory = async (
 
         const piNo = piByItem.get(g.yarnPoItemsId);
         if (!piNo) continue;
+
+        const rawComp = compByItem.get(g.yarnPoItemsId) ?? "";
+        const yarnComposition = isBlank(rawComp) ? "" : rawComp;
 
         const lotNo = clean(g.lotNo);
         const yarnCount = clean(g.yarnCount);
@@ -400,8 +461,15 @@ const getRawYarnInventory = async (
         const current = balances.get(key);
         if (current) {
             current.physicalQuantity += signed;
+            if (!current.yarnComposition) current.yarnComposition = yarnComposition;
         } else {
-            balances.set(key, { piNo, lotNo, yarnCount, physicalQuantity: signed });
+            balances.set(key, {
+                piNo,
+                lotNo,
+                yarnCount,
+                yarnComposition,
+                physicalQuantity: signed,
+            });
         }
     }
 
@@ -468,6 +536,7 @@ const getRawYarnInventory = async (
                 piNo: b.piNo,
                 lotNo: b.lotNo,
                 yarnCount: b.yarnCount,
+                yarnComposition: b.yarnComposition,
                 physicalQuantity: round3(b.physicalQuantity), // received - returned
                 assignedQuantity: round3(assigned),           // already assigned
                 totalQuantity: round3(available),             // available for a new work order
@@ -549,7 +618,14 @@ const getYarnDyeingLots = async (
                     workOrder: { jobNo, ...workOrderFilter(ORDER_TYPES.YARN_DYEING) },
                 },
             },
-            select: { lotNo: true, yarnCount: true, piId: true, color: true, qty: true },
+            select: {
+                lotNo: true,
+                yarnCount: true,
+                piId: true,
+                color: true,
+                qty: true,
+                composition: { select: { yarnComposition: true } },
+            },
         }),
         getTargetUsage(jobNo, orderType, excludeWorkOrderId),
     ]);
@@ -560,6 +636,7 @@ const getYarnDyeingLots = async (
             lotNo: string;
             yarnCount: string;
             pis: Set<string>;
+            comps: Set<string>;
             colors: Set<string>;
             bookedQuantity: number;
         }
@@ -577,6 +654,7 @@ const getYarnDyeingLots = async (
                 lotNo,
                 yarnCount: isBlank(yarnCount) ? "" : yarnCount,
                 pis: new Set<string>(),
+                comps: new Set<string>(),
                 colors: new Set<string>(),
                 bookedQuantity: 0,
             };
@@ -589,6 +667,9 @@ const getYarnDyeingLots = async (
         const pi = clean(b.piId);
         if (!isBlank(pi)) entry.pis.add(pi);
 
+        const yc = clean(b.composition?.yarnComposition);
+        if (!isBlank(yc)) entry.comps.add(yc);
+
         lots.set(key, entry);
     }
 
@@ -598,10 +679,22 @@ const getYarnDyeingLots = async (
             const piNos = Array.from(l.pis).sort();
             const piNo = piNos.length === 1 ? piNos[0]! : resolvePi("", l.lotNo, l.yarnCount, lookup);
 
+            const yarnCompositions = Array.from(l.comps).sort();
+            const yarnComposition =
+                yarnCompositions.length === 1
+                    ? yarnCompositions[0]!
+                    : resolveYarnComposition("", l.lotNo, l.yarnCount, lookup);
+
             return {
                 ydBatch: l.lotNo,
                 lotNo: l.lotNo,
                 yarnCount: l.yarnCount,
+                yarnComposition,
+                yarnCompositions: yarnCompositions.length
+                    ? yarnCompositions
+                    : yarnComposition
+                        ? [yarnComposition]
+                        : [],
                 piNo,
                 piNos: piNos.length ? piNos : piNo ? [piNo] : [],
                 colors: Array.from(l.colors).sort(),
@@ -634,7 +727,14 @@ const getYdFinishBatches = async (
 
         const batches = new Map<
             string,
-            { batchNo: string; qty: number; lots: Map<string, { lotNo: string; yarnCount: string; piNo: string }> }
+            {
+                batchNo: string;
+                qty: number;
+                lots: Map<
+                    string,
+                    { lotNo: string; yarnCount: string; yarnComposition: string; piNo: string }
+                >;
+            }
         >();
 
         for (const c of comps) {
@@ -652,6 +752,12 @@ const getYdFinishBatches = async (
                     entry.lots.set(lotCountKey(l), {
                         lotNo: l.lotNo,
                         yarnCount: l.yarnCount,
+                        yarnComposition: resolveYarnComposition(
+                            l.yarnComposition,
+                            l.lotNo,
+                            l.yarnCount,
+                            lookup
+                        ),
                         piNo: resolvePi(l.piNo, l.lotNo, l.yarnCount, lookup),
                     });
                 }
@@ -688,7 +794,8 @@ const getYdFinishBatches = async (
 // ---------------------------------------------------------------------------
 // 3) JOB LOTS (for AOP / Dyeing orders)
 //    Looks at ANY type of work placed for this job (knitting, yarn dyeing,
-//    dyeing, AOP) and returns the distinct lot + count pairs it used, with the PI.
+//    dyeing, AOP) and returns the distinct lot + count pairs it used, with the
+//    PI and the yarn composition.
 // ---------------------------------------------------------------------------
 const getJobLots = async (
     jobNo: string,
@@ -702,6 +809,7 @@ const getJobLots = async (
             styleRequirementRowId: true,
             lotNo: true,
             yarnCount: true,
+            yarnComposition: true,
             piId: true,
             workOrderQty: true,
             workOrder: { select: { orderType: true } },
@@ -715,6 +823,7 @@ const getJobLots = async (
             lotNo: string;
             yarnCount: string;
             pis: Set<string>;
+            comps: Set<string>;
             sources: Set<string>;
             rowIds: Set<number>;
             qty: number;
@@ -725,6 +834,7 @@ const getJobLots = async (
         lotValue: unknown,
         countValue: unknown,
         piValue: unknown,
+        compValue: unknown,
         source: string,
         rowId: number | null,
         qty: number
@@ -740,6 +850,7 @@ const getJobLots = async (
                 lotNo,
                 yarnCount: isBlank(yarnCount) ? "" : yarnCount,
                 pis: new Set<string>(),
+                comps: new Set<string>(),
                 sources: new Set<string>(),
                 rowIds: new Set<number>(),
                 qty: 0,
@@ -747,6 +858,9 @@ const getJobLots = async (
 
         const pi = clean(piValue);
         if (!isBlank(pi)) entry.pis.add(pi);
+
+        const yc = clean(compValue);
+        if (!isBlank(yc)) entry.comps.add(yc);
 
         entry.sources.add(source);
         if (rowId !== null) entry.rowIds.add(rowId);
@@ -759,10 +873,11 @@ const getJobLots = async (
         const source = c.workOrder?.orderType ?? "";
         const rowId = c.styleRequirementRowId ?? null;
 
-        add(c.lotNo, c.yarnCount, c.piId, source, rowId, c.workOrderQty ?? 0);
+        add(c.lotNo, c.yarnCount, c.piId, c.yarnComposition, source, rowId, c.workOrderQty ?? 0);
 
+        // yarn color bookings use the yarnComposition of their parent composition
         for (const color of c.yarnColors) {
-            add(color.lotNo, color.yarnCount, color.piId, source, rowId, color.qty ?? 0);
+            add(color.lotNo, color.yarnCount, color.piId, c.yarnComposition, source, rowId, color.qty ?? 0);
         }
     }
 
@@ -778,9 +893,21 @@ const getJobLots = async (
             const piNos = Array.from(l.pis).sort();
             const piNo = piNos.length === 1 ? piNos[0]! : resolvePi("", l.lotNo, l.yarnCount, lookup);
 
+            const yarnCompositions = Array.from(l.comps).sort();
+            const yarnComposition =
+                yarnCompositions.length === 1
+                    ? yarnCompositions[0]!
+                    : resolveYarnComposition("", l.lotNo, l.yarnCount, lookup);
+
             return {
                 lotNo: l.lotNo,
                 yarnCount: l.yarnCount,
+                yarnComposition,
+                yarnCompositions: yarnCompositions.length
+                    ? yarnCompositions
+                    : yarnComposition
+                        ? [yarnComposition]
+                        : [],
                 piNo,
                 piNos: piNos.length ? piNos : piNo ? [piNo] : [],
                 sources: Array.from(l.sources).sort(),
@@ -797,7 +924,8 @@ const getJobLots = async (
 //    The job's base order (first knitting / yarn dyeing order). When the order
 //    being created is NOT of the base type, its lots are limited to the lots the
 //    base order selected, the available qty = base qty - qty used by earlier
-//    orders of this type, and the PI / lot / count / qty is prefilled per composition.
+//    orders of this type, and the PI / lot / count / yarn composition / qty is
+//    prefilled per composition.
 // ---------------------------------------------------------------------------
 type JobContext = {
     baseOrderType: string | null;
@@ -845,7 +973,13 @@ const getJobContext = async (
     // THIS type already used), per PI + Lot + Count and per composition
     const baseTotals = new Map<
         string,
-        { piNo: string; lotNo: string; yarnCount: string; qty: number }
+        {
+            piNo: string;
+            lotNo: string;
+            yarnCount: string;
+            yarnComposition: string;
+            qty: number;
+        }
     >();
     const usedTotals = new Map<string, number>();
 
@@ -867,9 +1001,11 @@ const getJobContext = async (
                     piNo: l.piNo,
                     lotNo: l.lotNo,
                     yarnCount: l.yarnCount,
+                    yarnComposition: l.yarnComposition,
                     qty: 0,
                 };
                 total.qty += l.qty;
+                if (!total.yarnComposition) total.yarnComposition = l.yarnComposition;
                 baseTotals.set(key, total);
             }
 
@@ -887,6 +1023,9 @@ const getJobContext = async (
                         qty: 0,
                     };
                     current.qty += l.qty;
+                    if (!current.line.yarnComposition && l.yarnComposition) {
+                        current.line = { ...current.line, yarnComposition: l.yarnComposition };
+                    }
                     rowBase.set(rowKey, current);
                 }
 
@@ -906,6 +1045,7 @@ const getJobContext = async (
                 piNo: b.piNo,
                 lotNo: b.lotNo,
                 yarnCount: b.yarnCount,
+                yarnComposition: b.yarnComposition,
                 physicalQuantity: round3(b.qty),
                 assignedQuantity: round3(Math.min(used, b.qty)),
                 totalQuantity: round3(Math.max(b.qty - used, 0)),
@@ -930,6 +1070,7 @@ const getJobContext = async (
         lines.push({
             lotNo: base.line.lotNo,
             yarnCount: base.line.yarnCount,
+            yarnComposition: base.line.yarnComposition,
             piNo: base.line.piNo,
             qty: round3(remaining),
         });
@@ -952,8 +1093,9 @@ const getJobContext = async (
     return { baseOrderType: baseType, restricted: true, inventory, prefill };
 };
 
-// Fill the PI of lines that have none (when exactly one PI is possible), then merge
-// rows that became identical so the same PI + lot + count is never listed twice
+// Fill the PI / yarn composition of lines that have none (when exactly one is
+// possible), then merge rows that became identical so the same PI + lot + count
+// is never listed twice
 const withResolvedPi = (
     context: JobContext,
     lookup: PiLookup
@@ -962,6 +1104,12 @@ const withResolvedPi = (
 
     for (const r of context.inventory) {
         const piNo = resolvePi(r.piNo, r.lotNo, r.yarnCount, lookup);
+        const yarnComposition = resolveYarnComposition(
+            r.yarnComposition,
+            r.lotNo,
+            r.yarnCount,
+            lookup
+        );
         const key = JSON.stringify([norm(piNo), norm(r.lotNo), norm(r.yarnCount)]);
         const current = merged.get(key);
 
@@ -969,8 +1117,9 @@ const withResolvedPi = (
             current.physicalQuantity = round3(current.physicalQuantity + r.physicalQuantity);
             current.assignedQuantity = round3(current.assignedQuantity + r.assignedQuantity);
             current.totalQuantity = round3(current.totalQuantity + r.totalQuantity);
+            if (!current.yarnComposition) current.yarnComposition = yarnComposition;
         } else {
-            merged.set(key, { ...r, piNo });
+            merged.set(key, { ...r, piNo, yarnComposition });
         }
     }
 
@@ -981,11 +1130,21 @@ const withResolvedPi = (
 
             for (const l of row.lines) {
                 const piNo = resolvePi(l.piNo, l.lotNo, l.yarnCount, lookup);
+                const yarnComposition = resolveYarnComposition(
+                    l.yarnComposition,
+                    l.lotNo,
+                    l.yarnCount,
+                    lookup
+                );
                 const key = JSON.stringify([norm(piNo), norm(l.lotNo), norm(l.yarnCount)]);
                 const current = lines.get(key);
 
-                if (current) current.qty = round3(current.qty + l.qty);
-                else lines.set(key, { ...l, piNo });
+                if (current) {
+                    current.qty = round3(current.qty + l.qty);
+                    if (!current.yarnComposition) current.yarnComposition = yarnComposition;
+                } else {
+                    lines.set(key, { ...l, piNo, yarnComposition });
+                }
             }
 
             return {
@@ -1031,7 +1190,7 @@ export const getLotsAndYarnCounts = async (req: Request, res: Response) => {
         const excludeWorkOrderId =
             Number.isInteger(excludeParam) && excludeParam > 0 ? excludeParam : null;
 
-        // Base order of the job (first knitting / yarn dyeing order) + PI lookup
+        // Base order of the job (first knitting / yarn dyeing order) + PI / yarn composition lookup
         const [rawContext, lookup] = await Promise.all([
             jobNo
                 ? getJobContext(jobNo, orderType, excludeWorkOrderId)
@@ -1074,11 +1233,11 @@ export const getLotsAndYarnCounts = async (req: Request, res: Response) => {
             restricted: context.restricted,       // true = limited to the base order's lots
             baseOrderType: context.baseOrderType, // first knitting / yarn dyeing order type of the job
             count: raw.data.length,
-            data: raw.data,   // lots to choose from + PI + available qty
-            ydLots,           // yarn dyeing lots / batches of this job + PI + available qty
+            data: raw.data,   // lots to choose from + PI + yarn composition + available qty
+            ydLots,           // yarn dyeing lots / batches of this job + PI + yarn composition + available qty
             ydBatches: ydBatchResult.data, // batch numbers of the yarn dyeing Finish Received movements
-            jobLots,          // lots + counts already used by this job (AOP / dyeing) + PI
-            prefill: context.prefill, // remaining base qty per composition + lot + count + PI
+            jobLots,          // lots + counts already used by this job (AOP / dyeing) + PI + yarn composition
+            prefill: context.prefill, // remaining base qty per composition + lot + count + yarn composition + PI
             warnings: [...raw.warnings, ...ydBatchResult.warnings],
         });
     } catch (error) {

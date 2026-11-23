@@ -101,6 +101,7 @@ model Composition {
   piId                  String?
   status                String               @default("ASSIGNED")
   ydBatch               String               @default("NULL")
+  yarnComposition       String               @default("NULL")
 
   @@index([status])
   @@index([workOrderId])
