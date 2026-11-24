@@ -3,7 +3,7 @@ import { updateAuditStatus } from "../controllers/audit/updateAuditStatus";
 import { updateJobStatus } from "../controllers/jobs/updateJobStatus";
 import { updateJobs } from "../controllers/deliveries/newDelivery";
 import { updateStyleReq } from "../controllers/newStyleRequirements/updateStyleRequires/updateStyleReq";
-import { updateWorkOrder } from "../controllers/orders/update/updateWorkOrder";
+import { reviseWorkOrderData, updateWorkOrder } from "../controllers/orders/update/updateWorkOrder";
 import { authenticate, authorize } from "../middleware/Authenticate.middleware";
 import { styleReconciliation } from "../controllers/newStyleRequirements/styleReconciliation";
 import { responseTimeMonitor } from "../controllers/responseTime/responseTime";
@@ -24,7 +24,7 @@ updateRouters.patch("/job-status/:status/:jobId", responseTimeMonitor, authentic
 
 updateRouters.patch("/update-style-req/:jobId", responseTimeMonitor, authenticate, updateStyleReq);
 
-updateRouters.patch("/update-work-order/:workOrderId", responseTimeMonitor, authenticate, updateWorkOrder);
+updateRouters.get("/update-work-order/:workOrderId/:orderType", responseTimeMonitor, authenticate, updateWorkOrder);
 
 updateRouters.patch("/styles/:jobNo/reconciliation", responseTimeMonitor, authenticate, authorize("styleRequirements", [
   "reconciliationSubmission"
@@ -54,5 +54,10 @@ updateRouters.patch(
   ]),
   verifyChallanQty
 );
+
+updateRouters.patch(
+   "/revise-work-order/:orderType/:workOrderId", authenticate,
+    reviseWorkOrderData
+)
 
 export default updateRouters;

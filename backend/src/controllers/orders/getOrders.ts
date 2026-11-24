@@ -126,6 +126,9 @@ export const getAllOrders = async (req: Request, res: Response) => {
                             isCancelled: true,
                             reason: true,
                             remarks: true,
+                            revisionCount: true,
+                            revisIonRemarks: true,
+                            newWorkOrderPlaceDate: true,
                             compositions: {
                                 select: {
                                     id: true,

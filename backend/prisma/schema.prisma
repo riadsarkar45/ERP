@@ -50,6 +50,9 @@ model WorkOrder {
   canceledAt                DateTime?
   reason                    String                     @default("NULL")
   remarks                   String                     @default("NULL")
+  revisIonRemarks           String                     @default("NULL")
+  revisedBy                 String                     @default("NULL")
+  revisionCount             String                     @default("0")
   workOrderApprovalRequests workOrderApprovalRequest[]
 
   @@index([yarnCount])
@@ -59,6 +62,8 @@ model WorkOrder {
   @@index([styleRequirementId])
   @@index([styleNo])
   @@index([jobId])
+  @@index([id])
+  @@index([orderType])
 }
 
 model YarnColorBooking {
