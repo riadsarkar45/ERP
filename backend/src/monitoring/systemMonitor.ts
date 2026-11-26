@@ -8,14 +8,12 @@ import { metrics } from "../middleware/rateLimiter/metrics";
 
 const ROOM = "monitoring:admins";
 const SAMPLE_MS = 5000;
-const REDIS_SAMPLE_MS = 15000;
 const processStartedAt = new Date();
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
 let timer: NodeJS.Timeout | null = null;
 let previousCpu = process.cpuUsage();
 let previousCpuAt = performance.now();
-let lastRedisAt = 0;
 let previousRequestSampleAt = performance.now();
 let previousAllowedCount = 0;
 
@@ -30,82 +28,6 @@ const database = {
   sampledAt: null as string | null,
 };
 
-let redisMetrics: Record<string, unknown> = {
-  status: "unavailable", latencyMs: null, uptimeSeconds: null,
-  connectedClients: null, usedMemoryBytes: null, usedMemoryPeakBytes: null,
-  totalConnectionsReceived: null, totalCommandsProcessed: null,
-  instantaneousOpsPerSecond: null, maxMemoryBytes: null, evictedKeys: null,
-  keyspaceHits: null, keyspaceMisses: null, keyspaceHitRatePercent: null,
-  keyspace: {}, sampledAt: null,
-};
-
-function parseInfo(info: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const line of info.split(/\r?\n/)) {
-    if (!line || line.startsWith("#")) continue;
-    const index = line.indexOf(":");
-    if (index > 0) result[line.slice(0, index)] = line.slice(index + 1);
-  }
-  return result;
-}
-function toNumber(value: string | undefined): number | null {
-  if (value == null || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-async function sampleRedis(): Promise<void> {
-  const now = Date.now();
-  if (now - lastRedisAt < REDIS_SAMPLE_MS) return;
-  lastRedisAt = now;
-  const started = performance.now();
-
-  if (redis.status !== "ready") {
-    redisMetrics = { ...redisMetrics, status: ["connecting", "reconnecting"].includes(redis.status) ? "connecting" : "unavailable", clientState: redis.status, latencyMs: null, sampledAt: new Date().toISOString() };
-    return;
-  }
-  try {
-    const [ping, serverRaw, memoryRaw, clientsRaw, statsRaw, keyspaceRaw] = await Promise.all([
-      redis.ping(), redis.info("server"), redis.info("memory"), redis.info("clients"), redis.info("stats"), redis.info("keyspace"),
-    ]);
-    if (ping !== "PONG") throw new Error("Unexpected Redis PING response");
-    const server = parseInfo(serverRaw), memory = parseInfo(memoryRaw), clients = parseInfo(clientsRaw), stats = parseInfo(statsRaw);
-    const keyspaceInfo = parseInfo(keyspaceRaw);
-    const keyspace: Record<string, unknown> = {};
-    for (const [db, raw] of Object.entries(keyspaceInfo)) {
-      const fields: Record<string, string> = {};
-      for (const pair of raw.split(",")) {
-        const [key, value] = pair.split("=");
-        if (key && value !== undefined) fields[key] = value;
-      }
-      keyspace[db] = { keys: toNumber(fields.keys), expires: toNumber(fields.expires), avgTtlMs: toNumber(fields.avg_ttl) };
-    }
-    redisMetrics = {
-      status: "connected", clientState: redis.status,
-      latencyMs: Number((performance.now() - started).toFixed(2)),
-      uptimeSeconds: toNumber(server.uptime_in_seconds),
-      connectedClients: toNumber(clients.connected_clients),
-      usedMemoryBytes: toNumber(memory.used_memory),
-      usedMemoryPeakBytes: toNumber(memory.used_memory_peak),
-      totalConnectionsReceived: toNumber(stats.total_connections_received),
-      totalCommandsProcessed: toNumber(stats.total_commands_processed),
-      instantaneousOpsPerSecond: toNumber(stats.instantaneous_ops_per_sec),
-      maxMemoryBytes: toNumber(memory.maxmemory),
-      evictedKeys: toNumber(stats.evicted_keys),
-      keyspaceHits: toNumber(stats.keyspace_hits),
-      keyspaceMisses: toNumber(stats.keyspace_misses),
-      keyspaceHitRatePercent: (() => {
-        const hits = toNumber(stats.keyspace_hits) ?? 0;
-        const misses = toNumber(stats.keyspace_misses) ?? 0;
-        return hits + misses > 0 ? Number(((hits / (hits + misses)) * 100).toFixed(1)) : null;
-      })(),
-      keyspace, sampledAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    redisMetrics = { ...redisMetrics, status: "error", latencyMs: Number((performance.now() - started).toFixed(2)), sampledAt: new Date().toISOString(), error: error instanceof Error ? error.message : "Redis telemetry failed" };
-    console.warn("[SystemMonitor] Redis sample failed:", error instanceof Error ? error.message : error);
-  }
-}
 
 async function sampleDatabase(): Promise<void> {
   const started = performance.now();
@@ -195,18 +117,115 @@ function createSnapshot() {
     },
     sockets: { connected: getIO().engine.clientsCount },
     database: { ...database },
-    redis: { ...redisMetrics },
   };
 }
 
+const HISTORY_KEY = "sm-erp:monitoring:history:v1";
+const HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000;
+const HISTORY_TTL_SECONDS = 26 * 60 * 60;
+const HISTORY_MAX_RESPONSE_POINTS = 720;
+let lastHistoryWarningAt = 0;
+
+type HistoryPoint = {
+  timestamp: string;
+  server: { processCpuPercent: number; processMemoryBytes: number; heapUsedBytes: number; heapTotalBytes: number; processUptimeSeconds: number; eventLoopP95Ms: number };
+  database: { latencyMs: number | null; activeSessions: number | null; idleSessions: number | null; totalSessions: number | null; waitingSessions: number | null; longestActiveQuerySeconds: number | null };
+  requests: { active: number; totalAllowed: number; totalBlocked: number; requestsPerSecond: number };
+  sockets: { connected: number };
+};
+
+function toHistoryPoint(snapshot: ReturnType<typeof createSnapshot>): HistoryPoint {
+  return {
+    timestamp: snapshot.timestamp,
+    server: {
+      processCpuPercent: snapshot.server.processCpuPercent,
+      processMemoryBytes: snapshot.server.processMemoryBytes,
+      heapUsedBytes: snapshot.server.heapUsedBytes,
+      heapTotalBytes: snapshot.server.heapTotalBytes,
+      processUptimeSeconds: snapshot.server.processUptimeSeconds,
+      eventLoopP95Ms: snapshot.server.eventLoopDelayMs.p95,
+    },
+    database: {
+      latencyMs: snapshot.database.latencyMs,
+      activeSessions: snapshot.database.activeSessions,
+      idleSessions: snapshot.database.idleSessions,
+      totalSessions: snapshot.database.totalSessions,
+      waitingSessions: snapshot.database.waitingSessions,
+      longestActiveQuerySeconds: snapshot.database.longestActiveQuerySeconds,
+    },
+    requests: {
+      active: snapshot.requests.active,
+      totalAllowed: snapshot.requests.totalAllowed,
+      totalBlocked: snapshot.requests.totalBlocked,
+      requestsPerSecond: snapshot.requests.requestsPerSecond,
+    },
+    sockets: { connected: snapshot.sockets.connected },
+  };
+}
+
+async function persistHistory(snapshot: ReturnType<typeof createSnapshot>): Promise<void> {
+  if (redis.status !== "ready") return;
+  try {
+    const timestamp = Date.parse(snapshot.timestamp);
+    const point = toHistoryPoint(snapshot);
+    await redis.zadd(HISTORY_KEY, timestamp, JSON.stringify(point));
+    await redis.zremrangebyscore(HISTORY_KEY, "-inf", timestamp - HISTORY_RETENTION_MS);
+    await redis.expire(HISTORY_KEY, HISTORY_TTL_SECONDS);
+  } catch (error) {
+    const now = Date.now();
+    if (now - lastHistoryWarningAt > 60_000) {
+      lastHistoryWarningAt = now;
+      console.warn("[SystemMonitor] Redis history write failed:", error instanceof Error ? error.message : error);
+    }
+  }
+}
+
+export async function getMonitoringHistory(hours = 24) {
+  const safeHours = [1, 6, 12, 24].includes(hours) ? hours : 24;
+  if (redis.status !== "ready") {
+    return { success: false, available: false, hours: safeHours, points: [], sampleCount: 0, message: "Redis history storage is unavailable" };
+  }
+  try {
+    const rows = await redis.zrangebyscore(HISTORY_KEY, Date.now() - safeHours * 60 * 60 * 1000, "+inf");
+    const parsed: HistoryPoint[] = [];
+    for (const row of rows) {
+      try {
+        const point = JSON.parse(row) as HistoryPoint;
+        if (point?.timestamp && Number.isFinite(Date.parse(point.timestamp))) parsed.push(point);
+      } catch { /* Ignore malformed samples without losing valid history. */ }
+    }
+    parsed.sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    const stride = Math.max(1, Math.ceil(parsed.length / HISTORY_MAX_RESPONSE_POINTS));
+    const points = parsed.filter((_, index) => index % stride === 0);
+    const lastPoint = parsed.at(-1);
+    if (lastPoint && points.at(-1) !== lastPoint) points.push(lastPoint);
+    return { success: true, available: true, hours: safeHours, points, sampleCount: parsed.length, returnedCount: points.length, retentionHours: 24 };
+  } catch (error) {
+    const now = Date.now();
+    if (now - lastHistoryWarningAt > 60_000) {
+      lastHistoryWarningAt = now;
+      console.warn("[SystemMonitor] Redis history read failed:", error instanceof Error ? error.message : error);
+    }
+    return { success: false, available: false, hours: safeHours, points: [], sampleCount: 0, message: "Unable to read Redis monitoring history" };
+  }
+}
+
 async function publishSample(): Promise<void> {
-  await Promise.all([sampleDatabase(), sampleRedis()]);
-  getIO().to(ROOM).emit("system:metrics", createSnapshot());
+  await sampleDatabase();
+  const snapshot = createSnapshot();
+  void persistHistory(snapshot);
+  getIO().to(ROOM).emit("system:metrics", snapshot);
 }
 
 export function startSystemMonitor(): void {
   if (timer) return;
   eventLoop.reset();
+  getIO().on("connection", socket => {
+    socket.on("monitoring:history:request", async (payload: { hours?: number } = {}, callback?: (result: Awaited<ReturnType<typeof getMonitoringHistory>>) => void) => {
+      const result = await getMonitoringHistory(Number(payload?.hours ?? 24));
+      callback?.(result);
+    });
+  });
   void publishSample().catch(error => console.error("[SystemMonitor] Initial sample failed:", error));
   timer = setInterval(() => void publishSample().catch(error => console.error("[SystemMonitor] Sample failed:", error)), SAMPLE_MS);
   timer.unref();
