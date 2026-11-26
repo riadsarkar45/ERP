@@ -151,6 +151,12 @@ function createSnapshot() {
   const memory = process.memoryUsage();
   const heap = v8.getHeapStatistics();
   const load = os.loadavg();
+  const eventLoopMetrics = {
+    mean: Number((eventLoop.mean / 1e6 || 0).toFixed(2)),
+    p95: Number((eventLoop.percentile(95) / 1e6 || 0).toFixed(2)),
+    max: Number((eventLoop.max / 1e6 || 0).toFixed(2)),
+  };
+  eventLoop.reset();
 
   return {
     timestamp: new Date().toISOString(),
@@ -170,11 +176,7 @@ function createSnapshot() {
       loadAverage: { oneMinute: load[0] ?? 0, fiveMinutes: load[1] ?? 0, fifteenMinutes: load[2] ?? 0 },
       processMemoryBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal,
       heapLimitBytes: heap.heap_size_limit, externalMemoryBytes: memory.external, arrayBuffersBytes: memory.arrayBuffers,
-      eventLoopDelayMs: {
-        mean: Number((eventLoop.mean / 1e6 || 0).toFixed(2)),
-        p95: Number((eventLoop.percentile(95) / 1e6 || 0).toFixed(2)),
-        max: Number((eventLoop.max / 1e6 || 0).toFixed(2)),
-      },
+      eventLoopDelayMs: eventLoopMetrics,
     },
     requests: {
       active: metrics.activeRequests, totalAllowed: metrics.allowed, totalBlocked: metrics.blocked,
