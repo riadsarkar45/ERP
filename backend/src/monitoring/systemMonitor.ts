@@ -34,7 +34,9 @@ let redisMetrics: Record<string, unknown> = {
   status: "unavailable", latencyMs: null, uptimeSeconds: null,
   connectedClients: null, usedMemoryBytes: null, usedMemoryPeakBytes: null,
   totalConnectionsReceived: null, totalCommandsProcessed: null,
-  instantaneousOpsPerSecond: null, keyspace: {}, sampledAt: null,
+  instantaneousOpsPerSecond: null, maxMemoryBytes: null, evictedKeys: null,
+  keyspaceHits: null, keyspaceMisses: null, keyspaceHitRatePercent: null,
+  keyspace: {}, sampledAt: null,
 };
 
 function parseInfo(info: string): Record<string, string> {
@@ -88,6 +90,15 @@ async function sampleRedis(): Promise<void> {
       totalConnectionsReceived: toNumber(stats.total_connections_received),
       totalCommandsProcessed: toNumber(stats.total_commands_processed),
       instantaneousOpsPerSecond: toNumber(stats.instantaneous_ops_per_sec),
+      maxMemoryBytes: toNumber(memory.maxmemory),
+      evictedKeys: toNumber(stats.evicted_keys),
+      keyspaceHits: toNumber(stats.keyspace_hits),
+      keyspaceMisses: toNumber(stats.keyspace_misses),
+      keyspaceHitRatePercent: (() => {
+        const hits = toNumber(stats.keyspace_hits) ?? 0;
+        const misses = toNumber(stats.keyspace_misses) ?? 0;
+        return hits + misses > 0 ? Number(((hits / (hits + misses)) * 100).toFixed(1)) : null;
+      })(),
       keyspace, sampledAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -127,6 +138,10 @@ async function sampleDatabase(): Promise<void> {
 
 function createSnapshot() {
   const now = performance.now();
+  const requestElapsedSeconds = Math.max((now - previousRequestSampleAt) / 1000, 0.001);
+  const requestRatePerSecond = (metrics.allowed - previousAllowedCount) / requestElapsedSeconds;
+  previousRequestSampleAt = now;
+  previousAllowedCount = metrics.allowed;
   const elapsedMicros = Math.max((now - previousCpuAt) * 1000, 1);
   const delta = process.cpuUsage(previousCpu);
   const cpuCores = Math.max(os.cpus().length, 1);
@@ -162,7 +177,8 @@ function createSnapshot() {
       },
     },
     requests: {
-      active: metrics.activeRequests, totalAllowed: metrics.allowed, totalBlocked: metrics.blocked,\n      requestsPerSecond: Number(Math.max(0, requestRatePerSecond).toFixed(2)),
+      active: metrics.activeRequests, totalAllowed: metrics.allowed, totalBlocked: metrics.blocked,
+      requestsPerSecond: Number(Math.max(0, requestRatePerSecond).toFixed(2)),
       routes: Array.from(metrics.byRoute.entries()).map(([route, value]) => {
         const sorted = value.durationSamples.slice().sort((a, b) => a - b);
         return {
