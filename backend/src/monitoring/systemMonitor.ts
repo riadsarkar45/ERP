@@ -71,7 +71,11 @@ async function sampleRedis(): Promise<void> {
     const keyspaceInfo = parseInfo(keyspaceRaw);
     const keyspace: Record<string, unknown> = {};
     for (const [db, raw] of Object.entries(keyspaceInfo)) {
-      const fields = parseInfo(raw.replaceAll(",", "\n"));
+      const fields: Record<string, string> = {};
+      for (const pair of raw.split(",")) {
+        const [key, value] = pair.split("=");
+        if (key && value !== undefined) fields[key] = value;
+      }
       keyspace[db] = { keys: toNumber(fields.keys), expires: toNumber(fields.expires), avgTtlMs: toNumber(fields.avg_ttl) };
     }
     redisMetrics = {
