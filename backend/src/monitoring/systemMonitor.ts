@@ -161,7 +161,7 @@ function createSnapshot() {
         };
       }).sort((a, b) => b.p95DurationMs - a.p95DurationMs).slice(0, 20),
     },
-    sockets: { connected: (await import("../middleware/socket.io/socket")).getIO().engine.clientsCount },
+    sockets: { connected: getIO().engine.clientsCount },
     database: { ...database },
     redis: { ...redisMetrics },
   };
