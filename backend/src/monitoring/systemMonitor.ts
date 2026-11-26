@@ -2,6 +2,7 @@ import os from "node:os";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import v8 from "node:v8";
 import prisma from "../database/prismaClient/prisma";
+import redis from "../redis/connect.redis";
 import { getIO } from "../middleware/socket.io/socket";
 import { metrics } from "../middleware/rateLimiter/metrics";
 
@@ -27,21 +28,6 @@ const database = {
   sampledAt: null as string | null,
 };
 
-
-function parseInfo(info: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const line of info.split(/\r?\n/)) {
-    if (!line || line.startsWith("#")) continue;
-    const index = line.indexOf(":");
-    if (index > 0) result[line.slice(0, index)] = line.slice(index + 1);
-  }
-  return result;
-}
-function toNumber(value: string | undefined): number | null {
-  if (value == null || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
 
 async function sampleDatabase(): Promise<void> {
   const started = performance.now();
