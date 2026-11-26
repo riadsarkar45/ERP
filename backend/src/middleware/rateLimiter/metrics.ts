@@ -1,6 +1,10 @@
 export interface RouteMetrics {
   allowed: number;
   blocked: number;
+  count: number;
+  totalDurationMs: number;
+  maxDurationMs: number;
+  durationSamples: number[];
 }
 
 export const metrics = {
