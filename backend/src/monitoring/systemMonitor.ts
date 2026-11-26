@@ -139,6 +139,12 @@ function createSnapshot() {
       processUptimeSeconds: Math.floor(process.uptime()),
       hostUptimeSeconds: Math.floor(os.uptime()),
       hostname: os.hostname(), platform: process.platform, architecture: process.arch, nodeVersion: process.version,
+      deployment: {
+        provider: process.env.RENDER ? "Render" : "Unknown / self-hosted",
+        serviceId: process.env.RENDER_SERVICE_ID ?? null,
+        instanceId: process.env.RENDER_INSTANCE_ID ?? null,
+        gitCommit: process.env.RENDER_GIT_COMMIT ?? null,
+      },
       processCpuPercent: Number(cpuPercent.toFixed(1)), cpuCores,
       loadAverage: { oneMinute: load[0] ?? 0, fiveMinutes: load[1] ?? 0, fifteenMinutes: load[2] ?? 0 },
       processMemoryBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal,
