@@ -183,11 +183,13 @@ function createSnapshot() {
       requestsPerSecond: Number(Math.max(0, requestRatePerSecond).toFixed(2)),
       routes: Array.from(metrics.byRoute.entries()).map(([route, value]) => {
         const sorted = value.durationSamples.slice().sort((a, b) => a - b);
+        const p95Index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1);
+        const p95Sample = sorted.length ? sorted[p95Index] ?? 0 : 0;
         return {
           route, count: value.count, blocked: value.blocked,
           averageDurationMs: value.count ? Number((value.totalDurationMs / value.count).toFixed(2)) : 0,
           maxDurationMs: Number(value.maxDurationMs.toFixed(2)),
-          p95DurationMs: sorted.length ? Number(sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)].toFixed(2)) : 0,
+          p95DurationMs: Number(p95Sample.toFixed(2)),
         };
       }).sort((a, b) => b.p95DurationMs - a.p95DurationMs).slice(0, 20),
     },
