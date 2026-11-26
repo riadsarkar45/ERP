@@ -16,6 +16,8 @@ let timer: NodeJS.Timeout | null = null;
 let previousCpu = process.cpuUsage();
 let previousCpuAt = performance.now();
 let lastRedisAt = 0;
+let previousRequestSampleAt = performance.now();
+let previousAllowedCount = 0;
 
 const database = {
   status: "unavailable" as "connected" | "unavailable",
@@ -156,7 +158,7 @@ function createSnapshot() {
       },
     },
     requests: {
-      active: metrics.activeRequests, totalAllowed: metrics.allowed, totalBlocked: metrics.blocked,
+      active: metrics.activeRequests, totalAllowed: metrics.allowed, totalBlocked: metrics.blocked,\n      requestsPerSecond: Number(Math.max(0, requestRatePerSecond).toFixed(2)),
       routes: Array.from(metrics.byRoute.entries()).map(([route, value]) => {
         const sorted = value.durationSamples.slice().sort((a, b) => a - b);
         return {
