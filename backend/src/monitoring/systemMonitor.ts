@@ -197,7 +197,8 @@ export async function getMonitoringHistory(hours = 24) {
     parsed.sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     const stride = Math.max(1, Math.ceil(parsed.length / HISTORY_MAX_RESPONSE_POINTS));
     const points = parsed.filter((_, index) => index % stride === 0);
-    if (parsed.length && points[points.length - 1] !== parsed[parsed.length - 1]) points.push(parsed[parsed.length - 1]);
+    const lastPoint = parsed.at(-1);
+    if (lastPoint && points.at(-1) !== lastPoint) points.push(lastPoint);
     return { success: true, available: true, hours: safeHours, points, sampleCount: parsed.length, returnedCount: points.length, retentionHours: 24 };
   } catch (error) {
     const now = Date.now();
