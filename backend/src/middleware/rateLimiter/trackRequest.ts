@@ -24,7 +24,7 @@ export const trackRequests = (req: AuthenticatedRequest, res: Response, next: Ne
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     completeRequest();
     try {
-      const route = req.route?.path ? `${req.baseUrl}${req.route.path}` : req.path;
+      const route = req.route?.path ? `${req.baseUrl}${req.route.path}` : req.path.replace(/\\/[0-9]+(?=\\/|$)/g, "/:id").replace(/\\/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "/:id");
       const isBlocked = res.statusCode === 429;
       if (isBlocked) metrics.blocked++;
       else metrics.allowed++;
