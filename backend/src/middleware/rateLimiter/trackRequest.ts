@@ -1,92 +1,63 @@
-
-import type {
-  Request,
-  Response,
-  NextFunction,
-} from "express";
-
+import type { Request, Response, NextFunction } from "express";
 import { ipBlockAlert } from "../socket.io/ipBlockAlert";
 import { getIO } from "../socket.io/socket";
-import { metrics } from "./metrics";
+import { metrics, type RouteMetrics } from "./metrics";
 
 const MAX_TRACKED_ROUTES = 1000;
+const MAX_ROUTE_SAMPLES = 200;
 
 interface AuthenticatedRequest extends Request {
-  user?: Request["user"] & {
-    id?: string | number;
-  };
+  user?: Request["user"] & { id?: string | number };
 }
 
-export const trackRequests = (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): void => {
-  const route = req.route?.path
-    ? `${req.baseUrl}${req.route.path}`
-    : req.path;
+export const trackRequests = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  const startedAt = process.hrtime.bigint();
+  metrics.activeRequests++;
+  let completed = false;
+  const completeRequest = () => {
+    if (completed) return;
+    completed = true;
+    metrics.activeRequests = Math.max(0, metrics.activeRequests - 1);
+  };
 
   res.once("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    completeRequest();
     try {
+      const route = req.route?.path ? req.baseUrl + req.route.path : req.path.replace(/\/[0-9]+(?=\/|$)/g, "/:id").replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "/:id");
       const isBlocked = res.statusCode === 429;
-
-      // Keep global metrics updated even without Socket.IO
-      if (isBlocked) {
-        metrics.blocked++;
-      } else {
-        metrics.allowed++;
+      if (isBlocked) metrics.blocked++;
+      else metrics.allowed++;
+      if (!metrics.byRoute.has(route) && metrics.byRoute.size < MAX_TRACKED_ROUTES) {
+        metrics.byRoute.set(route, { allowed: 0, blocked: 0, count: 0, totalDurationMs: 0, maxDurationMs: 0, durationSamples: [] });
       }
-
-      if (
-        !metrics.byRoute.has(route) &&
-        metrics.byRoute.size < MAX_TRACKED_ROUTES
-      ) {
-        metrics.byRoute.set(route, {
-          allowed: 0,
-          blocked: 0,
-        });
-      }
-
-      const routeData = metrics.byRoute.get(route);
-
+      const routeData: RouteMetrics | undefined = metrics.byRoute.get(route);
       if (routeData) {
-        if (isBlocked) {
-          routeData.blocked++;
-        } else {
+        if (isBlocked) routeData.blocked++;
+        else {
           routeData.allowed++;
+          routeData.count++;
+          routeData.totalDurationMs += durationMs;
+          routeData.maxDurationMs = Math.max(routeData.maxDurationMs, durationMs);
+          routeData.durationSamples.push(durationMs);
+          if (routeData.durationSamples.length > MAX_ROUTE_SAMPLES) routeData.durationSamples.shift();
         }
       }
-
       const io = getIO();
-
-      if (!io) return;
-
-      // Emit monitoring event
       io.emit("rate-limit-event", {
-        type: isBlocked ? "blocked" : "allowed",
-        route,
-        ip: req.ip || "unknown",
+        type: isBlocked ? "blocked" : "allowed", route, ip: req.ip || "unknown",
         totalBlocked: isBlocked ? metrics.blocked : undefined,
         totalAllowed: !isBlocked ? metrics.allowed : undefined,
       });
-
-      // Send alert only for blocked requests
       if (isBlocked) {
-        void Promise.resolve(
-          ipBlockAlert({
-            route,
-            ip: req.ip || "unknown",
-            totalBlocked: metrics.blocked,
-            userId: req.user?.id ?? null,
-          })
-        ).catch((error) => {
-          console.error("IP block alert failed:", error);
-        });
+        void Promise.resolve(ipBlockAlert({
+          route, ip: req.ip || "unknown", totalBlocked: metrics.blocked, userId: req.user?.id ?? null,
+        })).catch(error => console.error("IP block alert failed:", error));
       }
     } catch (error) {
       console.error("Request tracking error:", error);
     }
   });
-
+  res.once("close", completeRequest);
   next();
 };
