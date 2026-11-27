@@ -1,4 +1,3 @@
-
 import type { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 
@@ -138,6 +137,14 @@ const MOVEMENT_TYPES = {
 
 const NULL_VALUE = "NULL";
 
+// Static values sent by the frontend (NewOrder.jsx) when the yarn has no
+// stock record / PI (for example old stock). A line that uses any of them is
+// saved as it is, but it has NO stock bucket, so it is never checked against
+// the spinning yarn stock.
+const DEFAULT_LOT = "DEFAULT LOT";
+const DEFAULT_COUNT = "DEFAULT COUNT";
+const DEFAULT_PI = "DEFAULT PI";
+
 /* ------------------------------- HELPERS ------------------------------- */
 
 class HttpError extends Error {
@@ -175,6 +182,16 @@ const stockKey = (
 
 const formatQty = (qty: number): string =>
     Number(qty.toFixed(3)).toString();
+
+// TRUE when the lot / count / PI is one of the static default values.
+const isDefaultStock = (
+    lotNo: string,
+    yarnCount: string,
+    piNo: string
+): boolean =>
+    lotNo === DEFAULT_LOT ||
+    yarnCount === DEFAULT_COUNT ||
+    piNo === DEFAULT_PI;
 
 /* ----------------------- STEP 1: PARSE AND VALIDATE ----------------------- */
 
@@ -388,6 +405,7 @@ function parseBody(body: CreateJobBody): CleanBody {
 
             // PI is mandatory for raw yarn stock lines.
             // It is not required when the line uses a Y/D batch.
+            // (Default lines arrive with DEFAULT PI, so they pass this check.)
             if (!ydBatch && !line.piNo) {
                 throw new HttpError(
                     400,
@@ -480,6 +498,11 @@ function buildStockRequests(
     for (const line of lines) {
         if (rule.mode === "yarnDyeing") {
             for (const yc of line.yarnColors) {
+                // Default lot / count / PI have no stock record: skip them.
+                if (isDefaultStock(yc.lotNo, yc.yarnCount, yc.piNo)) {
+                    continue;
+                }
+
                 requests.push({
                     piNo: yc.piNo,
                     lotNo: yc.lotNo,
@@ -490,6 +513,11 @@ function buildStockRequests(
         } else {
             // Y/D Batch lines do not use spinning raw yarn stock.
             if (line.ydBatch) {
+                continue;
+            }
+
+            // Default lot / count / PI have no stock record: skip them.
+            if (isDefaultStock(line.lotNo, line.yarnCount, line.piNo)) {
                 continue;
             }
 
@@ -664,7 +692,8 @@ export const createNewJob = async (
             throw new HttpError(404, "Job record not found");
         }
 
-        // Raw spinning stock requests exclude all Y/D batch lines.
+        // Raw spinning stock requests exclude all Y/D batch lines
+        // and all default (static) lot / count / PI lines.
         const stockRequests = buildStockRequests(
             data.lines,
             data.orderType
@@ -710,7 +739,7 @@ export const createNewJob = async (
                     data.lines
                 );
 
-                // Validate raw spinning yarn stock only for non-Y/D lines.
+                // Validate raw spinning yarn stock only for real stock lines.
                 if (stockRequests.length > 0) {
                     await validateAvailableStock(
                         tx,

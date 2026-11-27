@@ -14,7 +14,7 @@ const MASTER_PERMISSIONS: Record<string, string[]> = {
     userManagement: ['addNewUser', 'setUserPermission', 'deleteExistingUser'],
     dashboard: ['hourlyChallanActivity', 'hourlyWorkOrderActivity', 'hourlyBookingActivity'],
     debitNote: ['responsibleForMakingDebitNote', 'responsibleForApprovalDebitNote'],
-    newSoftwareUpdates: ['getNewUpdates'],
+    newSoftwareUpdates: ['getNewUpdates', 'systemMonitoringAndVerification'],
     factoryChallanVerificationQcReceive:["verifyChallanQty"]
 };
 
