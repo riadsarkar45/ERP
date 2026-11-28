@@ -19,6 +19,7 @@ import { addNewContractualJob } from "../controllers/contractualJob/addNewContra
 import { addProcessTypes } from "../controllers/contractualJob/addProcessTypes";
 import { newAssetItem } from "../controllers/fix-assets/new-asset.item";
 import { yarnDyeDeliveries } from "../controllers/deliveries/yarn.dye.deliveries";
+import { createGreyReceivedBatch } from "../controllers/deliveries/greyReceivedBatch";
 
 const router = express.Router();
 
@@ -66,7 +67,7 @@ router.post("/add-process-types", responseTimeMonitor, authenticate, addProcessT
 
 router.post("/new-asset-items", responseTimeMonitor, authenticate, newAssetItem)
 
-router.post("/yarn-dye-deliveries", authenticate, yarnDyeDeliveries);
+router.post("/yarn-dye-deliveries", authenticate, yarnDyeDeliveries);\n\nrouter.post("/grey-received-batch", responseTimeMonitor, authenticate, createGreyReceivedBatch);
 
 
 export default router;
