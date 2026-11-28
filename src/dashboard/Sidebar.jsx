@@ -39,8 +39,9 @@ const Sidebar = () => {
     const isActive = (path) => location.pathname === path;
     const { user, accessToken } = useAuth();
     const socket = useSocket();
-    const activitySessionId = useRef(crypto.randomUUID());
-    const lastActivityAt = useRef(Date.now());
+    const activitySessionId = useRef(null);
+    if (!activitySessionId.current) activitySessionId.current = crypto.randomUUID();
+    const lastActivityAt = useRef(0);
     console.log(user, "users from sidebar");
     const { sections } = UseUserRoles();
 
@@ -325,7 +326,6 @@ const Sidebar = () => {
         };
 
         const handleVisibility = () => {
-            if (document.visibilityState === "visible") markInteraction();
             sendHeartbeat();
         };
 
