@@ -67,7 +67,9 @@ router.post("/add-process-types", responseTimeMonitor, authenticate, addProcessT
 
 router.post("/new-asset-items", responseTimeMonitor, authenticate, newAssetItem)
 
-router.post("/yarn-dye-deliveries", authenticate, yarnDyeDeliveries);\n\nrouter.post("/grey-received-batch", responseTimeMonitor, authenticate, createGreyReceivedBatch);
+router.post("/yarn-dye-deliveries", authenticate, yarnDyeDeliveries);
+
+router.post("/grey-received-batch", responseTimeMonitor, authenticate, createGreyReceivedBatch);
 
 
 export default router;
