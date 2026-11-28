@@ -50,7 +50,9 @@ async function isAuthorizedMonitor(token: unknown): Promise<boolean> {
 function safePath(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/")) return "/";
   // Do not collect query strings because they may contain business identifiers.
-  return value.split("?")[0].slice(0, 200);
+  const queryIndex = value.indexOf("?");
+  const pathname = queryIndex === -1 ? value : value.slice(0, queryIndex);
+  return pathname.slice(0, 200);
 }
 
 function safeTitle(value: unknown): string {
