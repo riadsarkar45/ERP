@@ -28,7 +28,7 @@ const UserActivityPanel = () => {
     const [updatedAt, setUpdatedAt] = useState(null);
 
     const isAdmin = ["ADMIN", "SUPER ADMIN"].includes(
-        String(user?.userRole || user?.role || "").trim().toUpperCase()
+        String(user?.accountRole || "").trim().toUpperCase()
     );
 
     const loadActivity = useCallback(() => {
