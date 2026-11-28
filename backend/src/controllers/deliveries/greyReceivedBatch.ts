@@ -41,7 +41,7 @@ export const createGreyReceivedBatch = async (req: Request, res: Response) => {
     if (deliveryType !== "Grey Received") {
       return res.status(400).json({ type: "error", message: "This endpoint only accepts Grey Received." });
     }
-    if (!date || !challanNo || !fromFactory || !toFactory || !Array.isArray(allocations) || allocations.length < 2) {
+    if (!date || !challanNo || !fromFactory || !toFactory || !Array.isArray(allocations) || allocations.length < 1) {
       return res.status(400).json({ type: "error", message: "Missing batch delivery details or allocations." });
     }
 
