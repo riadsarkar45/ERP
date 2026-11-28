@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
     LayoutDashboard,
+    Activity,
     Package,
     FileText,
     PlusCircle,
@@ -141,7 +142,9 @@ const Sidebar = () => {
     // Bottom standalone items (Work Order Requests removed and converted to dropdown above)
     const bottomNavItems = [
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
-    ];
+        ["ADMIN", "SUPER ADMIN"].includes(String(user?.accountRole || "").trim().toUpperCase()) &&
+            { path: "/dashboard/monitoring", label: "System Monitoring", icon: Activity },
+    ].filter(Boolean);
 
     // Dropdown open states
     const [isYarnOpen, setIsYarnOpen] = useState(() => yarnSubItems.some(item => item.path === location.pathname));
@@ -255,6 +258,7 @@ const Sidebar = () => {
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
+            '/dashboard/monitoring': { title: 'System Monitoring', subtitle: 'Live server and user activity' },
             '/dashboard/yarn': { title: 'Yarn Purchase', subtitle: 'Purchase order status' },
             '/dashboard/yarn/movement': { title: 'Yarn Movement', subtitle: 'Yarn movement report' },
             '/dashboard/yarn/stock': { title: 'Yarn Stock', subtitle: 'Yarn stock status' },
