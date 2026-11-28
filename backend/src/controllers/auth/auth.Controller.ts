@@ -316,6 +316,7 @@ export async function login(req: Request, res: Response) {
                 userName: user.name,
                 phoneNo: user.phoneNo,
                 role: user.permissionSections,
+                accountRole: user.userRole,
             },
         });
 
@@ -571,6 +572,7 @@ export async function getMe(req: Request, res: Response) {
             workingStation: foundUser.workingStation,
             name: foundUser.name,
             userRole: foundUser.permissionSections,
+            accountRole: foundUser.userRole,
         });
 
     } catch (error) {
