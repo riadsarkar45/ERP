@@ -27,13 +27,6 @@ export const initSocket = (server: HTTPServer): SocketIOServer => {
   io.on("connection", socket => {
     console.log(`✅ User connected: ${socket.id}`);
 
-    // The application owner will apply their preferred authorization policy here.
-    socket.on("monitoring:subscribe", () => {
-      void socket.join("monitoring:admins");
-    });
-    socket.on("monitoring:unsubscribe", () => {
-      void socket.leave("monitoring:admins");
-    });
 
     socket.on("joinRoom", async (roomId: string, callback) => {
       try {

@@ -1,7 +1,8 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
     LayoutDashboard,
+    Activity,
     Package,
     FileText,
     PlusCircle,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { AuthContext, useAuth } from "./auth/AuthContext";
 import UseUserRoles from "./pages/users/allUsers/UserRoles";
+import { useSocket } from "../hooks/socket.io/socketContext";
 
 const Sidebar = () => {
     const location = useLocation();
@@ -36,7 +38,11 @@ const Sidebar = () => {
     const [zoomLevel, setZoomLevel] = useState(100);
 
     const isActive = (path) => location.pathname === path;
-    const { user } = useAuth();
+    const { user, accessToken } = useAuth();
+    const socket = useSocket();
+    const activitySessionId = useRef(null);
+    if (!activitySessionId.current) activitySessionId.current = crypto.randomUUID();
+    const lastActivityAt = useRef(0);
     console.log(user, "users from sidebar");
     const { sections } = UseUserRoles();
 
@@ -136,7 +142,9 @@ const Sidebar = () => {
     // Bottom standalone items (Work Order Requests removed and converted to dropdown above)
     const bottomNavItems = [
         { path: "/dashboard/party-wise-view", label: "Party Wise View", icon: UserRoundPlus },
-    ];
+        ["ADMIN", "SUPER ADMIN"].includes(String(user?.accountRole || "").trim().toUpperCase()) &&
+            { path: "/dashboard/monitoring", label: "System Monitoring", icon: Activity },
+    ].filter(Boolean);
 
     // Dropdown open states
     const [isYarnOpen, setIsYarnOpen] = useState(() => yarnSubItems.some(item => item.path === location.pathname));
@@ -250,6 +258,7 @@ const Sidebar = () => {
 
         const routeMap = {
             '/dashboard/home': { title: 'Dashboard', subtitle: 'Welcome back, System Admin' },
+            '/dashboard/monitoring': { title: 'System Monitoring', subtitle: 'Live server and user activity' },
             '/dashboard/yarn': { title: 'Yarn Purchase', subtitle: 'Purchase order status' },
             '/dashboard/yarn/movement': { title: 'Yarn Movement', subtitle: 'Yarn movement report' },
             '/dashboard/yarn/stock': { title: 'Yarn Stock', subtitle: 'Yarn stock status' },
@@ -299,6 +308,50 @@ const Sidebar = () => {
 
     const pageInfo = getPageInfo();
 
+    // Lightweight per-tab heartbeat. Only page metadata and recent interaction
+    // time are sent; form values and business data are never collected.
+    useEffect(() => {
+        if (!user?.id || !accessToken || !socket) return undefined;
+
+        const markInteraction = () => {
+            lastActivityAt.current = Date.now();
+        };
+
+        const sendHeartbeat = () => {
+            if (!socket.connected) return;
+            socket.emit("monitoring:user-activity:heartbeat", {
+                token: accessToken,
+                sessionId: activitySessionId.current,
+                path: location.pathname,
+                pageTitle: pageInfo.title,
+                isVisible: document.visibilityState === "visible",
+                lastInteractionAt: lastActivityAt.current,
+            });
+        };
+
+        const handleVisibility = () => {
+            sendHeartbeat();
+        };
+
+        const interactionEvents = ["pointerdown", "keydown", "scroll", "touchstart"];
+        interactionEvents.forEach(eventName =>
+            window.addEventListener(eventName, markInteraction, { passive: true })
+        );
+        document.addEventListener("visibilitychange", handleVisibility);
+        socket.on("connect", sendHeartbeat);
+
+        sendHeartbeat();
+        const heartbeatTimer = window.setInterval(sendHeartbeat, 20_000);
+
+        return () => {
+            window.clearInterval(heartbeatTimer);
+            interactionEvents.forEach(eventName =>
+                window.removeEventListener(eventName, markInteraction)
+            );
+            document.removeEventListener("visibilitychange", handleVisibility);
+            socket.off("connect", sendHeartbeat);
+        };
+    }, [accessToken, location.pathname, pageInfo.title, socket, user?.id]);
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-gray-50">

@@ -13,6 +13,7 @@ import { trackRequests } from "./middleware/rateLimiter/trackRequest";
 import { initSocketRoutes } from "./socketRoutes/socket.routes";
 import { startSystemMonitor, stopSystemMonitor } from "./monitoring/systemMonitor";
 import { connectRedis, disconnectRedis } from "./redis/connect.redis";
+import { initUserActivityMonitor } from "./monitoring/userActivity";
 
 const app = express();
 app.disable("x-powered-by");
@@ -77,6 +78,7 @@ const start = async (): Promise<void> => {
 
     initSocket(server);
     initSocketRoutes();
+    initUserActivityMonitor();
     startSystemMonitor();
 
     const shutdown = async (signal: string): Promise<void> => {

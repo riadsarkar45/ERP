@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useSocket } from '../../../hooks/socket.io/socketContext';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
+import UserActivityPanel from './UserActivityPanel';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -152,6 +153,7 @@ const ApiMonitoring = () => {
 
     return (
         <div className="space-y-4">
+            <UserActivityPanel />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                 {/* Left — live feed */}
