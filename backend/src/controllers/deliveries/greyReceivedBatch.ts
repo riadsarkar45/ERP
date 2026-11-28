@@ -86,6 +86,10 @@ export const createGreyReceivedBatch = async (req: Request, res: Response) => {
         composition: true,
         color: true,
         orderType: true,
+        workOrderQty: true,
+        deliveries: {
+          select: { deliveryType: true, deliveryQty: true },
+        },
         workOrder: { select: { id: true, orderType: true, factoryName: true } },
       },
     });
@@ -100,6 +104,28 @@ export const createGreyReceivedBatch = async (req: Request, res: Response) => {
       if (!composition || composition.workOrderId !== allocation.workOrderId ||
           composition.orderType !== "dyeingOrder" || composition.workOrder.orderType !== "dyeingOrder") {
         return res.status(400).json({ type: "error", message: "An allocation does not belong to the specified dyeing work order." });
+      }
+    }
+
+    // Recalculate each composition's outstanding quantity on the server;
+    // never trust client-side proportional allocations alone.
+    for (const allocation of normalized) {
+      const composition = compositionById.get(allocation.yarnId)!;
+      let totalOutbound = 0;
+      let totalReturn = 0;
+      for (const delivery of composition.deliveries) {
+        const type = String(delivery.deliveryType || "");
+        const lower = type.toLowerCase();
+        const qty = Number(delivery.deliveryQty || 0);
+        if (lower.includes("return")) totalReturn += qty;
+        else if (lower.includes("delivery") || lower.includes("sent")) totalOutbound += qty;
+      }
+      const outstanding = Math.max(0, Number(composition.workOrderQty || 0) + totalReturn - totalOutbound);
+      if (allocation.qty - outstanding > 0.01) {
+        return res.status(409).json({
+          type: "error",
+          message: `Allocation for composition ID ${allocation.yarnId} exceeds its outstanding quantity (${outstanding} kg).`,
+        });
       }
     }
 
