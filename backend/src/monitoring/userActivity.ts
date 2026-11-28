@@ -149,8 +149,13 @@ async function handleHeartbeat(
 }
 
 async function getActivitySnapshot(token: unknown) {
-  if (!(await isAuthorizedMonitor(token))) {
-    return { success: false, message: "Administrator access required", sessions: [], summary: null };
+  try {
+    if (!(await isAuthorizedMonitor(token))) {
+      return { success: false, message: "Administrator access required", sessions: [], summary: null };
+    }
+  } catch (error) {
+    console.error("[UserActivity] Authorization check failed:", error instanceof Error ? error.message : error);
+    return { success: false, message: "Unable to authorize monitoring request", sessions: [], summary: null };
   }
 
   if (redis.status !== "ready") {
