@@ -163,8 +163,28 @@ export const createGreyReceivedBatch = async (req: Request, res: Response) => {
       });
     }
 
-    const created = await prisma.$transaction(async (tx) => {
-      const challan = await tx.challan.upsert({
+    let created: { challanId: number; records: { id: number; yarnId: number; deliveryQty: number }[] };
+    try {
+      created = await prisma.$transaction(async (tx) => {
+        // Recheck duplicate challans inside a serializable transaction to reduce
+        // the chance of concurrent submissions creating duplicate movements.
+        for (const allocation of normalized) {
+          const duplicate = await tx.deliveries.findFirst({
+            where: {
+              challanNo: challanNoNum,
+              toFactory,
+              fromFactory,
+              yarnId: allocation.yarnId,
+              deliveryType,
+            },
+            select: { id: true },
+          });
+          if (duplicate) {
+            throw new Error(`GREY_RECEIVED_DUPLICATE:${allocation.yarnId}`);
+          }
+        }
+
+        const challan = await tx.challan.upsert({
         where: {
           challanNo_toFactory_fromFactory: {
             challanNo: challanNoNum,
@@ -198,8 +218,24 @@ export const createGreyReceivedBatch = async (req: Request, res: Response) => {
         })
       ));
 
-      return { challanId: challan.id, records };
-    });
+        return { challanId: challan.id, records };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (transactionError) {
+      const message = transactionError instanceof Error ? transactionError.message : "";
+      if (message.startsWith("GREY_RECEIVED_DUPLICATE:")) {
+        return res.status(409).json({
+          type: "error",
+          message: `This challan already has a Grey Received entry for composition ID ${message.split(":")[1]}.`,
+        });
+      }
+      if ((transactionError as { code?: string })?.code === "P2034") {
+        return res.status(409).json({
+          type: "error",
+          message: "A concurrent delivery changed this composition. Refresh the delivery list and try again.",
+        });
+      }
+      throw transactionError;
+    }
 
     for (const record of created.records) {
       Promise.resolve(generatePdfChallan(record.yarnId, record.id, userId)).catch((error: unknown) =>
