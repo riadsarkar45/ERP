@@ -2,6 +2,7 @@ import os from "node:os";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import v8 from "node:v8";
 import prisma from "../database/prismaClient/prisma";
+import { verifyAccessToken } from "../utils/auth/token.util";
 import redis from "../redis/connect.redis";
 import { getIO } from "../middleware/socket.io/socket";
 import { metrics } from "../middleware/rateLimiter/metrics";
@@ -221,6 +222,49 @@ export function startSystemMonitor(): void {
   if (timer) return;
   eventLoop.reset();
   getIO().on("connection", socket => {
+    // Metrics are published only to this room. Explicitly authorize and join
+    // admin clients; emitting "monitoring:subscribe" without a handler used
+    // to leave every dashboard socket outside the room.
+    socket.on("monitoring:subscribe", async (
+      payload: { token?: string } = {},
+      callback?: (result: { success: boolean; message?: string }) => void,
+    ) => {
+      try {
+        if (typeof payload?.token !== "string" || !payload.token) {
+          callback?.({ success: false, message: "Authentication required" });
+          return;
+        }
+
+        const tokenPayload = verifyAccessToken(payload.token);
+        const userId = Number(tokenPayload.userId);
+        if (!Number.isInteger(userId) || userId <= 0) {
+          callback?.({ success: false, message: "Invalid authentication token" });
+          return;
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { isActive: true, userRole: true },
+        });
+        const role = String(user?.userRole || "").trim().toUpperCase();
+        if (!user?.isActive || (role !== "ADMIN" && role !== "SUPER ADMIN")) {
+          callback?.({ success: false, message: "Administrator access required" });
+          return;
+        }
+
+        await socket.join(ROOM);
+        callback?.({ success: true });
+        socket.emit("system:metrics", createSnapshot());
+      } catch (error) {
+        callback?.({ success: false, message: "Unable to authorize monitoring subscription" });
+        console.warn("[SystemMonitor] Metrics subscription rejected:", error instanceof Error ? error.message : error);
+      }
+    });
+
+    socket.on("monitoring:unsubscribe", () => {
+      void socket.leave(ROOM);
+    });
+
     socket.on("monitoring:history:request", async (payload: { hours?: number } = {}, callback?: (result: Awaited<ReturnType<typeof getMonitoringHistory>>) => void) => {
       const result = await getMonitoringHistory(Number(payload?.hours ?? 24));
       callback?.(result);
