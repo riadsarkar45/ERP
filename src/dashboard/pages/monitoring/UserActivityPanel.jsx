@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Activity, Eye, Monitor, Users } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
-import { useSocket } from "../../../../hooks/socket.io/socketContext";
+import { useSocket } from "../../../hooks/socket.io/socketContext";
 
 const formatTime = (value) => {
     if (!value) return "—";
