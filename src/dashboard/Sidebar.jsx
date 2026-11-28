@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
     LayoutDashboard,
     Package,
@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { AuthContext, useAuth } from "./auth/AuthContext";
 import UseUserRoles from "./pages/users/allUsers/UserRoles";
+import { useSocket } from "../hooks/socket.io/socketContext";
 
 const Sidebar = () => {
     const location = useLocation();
@@ -36,7 +37,10 @@ const Sidebar = () => {
     const [zoomLevel, setZoomLevel] = useState(100);
 
     const isActive = (path) => location.pathname === path;
-    const { user } = useAuth();
+    const { user, accessToken } = useAuth();
+    const socket = useSocket();
+    const activitySessionId = useRef(crypto.randomUUID());
+    const lastActivityAt = useRef(Date.now());
     console.log(user, "users from sidebar");
     const { sections } = UseUserRoles();
 
@@ -299,6 +303,51 @@ const Sidebar = () => {
 
     const pageInfo = getPageInfo();
 
+    // Lightweight per-tab heartbeat. Only page metadata and recent interaction
+    // time are sent; form values and business data are never collected.
+    useEffect(() => {
+        if (!user?.id || !accessToken || !socket) return undefined;
+
+        const markInteraction = () => {
+            lastActivityAt.current = Date.now();
+        };
+
+        const sendHeartbeat = () => {
+            if (!socket.connected) return;
+            socket.emit("monitoring:user-activity:heartbeat", {
+                token: accessToken,
+                sessionId: activitySessionId.current,
+                path: location.pathname,
+                pageTitle: pageInfo.title,
+                isVisible: document.visibilityState === "visible",
+                lastInteractionAt: lastActivityAt.current,
+            });
+        };
+
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") markInteraction();
+            sendHeartbeat();
+        };
+
+        const interactionEvents = ["pointerdown", "keydown", "scroll", "touchstart"];
+        interactionEvents.forEach(eventName =>
+            window.addEventListener(eventName, markInteraction, { passive: true })
+        );
+        document.addEventListener("visibilitychange", handleVisibility);
+        socket.on("connect", sendHeartbeat);
+
+        sendHeartbeat();
+        const heartbeatTimer = window.setInterval(sendHeartbeat, 20_000);
+
+        return () => {
+            window.clearInterval(heartbeatTimer);
+            interactionEvents.forEach(eventName =>
+                window.removeEventListener(eventName, markInteraction)
+            );
+            document.removeEventListener("visibilitychange", handleVisibility);
+            socket.off("connect", sendHeartbeat);
+        };
+    }, [accessToken, location.pathname, pageInfo.title, socket, user?.id]);
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
