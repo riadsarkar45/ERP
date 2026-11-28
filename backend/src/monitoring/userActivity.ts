@@ -2,6 +2,7 @@ import type { Socket } from "socket.io";
 import prisma from "../database/prismaClient/prisma";
 import redis from "../redis/connect.redis";
 import { verifyAccessToken } from "../utils/auth/token.util";
+import { getIO } from "../middleware/socket.io/socket";
 
 const INDEX_KEY = "sm-erp:user-activity:sessions:v1";
 const SESSION_PREFIX = "sm-erp:user-activity:session:v1:";
@@ -119,7 +120,7 @@ async function handleHeartbeat(
       requestedInteractionAt >= now - 120_000;
     const lastInteractionAt = validNewInteraction
       ? Math.max(previousInteractionAt, requestedInteractionAt)
-      : previousInteractionAt || now;
+      : previousInteractionAt || now - 120_000;
 
     const fields = {
       userId: String(userId),
@@ -228,7 +229,7 @@ async function getActivitySnapshot(token: unknown) {
 }
 
 export function initUserActivityMonitor(): void {
-  const io = (awaitableGetIO());
+  const io = getIO();
   io.on("connection", (socket: Socket) => {
     socket.on(
       "monitoring:user-activity:heartbeat",
@@ -249,9 +250,3 @@ export function initUserActivityMonitor(): void {
   console.log("[UserActivity] Live user activity monitoring initialized");
 }
 
-function awaitableGetIO() {
-  // Kept as a small wrapper to make socket initialization dependency explicit.
-  return requireSocketIO();
-}
-
-import { getIO as requireSocketIO } from "../middleware/socket.io/socket";
